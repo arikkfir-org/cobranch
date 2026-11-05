@@ -19,17 +19,20 @@ export default async ({ path, at, rest, fail }) => [await repositoryHistory(path
 
 // repositoryHistory is the history of a branch, a tag or a commit, nearest first, a page at a time, under a picker of
 // the repository's branches and tags: through every parent beside a graph of its lines, or along first parents
-// alone, which an installation without a Git server falls back to.
+// alone, which an installation without a Git server falls back to. With a path (?path=), it is the commits that
+// changed what is there, through every parent, which takes the Git server.
 async function repositoryHistory(path, at, ref, fail) {
   const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
   if (!branches.length) return h("section", { class: "panel" }, h("h3", {}, "History"), h("p", {}, "Nothing has been pushed yet: push ", h("code", {}, "main"), " to start its history."));
-  let first = new URLSearchParams(location.search).get("parents") === "first";
+  const params = new URLSearchParams(location.search);
+  const file = params.get("path") || "";
+  let first = !file && params.get("parents") === "first";
   const panel = h("section", { class: "panel" });
   const pressed = (on, label, firstOnly) => h("button", { class: "button small", type: "button", "aria-pressed": String(on),
     onclick: () => go(at.history(ref, firstOnly).slice(base.length - 1)) }, label);
-  const toggle = h("div", { class: "tabs", role: "group", "aria-label": "Parents" }, pressed(!first, "Every parent", false), pressed(first, "First parent", true));
-  panel.append(h("div", { class: "row" }, h("h3", {}, "History"), h("span", { class: "spacer" }), toggle,
-    refPicker(branches, tags, ref, (r) => go(at.history(r, first).slice(base.length - 1)))));
+  const toggle = h("div", { class: "tabs", role: "group", "aria-label": "Parents", hidden: !!file }, pressed(!first, "Every parent", false), pressed(first, "First parent", true));
+  panel.append(h("div", { class: "row" }, h("h3", {}, file ? ["History of ", h("code", {}, file)] : "History"), h("span", { class: "spacer" }), toggle,
+    refPicker(branches, tags, ref, (r) => at.history(r, first, file))));
   let draw = first ? null : historyGraph();
   const row = (c) => {
     const lines = draw ? draw(c) : null;
@@ -52,13 +55,13 @@ async function repositoryHistory(path, at, ref, fail) {
       older.disabled = false;
     }
   }
-  const start = (firstOnly) => path + "/commits?" + new URLSearchParams({ ref, parents: firstOnly ? "first" : "all" });
+  const start = (firstOnly) => path + "/commits?" + new URLSearchParams({ ref, parents: firstOnly ? "first" : "all", ...(file ? { path: file } : {}) });
   let shown;
-  const needsGit = () => panel.append(h("p", {}, "A tag's history needs the Git server too: pick a branch or a commit."));
+  const needsGit = () => panel.append(h("p", {}, file ? "A path's history needs the Git server." : "A tag's history needs the Git server too: pick a branch or a commit."));
   try {
     shown = await load(start(first));
   } catch (err) {
-    if (err.code === "git.unavailable" && !first) {
+    if (err.code === "git.unavailable" && !first && !file) {
       first = true;
       draw = null;
       toggle.hidden = true;
@@ -78,7 +81,8 @@ async function repositoryHistory(path, at, ref, fail) {
       return panel;
     } else throw err;
   }
-  if (!shown && !next) panel.append(h("p", {}, "Nothing to show yet: ", h("code", {}, /^[0-9a-f]{40,64}$/.test(ref) ? shortSha(ref) : ref), " is at no commit a push recorded."));
+  if (!shown && !next && file) panel.append(h("p", {}, "No commit a push recorded changed ", h("code", {}, file), "."));
+  else if (!shown && !next) panel.append(h("p", {}, "Nothing to show yet: ", h("code", {}, /^[0-9a-f]{40,64}$/.test(ref) ? shortSha(ref) : ref), " is at no commit a push recorded."));
   panel.append(h("div", { class: "scroll" }, h("table", { class: "commits" }, rows)), h("div", {}, older));
   return panel;
 }

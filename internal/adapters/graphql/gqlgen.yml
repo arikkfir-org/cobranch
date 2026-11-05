@@ -55,6 +55,7 @@ models:
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
       models: { resolver: true }
+      spend: { resolver: true }
       conversation: { resolver: true }
   Issue:
     fields:
@@ -94,6 +95,7 @@ models:
       review: { resolver: true }
       tags: { resolver: true }
       tree: { resolver: true }
+      treeCommits: { resolver: true }
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }

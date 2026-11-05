@@ -8,6 +8,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"time"
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/orgs"
@@ -385,6 +386,21 @@ func (r *organizationResolver) Models(ctx context.Context, obj *Organization) ([
 		return nil, err
 	}
 	return mapAll(list, modelOf), nil
+}
+
+// Spend is the resolver for the spend field.
+func (r *organizationResolver) Spend(ctx context.Context, obj *Organization, month *string, zone *string) (*OrganizationSpend, error) {
+	in, err := agents.MonthIn(orEmpty(month), orEmpty(zone), time.Now())
+	if err != nil {
+		return nil, fail(ctx, err, "organization", "reading the month")
+	}
+	report, err := resolveOrg(ctx, obj, func(ctx context.Context, v agents.Viewer, orgID uuid.UUID) (agents.Report, error) {
+		return r.Resolver.Agents.Spend(ctx, v, orgID, in.Since, in.Until)
+	}, "reporting the spend")
+	if err != nil {
+		return nil, err
+	}
+	return organizationSpend(in, report), nil
 }
 
 // MyTask is the resolver for the myTask field.

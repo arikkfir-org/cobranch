@@ -1,0 +1,16 @@
+/* Settings · Agents: an agent without a model, in the warning colour, and the agent's editor: its name, model and cap
+   three across, then the secrets its tasks receive, a name and a secret each. */
+.table td.settings-agents-unset { color: var(--color-status-warning-fg); }
+.settings-agent-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16); align-items: start; }
+.settings-agent-secrets { display: grid; gap: var(--space-8); }
+.settings-agent-secrets:empty { display: none; }
+.settings-agent-secret { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--space-8); align-items: center; }
+.settings-agent .field-help .checkbox { margin-top: var(--space-6); }
+@media (max-width: 768px) {
+  .settings-agent-fields { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The new agent's dialog: the roles to pick, and a repository with a role on it. */
+.agent-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-4) var(--space-12); }
+.agent-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-8); }
+.settings-agents td.cell-mono { white-space: nowrap; }

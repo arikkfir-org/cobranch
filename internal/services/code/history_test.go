@@ -25,6 +25,7 @@ func withLogs(f *fixture) *fixture {
 	f.objects.History(sha(6), []code.LogEntry{entry(6, 2), entry(2, 1), entry(1)}, "feature/x")
 	f.objects.History(sha(4), tail, "v1")
 	f.objects.History(sha(8), append([]code.LogEntry{entry(8, 5), entry(5, 4, 6), entry(6, 2)}, tail...), "fresh")
+	f.objects.PathHistory(sha(5), "docs", []code.LogEntry{entry(6, 2), entry(2), entry(77)})
 	return f
 }
 
@@ -60,6 +61,14 @@ var historyCases = []struct {
 	{name: "every parent from a first parent's cursor", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll, Cursor: sha(3)}, wantErr: invalid("cursor.invalid")},
 	{name: "every parent from a cursor of nothing", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll, Cursor: "nonsense"}, wantErr: invalid("cursor.invalid")},
 	{name: "parents that are neither", q: code.HistoryQuery{Branch: "main", Parents: "some"}, wantErr: invalid("parents.invalid")},
+	{name: "a path's, every parent, without what no push recorded", q: code.HistoryQuery{Branch: "main", Path: "docs"}, want: []string{"6", "2"}},
+	{name: "a path's from a ref, every parent asked", q: code.HistoryQuery{Ref: "main", Path: "docs", Parents: code.ParentsAll}, want: []string{"6", "2"}},
+	{name: "a path's page and where the next starts", q: code.HistoryQuery{Branch: "main", Path: "docs", Limit: 1}, want: []string{"6"},
+		wantNext: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwNTox"},
+	{name: "a path nothing changed", q: code.HistoryQuery{Branch: "main", Path: "src"}},
+	{name: "a path's along first parents", q: code.HistoryQuery{Branch: "main", Path: "docs", Parents: code.ParentsFirst}, wantErr: invalid("parents.path")},
+	{name: "a path's with parents that are neither", q: code.HistoryQuery{Branch: "main", Path: "docs", Parents: "some"}, wantErr: invalid("parents.invalid")},
+	{name: "a path that climbs out", q: code.HistoryQuery{Branch: "main", Path: "docs/../.."}, wantErr: invalid("path.invalid")},
 	{name: "a cursor that names no commit", q: code.HistoryQuery{Branch: "main", Cursor: sha(77)}, wantErr: invalid("cursor.invalid")},
 	{name: "a cursor that is no object name", q: code.HistoryQuery{Branch: "main", Cursor: "HEAD~2"}, wantErr: invalid("cursor.invalid")},
 	{name: "a page too long", q: code.HistoryQuery{Branch: "main", Limit: 101}, wantErr: invalid("limit.invalid")},

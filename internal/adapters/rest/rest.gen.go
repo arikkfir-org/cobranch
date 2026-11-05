@@ -757,36 +757,39 @@ func (e PageViewNavigation) Valid() bool {
 
 // Defines values for PageViewPage.
 const (
-	PageViewPageHelp                      PageViewPage = "help"
-	PageViewPageHelpComponents            PageViewPage = "help.components"
-	PageViewPageOrganization              PageViewPage = "organization"
-	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
-	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
-	PageViewPageOrganizationArtifacts     PageViewPage = "organization.artifacts"
-	PageViewPageOrganizationIssues        PageViewPage = "organization.issues"
-	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
-	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
-	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
-	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
-	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
-	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
-	PageViewPageOrganizationUsage         PageViewPage = "organization.usage"
-	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
-	PageViewPageRepositoryArtifacts       PageViewPage = "repository.artifacts"
-	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
-	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
-	PageViewPageRepositoryChanges         PageViewPage = "repository.changes"
-	PageViewPageRepositoryCode            PageViewPage = "repository.code"
-	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
-	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
-	PageViewPageRepositoryEnvironments    PageViewPage = "repository.environments"
-	PageViewPageRepositoryFile            PageViewPage = "repository.file"
-	PageViewPageRepositoryRuns            PageViewPage = "repository.runs"
-	PageViewPageRepositorySecrets         PageViewPage = "repository.secrets"
-	PageViewPageRepositorySettings        PageViewPage = "repository.settings"
-	PageViewPageSettings                  PageViewPage = "settings"
-	PageViewPageSignIn                    PageViewPage = "sign-in"
-	PageViewPageWelcome                   PageViewPage = "welcome"
+	PageViewPageHelp                       PageViewPage = "help"
+	PageViewPageHelpComponents             PageViewPage = "help.components"
+	PageViewPageOrganization               PageViewPage = "organization"
+	PageViewPageOrganizationAgent          PageViewPage = "organization.agent"
+	PageViewPageOrganizationAgents         PageViewPage = "organization.agents"
+	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
+	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
+	PageViewPageOrganizationApiKeys        PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationArtifacts      PageViewPage = "organization.artifacts"
+	PageViewPageOrganizationIssues         PageViewPage = "organization.issues"
+	PageViewPageOrganizationMembers        PageViewPage = "organization.members"
+	PageViewPageOrganizationNewRepository  PageViewPage = "organization.new-repository"
+	PageViewPageOrganizationRoles          PageViewPage = "organization.roles"
+	PageViewPageOrganizationSecrets        PageViewPage = "organization.secrets"
+	PageViewPageOrganizationSettings       PageViewPage = "organization.settings"
+	PageViewPageOrganizationTasks          PageViewPage = "organization.tasks"
+	PageViewPageOrganizationUsage          PageViewPage = "organization.usage"
+	PageViewPageRepositoryAccess           PageViewPage = "repository.access"
+	PageViewPageRepositoryArtifacts        PageViewPage = "repository.artifacts"
+	PageViewPageRepositoryBranch           PageViewPage = "repository.branch"
+	PageViewPageRepositoryBranches         PageViewPage = "repository.branches"
+	PageViewPageRepositoryChanges          PageViewPage = "repository.changes"
+	PageViewPageRepositoryCode             PageViewPage = "repository.code"
+	PageViewPageRepositoryCommit           PageViewPage = "repository.commit"
+	PageViewPageRepositoryCommits          PageViewPage = "repository.commits"
+	PageViewPageRepositoryEnvironments     PageViewPage = "repository.environments"
+	PageViewPageRepositoryFile             PageViewPage = "repository.file"
+	PageViewPageRepositoryRuns             PageViewPage = "repository.runs"
+	PageViewPageRepositorySecrets          PageViewPage = "repository.secrets"
+	PageViewPageRepositorySettings         PageViewPage = "repository.settings"
+	PageViewPageSettings                   PageViewPage = "settings"
+	PageViewPageSignIn                     PageViewPage = "sign-in"
+	PageViewPageWelcome                    PageViewPage = "welcome"
 )
 
 // Valid indicates whether the value is a known member of the PageViewPage enum.
@@ -798,7 +801,13 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageOrganization:
 		return true
+	case PageViewPageOrganizationAgent:
+		return true
 	case PageViewPageOrganizationAgents:
+		return true
+	case PageViewPageOrganizationAgentsActivity:
+		return true
+	case PageViewPageOrganizationAgentsQuotas:
 		return true
 	case PageViewPageOrganizationApiKeys:
 		return true
@@ -1274,6 +1283,36 @@ type AgentPatch struct {
 type AgentSecrets struct {
 	// Secrets At most 50, each the name of the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and the secret's ID.
 	Secrets map[string]openapi_types.UUID `json:"secrets"`
+}
+
+// AgentSpend What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+type AgentSpend struct {
+	// Active Those of them still queued, running or waiting.
+	Active int64 `json:"active"`
+
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent Principal `json:"agent"`
+
+	// Cap The most a task of it may spend; absent for none.
+	Cap *string `json:"cap,omitempty"`
+
+	// Costliest The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+	Costliest *TaskCost `json:"costliest,omitempty"`
+
+	// FailedOnCap Those of them that failed having spent its cap.
+	FailedOnCap int64 `json:"failedOnCap"`
+
+	// Model The model it runs on; absent while it runs on none.
+	Model *string `json:"model,omitempty"`
+
+	// Provider The model provider it runs on; absent while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+
+	// Spent What its calls in the month cost.
+	Spent string `json:"spent"`
+
+	// Tasks Its tasks queued in the month.
+	Tasks int64 `json:"tasks"`
 }
 
 // Annotation A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -2527,6 +2566,16 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
+// ModelSpend What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+type ModelSpend struct {
+	InputTokens  int64  `json:"inputTokens"`
+	Model        string `json:"model"`
+	OutputTokens int64  `json:"outputTokens"`
+	Provider     string `json:"provider"`
+	Spent        string `json:"spent"`
+	Tasks        int64  `json:"tasks"`
+}
+
 // MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in.
 type MyTask struct {
 	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
@@ -2647,6 +2696,23 @@ type OrganizationSettings struct {
 	// Providers The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
 	Providers *[]string `json:"providers,omitempty"`
 	Slug      *string   `json:"slug,omitempty"`
+}
+
+// OrganizationSpend What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type OrganizationSpend struct {
+	// Agents Every agent of the organization, by name.
+	Agents []AgentSpend `json:"agents"`
+
+	// Models Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+	Models []ModelSpend `json:"models"`
+
+	// Month The month, such as 2026-11.
+	Month string    `json:"month"`
+	Since time.Time `json:"since"`
+	Until time.Time `json:"until"`
+
+	// Zone The time zone its days begin and end in.
+	Zone string `json:"zone"`
 }
 
 // OrganizationUsage What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
@@ -3219,6 +3285,15 @@ type Task struct {
 	Version int64 `json:"version"`
 }
 
+// TaskCost The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+type TaskCost struct {
+	Number int64 `json:"number"`
+
+	// Spent What it spent in all.
+	Spent string `json:"spent"`
+	Title string `json:"title"`
+}
+
 // TaskInput A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
 type TaskInput struct {
 	AgentId openapi_types.UUID `json:"agentId"`
@@ -3310,6 +3385,27 @@ type Tree struct {
 
 	// Sha Its tree's object.
 	Sha string `json:"sha"`
+}
+
+// TreeCommits What last changed a directory at a commit. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest.
+type TreeCommits struct {
+	// Commit The commit the ref resolved to.
+	Commit string `json:"commit"`
+
+	// Commits Every commit latest and entries name, once, the most recently committed first.
+	Commits []Commit `json:"commits"`
+
+	// Count How many commits reachable from the commit changed the directory, every commit for the root.
+	Count int `json:"count"`
+
+	// Entries The latest commit that changed each of the directory's entries, by the entry's name, each one of commits.
+	Entries map[string]string `json:"entries"`
+
+	// Latest The latest commit that changed the directory, one of commits.
+	Latest *string `json:"latest,omitempty"`
+
+	// Path The directory's path from the repository's root; empty for the root.
+	Path string `json:"path"`
 }
 
 // TreeEntry One of a directory's entries.
@@ -3964,7 +4060,10 @@ type ListCommitsParams struct {
 	// Ref Where the history starts instead of branch: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
 	Ref *string `form:"ref,omitempty" json:"ref,omitempty"`
 
-	// Parents Which parents of each commit the history follows, the first alone or every one.
+	// Path A file's or a directory's path from the repository's root, as names separated by /, whose history the page lists: the commits that changed what is there, every parent followed. A path's history takes parents=all or none, and parents=first is 400 parents.path.
+	Path *string `form:"path,omitempty" json:"path,omitempty"`
+
+	// Parents Which parents of each commit the history follows, the first alone or every one; every one for a path's.
 	Parents *ListCommitsParamsParents `form:"parents,omitempty" json:"parents,omitempty"`
 
 	// Cursor Where the page starts, as the previous page's Link names it, in place of branch and ref; the start's commit when left out. Opaque: every parent's cursor holds the commit the first page started from, so later pages hold still while the branch moves on.
@@ -4139,6 +4238,18 @@ type GetTreeParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetTreeCommitsParams defines parameters for GetTreeCommits.
+type GetTreeCommitsParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Path The directory's path from the repository's root, as names separated by /; empty for the root.
+	Path *Path `form:"path,omitempty" json:"path,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // DeleteSecretParams defines parameters for DeleteSecret.
 type DeleteSecretParams struct {
 	// IfMatch The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -4160,6 +4271,18 @@ type ReplaceSecretParams struct {
 // GrantSecretJSONBody defines parameters for GrantSecret.
 type GrantSecretJSONBody struct {
 	PrincipalId openapi_types.UUID `json:"principalId"`
+}
+
+// GetOrganizationSpendParams defines parameters for GetOrganizationSpend.
+type GetOrganizationSpendParams struct {
+	// Month The month, such as 2026-11; this month in the zone when absent.
+	Month *string `form:"month,omitempty" json:"month,omitempty"`
+
+	// Zone The IANA time zone the month's days begin and end in, such as Asia/Jerusalem; UTC when absent.
+	Zone *string `form:"zone,omitempty" json:"zone,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListTasksParams defines parameters for ListTasks.
@@ -4834,7 +4957,7 @@ type ServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -4963,6 +5086,9 @@ type ServerInterface interface {
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeParams)
+	// GetTreeCommits What last changed the directory at a path of the commit a ref names, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/tree/commits)
+	GetTreeCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeCommitsParams)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(w http.ResponseWriter, r *http.Request, org Org)
@@ -4999,6 +5125,9 @@ type ServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
+	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
+	// (GET /orgs/{org}/spend)
+	GetOrganizationSpend(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationSpendParams)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
@@ -11402,6 +11531,19 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "parents" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "parents", r.URL.Query(), &params.Parents, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13873,6 +14015,91 @@ func (siw *ServerInterfaceWrapper) GetTree(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// GetTreeCommits operation middleware
+func (siw *ServerInterfaceWrapper) GetTreeCommits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTreeCommitsParams
+
+	// ------------- Optional query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTreeCommits(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoles operation middleware
 func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
 
@@ -14329,6 +14556,82 @@ func (siw *ServerInterfaceWrapper) RevokeSecret(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeSecret(w, r, org, id, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationSpend operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationSpend(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationSpendParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "zone" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "zone", r.URL.Query(), &params.Zone, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "zone"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationSpend(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15086,6 +15389,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.RemoveModel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.GetModel)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.SetModel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/spend", wrapper.GetOrganizationSpend)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
@@ -15208,6 +15512,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/events", wrapper.PostEvent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree/commits", wrapper.GetTreeCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/raw", wrapper.GetRaw)
 
@@ -33662,6 +33967,127 @@ func (response GetTreedefaultApplicationProblemPlusJSONResponse) VisitGetTreeRes
 	return err
 }
 
+type GetTreeCommitsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params GetTreeCommitsParams
+}
+
+type GetTreeCommitsResponseObject interface {
+	VisitGetTreeCommitsResponse(w http.ResponseWriter) error
+}
+
+type GetTreeCommits200ResponseHeaders struct {
+	ETag string
+}
+
+type GetTreeCommits200JSONResponse struct {
+	Body    TreeCommits
+	Headers GetTreeCommits200ResponseHeaders
+}
+
+func (response GetTreeCommits200JSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits304ResponseHeaders struct {
+	ETag string
+}
+
+type GetTreeCommits304Response struct {
+	Headers GetTreeCommits304ResponseHeaders
+}
+
+func (response GetTreeCommits304Response) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetTreeCommits400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetTreeCommits400ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits401ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits404ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits503ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommitsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTreeCommitsdefaultApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRolesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -34880,6 +35306,112 @@ type RevokeSecretdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeSecretdefaultApplicationProblemPlusJSONResponse) VisitRevokeSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpendRequestObject struct {
+	Org    Org `json:"org"`
+	Params GetOrganizationSpendParams
+}
+
+type GetOrganizationSpendResponseObject interface {
+	VisitGetOrganizationSpendResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationSpend200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationSpend200JSONResponse struct {
+	Body    OrganizationSpend
+	Headers GetOrganizationSpend200ResponseHeaders
+}
+
+func (response GetOrganizationSpend200JSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationSpend304Response struct {
+	Headers GetOrganizationSpend304ResponseHeaders
+}
+
+func (response GetOrganizationSpend304Response) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationSpend400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationSpend400ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationSpend401ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationSpend404ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpenddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationSpenddefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -36392,7 +36924,7 @@ type StrictServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(ctx context.Context, request RequestReviewRequestObject) (RequestReviewResponseObject, error)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -36521,6 +37053,9 @@ type StrictServerInterface interface {
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(ctx context.Context, request GetTreeRequestObject) (GetTreeResponseObject, error)
+	// GetTreeCommits What last changed the directory at a path of the commit a ref names, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/tree/commits)
+	GetTreeCommits(ctx context.Context, request GetTreeCommitsRequestObject) (GetTreeCommitsResponseObject, error)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
@@ -36557,6 +37092,9 @@ type StrictServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(ctx context.Context, request RevokeSecretRequestObject) (RevokeSecretResponseObject, error)
+	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
+	// (GET /orgs/{org}/spend)
+	GetOrganizationSpend(ctx context.Context, request GetOrganizationSpendRequestObject) (GetOrganizationSpendResponseObject, error)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
@@ -41975,6 +42513,34 @@ func (sh *strictHandler) GetTree(w http.ResponseWriter, r *http.Request, org Org
 	}
 }
 
+// GetTreeCommits operation middleware
+func (sh *strictHandler) GetTreeCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeCommitsParams) {
+	var request GetTreeCommitsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTreeCommits(ctx, request.(GetTreeCommitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTreeCommits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTreeCommitsResponseObject); ok {
+		if err := validResponse.VisitGetTreeCommitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRoles operation middleware
 func (sh *strictHandler) ListRoles(w http.ResponseWriter, r *http.Request, org Org) {
 	var request ListRolesRequestObject
@@ -42327,6 +42893,33 @@ func (sh *strictHandler) RevokeSecret(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeSecretResponseObject); ok {
 		if err := validResponse.VisitRevokeSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationSpend operation middleware
+func (sh *strictHandler) GetOrganizationSpend(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationSpendParams) {
+	var request GetOrganizationSpendRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationSpend(ctx, request.(GetOrganizationSpendRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationSpend")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationSpendResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationSpendResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

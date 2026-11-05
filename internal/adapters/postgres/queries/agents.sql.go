@@ -155,7 +155,7 @@ const cancelTask = `-- name: CancelTask :one
 UPDATE agent_tasks SET state = 'cancelled', cancelled_by = $1, ended_at = now(), reason = $2
 WHERE org_id = $3 AND number = $4 AND state IN ('queued', 'running', 'waiting')
     AND ($5::bigint < 0 OR version = $5::bigint)
-RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id, sha, private
+RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id, sha, private, cap_reached
 `
 
 type CancelTaskParams struct {
@@ -200,6 +200,7 @@ func (q *Queries) CancelTask(ctx context.Context, arg CancelTaskParams) (AgentTa
 		&i.IssueID,
 		&i.Sha,
 		&i.Private,
+		&i.CapReached,
 	)
 	return i, err
 }
@@ -364,7 +365,7 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 }
 
 const task = `-- name: Task :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
     coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
@@ -419,6 +420,7 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.AgentTask.IssueID,
 		&i.AgentTask.Sha,
 		&i.AgentTask.Private,
+		&i.AgentTask.CapReached,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,
@@ -451,7 +453,7 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 }
 
 const tasks = `-- name: Tasks :many
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
     coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
@@ -541,6 +543,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.AgentTask.IssueID,
 			&i.AgentTask.Sha,
 			&i.AgentTask.Private,
+			&i.AgentTask.CapReached,
 			&i.AgentName,
 			&i.AssignerName,
 			&i.CancellerName,

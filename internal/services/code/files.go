@@ -20,8 +20,12 @@ type Objects interface {
 	// Raw streams the bytes of the file or symlink at path in the commit ref names.
 	Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (Raw, error)
 	// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, newest first
-	// as git log --date-order lists them, after skipping the first skip.
-	Log(ctx context.Context, repoID uuid.UUID, ref string, skip, limit int) (Log, error)
+	// as git log --date-order lists them, after skipping the first skip; with a path, only those that changed what is
+	// there, as git log -- path lists them.
+	Log(ctx context.Context, repoID uuid.UUID, ref, path string, skip, limit int) (Log, error)
+	// LastCommits reads what last changed the directory at path in the commit ref names: how many commits changed it,
+	// the latest of them, and the latest that changed each of its entries.
+	LastCommits(ctx context.Context, repoID uuid.UUID, ref, path string) (LastCommits, error)
 	// Merge builds the merge req asks for and records it as a push of its base, answering once it is committed:
 	// ErrBranchMoved when the branch or its base moved, and a *MergeError for a merge Cobranch won't make.
 	Merge(ctx context.Context, repoID uuid.UUID, req MergeRequest) (Merged, error)
@@ -47,8 +51,12 @@ func (unavailable) Raw(context.Context, uuid.UUID, string, string) (Raw, error) 
 	return Raw{}, ErrUnavailable
 }
 
-func (unavailable) Log(context.Context, uuid.UUID, string, int, int) (Log, error) {
+func (unavailable) Log(context.Context, uuid.UUID, string, string, int, int) (Log, error) {
 	return Log{}, ErrUnavailable
+}
+
+func (unavailable) LastCommits(context.Context, uuid.UUID, string, string) (LastCommits, error) {
+	return LastCommits{}, ErrUnavailable
 }
 
 func (unavailable) Merge(context.Context, uuid.UUID, MergeRequest) (Merged, error) {

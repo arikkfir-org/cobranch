@@ -125,6 +125,35 @@ func (a api) GetTree(ctx context.Context, req GetTreeRequestObject) (GetTreeResp
 	return GetTree200JSONResponse{Body: body, Headers: GetTree200ResponseHeaders{ETag: tag}}, nil
 }
 
+// GetTreeCommits answers what last changed the directory at a path of the commit a ref names, or 304 while the caller
+// holds it.
+func (a api) GetTreeCommits(ctx context.Context, req GetTreeCommitsRequestObject) (GetTreeCommitsResponseObject, error) {
+	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	dir := ""
+	if req.Params.Path != nil {
+		dir = *req.Params.Path
+	}
+	last, err := a.code.TreeCommits(ctx, v, repo.ID, refOf(req.Params.Ref), dir)
+	if err != nil {
+		return nil, codeFail(err)
+	}
+	body := TreeCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Entries: last.Entries, Commits: mapAll(last.Commits, commit)}
+	if last.Latest != "" {
+		body.Latest = &last.Latest
+	}
+	tag, err := bodyTag("tree-commits", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetTreeCommits304Response{Headers: GetTreeCommits304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetTreeCommits200JSONResponse{Body: body, Headers: GetTreeCommits200ResponseHeaders{ETag: tag}}, nil
+}
+
 func entry(e code.Entry) TreeEntry {
 	out := TreeEntry{Name: e.Name, Path: e.Path, Kind: TreeEntryKind(e.Kind), Mode: e.Mode, Sha: e.SHA}
 	if e.Kind == code.KindBlob || e.Kind == code.KindSymlink {

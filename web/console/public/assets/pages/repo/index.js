@@ -25,7 +25,7 @@ export async function repositoryBranches(ctx) {
   const { path, at, root } = ctx;
   const [branches, environments] = await Promise.all([listBranches(path),
     api("GET", path + "/environments").then((d) => d.environments, () => [])]);
-  if (!branches.length) return [h("section", { class: "card" }, h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon("git-branch")),
+  if (!branches.length) return [h("section", { class: "card empty-centred" }, h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon("git-branch")),
     h("h2", { class: "empty-title" }, "No branches yet"),
     h("p", { class: "empty-description" }, "Nothing has been pushed to this repository. Clone it and push main: every other branch is then a request to merge into it.")))];
   const main = branches.find((b) => !b.status);

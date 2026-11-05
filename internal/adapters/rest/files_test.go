@@ -86,6 +86,47 @@ func TestTreeAPI(t *testing.T) {
 	})
 }
 
+func TestTreeCommitsAPI(t *testing.T) {
+	const at = "/v1/orgs/acme/repos/website/tree/commits"
+	lastChanged := func(f *orgFixture) {
+		f.objects.LastChanged(code.LastCommits{Commit: shaOf("c"), Path: "docs", Count: 2, Latest: shaOf("c"),
+			Entries: map[string]string{"guide.md": shaOf("b"), "deep": shaOf("c"), "lost.md": shaOf("z")}})
+	}
+	runOrgCases(t, []orgCase{
+		{name: "a directory's count, latest and entries, each commit once", viewer: olivia, method: "GET", path: fixed(at + "?path=docs"), before: lastChanged,
+			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[TreeCommits](t, body)
+				var commits []string
+				for _, c := range got.Commits {
+					commits = append(commits, c.Sha)
+				}
+				if got.Commit != shaOf("c") || got.Path != "docs" || got.Count != 2 || got.Latest == nil || *got.Latest != shaOf("c") ||
+					len(got.Entries) != 2 || got.Entries["guide.md"] != shaOf("b") || got.Entries["deep"] != shaOf("c") ||
+					len(commits) != 2 || !slices.Contains(commits, shaOf("b")) || !slices.Contains(commits, shaOf("c")) {
+					t.Errorf("tree commits = %s, want docs' count, latest c, guide.md at b, deep at c, without what no push recorded", body)
+				}
+			}},
+		{name: "nothing changed it in the walk", viewer: olivia, method: "GET", path: fixed(at), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[TreeCommits](t, body); got.Latest != nil || len(got.Entries) != 0 || len(got.Commits) != 0 || got.Commit != shaOf("c") {
+					t.Errorf("tree commits = %s, want none", body)
+				}
+			}},
+		{name: "its ETag answers 304 while it holds", viewer: olivia, method: "GET", path: fixed(at + "?path=docs"), before: lastChanged, wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				tag := f.call(&f.olivia, "GET", at+"?path=docs", "").Header().Get("ETag")
+				req := httptest.NewRequest("GET", at+"?path=docs", nil)
+				req.Header.Set("If-None-Match", tag)
+				if rec := f.serve(&f.olivia, req); tag == "" || rec.Code != 304 {
+					t.Errorf("ETag %q answered %d, want 304", tag, rec.Code)
+				}
+			}},
+		{name: "a ref that names nothing", viewer: olivia, method: "GET", path: fixed(at + "?ref=gone"), wantStatus: 404, wantCode: "ref.not_found"},
+		{name: "a path that climbs out", viewer: olivia, method: "GET", path: fixed(at + "?path=.."), wantStatus: 400, wantCode: "path.invalid"},
+		{name: "a Member who doesn't read it", viewer: maxim, method: "GET", path: fixed(at), wantStatus: 404, wantCode: "repository.not_found"},
+	})
+}
+
 func TestBlobAPI(t *testing.T) {
 	file := func(check func(t *testing.T, f File)) func(t *testing.T, _ *orgFixture, body []byte) {
 		return func(t *testing.T, _ *orgFixture, body []byte) { check(t, decode[File](t, body)) }

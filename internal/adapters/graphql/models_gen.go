@@ -101,6 +101,27 @@ type AgentSecretInput struct {
 	SecretID string `json:"secretId"`
 }
 
+// What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+type AgentSpend struct {
+	Agent *CommitPrincipal `json:"agent"`
+	// The model provider it runs on; null while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+	// The model it runs on; null while it runs on none.
+	Model *string `json:"model,omitempty"`
+	// The most a task of it may spend; null for none.
+	Cap *string `json:"cap,omitempty"`
+	// Its tasks queued in the month.
+	Tasks int `json:"tasks"`
+	// Those of them that failed having spent its cap.
+	FailedOnCap int `json:"failedOnCap"`
+	// Those of them still queued, running or waiting.
+	Active int `json:"active"`
+	// What its calls in the month cost.
+	Spent string `json:"spent"`
+	// The task of its queued in the month that spent most in all, of those the viewer sees; null for none.
+	Costliest *TaskCost `json:"costliest,omitempty"`
+}
+
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
 type Annotation struct {
 	ID string `json:"id"`
@@ -572,6 +593,13 @@ type Email struct {
 	Verified bool   `json:"verified"`
 }
 
+// The latest commit that changed one of a directory's entries.
+type EntryCommit struct {
+	// The entry's name.
+	Name   string  `json:"name"`
+	Commit *Commit `json:"commit"`
+}
+
 // A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
 type Environment struct {
 	ID string `json:"id"`
@@ -1000,6 +1028,16 @@ type ModelProvider struct {
 	Version int `json:"version"`
 }
 
+// What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+type ModelSpend struct {
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	Tasks        int    `json:"tasks"`
+	InputTokens  int64  `json:"inputTokens"`
+	OutputTokens int64  `json:"outputTokens"`
+	Spent        string `json:"spent"`
+}
+
 type Mutation struct {
 }
 
@@ -1106,6 +1144,8 @@ type Organization struct {
 	AvailableModelProviders []string `json:"availableModelProviders"`
 	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	Models []*Model `json:"models"`
+	// What the organization's agents spent in month, such as 2026-11, this month when absent, in zone, an IANA time zone, UTC when absent: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too. A month or zone that isn't one is refused (BAD_USER_INPUT, spend.month_invalid or spend.zone_invalid).
+	Spend *OrganizationSpend `json:"spend"`
 	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`
 	// The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
@@ -1139,6 +1179,20 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 	// 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before.
 	IssueKey *string `json:"issueKey,omitempty"`
+}
+
+// What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type OrganizationSpend struct {
+	// The month, such as 2026-11.
+	Month string `json:"month"`
+	// The time zone its days begin and end in.
+	Zone  string    `json:"zone"`
+	Since time.Time `json:"since"`
+	Until time.Time `json:"until"`
+	// Every agent of the organization, by name.
+	Agents []*AgentSpend `json:"agents"`
+	// Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+	Models []*ModelSpend `json:"models"`
 }
 
 // What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
@@ -1249,7 +1303,7 @@ type Repository struct {
 	Branch *Branch `json:"branch,omitempty"`
 	// The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read.
 	DeletedBranch *DeletedBranch `json:"deletedBranch,omitempty"`
-	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100.
+	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`
@@ -1259,6 +1313,8 @@ type Repository struct {
 	Tags []*Tag `json:"tags"`
 	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
 	Tree *Tree `json:"tree,omitempty"`
+	// What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree.
+	TreeCommits *TreeCommits `json:"treeCommits,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
 	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
@@ -1539,6 +1595,13 @@ type Task struct {
 	Transcript []*TranscriptEntry `json:"transcript"`
 }
 
+// A task and what it spent in all.
+type TaskCost struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Spent  string `json:"spent"`
+}
+
 // A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
 type TaskInput struct {
 	AgentID string `json:"agentId"`
@@ -1612,6 +1675,20 @@ type Tree struct {
 	Entries []*TreeEntry `json:"entries"`
 	// Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
 	Readme *File `json:"readme,omitempty"`
+}
+
+// What last changed a directory at a commit.
+type TreeCommits struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// The directory's path from the repository's root; empty for the root.
+	Path string `json:"path"`
+	// How many commits reachable from the commit changed the directory, every commit for the root.
+	Count int `json:"count"`
+	// The latest commit that changed the directory.
+	Latest *Commit `json:"latest,omitempty"`
+	// The latest commit that changed each of the directory's entries, by the entry's name.
+	Entries []*EntryCommit `json:"entries"`
 }
 
 // One of a directory's entries.
