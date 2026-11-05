@@ -837,6 +837,7 @@ type ComplexityRoot struct {
 		ModelProviders          func(childComplexity int) int
 		Models                  func(childComplexity int) int
 		Name                    func(childComplexity int) int
+		Overview                func(childComplexity int, from *string, to *string, zone *string) int
 		Providers               func(childComplexity int) int
 		Repositories            func(childComplexity int) int
 		Repository              func(childComplexity int, slug string) int
@@ -848,6 +849,23 @@ type ComplexityRoot struct {
 		Tasks                   func(childComplexity int, agent *string, states []TaskState, repositoryID *string, first int, after *string) int
 		Usage                   func(childComplexity int) int
 		ViewerPermissions       func(childComplexity int) int
+	}
+
+	OrganizationOverview struct {
+		Agents          func(childComplexity int) int
+		BlockedBranches func(childComplexity int) int
+		ByRepository    func(childComplexity int) int
+		Days            func(childComplexity int) int
+		From            func(childComplexity int) int
+		Issues          func(childComplexity int) int
+		Members         func(childComplexity int) int
+		QueuedTasks     func(childComplexity int) int
+		ReadyBranches   func(childComplexity int) int
+		Repositories    func(childComplexity int) int
+		To              func(childComplexity int) int
+		Totals          func(childComplexity int) int
+		WorkingAgents   func(childComplexity int) int
+		Zone            func(childComplexity int) int
 	}
 
 	OrganizationSpend struct {
@@ -863,6 +881,36 @@ type ComplexityRoot struct {
 		ByRepository func(childComplexity int) int
 		GitData      func(childComplexity int) int
 		Repositories func(childComplexity int) int
+	}
+
+	OverviewDay struct {
+		Date       func(childComplexity int) int
+		JobMinutes func(childComplexity int) int
+		Jobs       func(childComplexity int) int
+		Spent      func(childComplexity int) int
+		Tasks      func(childComplexity int) int
+	}
+
+	OverviewFigures struct {
+		JobMinutes func(childComplexity int) int
+		Jobs       func(childComplexity int) int
+		Spent      func(childComplexity int) int
+		Tasks      func(childComplexity int) int
+	}
+
+	OverviewIssues struct {
+		Open   func(childComplexity int) int
+		Opened func(childComplexity int) int
+	}
+
+	OverviewRepository struct {
+		Commits    func(childComplexity int) int
+		JobMinutes func(childComplexity int) int
+		Jobs       func(childComplexity int) int
+		Merged     func(childComplexity int) int
+		Repository func(childComplexity int) int
+		Spent      func(childComplexity int) int
+		Tasks      func(childComplexity int) int
 	}
 
 	Paths struct {
@@ -1348,6 +1396,7 @@ type OrganizationResolver interface {
 	Repository(ctx context.Context, obj *Organization, slug string) (*Repository, error)
 	Secrets(ctx context.Context, obj *Organization) ([]*Secret, error)
 	Usage(ctx context.Context, obj *Organization) (*OrganizationUsage, error)
+	Overview(ctx context.Context, obj *Organization, from *string, to *string, zone *string) (*OrganizationOverview, error)
 }
 type QueryResolver interface {
 	Version(ctx context.Context) (string, error)
@@ -5427,6 +5476,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Name(childComplexity), true
+	case "Organization.overview":
+		if e.ComplexityRoot.Organization.Overview == nil {
+			break
+		}
+
+		args, err := ec.field_Organization_overview_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Organization.Overview(childComplexity, args["from"].(*string), args["to"].(*string), args["zone"].(*string)), true
 	case "Organization.providers":
 		if e.ComplexityRoot.Organization.Providers == nil {
 			break
@@ -5514,6 +5574,91 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Organization.ViewerPermissions(childComplexity), true
 
+	case "OrganizationOverview.agents":
+		if e.ComplexityRoot.OrganizationOverview.Agents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Agents(childComplexity), true
+	case "OrganizationOverview.blockedBranches":
+		if e.ComplexityRoot.OrganizationOverview.BlockedBranches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.BlockedBranches(childComplexity), true
+	case "OrganizationOverview.byRepository":
+		if e.ComplexityRoot.OrganizationOverview.ByRepository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.ByRepository(childComplexity), true
+	case "OrganizationOverview.days":
+		if e.ComplexityRoot.OrganizationOverview.Days == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Days(childComplexity), true
+	case "OrganizationOverview.from":
+		if e.ComplexityRoot.OrganizationOverview.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.From(childComplexity), true
+	case "OrganizationOverview.issues":
+		if e.ComplexityRoot.OrganizationOverview.Issues == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Issues(childComplexity), true
+	case "OrganizationOverview.members":
+		if e.ComplexityRoot.OrganizationOverview.Members == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Members(childComplexity), true
+	case "OrganizationOverview.queuedTasks":
+		if e.ComplexityRoot.OrganizationOverview.QueuedTasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.QueuedTasks(childComplexity), true
+	case "OrganizationOverview.readyBranches":
+		if e.ComplexityRoot.OrganizationOverview.ReadyBranches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.ReadyBranches(childComplexity), true
+	case "OrganizationOverview.repositories":
+		if e.ComplexityRoot.OrganizationOverview.Repositories == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Repositories(childComplexity), true
+	case "OrganizationOverview.to":
+		if e.ComplexityRoot.OrganizationOverview.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.To(childComplexity), true
+	case "OrganizationOverview.totals":
+		if e.ComplexityRoot.OrganizationOverview.Totals == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Totals(childComplexity), true
+	case "OrganizationOverview.workingAgents":
+		if e.ComplexityRoot.OrganizationOverview.WorkingAgents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.WorkingAgents(childComplexity), true
+	case "OrganizationOverview.zone":
+		if e.ComplexityRoot.OrganizationOverview.Zone == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationOverview.Zone(childComplexity), true
+
 	case "OrganizationSpend.agents":
 		if e.ComplexityRoot.OrganizationSpend.Agents == nil {
 			break
@@ -5569,6 +5714,118 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OrganizationUsage.Repositories(childComplexity), true
+
+	case "OverviewDay.date":
+		if e.ComplexityRoot.OverviewDay.Date == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewDay.Date(childComplexity), true
+	case "OverviewDay.jobMinutes":
+		if e.ComplexityRoot.OverviewDay.JobMinutes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewDay.JobMinutes(childComplexity), true
+	case "OverviewDay.jobs":
+		if e.ComplexityRoot.OverviewDay.Jobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewDay.Jobs(childComplexity), true
+	case "OverviewDay.spent":
+		if e.ComplexityRoot.OverviewDay.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewDay.Spent(childComplexity), true
+	case "OverviewDay.tasks":
+		if e.ComplexityRoot.OverviewDay.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewDay.Tasks(childComplexity), true
+
+	case "OverviewFigures.jobMinutes":
+		if e.ComplexityRoot.OverviewFigures.JobMinutes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewFigures.JobMinutes(childComplexity), true
+	case "OverviewFigures.jobs":
+		if e.ComplexityRoot.OverviewFigures.Jobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewFigures.Jobs(childComplexity), true
+	case "OverviewFigures.spent":
+		if e.ComplexityRoot.OverviewFigures.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewFigures.Spent(childComplexity), true
+	case "OverviewFigures.tasks":
+		if e.ComplexityRoot.OverviewFigures.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewFigures.Tasks(childComplexity), true
+
+	case "OverviewIssues.open":
+		if e.ComplexityRoot.OverviewIssues.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewIssues.Open(childComplexity), true
+	case "OverviewIssues.opened":
+		if e.ComplexityRoot.OverviewIssues.Opened == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewIssues.Opened(childComplexity), true
+
+	case "OverviewRepository.commits":
+		if e.ComplexityRoot.OverviewRepository.Commits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Commits(childComplexity), true
+	case "OverviewRepository.jobMinutes":
+		if e.ComplexityRoot.OverviewRepository.JobMinutes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.JobMinutes(childComplexity), true
+	case "OverviewRepository.jobs":
+		if e.ComplexityRoot.OverviewRepository.Jobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Jobs(childComplexity), true
+	case "OverviewRepository.merged":
+		if e.ComplexityRoot.OverviewRepository.Merged == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Merged(childComplexity), true
+	case "OverviewRepository.repository":
+		if e.ComplexityRoot.OverviewRepository.Repository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Repository(childComplexity), true
+	case "OverviewRepository.spent":
+		if e.ComplexityRoot.OverviewRepository.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Spent(childComplexity), true
+	case "OverviewRepository.tasks":
+		if e.ComplexityRoot.OverviewRepository.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OverviewRepository.Tasks(childComplexity), true
 
 	case "Paths.commit":
 		if e.ComplexityRoot.Paths.Commit == nil {
@@ -9900,7 +10157,7 @@ input SecretChange {
 }
 `, BuiltIn: false},
 	{Name: "../../../api/graphql/usage.graphqls", Input: `# Usage: what users and organizations take of what the installation's limits cap
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console", "An organization's figures").
 
 "An integer that may pass GraphQL's 32-bit Int, such as a number of bytes: a JSON number."
 scalar Int64
@@ -9944,6 +10201,82 @@ extend type User {
 extend type Organization {
   "What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too."
   usage: OrganizationUsage!
+}
+
+extend type Organization {
+  "How the organization's work stands, and what it did over the days from from to to, both included, written as 2026-11-01, in the IANA time zone zone: to is today there when absent, from the first day of to's month, and zone UTC. At most 92 days; takes org.read. Branches and repositories are those the viewer reads, issues show only to a viewer holding issues.read, and the days count every task and job run of the organization, as its usage counts every repository."
+  overview(from: String, to: String, zone: String): OrganizationOverview!
+}
+
+"How an organization's work stands, and what it did over a period of days in a time zone. Amounts are US dollars, as decimals such as 42.18."
+type OrganizationOverview {
+  "The period's first day, such as 2026-11-01."
+  from: String!
+  "The period's last day."
+  to: String!
+  "The time zone its days begin and end in."
+  zone: String!
+  "The organization's members."
+  members: Int64!
+  "The repositories the viewer reads."
+  repositories: Int64!
+  "The organization's agents."
+  agents: Int64!
+  "Its open issues, and those opened in the period; null for a viewer who may not read its issues."
+  issues: OverviewIssues
+  "The live branches, but main, of the repositories the viewer reads that are Ready."
+  readyBranches: Int64!
+  "Those that are Blocked."
+  blockedBranches: Int64!
+  "The agents with a task running."
+  workingAgents: Int64!
+  "The tasks waiting for their agent."
+  queuedTasks: Int64!
+  "The period's totals."
+  totals: OverviewFigures!
+  "Every day of the period, first to last."
+  days: [OverviewDay!]!
+  "The repositories the viewer reads that saw anything in the period, costliest first."
+  byRepository: [OverviewRepository!]!
+}
+
+"An organization's open issues, and those opened in a period."
+type OverviewIssues {
+  open: Int64!
+  opened: Int64!
+}
+
+"What an organization did over a span: the tasks queued, what its tasks' calls of their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute."
+type OverviewFigures {
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
+}
+
+"One day of a period and what the organization did then."
+type OverviewDay {
+  "The day, such as 2026-11-05."
+  date: String!
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
+}
+
+"One repository's share of a period's figures, with the commits first pushed to it and the branches merged into its main."
+type OverviewRepository {
+  "The repository's slug."
+  repository: String!
+  commits: Int64!
+  merged: Int64!
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
 }
 `, BuiltIn: false},
 }
@@ -11359,8 +11692,44 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_secrets(ctx, field)
 	case "usage":
 		return ec.fieldContext_Organization_usage(ctx, field)
+	case "overview":
+		return ec.fieldContext_Organization_overview(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
+}
+
+func (ec *executionContext) childFields_OrganizationOverview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "from":
+		return ec.fieldContext_OrganizationOverview_from(ctx, field)
+	case "to":
+		return ec.fieldContext_OrganizationOverview_to(ctx, field)
+	case "zone":
+		return ec.fieldContext_OrganizationOverview_zone(ctx, field)
+	case "members":
+		return ec.fieldContext_OrganizationOverview_members(ctx, field)
+	case "repositories":
+		return ec.fieldContext_OrganizationOverview_repositories(ctx, field)
+	case "agents":
+		return ec.fieldContext_OrganizationOverview_agents(ctx, field)
+	case "issues":
+		return ec.fieldContext_OrganizationOverview_issues(ctx, field)
+	case "readyBranches":
+		return ec.fieldContext_OrganizationOverview_readyBranches(ctx, field)
+	case "blockedBranches":
+		return ec.fieldContext_OrganizationOverview_blockedBranches(ctx, field)
+	case "workingAgents":
+		return ec.fieldContext_OrganizationOverview_workingAgents(ctx, field)
+	case "queuedTasks":
+		return ec.fieldContext_OrganizationOverview_queuedTasks(ctx, field)
+	case "totals":
+		return ec.fieldContext_OrganizationOverview_totals(ctx, field)
+	case "days":
+		return ec.fieldContext_OrganizationOverview_days(ctx, field)
+	case "byRepository":
+		return ec.fieldContext_OrganizationOverview_byRepository(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OrganizationOverview", field.Name)
 }
 
 func (ec *executionContext) childFields_OrganizationSpend(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -11391,6 +11760,66 @@ func (ec *executionContext) childFields_OrganizationUsage(ctx context.Context, f
 		return ec.fieldContext_OrganizationUsage_byRepository(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OrganizationUsage", field.Name)
+}
+
+func (ec *executionContext) childFields_OverviewDay(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "date":
+		return ec.fieldContext_OverviewDay_date(ctx, field)
+	case "tasks":
+		return ec.fieldContext_OverviewDay_tasks(ctx, field)
+	case "spent":
+		return ec.fieldContext_OverviewDay_spent(ctx, field)
+	case "jobMinutes":
+		return ec.fieldContext_OverviewDay_jobMinutes(ctx, field)
+	case "jobs":
+		return ec.fieldContext_OverviewDay_jobs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OverviewDay", field.Name)
+}
+
+func (ec *executionContext) childFields_OverviewFigures(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "tasks":
+		return ec.fieldContext_OverviewFigures_tasks(ctx, field)
+	case "spent":
+		return ec.fieldContext_OverviewFigures_spent(ctx, field)
+	case "jobMinutes":
+		return ec.fieldContext_OverviewFigures_jobMinutes(ctx, field)
+	case "jobs":
+		return ec.fieldContext_OverviewFigures_jobs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OverviewFigures", field.Name)
+}
+
+func (ec *executionContext) childFields_OverviewIssues(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "open":
+		return ec.fieldContext_OverviewIssues_open(ctx, field)
+	case "opened":
+		return ec.fieldContext_OverviewIssues_opened(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OverviewIssues", field.Name)
+}
+
+func (ec *executionContext) childFields_OverviewRepository(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repository":
+		return ec.fieldContext_OverviewRepository_repository(ctx, field)
+	case "commits":
+		return ec.fieldContext_OverviewRepository_commits(ctx, field)
+	case "merged":
+		return ec.fieldContext_OverviewRepository_merged(ctx, field)
+	case "tasks":
+		return ec.fieldContext_OverviewRepository_tasks(ctx, field)
+	case "spent":
+		return ec.fieldContext_OverviewRepository_spent(ctx, field)
+	case "jobMinutes":
+		return ec.fieldContext_OverviewRepository_jobMinutes(ctx, field)
+	case "jobs":
+		return ec.fieldContext_OverviewRepository_jobs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OverviewRepository", field.Name)
 }
 
 func (ec *executionContext) childFields_Paths(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -15126,6 +15555,36 @@ func (ec *executionContext) field_Organization_issues_args(ctx context.Context, 
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Organization_overview_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "from",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["from"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "to",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["to"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "zone",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["zone"] = arg2
 	return args, nil
 }
 
@@ -32285,6 +32744,408 @@ func (ec *executionContext) fieldContext_Organization_usage(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_overview(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_overview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Organization().Overview(ctx, obj, fc.Args["from"].(*string), fc.Args["to"].(*string), fc.Args["zone"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OrganizationOverview) graphql.Marshaler {
+			return ec.marshalNOrganizationOverview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationOverview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_overview(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OrganizationOverview(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Organization_overview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationOverview_from(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_from(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "String")
+}
+
+func (ec *executionContext) _OrganizationOverview_to(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_to(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "String")
+}
+
+func (ec *executionContext) _OrganizationOverview_zone(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_zone(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Zone, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_zone(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "String")
+}
+
+func (ec *executionContext) _OrganizationOverview_members(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_members(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Members, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_members(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_repositories(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_repositories(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repositories, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_repositories(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_agents(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_agents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Agents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_agents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_issues(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_issues(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Issues, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OverviewIssues) graphql.Marshaler {
+			return ec.marshalOOverviewIssues2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewIssues(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_issues(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationOverview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OverviewIssues(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationOverview_readyBranches(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_readyBranches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReadyBranches, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_readyBranches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_blockedBranches(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_blockedBranches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BlockedBranches, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_blockedBranches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_workingAgents(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_workingAgents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WorkingAgents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_workingAgents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_queuedTasks(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_queuedTasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.QueuedTasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_queuedTasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationOverview", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OrganizationOverview_totals(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_totals(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Totals, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OverviewFigures) graphql.Marshaler {
+			return ec.marshalNOverviewFigures2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewFigures(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_totals(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationOverview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OverviewFigures(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationOverview_days(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_days(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Days, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*OverviewDay) graphql.Marshaler {
+			return ec.marshalNOverviewDay2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewDayᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_days(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationOverview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OverviewDay(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationOverview_byRepository(ctx context.Context, field graphql.CollectedField, obj *OrganizationOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationOverview_byRepository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ByRepository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*OverviewRepository) graphql.Marshaler {
+			return ec.marshalNOverviewRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewRepositoryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationOverview_byRepository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationOverview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OverviewRepository(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OrganizationSpend_month(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32535,6 +33396,420 @@ func (ec *executionContext) fieldContext_OrganizationUsage_byRepository(_ contex
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _OverviewDay_date(ctx context.Context, field graphql.CollectedField, obj *OverviewDay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewDay_date(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Date, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewDay_date(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewDay", field, false, false, "String")
+}
+
+func (ec *executionContext) _OverviewDay_tasks(ctx context.Context, field graphql.CollectedField, obj *OverviewDay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewDay_tasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewDay_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewDay", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewDay_spent(ctx context.Context, field graphql.CollectedField, obj *OverviewDay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewDay_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewDay_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewDay", field, false, false, "String")
+}
+
+func (ec *executionContext) _OverviewDay_jobMinutes(ctx context.Context, field graphql.CollectedField, obj *OverviewDay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewDay_jobMinutes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobMinutes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewDay_jobMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewDay", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewDay_jobs(ctx context.Context, field graphql.CollectedField, obj *OverviewDay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewDay_jobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Jobs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewDay_jobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewDay", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewFigures_tasks(ctx context.Context, field graphql.CollectedField, obj *OverviewFigures) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewFigures_tasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewFigures_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewFigures", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewFigures_spent(ctx context.Context, field graphql.CollectedField, obj *OverviewFigures) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewFigures_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewFigures_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewFigures", field, false, false, "String")
+}
+
+func (ec *executionContext) _OverviewFigures_jobMinutes(ctx context.Context, field graphql.CollectedField, obj *OverviewFigures) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewFigures_jobMinutes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobMinutes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewFigures_jobMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewFigures", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewFigures_jobs(ctx context.Context, field graphql.CollectedField, obj *OverviewFigures) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewFigures_jobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Jobs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewFigures_jobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewFigures", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewIssues_open(ctx context.Context, field graphql.CollectedField, obj *OverviewIssues) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewIssues_open(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewIssues_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewIssues", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewIssues_opened(ctx context.Context, field graphql.CollectedField, obj *OverviewIssues) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewIssues_opened(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Opened, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewIssues_opened(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewIssues", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewRepository_repository(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_repository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_repository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "String")
+}
+
+func (ec *executionContext) _OverviewRepository_commits(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_commits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_commits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewRepository_merged(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_merged(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Merged, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_merged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewRepository_tasks(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_tasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewRepository_spent(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "String")
+}
+
+func (ec *executionContext) _OverviewRepository_jobMinutes(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_jobMinutes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobMinutes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_jobMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _OverviewRepository_jobs(ctx context.Context, field graphql.CollectedField, obj *OverviewRepository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OverviewRepository_jobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Jobs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OverviewRepository_jobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OverviewRepository", field, false, false, "Int64")
 }
 
 func (ec *executionContext) _Paths_commit(ctx context.Context, field graphql.CollectedField, obj *Paths) (ret graphql.Marshaler) {
@@ -47178,6 +48453,110 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_usage(ctx, field, obj)
 				})
+		case "overview":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_overview(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var organizationOverviewImplementors = []string{"OrganizationOverview"}
+
+func (ec *executionContext) _OrganizationOverview(ctx context.Context, sel ast.SelectionSet, obj *OrganizationOverview) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, organizationOverviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OrganizationOverview")
+		case "from":
+			out.Values[i] = ec._OrganizationOverview_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._OrganizationOverview_to(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "zone":
+			out.Values[i] = ec._OrganizationOverview_zone(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "members":
+			out.Values[i] = ec._OrganizationOverview_members(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "repositories":
+			out.Values[i] = ec._OrganizationOverview_repositories(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agents":
+			out.Values[i] = ec._OrganizationOverview_agents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "issues":
+			out.Values[i] = ec._OrganizationOverview_issues(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "readyBranches":
+			out.Values[i] = ec._OrganizationOverview_readyBranches(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blockedBranches":
+			out.Values[i] = ec._OrganizationOverview_blockedBranches(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "workingAgents":
+			out.Values[i] = ec._OrganizationOverview_workingAgents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "queuedTasks":
+			out.Values[i] = ec._OrganizationOverview_queuedTasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totals":
+			out.Values[i] = ec._OrganizationOverview_totals(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "days":
+			out.Values[i] = ec._OrganizationOverview_days(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "byRepository":
+			out.Values[i] = ec._OrganizationOverview_byRepository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -47276,6 +48655,208 @@ func (ec *executionContext) _OrganizationUsage(ctx context.Context, sel ast.Sele
 			}
 		case "byRepository":
 			out.Values[i] = ec._OrganizationUsage_byRepository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var overviewDayImplementors = []string{"OverviewDay"}
+
+func (ec *executionContext) _OverviewDay(ctx context.Context, sel ast.SelectionSet, obj *OverviewDay) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, overviewDayImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OverviewDay")
+		case "date":
+			out.Values[i] = ec._OverviewDay_date(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tasks":
+			out.Values[i] = ec._OverviewDay_tasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._OverviewDay_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobMinutes":
+			out.Values[i] = ec._OverviewDay_jobMinutes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobs":
+			out.Values[i] = ec._OverviewDay_jobs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var overviewFiguresImplementors = []string{"OverviewFigures"}
+
+func (ec *executionContext) _OverviewFigures(ctx context.Context, sel ast.SelectionSet, obj *OverviewFigures) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, overviewFiguresImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OverviewFigures")
+		case "tasks":
+			out.Values[i] = ec._OverviewFigures_tasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._OverviewFigures_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobMinutes":
+			out.Values[i] = ec._OverviewFigures_jobMinutes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobs":
+			out.Values[i] = ec._OverviewFigures_jobs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var overviewIssuesImplementors = []string{"OverviewIssues"}
+
+func (ec *executionContext) _OverviewIssues(ctx context.Context, sel ast.SelectionSet, obj *OverviewIssues) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, overviewIssuesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OverviewIssues")
+		case "open":
+			out.Values[i] = ec._OverviewIssues_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "opened":
+			out.Values[i] = ec._OverviewIssues_opened(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var overviewRepositoryImplementors = []string{"OverviewRepository"}
+
+func (ec *executionContext) _OverviewRepository(ctx context.Context, sel ast.SelectionSet, obj *OverviewRepository) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, overviewRepositoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OverviewRepository")
+		case "repository":
+			out.Values[i] = ec._OverviewRepository_repository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commits":
+			out.Values[i] = ec._OverviewRepository_commits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "merged":
+			out.Values[i] = ec._OverviewRepository_merged(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tasks":
+			out.Values[i] = ec._OverviewRepository_tasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._OverviewRepository_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobMinutes":
+			out.Values[i] = ec._OverviewRepository_jobMinutes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobs":
+			out.Values[i] = ec._OverviewRepository_jobs(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -51320,6 +52901,14 @@ func (ec *executionContext) marshalNOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 	return ec._Organization(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNOrganizationOverview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationOverview(ctx context.Context, sel ast.SelectionSet, v *OrganizationOverview) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OrganizationOverview!")
+		return graphql.Null
+	}
+	return ec._OrganizationOverview(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSettings(ctx context.Context, v any) (OrganizationSettings, error) {
 	res, err := ec.unmarshalInputOrganizationSettings(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -51339,6 +52928,62 @@ func (ec *executionContext) marshalNOrganizationUsage2ᚖcobranchᚗdevᚋintern
 		return graphql.Null
 	}
 	return ec._OrganizationUsage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOverviewDay2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewDayᚄ(ctx context.Context, sel ast.SelectionSet, v []*OverviewDay) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNOverviewDay2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewDay(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOverviewDay2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewDay(ctx context.Context, sel ast.SelectionSet, v *OverviewDay) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OverviewDay!")
+		return graphql.Null
+	}
+	return ec._OverviewDay(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOverviewFigures2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewFigures(ctx context.Context, sel ast.SelectionSet, v *OverviewFigures) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OverviewFigures!")
+		return graphql.Null
+	}
+	return ec._OverviewFigures(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOverviewRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewRepositoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*OverviewRepository) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNOverviewRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewRepository(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOverviewRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewRepository(ctx context.Context, sel ast.SelectionSet, v *OverviewRepository) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OverviewRepository!")
+		return graphql.Null
+	}
+	return ec._OverviewRepository(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPerson2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPerson(ctx context.Context, sel ast.SelectionSet, v *Person) graphql.Marshaler {
@@ -52813,6 +54458,13 @@ func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 		return graphql.Null
 	}
 	return ec._Organization(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOOverviewIssues2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOverviewIssues(ctx context.Context, sel ast.SelectionSet, v *OverviewIssues) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._OverviewIssues(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOPaths2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPaths(ctx context.Context, sel ast.SelectionSet, v *Paths) graphql.Marshaler {

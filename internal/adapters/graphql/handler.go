@@ -20,19 +20,20 @@ const maxSubscription = time.Hour
 // NewHandler serves queries over GET and POST, for a server built as version, with sessions for the viewer's,
 // organizations and repositories for theirs, code for the repositories' branches and commits, issues for the
 // organizations' issues, chats for the branches' chats, agents for the organizations' agents and tasks, secrets for
-// their secrets, and artifacts for the repositories' artifacts. Subscriptions run over WebSocket (graphql-transport-ws),
-// for the API's own pages, from origin pages, and for clients that send no Origin; each closes after an hour. A mutation runs over POST and WebSocket alone: GET's
+// their secrets, artifacts for the repositories' artifacts, and overview for the organizations' figures. Subscriptions
+// run over WebSocket (graphql-transport-ws), for the API's own pages, from origin pages, and for clients that send no
+// Origin; each closes after an hour. A mutation runs over POST and WebSocket alone: GET's
 // transport refuses it, so a cross-site navigation changes nothing, and a page from another origin opens no WebSocket.
 // It times each root field of a query or a mutation.
 func NewHandler(version, pages string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, issues Issues, chats Chats,
-	agents Agents, secrets Secrets, artifacts Artifacts, opts ...Option,
+	agents Agents, secrets Secrets, artifacts Artifacts, overview Overview, opts ...Option,
 ) http.Handler {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	srv := handler.New(NewExecutableSchema(Config{Resolvers: &Resolver{Version: version, Sessions: sessions, Orgs: organizations, Repos: repositories,
-		Code: code, IssueService: issues, Chats: chats, Agents: agents, Secrets: secrets, Artifacts: artifacts}}))
+		Code: code, IssueService: issues, Chats: chats, Agents: agents, Secrets: secrets, Artifacts: artifacts, Overview: overview}}))
 	srv.AddTransport(transport.GET{})
 	srv.AddTransport(transport.POST{})
 	var origins []string

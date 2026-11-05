@@ -23,8 +23,8 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 53 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
-| Screens | 50 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Components | 55 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
+| Screens | 53 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -136,7 +136,7 @@ Weights stop at Semi Bold: hierarchy comes from size and colour (`fg/default` ag
 ## Spacing, radii and elevation
 
 Spacing follows a 4 px grid with a 2 px half-step, and every padding, gap and radius in the file is bound to a token, so
-a change to a token moves every screen. The density is comfortable: rows are 36 px, table rows included.
+a change to a token moves every screen. The density is comfortable: rows are 36 px, table rows included, each above its 1 px divider.
 
 | Group | Tokens (px) | Use |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ a change to a token moves every screen. The density is comfortable: rows are 36 
 | `size/icon-*` | sm 16, md 20 | Icons |
 | `size/row`, `size/row-sm` | 36, 32 | Rows and table rows; `row-sm` is no longer used |
 | `size/topbar`, `size/sidebar`, `size/pane` | 48, 240, 320 | App shell |
-| `radius/*` | none 0, sm 4, md 6, lg 8, xl 12, full 999 | sm for tags and code chips; md for buttons, inputs and menu items; lg for cards, menus and machine avatars; xl for dialogs; full for people, status badges and counts |
+| `radius/*` | none 0, xs 2, sm 4, md 6, lg 8, xl 12, full 999 | xs for a chart's bars; sm for tags and code chips; md for buttons, inputs and menu items; lg for cards, menus and machine avatars; xl for dialogs; full for people, status badges and counts |
 
 **Elevation** is rare: content sits on flat cards with a 1 px border, and shadows mark only what floats above the page.
 
@@ -229,7 +229,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 53 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 55 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
@@ -276,6 +276,8 @@ plan.
 | Pattern/Agent row | Status: Working (Info), Watching (AI), Idle (Neutral) | Name, what it does now, which wraps; Avatar Agent 24 and the status Tag nested | `.agent-row` in a `.list` |
 | Swatch | State: Default, Chosen | A label's colour as the Tag it gives, padded inside 1px of transparent border; Chosen ringed 2px in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`), `.is-chosen` |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
+| Stat | None | A counter: its label in Label/Small with its icon at the end, its value in Heading/Large, and a Badge/Quiet under it that says more | `.stat` (`.stat-label`, `.stat-value`) and a `.badge-quiet` |
+| Chart/Bars | State: Default, Hover; Tone: Info, AI, Accent | A Card of a value by day: title and total, a bar a day at most 10 px wide and 4 px apart, the first and last day; a pointed bar turns fg/default under a tooltip of its day and value | `.chart-bars` (`.tone-ai`, `.tone-accent`) in a `.card`, of `.chart-bars-plot`, `.chart-bars-bar`, `.chart-bars-tooltip` and `.chart-bars-axis` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
 place a node inside an instance (Figma refuses it; compose rows beside it).
@@ -331,7 +333,7 @@ only cue.
 
 ## Screens
 
-Fifty screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Fifty-three screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -339,7 +341,10 @@ Researcher waits for a task.
 | --- | --- |
 | [Sign in](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-2) | Google, GitHub and SSO, or email; a link to sign up |
 | [Sign up: organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-79) | Step 2 of 2: create an organization or ask to join one |
-| [Overview](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Branches that need you, repositories, agents at work, recent activity |
+| [Overview](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Counters, then tasks, spend and job minutes by day, then the same by repository, over a period: this month, last month or the last 30 days |
+| [Overview · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12276) | An organization with nothing to count yet, and New repository |
+| [Overview · 1024](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=202-28680) | Below 1200 wide the counters wrap, four to a row, and a chart's total goes under its title |
+| [Overview · Phone](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=202-28173) | At 390: the header stacks, two counters to a row, the charts stacked, and the table keeps Repository and Spend |
 | [Activity](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=124-12015) | What needs you, the repositories pushed to last, the agents at work and what happened |
 | [Repositories](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=69-3127) | Every repository as a table: visibility, default branch, open branches, status, last push |
 | [New repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12992) | A card of a repository's name and description; Create repository opens it |
@@ -528,7 +533,7 @@ preference unless `data-theme="light"`.
 | What colour is the primary action? | Blue; ink stays for text and the mark (2026-11-04) |
 | Light, dark, or both? | Both, equal: the system decides, and a person may override it (2026-11-04) |
 | What is the shell? | A sidebar and a top bar, both fixed (2026-11-04) |
-| How dense? | Comfortable: 36 px rows (2026-11-04), table rows too (2026-11-05) |
+| How dense? | Comfortable: 36 px rows (2026-11-04), table rows too (2026-11-05), each above its divider |
 | What is the mark? | A person and an agent on one trunk, in an ink square, from 24 px; the branch graph at 16 px and as the favicon (2026-11-04) |
 | Where does the system live in code? | `tokens.css` and a component stylesheet in the Console; Figma stays the source (2026-11-04) |
 | How are settings laid out? | Tabs, scoped to the organization (2026-11-04) |

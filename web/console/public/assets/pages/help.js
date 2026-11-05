@@ -2,6 +2,7 @@ import { annotationStatuses } from "../lib/annotations.js";
 import { logo, mark, markSmall } from "../lib/brand.js";
 import { branchStatuses } from "../lib/branches.js";
 import { h } from "../lib/dom.js";
+import { bars, day, stat } from "../lib/figures.js";
 import { copyField } from "../lib/forms.js";
 import { icon } from "../lib/icons.js";
 import { reviewStates } from "../lib/reviews.js";
@@ -37,7 +38,7 @@ const toneName = (t) => t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1);
 function components() {
   return [h("h1", {}, "Components"),
     h("p", {}, "Every component of the Console's component stylesheet, and the brand's marks, as the design system's Figma file draws them. Hover a control to see its hover state and Tab to it to see its focus ring; the segmented control under Forms switches the theme, to compare both. The app shell's own components (App/*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn by the shell, not here."),
-    brand(), buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), patterns()];
+    brand(), buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), figures(), patterns()];
 }
 
 function brand() {
@@ -187,6 +188,25 @@ function surfaces() {
     h("header", { class: "page-header" }, h("div", { class: "page-header-text" }, h("h1", { class: "page-header-title" }, "Page title"),
       h("p", { class: "page-header-description" }, "One line on what the page holds or where it stands.")),
       h("div", { class: "page-header-actions" }, h("button", { class: "btn", type: "button" }, "Secondary"), h("button", { class: "btn btn-primary", type: "button" }, icon("plus"), "Primary"))));
+}
+
+// figures are a Stat in each tone a counter takes, and a Chart/Bars of the last fortnight in each of its tones.
+function figures() {
+  const fortnight = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - 13 + i);
+    return { date: day(d), value: [3, 6, 4, 8, 7, 10, 5, 12, 9, 14, 10, 7, 12, 16][i] };
+  });
+  const chart = (title, tone) => {
+    const card = bars(title, tone, fortnight.reduce((n, d) => n + d.value, 0) + " in 14 days", fortnight, (d) => d.value, (d) => d.value + " tasks");
+    card.classList.add("specimens-card");
+    return card;
+  };
+  return section("Figures", "Counters and charts of what an organization did. A Stat is a counter on the surface: its label with an icon, its value, and a Badge/Quiet that says more, in a tone only when it asks for attention. A Chart/Bars is a card of a value by day, a bar a day in Info, AI or Accent, its total in the header; pointing at a bar or focusing it turns it fg/default and says its day and value.",
+    [["Stat", ".stat .stat-label .stat-value"], ["Chart/Bars", ".chart-bars .chart-bars-plot .chart-bars-bar .chart-bars-axis .chart-bars-tooltip .tone-ai .tone-accent"]],
+    h("div", { class: "specimens-fields" }, stat("Open issues", "circle-dot", "24", "+3 this month", "neutral"), stat("Branches ready", "git-branch", "3", "2 blocked", "warning"),
+      stat("Agents working", "bot", "2 of 3", "5 tasks queued", "ai")),
+    h("div", { class: "specimens-row" }, chart("Tasks per day", "ai"), chart("Spend per day", "accent"), chart("Job minutes per day", "info")));
 }
 
 function patterns() {

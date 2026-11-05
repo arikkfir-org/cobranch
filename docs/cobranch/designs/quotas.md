@@ -157,6 +157,45 @@ Sizes are entered and shown in binary units (MiB, GiB), as the chart’s values 
 - **Creating an organization** shows how many the user has created against their limit, and the button gives way to the
   reason once they reach it.
 
+## An organization's figures
+
+**The Overview counts what stands now and sums up a period's days, in the viewer's time zone**
+
+```mermaid
+flowchart LR
+  P["A period: from and to,<br/>in the viewer's zone"] --> D["Its days, first to last"]
+  T["agent_tasks queued"] --> D
+  S["task_spend"] --> D
+  J["job_runs that ended,<br/>minutes rounded up"] --> D
+  D --> TOT["The period's totals"]
+  R["The repositories<br/>the viewer reads"] --> BR["By repository: commits first pushed,<br/>branches merged, tasks, spend, job minutes"]
+  R --> N["Ready and Blocked branches"]
+  C["Members, agents, open issues,<br/>agents working, tasks queued"] --> O["The Overview"]
+  TOT --> O
+  BR --> O
+  N --> O
+```
+
+- **A period is days in a time zone**: `from` and `to`, both included, at most 92 days, in the IANA zone the client
+  names, UTC by default; `to` defaults to today there and `from` to the first of `to`'s month, so that neither asks for
+  this month so far. A day begins and ends in that zone, so a day when the clocks change is 23 or 25 hours long. The
+  Console offers This month, Last month and Last 30 days, in the browser's zone, and every figure follows it.
+- **What stands now**: the organization's members and agents, its open issues and those opened in the period (only to a
+  viewer holding `issues.read`), the live branches but `main` that are Ready and Blocked, the agents with a task running
+  and the tasks queued.
+- **The period's days** count the tasks queued, what their calls of their models cost, and the job runs that ended, with
+  the minutes each ran, rounded up to a minute. Like the usage above, they count every task and run of the
+  organization, those on repositories the viewer doesn't read too: they are the organization's money, which
+  [the agents' spend report](agents.md#spend-and-caps) counts the same way.
+- **By repository** lists the repositories the viewer reads that saw anything in the period, costliest first: the
+  commits first pushed to each, the branches merged into its `main`, and its tasks', spend's and job runs' share.
+- Migration `00058` indexes tasks by when they were queued and job runs by when they ended, per organization;
+  `task_spend` was indexed so already.
+
+| REST | GraphQL | Takes |
+| --- | --- | --- |
+| `GET /v1/orgs/{org}/overview?from&to&zone`, 304 on its ETag | `Organization.overview(from, to, zone)` | `org.read`; branches and repositories only with `repo.read`, issues only with `issues.read` |
+
 ## Rollout
 
 **Three pull requests, the first of which caps every installation with the built-in defaults**
