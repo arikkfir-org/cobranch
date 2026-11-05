@@ -44,4 +44,6 @@ type Resolver struct {
 	Agents Agents
 	// Secrets is the service of the organizations' and repositories' secrets.
 	Secrets Secrets
+	// Artifacts is the service of the repositories' artifacts.
+	Artifacts Artifacts
 }

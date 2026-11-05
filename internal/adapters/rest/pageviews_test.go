@@ -30,8 +30,8 @@ func TestReportPageViews(t *testing.T) {
 	}{
 		{name: "a first load and a move", body: views(view("repository.code", "load", 1250, 2), view("repository.file", "route", 80.5, 1)), wantStatus: 204,
 			want: []string{"repository.code load 1 1.25", "repository.file route 1 0.0805", "repository.code load 1 2", "repository.file route 1 1"}},
-		{name: "the sign-in page", body: views(view("sign-in", "load", 300, 0)), wantStatus: 204,
-			want: []string{"sign-in load 1 0.3", "sign-in load 1 0"}},
+		{name: "the sign-in and help pages", body: views(view("sign-in", "load", 300, 0), view("help", "route", 100, 0), view("help.components", "load", 500, 0)), wantStatus: 204,
+			want: []string{"help route 1 0.1", "help.components load 1 0.5", "sign-in load 1 0.3", "help route 1 0", "help.components load 1 0", "sign-in load 1 0"}},
 		{name: "an organization's issues", body: views(view("organization.issues", "route", 200, 0)), wantStatus: 204,
 			want: []string{"organization.issues route 1 0.2", "organization.issues route 1 0"}},
 		{name: "a branch's changes", body: views(view("repository.changes", "route", 400, 3)), wantStatus: 204,
@@ -60,7 +60,7 @@ func TestReportPageViews(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := sdkmetric.NewManualReader()
-			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
+			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
 			req := httptest.NewRequest("POST", "/v1/page-views", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()

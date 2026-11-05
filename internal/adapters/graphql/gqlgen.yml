@@ -49,6 +49,7 @@ models:
       task: { resolver: true }
       labels: { resolver: true }
       secrets: { resolver: true }
+      artifact: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
   Issue:
@@ -96,6 +97,7 @@ models:
       delivery: { resolver: true }
       secrets: { resolver: true }
       jobPrincipals: { resolver: true }
+      artifacts: { resolver: true }
   Environment:
     fields:
       deliveries: { resolver: true }
@@ -105,6 +107,11 @@ models:
         type: string
   Secret:
     fields:
+      access: { resolver: true }
+  Artifact:
+    fields:
+      versions: { resolver: true }
+      versionByNumber: { resolver: true }
       access: { resolver: true }
   Task:
     fields:

@@ -125,6 +125,138 @@ func (e AnnotationStatus) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactAudience.
+const (
+	ArtifactAudienceOrganization ArtifactAudience = "organization"
+	ArtifactAudiencePrivate      ArtifactAudience = "private"
+	ArtifactAudienceRepository   ArtifactAudience = "repository"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactAudience enum.
+func (e ArtifactAudience) Valid() bool {
+	switch e {
+	case ArtifactAudienceOrganization:
+		return true
+	case ArtifactAudiencePrivate:
+		return true
+	case ArtifactAudienceRepository:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactGrantKind.
+const (
+	ArtifactGrantKindAgent  ArtifactGrantKind = "agent"
+	ArtifactGrantKindApiKey ArtifactGrantKind = "api_key"
+	ArtifactGrantKindJob    ArtifactGrantKind = "job"
+	ArtifactGrantKindUser   ArtifactGrantKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactGrantKind enum.
+func (e ArtifactGrantKind) Valid() bool {
+	switch e {
+	case ArtifactGrantKindAgent:
+		return true
+	case ArtifactGrantKindApiKey:
+		return true
+	case ArtifactGrantKindJob:
+		return true
+	case ArtifactGrantKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactKind.
+const (
+	Diagram  ArtifactKind = "diagram"
+	Document ArtifactKind = "document"
+	Page     ArtifactKind = "page"
+	Report   ArtifactKind = "report"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactKind enum.
+func (e ArtifactKind) Valid() bool {
+	switch e {
+	case Diagram:
+		return true
+	case Document:
+		return true
+	case Page:
+		return true
+	case Report:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactMediaType.
+const (
+	ImagesvgXml  ArtifactMediaType = "image/svg+xml"
+	Texthtml     ArtifactMediaType = "text/html"
+	Textmarkdown ArtifactMediaType = "text/markdown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactMediaType enum.
+func (e ArtifactMediaType) Valid() bool {
+	switch e {
+	case ImagesvgXml:
+		return true
+	case Texthtml:
+		return true
+	case Textmarkdown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactReach.
+const (
+	ArtifactReachEdit ArtifactReach = "edit"
+	ArtifactReachNone ArtifactReach = "none"
+	ArtifactReachView ArtifactReach = "view"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactReach enum.
+func (e ArtifactReach) Valid() bool {
+	switch e {
+	case ArtifactReachEdit:
+		return true
+	case ArtifactReachNone:
+		return true
+	case ArtifactReachView:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactRole.
+const (
+	Editor ArtifactRole = "editor"
+	Owner  ArtifactRole = "owner"
+	Viewer ArtifactRole = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRole enum.
+func (e ArtifactRole) Valid() bool {
+	switch e {
+	case Editor:
+		return true
+	case Owner:
+		return true
+	case Viewer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BranchCheckKind.
 const (
 	BranchCheckKindAi               BranchCheckKind = "ai"
@@ -463,25 +595,25 @@ func (e IssueChangeField) Valid() bool {
 
 // Defines values for IssuePriority.
 const (
-	High   IssuePriority = "high"
-	Low    IssuePriority = "low"
-	Medium IssuePriority = "medium"
-	None   IssuePriority = "none"
-	Urgent IssuePriority = "urgent"
+	IssuePriorityHigh   IssuePriority = "high"
+	IssuePriorityLow    IssuePriority = "low"
+	IssuePriorityMedium IssuePriority = "medium"
+	IssuePriorityNone   IssuePriority = "none"
+	IssuePriorityUrgent IssuePriority = "urgent"
 )
 
 // Valid indicates whether the value is a known member of the IssuePriority enum.
 func (e IssuePriority) Valid() bool {
 	switch e {
-	case High:
+	case IssuePriorityHigh:
 		return true
-	case Low:
+	case IssuePriorityLow:
 		return true
-	case Medium:
+	case IssuePriorityMedium:
 		return true
-	case None:
+	case IssuePriorityNone:
 		return true
-	case Urgent:
+	case IssuePriorityUrgent:
 		return true
 	default:
 		return false
@@ -622,6 +754,8 @@ func (e PageViewNavigation) Valid() bool {
 
 // Defines values for PageViewPage.
 const (
+	PageViewPageHelp                      PageViewPage = "help"
+	PageViewPageHelpComponents            PageViewPage = "help.components"
 	PageViewPageOrganization              PageViewPage = "organization"
 	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
 	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
@@ -652,6 +786,10 @@ const (
 // Valid indicates whether the value is a known member of the PageViewPage enum.
 func (e PageViewPage) Valid() bool {
 	switch e {
+	case PageViewPageHelp:
+		return true
+	case PageViewPageHelpComponents:
+		return true
 	case PageViewPageOrganization:
 		return true
 	case PageViewPageOrganizationAgents:
@@ -748,16 +886,16 @@ func (e RepositoryObjectFormat) Valid() bool {
 
 // Defines values for RepositoryVisibility.
 const (
-	Internal RepositoryVisibility = "internal"
-	Private  RepositoryVisibility = "private"
+	RepositoryVisibilityInternal RepositoryVisibility = "internal"
+	RepositoryVisibilityPrivate  RepositoryVisibility = "private"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryVisibility enum.
 func (e RepositoryVisibility) Valid() bool {
 	switch e {
-	case Internal:
+	case RepositoryVisibilityInternal:
 		return true
-	case Private:
+	case RepositoryVisibilityPrivate:
 		return true
 	default:
 		return false
@@ -1208,6 +1346,158 @@ type ApiKeySecret struct {
 	Id         openapi_types.UUID `json:"id"`
 	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
+}
+
+// Artifact A document, a diagram, a report or a page that a repository owns, as its readers see it: its versions' bodies come from getArtifactVersion.
+type Artifact struct {
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent *Principal `json:"agent,omitempty"`
+
+	// Audience Its widest audience, as the list's badge names it.
+	Audience ArtifactAudience `json:"audience"`
+
+	// Branch The branch it came from; empty for none.
+	Branch    string    `json:"branch"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Head Its newest version's number, the one it shows.
+	Head int32              `json:"head"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType  `json:"mediaType"`
+	OrgId     openapi_types.UUID `json:"orgId"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+
+	// Permissions What the caller holds on it, sorted; getArtifact alone answers it.
+	Permissions *[]string `json:"permissions,omitempty"`
+
+	// Repository The repository that owns an artifact.
+	Repository ArtifactRepository `json:"repository"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+	Summary          string        `json:"summary"`
+
+	// TaskNumber The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
+	TaskNumber *int64    `json:"taskNumber,omitempty"`
+	Title      string    `json:"title"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+
+	// UpdatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	UpdatedBy *Principal `json:"updatedBy,omitempty"`
+
+	// Version Its version, which every change and every new version bumps, and its ETag carries.
+	Version int64 `json:"version"`
+}
+
+// ArtifactAudience Its widest audience, as the list's badge names it.
+type ArtifactAudience string
+
+// ArtifactAccess Who reaches an artifact; grants on its repository and at its organization reach it too.
+type ArtifactAccess struct {
+	Grants []ArtifactGrant `json:"grants"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+}
+
+// ArtifactGrant A role a principal holds on an artifact itself.
+type ArtifactGrant struct {
+	DisplayName string             `json:"displayName"`
+	Kind        ArtifactGrantKind  `json:"kind"`
+	PrincipalId openapi_types.UUID `json:"principalId"`
+
+	// Role A role an artifact grants, from viewing to managing.
+	Role ArtifactRole `json:"role"`
+}
+
+// ArtifactGrantKind defines model for ArtifactGrant.Kind.
+type ArtifactGrantKind string
+
+// ArtifactKind What an artifact is for, which picks its icon and its filter, never its format.
+type ArtifactKind string
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList struct {
+	Artifacts []Artifact `json:"artifacts"`
+}
+
+// ArtifactMediaType The format a version is written in.
+type ArtifactMediaType string
+
+// ArtifactPatch The fields of an artifact a change sets; those it leaves out stay as they are.
+type ArtifactPatch struct {
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	Summary          *string        `json:"summary,omitempty"`
+	Title            *string        `json:"title,omitempty"`
+}
+
+// ArtifactReach How far an audience reaches an artifact.
+type ArtifactReach string
+
+// ArtifactRepository The repository that owns an artifact.
+type ArtifactRepository struct {
+	Id   openapi_types.UUID `json:"id"`
+	Slug string             `json:"slug"`
+}
+
+// ArtifactRole A role an artifact grants, from viewing to managing.
+type ArtifactRole string
+
+// ArtifactShare Who an artifact is shared with, and as what.
+type ArtifactShare struct {
+	PrincipalId openapi_types.UUID `json:"principalId"`
+
+	// Role A role an artifact grants, from viewing to managing.
+	Role ArtifactRole `json:"role"`
+}
+
+// ArtifactVersion A version of an artifact, which never changes.
+type ArtifactVersion struct {
+	ArtifactId openapi_types.UUID `json:"artifactId"`
+
+	// Author Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Author *Principal `json:"author,omitempty"`
+
+	// Body Its text; getArtifactVersion alone answers it.
+	Body      *string   `json:"body,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Html A Markdown body rendered and sanitized as the Console shows it; getArtifactVersion alone answers it.
+	Html *string            `json:"html,omitempty"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+	Note      string            `json:"note"`
+	Number    int32             `json:"number"`
+
+	// Size Its body's length in bytes.
+	Size int64 `json:"size"`
+
+	// TaskNumber The number of the agent's task it was written in; absent for none.
+	TaskNumber *int64 `json:"taskNumber,omitempty"`
+}
+
+// ArtifactVersionList defines model for ArtifactVersionList.
+type ArtifactVersionList struct {
+	Versions []ArtifactVersion `json:"versions"`
 }
 
 // Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
@@ -2155,6 +2445,54 @@ type MyTask struct {
 	Task Task `json:"task"`
 }
 
+// NewArtifact What makes an artifact with its first version.
+type NewArtifact struct {
+	// Body Its first version's body, 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Branch The branch it came from; an agent's task names its own when absent.
+	Branch *string `json:"branch,omitempty"`
+
+	// Id The artifact's ID, and its first version's, which the call that makes it picks so that it makes it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why the version was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+
+	// Summary At most 500 characters.
+	Summary *string `json:"summary,omitempty"`
+
+	// Title 1 to 200 characters.
+	Title string `json:"title"`
+}
+
+// NewArtifactVersion What adds a version.
+type NewArtifactVersion struct {
+	// Body 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Id The version's ID, which the call that adds it picks so that it adds it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why it was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
+}
+
 // NewSecret What makes a secret.
 type NewSecret struct {
 	// Name At most 100 characters, unique where the secret lives.
@@ -2870,6 +3208,9 @@ type AgentID = openapi_types.UUID
 // Name defines model for annotation.
 type Name = string
 
+// ArtifactVersionNumber defines model for artifactVersionNumber.
+type ArtifactVersionNumber = int32
+
 // BranchName defines model for branch.
 type BranchName = string
 
@@ -2887,6 +3228,9 @@ type IfMatchAgent = string
 
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
+
+// IfMatchArtifact defines model for ifMatchArtifact.
+type IfMatchArtifact = string
 
 // IfMatchBranch defines model for ifMatchBranch.
 type IfMatchBranch = string
@@ -3029,6 +3373,45 @@ type SetAgentModelParams struct {
 type SetAgentSecretsParams struct {
 	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
 	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
+// DeleteArtifactParams defines parameters for DeleteArtifact.
+type DeleteArtifactParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// GetArtifactParams defines parameters for GetArtifact.
+type GetArtifactParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateArtifactParams defines parameters for UpdateArtifact.
+type UpdateArtifactParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// AddArtifactVersionParams defines parameters for AddArtifactVersion.
+type AddArtifactVersionParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// GetArtifactVersionParams defines parameters for GetArtifactVersion.
+type GetArtifactVersionParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetArtifactVersionRawParams defines parameters for GetArtifactVersionRaw.
+type GetArtifactVersionRawParams struct {
+	// Download Whether to answer the body as an attachment, named after the artifact's title and the version's format.
+	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // InviteJSONBody defines parameters for Invite.
@@ -3188,6 +3571,12 @@ type SetModelProviderParams struct {
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
 type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
+}
+
+// ListArtifactsParams defines parameters for ListArtifacts.
+type ListArtifactsParams struct {
+	// Kind Only the artifacts of this kind.
+	Kind *ArtifactKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
 // GetBlobParams defines parameters for GetBlob.
@@ -3520,6 +3909,15 @@ type CreateAPIKeyJSONRequestBody = ApiKeyInput
 // RotateAPIKeyJSONRequestBody defines body for RotateAPIKey for application/json ContentType.
 type RotateAPIKeyJSONRequestBody = SecretInput
 
+// UpdateArtifactApplicationMergePatchPlusJSONRequestBody defines body for UpdateArtifact for application/merge-patch+json ContentType.
+type UpdateArtifactApplicationMergePatchPlusJSONRequestBody = ArtifactPatch
+
+// ShareArtifactJSONRequestBody defines body for ShareArtifact for application/json ContentType.
+type ShareArtifactJSONRequestBody = ArtifactShare
+
+// AddArtifactVersionJSONRequestBody defines body for AddArtifactVersion for application/json ContentType.
+type AddArtifactVersionJSONRequestBody = NewArtifactVersion
+
 // InviteJSONRequestBody defines body for Invite for application/json ContentType.
 type InviteJSONRequestBody InviteJSONBody
 
@@ -3567,6 +3965,9 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
+
+// CreateArtifactJSONRequestBody defines body for CreateArtifact for application/json ContentType.
+type CreateArtifactJSONRequestBody = NewArtifact
 
 // StartChatThreadJSONRequestBody defines body for StartChatThread for application/json ContentType.
 type StartChatThreadJSONRequestBody = ChatThreadInput
@@ -3723,6 +4124,36 @@ type ServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, secretID SecretID)
+	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/artifacts/{id})
+	DeleteArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteArtifactParams)
+	// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	// (GET /orgs/{org}/artifacts/{id})
+	GetArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetArtifactParams)
+	// UpdateArtifact Changes the fields the merge patch (RFC 7396) names of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/artifacts/{id})
+	UpdateArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params UpdateArtifactParams)
+	// GetArtifactAccess Who reaches an artifact, its audiences and the roles principals hold on the artifact itself, by name; grants on its repository and at its organization reach it too. Takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/access)
+	GetArtifactAccess(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// ShareArtifact Gives one of the organization's members, API keys or agents a role on the artifact, in place of any role it held on it; takes artifacts.manage on it and every permission the role gives.
+	// (POST /orgs/{org}/artifacts/{id}/access)
+	ShareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// UnshareArtifact Takes every role a principal holds on the artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository or at its organization, and its audiences, still reach it.
+	// (DELETE /orgs/{org}/artifacts/{id}/access/{principal})
+	UnshareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
+	// ListArtifactVersions An artifact's versions, newest first, without their bodies; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions)
+	ListArtifactVersions(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	// (POST /orgs/{org}/artifacts/{id}/versions)
+	AddArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, params AddArtifactVersionParams)
+	// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version})
+	GetArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionParams)
+	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
+	GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams)
 	// ListInvitations The organization's invitations that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org)
@@ -3855,6 +4286,12 @@ type ServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
+	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// (GET /orgs/{org}/repos/{repo}/artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams)
+	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// (POST /orgs/{org}/repos/{repo}/artifacts)
+	CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
@@ -5062,6 +5499,540 @@ func (siw *ServerInterfaceWrapper) RevokeAPIKeySecret(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeAPIKeySecret(w, r, org, keyID, secretID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactAccess operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactAccess(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShareArtifact operation middleware
+func (siw *ServerInterfaceWrapper) ShareArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShareArtifact(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnshareArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UnshareArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnshareArtifact(w, r, org, id, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifactVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifactVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifactVersions(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) AddArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddArtifactVersionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddArtifactVersion(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version ArtifactVersionNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int32", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactVersionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactVersion(w, r, org, id, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactVersionRaw operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version ArtifactVersionNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int32", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactVersionRawParams
+
+	// ------------- Optional query parameter "download" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "download", r.URL.Query(), &params.Download, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "download"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "download", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactVersionRaw(w, r, org, id, version, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7109,6 +8080,92 @@ func (siw *ServerInterfaceWrapper) RevokeRepositoryRole(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeRepositoryRole(w, r, org, repo, principalID, roleID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactsParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifacts(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArtifact(w, r, org, repo)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11434,6 +12491,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.ListSecretAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.GrantSecret)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access/{principal}", wrapper.RevokeSecret)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.DeleteArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.UpdateArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions", wrapper.ListArtifactVersions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions", wrapper.AddArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions/{version}", wrapper.GetArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions/{version}/raw", wrapper.GetArtifactVersionRaw)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access", wrapper.GetArtifactAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access", wrapper.ShareArtifact)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access/{principal}", wrapper.UnshareArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.ListInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.Invite)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/invitations/{id}", wrapper.CancelInvitation)
@@ -11490,6 +12557,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.ListRepositorySecrets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.CreateRepositorySecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/artifacts", wrapper.CreateArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/jobs", wrapper.ListRepositoryJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
@@ -14356,6 +15425,1037 @@ type RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse) VisitRevokeAPIKeySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params DeleteArtifactParams
+}
+
+type DeleteArtifactResponseObject interface {
+	VisitDeleteArtifactResponse(w http.ResponseWriter) error
+}
+
+type DeleteArtifact204Response struct {
+}
+
+func (response DeleteArtifact204Response) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteArtifact401ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact403ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact404ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact412ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact428ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteArtifactdefaultApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params GetArtifactParams
+}
+
+type GetArtifactResponseObject interface {
+	VisitGetArtifactResponse(w http.ResponseWriter) error
+}
+
+type GetArtifact200ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers GetArtifact200ResponseHeaders
+}
+
+func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifact304ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifact304Response struct {
+	Headers GetArtifact304ResponseHeaders
+}
+
+func (response GetArtifact304Response) VisitGetArtifactResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifact401ApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifact404ApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params UpdateArtifactParams
+	Body   *UpdateArtifactApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateArtifactResponseObject interface {
+	VisitUpdateArtifactResponse(w http.ResponseWriter) error
+}
+
+type UpdateArtifact200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers UpdateArtifact200ResponseHeaders
+}
+
+func (response UpdateArtifact200JSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateArtifact400ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact401ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact403ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact404ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact412ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact428ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateArtifactdefaultApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccessRequestObject struct {
+	Org Org `json:"org"`
+	Id  Id  `json:"id"`
+}
+
+type GetArtifactAccessResponseObject interface {
+	VisitGetArtifactAccessResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactAccess200JSONResponse ArtifactAccess
+
+func (response GetArtifactAccess200JSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccess401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactAccess401ApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccess404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactAccess404ApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccessdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactAccessdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifactRequestObject struct {
+	Org  Org `json:"org"`
+	Id   Id  `json:"id"`
+	Body *ShareArtifactJSONRequestBody
+}
+
+type ShareArtifactResponseObject interface {
+	VisitShareArtifactResponse(w http.ResponseWriter) error
+}
+
+type ShareArtifact204Response struct {
+}
+
+func (response ShareArtifact204Response) VisitShareArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ShareArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ShareArtifact400ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact401ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact403ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact404ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ShareArtifactdefaultApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifactRequestObject struct {
+	Org         Org         `json:"org"`
+	Id          Id          `json:"id"`
+	PrincipalID PrincipalID `json:"principal"`
+}
+
+type UnshareArtifactResponseObject interface {
+	VisitUnshareArtifactResponse(w http.ResponseWriter) error
+}
+
+type UnshareArtifact204Response struct {
+}
+
+func (response UnshareArtifact204Response) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UnshareArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UnshareArtifact401ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareArtifact403ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareArtifact404ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnshareArtifactdefaultApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersionsRequestObject struct {
+	Org Org `json:"org"`
+	Id  Id  `json:"id"`
+}
+
+type ListArtifactVersionsResponseObject interface {
+	VisitListArtifactVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifactVersions200JSONResponse ArtifactVersionList
+
+func (response ListArtifactVersions200JSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersions401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListArtifactVersions401ApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersions404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifactVersions404ApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListArtifactVersionsdefaultApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersionRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params AddArtifactVersionParams
+	Body   *AddArtifactVersionJSONRequestBody
+}
+
+type AddArtifactVersionResponseObject interface {
+	VisitAddArtifactVersionResponse(w http.ResponseWriter) error
+}
+
+type AddArtifactVersion200ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AddArtifactVersion200JSONResponse struct {
+	Body    ArtifactVersion
+	Headers AddArtifactVersion200ResponseHeaders
+}
+
+func (response AddArtifactVersion200JSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AddArtifactVersion201JSONResponse struct {
+	Body    ArtifactVersion
+	Headers AddArtifactVersion201ResponseHeaders
+}
+
+func (response AddArtifactVersion201JSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AddArtifactVersion400ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion401ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion401ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion403ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion403ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion404ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion404ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion409ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion409ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion412ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion412ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion428ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion428ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AddArtifactVersiondefaultApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRequestObject struct {
+	Org     Org                   `json:"org"`
+	Id      Id                    `json:"id"`
+	Version ArtifactVersionNumber `json:"version"`
+	Params  GetArtifactVersionParams
+}
+
+type GetArtifactVersionResponseObject interface {
+	VisitGetArtifactVersionResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactVersion200ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifactVersion200JSONResponse struct {
+	Body    ArtifactVersion
+	Headers GetArtifactVersion200ResponseHeaders
+}
+
+func (response GetArtifactVersion200JSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersion304ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifactVersion304Response struct {
+	Headers GetArtifactVersion304ResponseHeaders
+}
+
+func (response GetArtifactVersion304Response) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifactVersion401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactVersion401ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersion404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactVersion404ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactVersiondefaultApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRawRequestObject struct {
+	Org     Org                   `json:"org"`
+	Id      Id                    `json:"id"`
+	Version ArtifactVersionNumber `json:"version"`
+	Params  GetArtifactVersionRawParams
+}
+
+type GetArtifactVersionRawResponseObject interface {
+	VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactVersionRaw200ResponseHeaders struct {
+	CacheControl              string
+	ContentDisposition        *string
+	ContentSecurityPolicy     string
+	CrossOriginResourcePolicy string
+	ETag                      string
+	XContentTypeOptions       string
+}
+
+type GetArtifactVersionRaw200AsteriskResponse struct {
+	Body          io.Reader
+	Headers       GetArtifactVersionRaw200ResponseHeaders
+	ContentType   string
+	ContentLength int64
+}
+
+func (response GetArtifactVersionRaw200AsteriskResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", response.ContentType)
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.Header().Set("Content-Security-Policy", fmt.Sprint(response.Headers.ContentSecurityPolicy))
+	w.Header().Set("Cross-Origin-Resource-Policy", fmt.Sprint(response.Headers.CrossOriginResourcePolicy))
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetArtifactVersionRaw304ResponseHeaders struct {
+	CacheControl string
+	ETag         string
+}
+
+type GetArtifactVersionRaw304Response struct {
+	Headers GetArtifactVersionRaw304ResponseHeaders
+}
+
+func (response GetArtifactVersionRaw304Response) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifactVersionRaw401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactVersionRaw401ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRaw404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactVersionRaw404ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -18911,6 +21011,238 @@ type RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListArtifactsParams
+}
+
+type ListArtifactsResponseObject interface {
+	VisitListArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifacts200JSONResponse ArtifactList
+
+func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListArtifacts400ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifacts401ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifacts404ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListArtifactsdefaultApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *CreateArtifactJSONRequestBody
+}
+
+type CreateArtifactResponseObject interface {
+	VisitCreateArtifactResponse(w http.ResponseWriter) error
+}
+
+type CreateArtifact200ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers CreateArtifact200ResponseHeaders
+}
+
+func (response CreateArtifact200JSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateArtifact201JSONResponse struct {
+	Body    Artifact
+	Headers CreateArtifact201ResponseHeaders
+}
+
+func (response CreateArtifact201JSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArtifact400ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact401ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact403ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact404ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact409ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateArtifactdefaultApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -26912,6 +29244,36 @@ type StrictServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(ctx context.Context, request RevokeAPIKeySecretRequestObject) (RevokeAPIKeySecretResponseObject, error)
+	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/artifacts/{id})
+	DeleteArtifact(ctx context.Context, request DeleteArtifactRequestObject) (DeleteArtifactResponseObject, error)
+	// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	// (GET /orgs/{org}/artifacts/{id})
+	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+	// UpdateArtifact Changes the fields the merge patch (RFC 7396) names of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/artifacts/{id})
+	UpdateArtifact(ctx context.Context, request UpdateArtifactRequestObject) (UpdateArtifactResponseObject, error)
+	// GetArtifactAccess Who reaches an artifact, its audiences and the roles principals hold on the artifact itself, by name; grants on its repository and at its organization reach it too. Takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/access)
+	GetArtifactAccess(ctx context.Context, request GetArtifactAccessRequestObject) (GetArtifactAccessResponseObject, error)
+	// ShareArtifact Gives one of the organization's members, API keys or agents a role on the artifact, in place of any role it held on it; takes artifacts.manage on it and every permission the role gives.
+	// (POST /orgs/{org}/artifacts/{id}/access)
+	ShareArtifact(ctx context.Context, request ShareArtifactRequestObject) (ShareArtifactResponseObject, error)
+	// UnshareArtifact Takes every role a principal holds on the artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository or at its organization, and its audiences, still reach it.
+	// (DELETE /orgs/{org}/artifacts/{id}/access/{principal})
+	UnshareArtifact(ctx context.Context, request UnshareArtifactRequestObject) (UnshareArtifactResponseObject, error)
+	// ListArtifactVersions An artifact's versions, newest first, without their bodies; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions)
+	ListArtifactVersions(ctx context.Context, request ListArtifactVersionsRequestObject) (ListArtifactVersionsResponseObject, error)
+	// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	// (POST /orgs/{org}/artifacts/{id}/versions)
+	AddArtifactVersion(ctx context.Context, request AddArtifactVersionRequestObject) (AddArtifactVersionResponseObject, error)
+	// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version})
+	GetArtifactVersion(ctx context.Context, request GetArtifactVersionRequestObject) (GetArtifactVersionResponseObject, error)
+	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
+	GetArtifactVersionRaw(ctx context.Context, request GetArtifactVersionRawRequestObject) (GetArtifactVersionRawResponseObject, error)
 	// ListInvitations The organization's invitations that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(ctx context.Context, request ListInvitationsRequestObject) (ListInvitationsResponseObject, error)
@@ -27044,6 +29406,12 @@ type StrictServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
+	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// (GET /orgs/{org}/repos/{repo}/artifacts)
+	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// (POST /orgs/{org}/repos/{repo}/artifacts)
+	CreateArtifact(ctx context.Context, request CreateArtifactRequestObject) (CreateArtifactResponseObject, error)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
@@ -28241,6 +30609,306 @@ func (sh *strictHandler) RevokeAPIKeySecret(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeAPIKeySecretResponseObject); ok {
 		if err := validResponse.VisitRevokeAPIKeySecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteArtifact operation middleware
+func (sh *strictHandler) DeleteArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteArtifactParams) {
+	var request DeleteArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteArtifact(ctx, request.(DeleteArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteArtifactResponseObject); ok {
+		if err := validResponse.VisitDeleteArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifact operation middleware
+func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetArtifactParams) {
+	var request GetArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifact(ctx, request.(GetArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
+		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateArtifact operation middleware
+func (sh *strictHandler) UpdateArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params UpdateArtifactParams) {
+	var request UpdateArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	var body UpdateArtifactApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateArtifact(ctx, request.(UpdateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateArtifactResponseObject); ok {
+		if err := validResponse.VisitUpdateArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactAccess operation middleware
+func (sh *strictHandler) GetArtifactAccess(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request GetArtifactAccessRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactAccess(ctx, request.(GetArtifactAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactAccessResponseObject); ok {
+		if err := validResponse.VisitGetArtifactAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShareArtifact operation middleware
+func (sh *strictHandler) ShareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request ShareArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	var body ShareArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShareArtifact(ctx, request.(ShareArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShareArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShareArtifactResponseObject); ok {
+		if err := validResponse.VisitShareArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnshareArtifact operation middleware
+func (sh *strictHandler) UnshareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID) {
+	var request UnshareArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnshareArtifact(ctx, request.(UnshareArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnshareArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnshareArtifactResponseObject); ok {
+		if err := validResponse.VisitUnshareArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListArtifactVersions operation middleware
+func (sh *strictHandler) ListArtifactVersions(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request ListArtifactVersionsRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifactVersions(ctx, request.(ListArtifactVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifactVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactVersionsResponseObject); ok {
+		if err := validResponse.VisitListArtifactVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddArtifactVersion operation middleware
+func (sh *strictHandler) AddArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, params AddArtifactVersionParams) {
+	var request AddArtifactVersionRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	var body AddArtifactVersionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddArtifactVersion(ctx, request.(AddArtifactVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddArtifactVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddArtifactVersionResponseObject); ok {
+		if err := validResponse.VisitAddArtifactVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactVersion operation middleware
+func (sh *strictHandler) GetArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionParams) {
+	var request GetArtifactVersionRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Version = version
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactVersion(ctx, request.(GetArtifactVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactVersionResponseObject); ok {
+		if err := validResponse.VisitGetArtifactVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactVersionRaw operation middleware
+func (sh *strictHandler) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams) {
+	var request GetArtifactVersionRawRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Version = version
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactVersionRaw(ctx, request.(GetArtifactVersionRawRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactVersionRaw")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactVersionRawResponseObject); ok {
+		if err := validResponse.VisitGetArtifactVersionRawResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -29561,6 +32229,68 @@ func (sh *strictHandler) RevokeRepositoryRole(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeRepositoryRoleResponseObject); ok {
 		if err := validResponse.VisitRevokeRepositoryRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListArtifacts operation middleware
+func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams) {
+	var request ListArtifactsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifacts(ctx, request.(ListArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
+		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateArtifact operation middleware
+func (sh *strictHandler) CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request CreateArtifactRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body CreateArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateArtifact(ctx, request.(CreateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateArtifactResponseObject); ok {
+		if err := validResponse.VisitCreateArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

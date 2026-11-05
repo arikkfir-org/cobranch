@@ -198,7 +198,8 @@ func TestRepoStorePrincipalsAndRoles(t *testing.T) {
 	for _, r := range roles {
 		ids = append(ids, r.ID)
 	}
-	if want := []uuid.UUID{auth.RoleReader, auth.RoleDeveloper, auth.RoleMaintainer, auth.RoleAutomation, auth.RoleSecretReader}; !slices.Equal(ids, want) {
+	if want := []uuid.UUID{auth.RoleReader, auth.RoleDeveloper, auth.RoleMaintainer, auth.RoleAutomation, auth.RoleSecretReader,
+		auth.RoleArtifactViewer, auth.RoleArtifactEditor, auth.RoleArtifactOwner}; !slices.Equal(ids, want) {
 		t.Errorf("Roles() = %v, want the built-in repository roles in order", ids)
 	}
 }
