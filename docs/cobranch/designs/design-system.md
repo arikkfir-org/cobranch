@@ -171,7 +171,7 @@ Console draws them from its export.
 ## Layout
 
 A fixed sidebar and top bar, and only the content scrolls. The sidebar holds, top to bottom: the logo (to Overview),
-Overview, then Issues, Repositories and Agents, each a section with its last five children (agents with a status dot),
+Overview and Activity, then Issues, Repositories and Agents, each a section with its last five children (agents with a status dot),
 then the organization switcher, Settings and the credit line. The top bar holds the breadcrumbs, the conversation
 toggle and the avatar menu (Account; Theme, a Light, Dark and System segmented control; Preferences; Log out). Tasks
 have no page of their own: they live on their agent's page and on the issue or branch they came from.
@@ -229,7 +229,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 51 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 53 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
@@ -257,7 +257,7 @@ plan.
 | Badge/Quiet | Tone: Neutral, Info, Success, Warning, Danger, AI | Label: a dot and a word, for lists | `.badge-quiet` with a `.tone-*` class |
 | Tag | Tone: Neutral, Info, Success, Warning, Danger, AI | Label, icon | `.tag` with a `.tone-*` class |
 | Avatar | Kind: User, Unclaimed, Agent, Machine × Size: 20, 24, 32, 40 | Initials (people), glyph (machines) | `.avatar`, `.avatar-unclaimed`, `.avatar-agent`, `.avatar-machine`, `.avatar-24`, `.avatar-32`, `.avatar-40` |
-| Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action, body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
+| Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action (a button, or a link such as View all), body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
 | Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`, and `.empty-centred` on a card, a card's body or a screen that shows nothing else, which holds it at 480px with 48px above and below; `.tooltip`, or `data-tooltip` on what it labels |
@@ -272,6 +272,8 @@ plan.
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
 | Fact row | Kind: Text, Editable | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`) |
 | Activity/Event | None | Who did what, and when | `.event-row` |
+| Activity/Item | None | Whoever did it as Avatar 20 of any kind, the sentence, which wraps, and how long ago | `.activity-item` in an `.activity-list` |
+| Pattern/Agent row | Status: Working (Info), Watching (AI), Idle (Neutral) | Name, what it does now, which wraps; Avatar Agent 24 and the status Tag nested | `.agent-row` in a `.list` |
 | Swatch | State: Default, Chosen | A label's colour as the Tag it gives, padded inside 1px of transparent border; Chosen ringed 2px in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`), `.is-chosen` |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
@@ -329,7 +331,7 @@ only cue.
 
 ## Screens
 
-Forty-nine screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Fifty screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -338,6 +340,7 @@ Researcher waits for a task.
 | [Sign in](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-2) | Google, GitHub and SSO, or email; a link to sign up |
 | [Sign up: organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-79) | Step 2 of 2: create an organization or ask to join one |
 | [Overview](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Branches that need you, repositories, agents at work, recent activity |
+| [Activity](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=124-12015) | What needs you, the repositories pushed to last, the agents at work and what happened |
 | [Repositories](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=69-3127) | Every repository as a table: visibility, default branch, open branches, status, last push |
 | [New repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12992) | A card of a repository's name and description; Create repository opens it |
 | [Repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-646) | Branches by status (no pull requests), merge requirements, environments |
@@ -398,6 +401,10 @@ The repository's other screens (Commits and Commit, a branch's Files changed, Jo
 ### Overview
 
 ![Overview](design-system/overview.png)
+
+### Activity
+
+![Activity](design-system/activity.png)
 
 ### Repositories
 

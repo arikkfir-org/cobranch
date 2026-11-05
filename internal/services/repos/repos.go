@@ -137,6 +137,7 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 // ReservedSlugs are the Console's pages under an organization, which no repository may take: one per page module of
 // its pages/org but index.js, the organization's home. One a line, so two changes that each add a page add a line each.
 var ReservedSlugs = []string{
+	"activity",
 	"agents",
 	"api-keys",
 	"artifacts",
