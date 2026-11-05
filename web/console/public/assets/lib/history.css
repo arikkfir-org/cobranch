@@ -1,5 +1,5 @@
 /* Tables of commits (commitRow). */
 .commits td { vertical-align: top; }
 .commits td.sha { text-align: right; white-space: nowrap; }
-.commits a.subject { color: var(--color-fg-default); font-weight: 500; text-decoration: none; }
-.commits a.subject:hover { color: var(--color-accent); }
+.commits a.subject { color: var(--color-fg-default); font: var(--text-body-medium-strong); text-decoration: none; }
+.commits a.subject:hover { color: var(--color-fg-link); }

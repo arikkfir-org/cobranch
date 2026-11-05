@@ -1,28 +1,28 @@
 /* Diffs: their files, hunks and draft comments. */
-.diff-summary { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; margin: 0; }
+.diff-summary { display: flex; gap: var(--space-12); flex-wrap: wrap; align-items: baseline; margin: 0; }
 .added-count { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
 .removed-count { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
-.diff-files { display: grid; gap: 12px; }
-details.file-diff { border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); overflow: hidden; }
-details.file-diff > summary { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; background: var(--color-bg-sunken); }
+.diff-files { display: grid; gap: var(--space-12); }
+details.file-diff { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }
+details.file-diff > summary { display: flex; gap: var(--space-8); align-items: baseline; flex-wrap: wrap; padding: var(--space-8) var(--space-12); cursor: pointer; background: var(--color-bg-sunken); }
 details.file-diff[open] > summary { border-bottom: 1px solid var(--color-border-default); }
 details.file-diff summary code { overflow-wrap: anywhere; }
-details.file-diff summary .counts { margin-left: auto; display: flex; gap: 8px; }
-.file-diff p.note { margin: 0; padding: 8px 12px; color: var(--color-fg-muted); }
+details.file-diff summary .counts { margin-left: auto; display: flex; gap: var(--space-8); }
+.file-diff p.note { margin: 0; padding: var(--space-8) var(--space-12); color: var(--color-fg-muted); }
 .hunks { overflow-x: auto; }
-table.hunk { font: 13px/20px var(--font-mono); font-variant-ligatures: none; }
-table.hunk td { padding: 0 8px; white-space: pre; vertical-align: top; }
+table.hunk { font: var(--text-code-medium); font-variant-ligatures: none; }
+table.hunk td { padding: 0 var(--space-8); white-space: pre; vertical-align: top; }
 table.hunk td.ln { width: 1%; text-align: right; color: var(--color-fg-muted); user-select: none; }
-table.hunk td.mark { width: 1%; padding: 0 4px; user-select: none; }
+table.hunk td.mark { width: 1%; padding: 0 var(--space-4); user-select: none; }
 table.hunk td.text { tab-size: 4; }
 table.hunk tr.added td { background: var(--color-status-success-bg); }
 table.hunk tr.removed td { background: var(--color-status-danger-bg); }
 table.hunk tr.hunk-head td { background: var(--color-status-info-bg); color: var(--color-fg-muted); }
-table.hunk .no-newline { color: var(--color-fg-muted); font-family: var(--font-sans); font-size: 12px; }
-table.hunk td.act { width: 1%; padding: 0 2px; user-select: none; }
-table.hunk .add-comment { width: 20px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--color-accent); font: inherit; line-height: 18px; cursor: pointer; opacity: .35; }
-table.hunk tr:hover .add-comment, table.hunk .add-comment:focus-visible { opacity: 1; border-color: var(--color-border-default); background: var(--color-bg-raised); }
-table.hunk tr.draft td { white-space: normal; font-family: var(--font-sans); padding: 8px 12px; background: var(--color-bg-raised); border-block: 1px solid var(--color-border-default); }
-.draft-comment { display: grid; gap: 8px; max-width: 72ch; }
+table.hunk .no-newline { color: var(--color-fg-muted); font: var(--text-caption); }
+table.hunk td.act { width: 1%; padding: 0 var(--space-2); user-select: none; }
+table.hunk .add-comment { display: inline-grid; place-items: center; width: var(--size-icon-md); height: var(--size-icon-md); padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: none; color: var(--color-fg-link); font: inherit; cursor: pointer; opacity: .35; }
+table.hunk tr:hover .add-comment, table.hunk .add-comment:focus-visible { opacity: 1; border-color: var(--color-border-default); background: var(--color-bg-surface); }
+table.hunk tr.draft td { white-space: normal; font: var(--text-body-medium); padding: var(--space-8) var(--space-12); background: var(--color-bg-surface); border-block: 1px solid var(--color-border-default); }
+.draft-comment { display: grid; gap: var(--space-8); max-width: 72ch; }
 .draft-comment textarea { min-height: 64px; resize: vertical; }
 .draft-comment p.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

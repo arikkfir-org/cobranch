@@ -1,17 +1,20 @@
 # The Cobranch design system
 
 > **Snapshot.** This design lives in its [design system page](https://claude.ai/artifact/K6oZu5M6kiXuEBiqFNgPcW),
-> linked with Cobranch's other designs; this file is a snapshot of it, with its diagrams, as of 2026-10-27, and synced
+> linked with Cobranch's other designs; this file is a snapshot of it, with its diagrams, as of 2026-11-04, and synced
 > again once Cobranch's shape settles.
 
 **Decision**: Cobranch's interface puts clarity first and simplicity second. It is drawn in ink (near-black on white,
-inverted in dark mode), uses colour only where colour means something, and says every status with an icon, a word and a
-tone. The source is the Figma file [Cobranch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch). This page
-records its principles, tokens and components, and [`design-system/tokens.css`](design-system/tokens.css) holds its
-tokens as CSS custom properties.
+inverted in dark mode) with blue for its one primary action, uses other colour only where colour means something, and
+says every status with an icon, a word and a tone. The source of truth is the Figma file
+[Cobranch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch), and the Console follows it: its tokens are
+generated from the file's export into
+[`tokens.css`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/public/assets/tokens.css) (see
+[Design to code](#design-to-code)).
 
 Cobranch is a Kfirs project, © 2026 Arik Kfir. The design system is [ENG-194](https://linear.app/arikkfir/issue/ENG-194);
-the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200).
+the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing it to the Console is
+[ENG-253](https://linear.app/arikkfir/issue/ENG-253) and the slices after it.
 
 ![The cover of the Cobranch Figma file](design-system/cover.png)
 
@@ -20,25 +23,25 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200).
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | Controls, badges, avatars, menus, tables, app shell, list-row patterns, brand |
-| Screens | Sign-in, sign-up, organization home, members, repository, issue, branch (light and dark) |
+| Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
+| Screens | 22 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
 Six rules decide every screen; when a design breaks one, the design changes, not the rule.
 
-1. **Ink, not colour, for the interface.** Chrome, text and the primary action are near-black on white (inverted in
-   dark mode). Colour is reserved for meaning, so it stands out when it appears.
+1. **Ink for the interface, blue for its one action.** Chrome and text are near-black on white (inverted in dark mode);
+   the primary action is blue. Other colour is reserved for meaning, so it stands out when it appears.
 2. **Status is an icon, a word and a colour.** Never colour alone: a badge reads correctly in grayscale, to colour-blind
    users and in a screen reader.
 3. **Violet means AI.** Agents, AI reviews and agent work use violet and the sparkles icon, and nothing else does. A
    person can always tell what a machine did.
 4. **Shape tells who acted.** People are circles; agents, jobs, keys and apps are rounded squares; a commit author not
    yet linked to a user is a dashed circle.
-5. **One primary action per view.** It is the only ink-filled button on screen ("Merge", "New repository"); everything
-   else is secondary or ghost.
-6. **Code is mono, prose is sans.** Branch names, SHAs, paths and environments use JetBrains Mono; everything people
-   wrote uses Inter.
+5. **One primary action per view.** It is the only blue button on screen ("Merge", "New repository"); everything else
+   is secondary or ghost.
+6. **Code is mono, prose is sans.** Branch names, repository names, SHAs, ids, paths and environments use JetBrains
+   Mono; everything people wrote uses Inter.
 
 ![The Foundations page: principles, colour, type, spacing, radii and elevation](design-system/foundations.png)
 
@@ -48,14 +51,14 @@ Six rules decide every screen; when a design breaks one, the design changes, not
 
 ![Two layers of colour, components from tokens only, screens from instances only](design-system/layers.svg)
 
-A token changes in Figma first, then in `tokens.css`, in the same pull request. A fix to a component reaches every
-screen.
+A visual change is made in Figma first; `tokens.css` is generated from the file's export, and a page composes the
+classes that map its components. A fix to a component reaches every screen and every page.
 
 ## Colour
 
 Colour has two layers: primitives hold raw values, and semantic tokens alias them per mode. Components use semantic
 tokens only, and Light and Dark are two modes of the one `Color` collection, so a frame changes theme by switching its
-mode.
+mode. Both themes are equal: the system's setting decides, and a person may override it.
 
 **Primitives** (`Primitives`): a cool gray in 15 steps, from `gray/0` #ffffff to `gray/1000` #0c0d0f; blue, green,
 amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 50 and 60% for overlays and shadows.
@@ -69,7 +72,7 @@ amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 
 | `bg/sunken` | gray/50 | gray/1000 | Code chips, wells |
 | `bg/hover` | gray/100 | gray/850 | Hovered rows and ghost buttons |
 | `bg/selected` | gray/150 | gray/800 | Selected nav item or row |
-| `bg/inverse` | gray/900 | gray/50 | Merged badge, tooltips |
+| `bg/inverse` | gray/900 | gray/50 | Merged badge, tooltips, the mark |
 | `bg/overlay` | black 40% | black 60% | Behind dialogs |
 | `fg/default` | gray/900 | gray/50 | Text and icons |
 | `fg/muted` | gray/600 | gray/400 | Secondary text, metadata |
@@ -81,7 +84,7 @@ amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 
 | `border/subtle` | gray/150 | gray/850 | Dividers between rows |
 | `border/strong` | gray/300 | gray/700 | Inputs, the composer |
 | `border/focus` | blue/500 | blue/400 | Focus ring |
-| `action/primary/bg`, `bg-hover`, `fg` | gray/900, gray/700, gray/0 | gray/50, gray/200, gray/950 | The one primary button |
+| `action/primary/bg`, `bg-hover`, `fg` | blue/600, blue/700, gray/0 | blue/500, blue/400, gray/0 | The one primary button |
 | `action/secondary/bg`, `bg-hover`, `border`, `fg` | gray/0, gray/100, gray/300, gray/900 | gray/900, gray/850, gray/700, gray/50 | Secondary buttons |
 | `action/danger/bg`, `bg-hover`, `fg` | red/600, red/700, gray/0 | red/600, red/500, gray/0 | Destructive confirmations |
 | `avatar/user/bg`, `fg` | gray/150, gray/700 | gray/800, gray/200 | People |
@@ -108,8 +111,8 @@ on its `bg` is at least 6:1. `fg/subtle` is 3.1:1 in light, so it holds placehol
 ## Typography
 
 Two families and 14 text styles cover every screen: Inter for prose and interface, JetBrains Mono for anything that is
-code. Both are open-source (SIL Open Font License). Body text is 13 to 14 px, dense enough for lists of branches and
-commits and still easy to read.
+code, a name or an id. Both are open-source (SIL Open Font License) and served with the Console. Body text is 13 to
+14 px, dense enough for lists of branches and commits and still easy to read.
 
 | Style | Font | Size / line height (px) | Use |
 | --- | --- | --- | --- |
@@ -130,35 +133,70 @@ commits and still easy to read.
 
 Weights stop at Semi Bold: hierarchy comes from size and colour (`fg/default` against `fg/muted`), not from bold text.
 
-## Spacing, radii, elevation and layout
+## Spacing, radii and elevation
 
 Spacing follows a 4 px grid with a 2 px half-step, and every padding, gap and radius in the file is bound to a token, so
-a change to a token moves every screen.
+a change to a token moves every screen. The density is comfortable: rows are 36 px, single-line table rows 32 px.
 
 | Group | Tokens (px) | Use |
 | --- | --- | --- |
 | `space/*` | 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 | 8 to 12 inside controls, 16 inside cards, 24 between page sections, 32 page margins |
 | `size/control-*` | sm 28, md 32, lg 40 | Button and input heights |
 | `size/icon-*` | sm 16, md 20 | Icons |
-| `size/topbar`, `size/sidebar` | 48, 240 | App shell |
+| `size/row`, `size/row-sm` | 36, 32 | Rows, single-line table rows |
+| `size/topbar`, `size/sidebar`, `size/pane` | 48, 240, 320 | App shell |
 | `radius/*` | none 0, sm 4, md 6, lg 8, xl 12, full 999 | sm for tags and code chips; md for buttons, inputs and menu items; lg for cards, menus and machine avatars; xl for dialogs; full for people, status badges and counts |
 
 **Elevation** is rare: content sits on flat cards with a 1 px border, and shadows mark only what floats above the page.
 
 | Style | Shadow | Use |
 | --- | --- | --- |
-| Elevation/1 | 0 1 2 `shadow/soft` | Tooltips and toasts (not drawn yet) |
+| Elevation/1 | 0 1 2 `shadow/soft` | Tooltips and toasts |
 | Elevation/2 | Elevation/1 + 0 4 12 -2 `shadow/strong` | Menus, popovers |
-| Elevation/3 | 0 2 6 `shadow/soft` + 0 12 32 -4 `shadow/strong` | Dialogs (not drawn yet) |
+| Elevation/3 | 0 2 6 `shadow/soft` + 0 12 32 -4 `shadow/strong` | Dialogs |
 | Focus/Ring | 2 px `bg/canvas` + 4 px `border/focus` | Keyboard focus on any control |
 
-**Layout**: a 240 px sidebar (organization switcher, search, navigation, pinned repositories, the signed-in person) and a
-48 px top bar (breadcrumb, "Ask an agent", notifications). Content has 32 px margins; detail pages add a 320 px side
-column for properties, and the branch view docks its 400 px chat on the right. Screens are designed at 1440 × 900.
+## The marks
 
-**The app shell: sidebar, top bar, content and a side column**
+The mark puts a person and an agent on one trunk, in an ink square (`bg/inverse`, the glyph `fg/inverse`); at 16 px it
+gives way to the small mark, the branch graph, which is also the favicon. Both are components of the file, and the
+Console draws them from its export.
 
-![The app shell: sidebar, top bar, content and a side column](design-system/shell.svg)
+| Component | What it is | Where |
+| --- | --- | --- |
+| [Brand/Logo](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=11-395) | The mark (28 px) and the wordmark, Inter Semi Bold 17 px | The sidebar, sign-in and the Console's cards |
+| [Brand/Mark small](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=73-594) | The branch graph in a 16 px ink square, a 1.5 px stroke | Below 24 px, and the favicon |
+| [Brand/Credit](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=11-403) | "Cobranch is a Kfirs project" | The foot of the sidebar |
+
+## Layout
+
+A fixed sidebar and top bar, and only the content scrolls. The sidebar holds, top to bottom: the logo (to Overview),
+Overview, then Issues, Repositories and Agents, each a section with its last five children (agents with a status dot),
+then the organization switcher, Settings and the credit line. The top bar holds the breadcrumbs, the conversation
+toggle and the avatar menu (Account; Theme, a Light, Dark and System segmented control; Preferences; Log out). Tasks
+have no page of their own: they live on their agent's page and on the issue or branch they came from.
+
+**The app shell: sidebar, top bar, content and the conversation pane**
+
+![The app shell: sidebar, top bar, content and the conversation pane](design-system/shell.svg)
+
+**The conversation pane** is one pane on the right, 320 px, toggled from the top bar, with pin and close. Its subject
+follows the page; its header names the subject, a scope line says who sees it, and "Ask" starts an agent's task from
+the composer.
+
+| Page | Conversation | Who is in it |
+| --- | --- | --- |
+| Organization (Overview, Settings) | your organization chat | you; tag an agent to bring it in |
+| Repository, and its files, jobs and artifacts | your repository chat | you; tag an agent to bring it in |
+| Issue | the issue's chat | everyone who can see the issue, agents included |
+| Branch, and any commit, file or job in it | the branch's chat | everyone who can see the branch, agents included |
+| Agent | your chat with that agent | you and the agent, which knows its tasks and queue |
+
+Settings are tabs, scoped to the organization: General, Members, Roles, API keys, Agents, Secrets, Models and Usage.
+Organization-level lists (repositories, issues, agents, models) are tables with a header row; lists inside a page
+(branches on a repository, tasks on an agent) are rich two-line rows; both share the card, the row height and the
+dividers. A table sits in a bordered card only when the card holds more than the table; otherwise the table is the
+card. Labels sit above their fields.
 
 ## Iconography
 
@@ -191,30 +229,39 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 25 components built only from the tokens above; screens are assembled from their instances,
-so a fix to a component reaches every screen.
+The Components page holds 41 components built only from the tokens above; screens are assembled from their instances,
+so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
+`.badge-quiet`).
 
 | Component | Variants | Properties |
 | --- | --- | --- |
+| Brand/Logo, Brand/Mark small, Brand/Credit | None | None: the large mark with the wordmark, the small mark (also the favicon), the credit line |
 | Button | Style: Primary, Secondary, Ghost, Danger × Size: Medium 32, Small 28 × State: Default, Hover, Disabled | Label, leading icon, trailing icon (each optional, swappable) |
-| Icon button | Style: Secondary, Ghost × Size | Icon |
-| Input | State: Default, Focus, Error, Disabled | Label, value, helper text, leading icon (each optional) |
+| Icon button | Style: Secondary, Ghost × Size: Medium, Small | Icon |
+| Input, Select, Textarea | State: Default, Focus, Error, Disabled | Label, value, helper text (each optional); Input also a leading icon |
+| Checkbox, Radio | Checked: Off, On × State: Default, Disabled | Label |
+| Segmented control | Selected: 1, 2, 3 | Three options (the theme: Light, Dark, System) |
 | Tab | State: Default, Selected | Label, icon, count |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked |
-| Nav item | State: Default, Hover, Selected | Label, icon, count |
-| Table header cell, Table cell | Cell kind: Text, Muted, Mono | Text |
+| Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot |
+| Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono | Text |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None |
 | Badge/Review | Approved, Changes requested, Neutral | None |
+| Badge/Quiet | Tone: Neutral, Info, Success, Warning, Danger, AI | Label: a dot and a word, for lists |
 | Tag | Tone: Neutral, Info, Success, Warning, Danger, AI | Label, icon |
 | Avatar | Kind: User, Unclaimed, Agent, Machine × Size: 20, 24, 32, 40 | Initials (people), glyph (machines) |
+| Card, Page header | None | Title, meta, action, body; description, actions |
+| Dialog | None | Title, body, secondary action |
+| Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss |
+| Empty state, Tooltip | None | Icon, title, description, action; label |
 | App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page |
+| App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested |
 | Annotation row | Status (as Badge/Annotation) | Name, description, duration; creator avatar nested |
 | Branch row | None | Name, meta, message count; status badge and author avatar nested |
 | Chat message | Author: Person, Agent | Name, time, body, code reference |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested |
-| Brand/Logo, Brand/Credit | None | None |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
 place a node inside an instance (Figma refuses it; compose rows beside it).
@@ -224,7 +271,8 @@ place a node inside an instance (Figma refuses it; compose rows beside it).
 ## Status language
 
 Cobranch has three status vocabularies, one per object, and each word maps to exactly one icon and one tone everywhere it
-appears: badges, rows, the branch view's requirements and the commit row's annotation icons.
+appears: badges, rows, the branch view's requirements and the commit row's annotation icons. A status is a tinted pill
+by default, and the quiet variant, a dot and a word, in lists.
 
 | Object | Status | Icon | Tone |
 | --- | --- | --- | --- |
@@ -269,23 +317,37 @@ only cue.
 
 ## Screens
 
-Eight mockups on the Screens page cover the core flows, all at 1440 × 900 and built only from library instances. They
-follow one story: Kfirs works on `cobranch`, where Builder (an agent) implements DEV-42 on `feature/push-worker` and
-Reviewer (an agent) blocks it.
+Twenty-two screens on the Screens page, at 1440 wide and built only from library instances. They follow one
+organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
+Researcher waits for a task.
 
 | Screen | Shows |
 | --- | --- |
-| [Sign in](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-2) | Google, GitHub and SSO, or email; link to sign up |
-| [Sign up: organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-79) | Step 2 of 2: create an organization (name, address) or ask to join one |
-| [Organization home](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Branches that need you, repositories, agents at work, recent activity |
-| [Organization members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | A request to join, members with roles, invited people |
+| [Sign in](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-2) | Google, GitHub and SSO, or email; a link to sign up |
+| [Sign up: organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-79) | Step 2 of 2: create an organization or ask to join one |
+| [Overview](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Branches that need you, repositories, agents at work, recent activity |
+| [Repositories](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=69-3127) | Every repository as a table: visibility, default branch, open branches, status, last push |
 | [Repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-646) | Branches by status (no pull requests), merge requirements, environments |
-| [Issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-1127) | Description, linked branch, activity with people and agents, properties, "Assign to an agent" |
-| [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits with annotation icons, annotations, reviews, branch chat with agents |
-| [Branch, dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
+| [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
+| [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
+| [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's issues as a table |
+| [Issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-1127) | Description, linked branch, activity with people and agents, "Assign to an agent" |
+| [Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=68-2926) | Tabs Agents, Activity and Quotas; each agent's model, status and cap |
+| [Agents · Activity](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5230) | What the organization's agents did, newest first |
+| [Agents · Quotas](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5627) | Spend this month, by agent against its cap and by model |
+| [Agent](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=64-2654) | Working on, Queue and History of its tasks, its settings, and your private chat with it |
+| [Agent · Task](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=81-4443) | One task: its transcript of turns and tool calls, what it came from, and its spend against the cap |
+| [Agent · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-5663) | An agent with no tasks yet |
+| [Repository · Artifacts](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-3941) | What agents generated for the repository: documents, diagrams, reports and pages |
+| [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
+| [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | Settings as tabs; a request to join, members with roles, invited people |
+| [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
+| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with a cap per task |
+| [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
+| [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-Not drawn yet: files and diffs, jobs, delivery and environments, settings, agent management, dialogs, and empty and
-error states.
+Not drawn yet: files and diffs, jobs, delivery and environments, the other settings tabs (General, Roles, API keys,
+Secrets, Usage), and error states.
 
 ### Sign in
 
@@ -295,21 +357,17 @@ error states.
 
 ![Sign up, organization step](design-system/sign-up.png)
 
-### Organization home
+### Overview
 
-![Organization home](design-system/organization-home.png)
+![Overview](design-system/overview.png)
 
-### Organization members
+### Repositories
 
-![Organization members](design-system/organization-members.png)
+![Repositories](design-system/repositories.png)
 
 ### Repository
 
 ![Repository](design-system/repository.png)
-
-### Issue
-
-![Issue](design-system/issue.png)
 
 ### Branch
 
@@ -317,18 +375,92 @@ error states.
 
 ![Branch, dark](design-system/branch-dark.png)
 
-## From design to code
+### Issues
 
-Every Figma variable carries its CSS name, and [`design-system/tokens.css`](design-system/tokens.css) holds them all:
-semantic colours are `--color-*` custom properties (`bg/canvas` is `var(--color-bg-canvas)`), and spacing, radii and
-primitives keep their own prefixes (`var(--space-16)`, `var(--radius-lg)`, `var(--gray-900)`). Light applies by default;
-dark applies with `data-theme="dark"` on the root element, or with the system's dark preference unless
-`data-theme="light"`. The console imports these tokens rather than hard-coding a value, and a token changes in Figma
-first, then here, in the same pull request.
+![Issues](design-system/issues.png)
 
-**From a Figma variable to a CSS custom property to the Console**
+### Issue
 
-![From a Figma variable to a CSS custom property to the Console](design-system/code.svg)
+![Issue](design-system/issue.png)
+
+### Agents
+
+![Agents](design-system/agents.png)
+
+### Agents · Activity
+
+![Agents, Activity tab](design-system/agents-activity.png)
+
+### Agents · Quotas
+
+![Agents, Quotas tab](design-system/agents-quotas.png)
+
+### Agent
+
+![Agent](design-system/agent.png)
+
+### Agent · Task
+
+![Agent, one task](design-system/agent-task.png)
+
+### Agent · Empty
+
+![Agent with no tasks](design-system/agent-empty.png)
+
+### Repository · Artifacts
+
+![Repository, Artifacts tab](design-system/artifacts.png)
+
+### Artifact
+
+![Artifact](design-system/artifact.png)
+
+### Settings · Members
+
+![Settings, Members tab](design-system/settings-members.png)
+
+### Settings · Agents
+
+![Settings, Agents tab](design-system/settings-agents.png)
+
+### Settings · Models
+
+![Settings, Models tab](design-system/settings-models.png)
+
+![Settings, Models tab, adding a model](design-system/settings-models-add.png)
+
+![Settings, Models tab, before any provider](design-system/settings-models-empty.png)
+
+## Design to code
+
+The Figma file is the source of truth, and the Console follows it, never leads.
+
+1. **A visual change starts in Figma.** A colour, size, radius, text style, shadow, component or screen changes in the
+   file first, and the file is where it is reviewed. A value that isn't a token is a Figma change, never a CSS one.
+2. **Tokens flow one way, by export.** Every variable carries its CSS name in Figma's `codeSyntax`.
+   [`figma-export.js`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/figma-export.js) exports the variables and the text and effect styles
+   to `tokens.json`, and `go generate` writes
+   [`tokens.css`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/public/assets/tokens.css) from it;
+   nobody edits `tokens.css` by hand, and CI fails when it differs from the export. A pull request that changes it names
+   the Figma change it carries. The steps are in the tools'
+   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md).
+3. **Components map one to one.** Each Figma component is one class of the Console's component stylesheet, named after
+   it. A page composes those classes and writes no component CSS of its own, so a component fix reaches every page.
+4. **Screens are the acceptance test.** A page group is done when the Console matches its Figma screen at 1440 wide,
+   light and dark, shown side by side in the pull request.
+5. **Code never leads.** When the code needs what the file lacks (a state, an empty or error screen), the file gets it
+   first. A forced divergence is said in the pull request and corrected in the file in the same unit of work.
+
+**From a Figma variable to a CSS custom property to the Console, one way**
+
+![From a Figma variable to a CSS custom property to the Console, one way](design-system/code.svg)
+
+Semantic colours are `--color-*` custom properties (`bg/canvas` is `var(--color-bg-canvas)`), and spacing, sizes, radii
+and primitives keep their own prefixes (`var(--space-16)`, `var(--radius-lg)`, `var(--gray-900)`). Text styles are
+`font` shorthands with their tracking beside them (`font: var(--text-body-medium)`,
+`letter-spacing: var(--text-body-medium-tracking)`), and effect styles `box-shadow` values (`var(--shadow-focus-ring)`).
+Light applies by default; dark applies with `data-theme="dark"` on the root element, or with the system's dark
+preference unless `data-theme="light"`.
 
 ```css
 .card {
@@ -345,4 +477,22 @@ first, then here, in the same pull request.
 | --- | --- |
 | Is violet right for AI, or should agents share the interface's ink? | Violet, for agents and AI work only (2026-10-27) |
 | Should a branch with changes requested be Blocked, or a softer state of its own? | Blocked (2026-10-27) |
-| Is Inter the face, or does Cobranch need a typeface of its own for the logo and headings? | Inter for now (2026-10-27) |
+| Is Inter the face, or does Cobranch need a typeface of its own for the logo and headings? | Inter for the interface, JetBrains Mono for code, names and ids (2026-11-04) |
+| Evolve the file, or start again? | Evolve it (2026-11-04) |
+| What colour is the primary action? | Blue; ink stays for text and the mark (2026-11-04) |
+| Light, dark, or both? | Both, equal: the system decides, and a person may override it (2026-11-04) |
+| What is the shell? | A sidebar and a top bar, both fixed (2026-11-04) |
+| How dense? | Comfortable: 36 px rows, 32 px single-line table rows (2026-11-04) |
+| What is the mark? | A person and an agent on one trunk, in an ink square, from 24 px; the branch graph at 16 px and as the favicon (2026-11-04) |
+| Where does the system live in code? | `tokens.css` and a component stylesheet in the Console; Figma stays the source (2026-11-04) |
+| How are settings laid out? | Tabs, scoped to the organization (2026-11-04) |
+| Which radii? | 4, 6, 8 and 12 (2026-11-04) |
+| How is a status shown in a list? | A tinted pill by default, a quiet dot and word in lists (2026-11-04) |
+| Is a table always in a card? | Only when the card holds more than the table (2026-11-04) |
+| Where do labels go? | Above their fields (2026-11-04) |
+| Where does a conversation live? | One pane on the right, whose subject follows the page (2026-11-04) |
+| Tables or rich rows for lists? | Proposed: tables for organization-level lists, rich rows inside a page |
+| How does an agent's spend show? | Proposed: on each task row of the agent's page |
+| How are models capped? | Proposed: a cap per task on the model, which an agent may lower |
+| Where do artifacts appear? | Proposed: a tab on their repository, and posted into the conversation that asked for them |
+| Who may see an artifact? | Proposed: grants to the repository's members, the organization, people and agents, each view or edit |
