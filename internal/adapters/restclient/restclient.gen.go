@@ -688,6 +688,9 @@ type TreeEntry struct {
 // TreeEntryKind A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
 type TreeEntryKind string
 
+// AgentID defines model for agent.
+type AgentID = openapi_types.UUID
+
 // BranchName defines model for branch.
 type BranchName = string
 
@@ -717,6 +720,54 @@ type TaskNumber = int64
 
 // ThreadID defines model for thread.
 type ThreadID = openapi_types.UUID
+
+// ListAgentConversationThreadsParams defines parameters for ListAgentConversationThreads.
+type ListAgentConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetAgentConversationThreadParams defines parameters for GetAgentConversationThread.
+type GetAgentConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListAgentConversationUpdatesParams defines parameters for ListAgentConversationUpdates.
+type ListAgentConversationUpdatesParams struct {
+	// After Where the updates start, as listAgentConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
+// ListOrganizationConversationThreadsParams defines parameters for ListOrganizationConversationThreads.
+type ListOrganizationConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetOrganizationConversationThreadParams defines parameters for GetOrganizationConversationThread.
+type GetOrganizationConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListOrganizationConversationUpdatesParams defines parameters for ListOrganizationConversationUpdates.
+type ListOrganizationConversationUpdatesParams struct {
+	// After Where the updates start, as listOrganizationConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
 
 // ListIssueChatThreadsParams defines parameters for ListIssueChatThreads.
 type ListIssueChatThreadsParams struct {
@@ -796,6 +847,30 @@ type ListReviewsParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListRepositoryConversationThreadsParams defines parameters for ListRepositoryConversationThreads.
+type ListRepositoryConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetRepositoryConversationThreadParams defines parameters for GetRepositoryConversationThread.
+type GetRepositoryConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListRepositoryConversationUpdatesParams defines parameters for ListRepositoryConversationUpdates.
+type ListRepositoryConversationUpdatesParams struct {
+	// After Where the updates start, as listRepositoryConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
 // GetTreeParams defines parameters for GetTree.
 type GetTreeParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -808,6 +883,24 @@ type GetTreeParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListTasksParams defines parameters for ListTasks.
+type ListTasksParams struct {
+	// AgentID Only this agent's tasks, by its ID.
+	AgentID *openapi_types.UUID `form:"agent,omitempty" json:"agent,omitempty"`
+
+	// State Only the tasks in these states.
+	State *[]TaskState `form:"state,omitempty" json:"state,omitempty"`
+
+	// RepositoryID Only the tasks that work in this repository, by its ID.
+	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Cursor Where the page starts, as the previous page's Link names it; the newest task when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many tasks the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListTranscriptParams defines parameters for ListTranscript.
 type ListTranscriptParams struct {
 	// After The number of the last entry already read; 0, the default, for the first.
@@ -816,6 +909,18 @@ type ListTranscriptParams struct {
 	// Limit How many entries the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// StartAgentConversationThreadJSONRequestBody defines body for StartAgentConversationThread for application/json ContentType.
+type StartAgentConversationThreadJSONRequestBody = ChatThreadInput
+
+// PostAgentConversationMessageJSONRequestBody defines body for PostAgentConversationMessage for application/json ContentType.
+type PostAgentConversationMessageJSONRequestBody = ChatMessageInput
+
+// StartOrganizationConversationThreadJSONRequestBody defines body for StartOrganizationConversationThread for application/json ContentType.
+type StartOrganizationConversationThreadJSONRequestBody = ChatThreadInput
+
+// PostOrganizationConversationMessageJSONRequestBody defines body for PostOrganizationConversationMessage for application/json ContentType.
+type PostOrganizationConversationMessageJSONRequestBody = ChatMessageInput
 
 // StartIssueChatThreadJSONRequestBody defines body for StartIssueChatThread for application/json ContentType.
 type StartIssueChatThreadJSONRequestBody = ChatThreadInput
@@ -831,6 +936,12 @@ type PostChatMessageJSONRequestBody = ChatMessageInput
 
 // SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
 type SubmitReviewJSONRequestBody = ReviewInput
+
+// StartRepositoryConversationThreadJSONRequestBody defines body for StartRepositoryConversationThread for application/json ContentType.
+type StartRepositoryConversationThreadJSONRequestBody = ChatThreadInput
+
+// PostRepositoryConversationMessageJSONRequestBody defines body for PostRepositoryConversationMessage for application/json ContentType.
+type PostRepositoryConversationMessageJSONRequestBody = ChatMessageInput
 
 // AppendTranscriptJSONRequestBody defines body for AppendTranscript for application/json ContentType.
 type AppendTranscriptJSONRequestBody = TranscriptEntryInput
@@ -913,6 +1024,92 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation (the `ListAgentConversationThreads` operationId).
+	ListAgentConversationThreads(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartAgentConversationThreadWithBody Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+	StartAgentConversationThreadWithBody(ctx context.Context, org Org, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartAgentConversationThread Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+	StartAgentConversationThread(ctx context.Context, org Org, agentID AgentID, body StartAgentConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentConversationThread One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/threads/{thread} (the `GetAgentConversationThread` operationId).
+	GetAgentConversationThread(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, params *GetAgentConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAgentConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+	PostAgentConversationMessageWithBody(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAgentConversationMessage Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+	PostAgentConversationMessage(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, body PostAgentConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
+	ListAgentConversationUpdates(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+	//
+	// Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
+	ListOrganizationConversationThreads(ctx context.Context, org Org, params *ListOrganizationConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartOrganizationConversationThreadWithBody Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+	StartOrganizationConversationThreadWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartOrganizationConversationThread Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+	StartOrganizationConversationThread(ctx context.Context, org Org, body StartOrganizationConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrganizationConversationThread One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+	//
+	// Corresponds with GET /orgs/{org}/conversation/threads/{thread} (the `GetOrganizationConversationThread` operationId).
+	GetOrganizationConversationThread(ctx context.Context, org Org, threadID ThreadID, params *GetOrganizationConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrganizationConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+	PostOrganizationConversationMessageWithBody(ctx context.Context, org Org, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrganizationConversationMessage Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+	PostOrganizationConversationMessage(ctx context.Context, org Org, threadID ThreadID, body PostOrganizationConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOrganizationConversationUpdates The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Corresponds with GET /orgs/{org}/conversation/updates (the `ListOrganizationConversationUpdates` operationId).
+	ListOrganizationConversationUpdates(ctx context.Context, org Org, params *ListOrganizationConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 	//
@@ -1029,10 +1226,58 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
 	SubmitReview(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRepositoryConversationThreads A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation (the `ListRepositoryConversationThreads` operationId).
+	ListRepositoryConversationThreads(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartRepositoryConversationThreadWithBody Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+	StartRepositoryConversationThreadWithBody(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartRepositoryConversationThread Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+	StartRepositoryConversationThread(ctx context.Context, org Org, repo Repo, body StartRepositoryConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRepositoryConversationThread One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/threads/{thread} (the `GetRepositoryConversationThread` operationId).
+	GetRepositoryConversationThread(ctx context.Context, org Org, repo Repo, threadID ThreadID, params *GetRepositoryConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRepositoryConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+	PostRepositoryConversationMessageWithBody(ctx context.Context, org Org, repo Repo, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRepositoryConversationMessage Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+	PostRepositoryConversationMessage(ctx context.Context, org Org, repo Repo, threadID ThreadID, body PostRepositoryConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRepositoryConversationUpdates The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/updates (the `ListRepositoryConversationUpdates` operationId).
+	ListRepositoryConversationUpdates(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
 	GetTree(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	//
+	// Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
+	ListTasks(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTranscript The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
 	//
@@ -1059,6 +1304,232 @@ type ClientInterface interface {
 // Corresponds with GET /me/task (the `GetMyTask` operationId).
 func (c *Client) GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMyTaskRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation (the `ListAgentConversationThreads` operationId).
+func (c *Client) ListAgentConversationThreads(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentConversationThreadsRequest(c.Server, org, agentID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartAgentConversationThreadWithBody Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+func (c *Client) StartAgentConversationThreadWithBody(ctx context.Context, org Org, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartAgentConversationThreadRequestWithBody(c.Server, org, agentID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartAgentConversationThread Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+func (c *Client) StartAgentConversationThread(ctx context.Context, org Org, agentID AgentID, body StartAgentConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartAgentConversationThreadRequest(c.Server, org, agentID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgentConversationThread One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/threads/{thread} (the `GetAgentConversationThread` operationId).
+func (c *Client) GetAgentConversationThread(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, params *GetAgentConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentConversationThreadRequest(c.Server, org, agentID, threadID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAgentConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+func (c *Client) PostAgentConversationMessageWithBody(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAgentConversationMessageRequestWithBody(c.Server, org, agentID, threadID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAgentConversationMessage Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+func (c *Client) PostAgentConversationMessage(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, body PostAgentConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAgentConversationMessageRequest(c.Server, org, agentID, threadID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
+func (c *Client) ListAgentConversationUpdates(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentConversationUpdatesRequest(c.Server, org, agentID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+//
+// Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
+func (c *Client) ListOrganizationConversationThreads(ctx context.Context, org Org, params *ListOrganizationConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrganizationConversationThreadsRequest(c.Server, org, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartOrganizationConversationThreadWithBody Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+func (c *Client) StartOrganizationConversationThreadWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartOrganizationConversationThreadRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartOrganizationConversationThread Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+func (c *Client) StartOrganizationConversationThread(ctx context.Context, org Org, body StartOrganizationConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartOrganizationConversationThreadRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrganizationConversationThread One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+//
+// Corresponds with GET /orgs/{org}/conversation/threads/{thread} (the `GetOrganizationConversationThread` operationId).
+func (c *Client) GetOrganizationConversationThread(ctx context.Context, org Org, threadID ThreadID, params *GetOrganizationConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrganizationConversationThreadRequest(c.Server, org, threadID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrganizationConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+func (c *Client) PostOrganizationConversationMessageWithBody(ctx context.Context, org Org, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrganizationConversationMessageRequestWithBody(c.Server, org, threadID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrganizationConversationMessage Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+func (c *Client) PostOrganizationConversationMessage(ctx context.Context, org Org, threadID ThreadID, body PostOrganizationConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrganizationConversationMessageRequest(c.Server, org, threadID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListOrganizationConversationUpdates The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Corresponds with GET /orgs/{org}/conversation/updates (the `ListOrganizationConversationUpdates` operationId).
+func (c *Client) ListOrganizationConversationUpdates(ctx context.Context, org Org, params *ListOrganizationConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrganizationConversationUpdatesRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1374,11 +1845,139 @@ func (c *Client) SubmitReview(ctx context.Context, org Org, repo Repo, sha SHA, 
 	return c.Client.Do(req)
 }
 
+// ListRepositoryConversationThreads A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation (the `ListRepositoryConversationThreads` operationId).
+func (c *Client) ListRepositoryConversationThreads(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRepositoryConversationThreadsRequest(c.Server, org, repo, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartRepositoryConversationThreadWithBody Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+func (c *Client) StartRepositoryConversationThreadWithBody(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartRepositoryConversationThreadRequestWithBody(c.Server, org, repo, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartRepositoryConversationThread Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+func (c *Client) StartRepositoryConversationThread(ctx context.Context, org Org, repo Repo, body StartRepositoryConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartRepositoryConversationThreadRequest(c.Server, org, repo, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRepositoryConversationThread One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/threads/{thread} (the `GetRepositoryConversationThread` operationId).
+func (c *Client) GetRepositoryConversationThread(ctx context.Context, org Org, repo Repo, threadID ThreadID, params *GetRepositoryConversationThreadParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRepositoryConversationThreadRequest(c.Server, org, repo, threadID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRepositoryConversationMessageWithBody Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+func (c *Client) PostRepositoryConversationMessageWithBody(ctx context.Context, org Org, repo Repo, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRepositoryConversationMessageRequestWithBody(c.Server, org, repo, threadID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRepositoryConversationMessage Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+func (c *Client) PostRepositoryConversationMessage(ctx context.Context, org Org, repo Repo, threadID ThreadID, body PostRepositoryConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRepositoryConversationMessageRequest(c.Server, org, repo, threadID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRepositoryConversationUpdates The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/updates (the `ListRepositoryConversationUpdates` operationId).
+func (c *Client) ListRepositoryConversationUpdates(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRepositoryConversationUpdatesRequest(c.Server, org, repo, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 //
 // Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
 func (c *Client) GetTree(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetTreeRequest(c.Server, org, repo, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+//
+// Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
+func (c *Client) ListTasks(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTasksRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1455,6 +2054,639 @@ func NewGetMyTaskRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAgentConversationThreadsRequest constructs an http.Request for the ListAgentConversationThreads method
+func NewListAgentConversationThreadsRequest(server string, org Org, agentID AgentID, params *ListAgentConversationThreadsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s/conversation", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartAgentConversationThreadRequest calls the generic StartAgentConversationThread builder with application/json body
+func NewStartAgentConversationThreadRequest(server string, org Org, agentID AgentID, body StartAgentConversationThreadJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewStartAgentConversationThreadRequestWithBody(server, org, agentID, "application/json", bodyReader)
+}
+
+// NewStartAgentConversationThreadRequestWithBody constructs an http.Request for the StartAgentConversationThread method, with any body, and a specified content type
+func NewStartAgentConversationThreadRequestWithBody(server string, org Org, agentID AgentID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s/conversation/threads", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAgentConversationThreadRequest constructs an http.Request for the GetAgentConversationThread method
+func NewGetAgentConversationThreadRequest(server string, org Org, agentID AgentID, threadID ThreadID, params *GetAgentConversationThreadParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s/conversation/threads/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPostAgentConversationMessageRequest calls the generic PostAgentConversationMessage builder with application/json body
+func NewPostAgentConversationMessageRequest(server string, org Org, agentID AgentID, threadID ThreadID, body PostAgentConversationMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostAgentConversationMessageRequestWithBody(server, org, agentID, threadID, "application/json", bodyReader)
+}
+
+// NewPostAgentConversationMessageRequestWithBody constructs an http.Request for the PostAgentConversationMessage method, with any body, and a specified content type
+func NewPostAgentConversationMessageRequestWithBody(server string, org Org, agentID AgentID, threadID ThreadID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s/conversation/threads/%s/messages", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentConversationUpdatesRequest constructs an http.Request for the ListAgentConversationUpdates method
+func NewListAgentConversationUpdatesRequest(server string, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s/conversation/updates", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListOrganizationConversationThreadsRequest constructs an http.Request for the ListOrganizationConversationThreads method
+func NewListOrganizationConversationThreadsRequest(server string, org Org, params *ListOrganizationConversationThreadsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/conversation", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartOrganizationConversationThreadRequest calls the generic StartOrganizationConversationThread builder with application/json body
+func NewStartOrganizationConversationThreadRequest(server string, org Org, body StartOrganizationConversationThreadJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewStartOrganizationConversationThreadRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewStartOrganizationConversationThreadRequestWithBody constructs an http.Request for the StartOrganizationConversationThread method, with any body, and a specified content type
+func NewStartOrganizationConversationThreadRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/conversation/threads", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrganizationConversationThreadRequest constructs an http.Request for the GetOrganizationConversationThread method
+func NewGetOrganizationConversationThreadRequest(server string, org Org, threadID ThreadID, params *GetOrganizationConversationThreadParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/conversation/threads/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPostOrganizationConversationMessageRequest calls the generic PostOrganizationConversationMessage builder with application/json body
+func NewPostOrganizationConversationMessageRequest(server string, org Org, threadID ThreadID, body PostOrganizationConversationMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrganizationConversationMessageRequestWithBody(server, org, threadID, "application/json", bodyReader)
+}
+
+// NewPostOrganizationConversationMessageRequestWithBody constructs an http.Request for the PostOrganizationConversationMessage method, with any body, and a specified content type
+func NewPostOrganizationConversationMessageRequestWithBody(server string, org Org, threadID ThreadID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/conversation/threads/%s/messages", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListOrganizationConversationUpdatesRequest constructs an http.Request for the ListOrganizationConversationUpdates method
+func NewListOrganizationConversationUpdatesRequest(server string, org Org, params *ListOrganizationConversationUpdatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/conversation/updates", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -2485,6 +3717,340 @@ func NewSubmitReviewRequestWithBody(server string, org Org, repo Repo, sha SHA, 
 	return req, nil
 }
 
+// NewListRepositoryConversationThreadsRequest constructs an http.Request for the ListRepositoryConversationThreads method
+func NewListRepositoryConversationThreadsRequest(server string, org Org, repo Repo, params *ListRepositoryConversationThreadsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/conversation", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartRepositoryConversationThreadRequest calls the generic StartRepositoryConversationThread builder with application/json body
+func NewStartRepositoryConversationThreadRequest(server string, org Org, repo Repo, body StartRepositoryConversationThreadJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewStartRepositoryConversationThreadRequestWithBody(server, org, repo, "application/json", bodyReader)
+}
+
+// NewStartRepositoryConversationThreadRequestWithBody constructs an http.Request for the StartRepositoryConversationThread method, with any body, and a specified content type
+func NewStartRepositoryConversationThreadRequestWithBody(server string, org Org, repo Repo, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/conversation/threads", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetRepositoryConversationThreadRequest constructs an http.Request for the GetRepositoryConversationThread method
+func NewGetRepositoryConversationThreadRequest(server string, org Org, repo Repo, threadID ThreadID, params *GetRepositoryConversationThreadParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/conversation/threads/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPostRepositoryConversationMessageRequest calls the generic PostRepositoryConversationMessage builder with application/json body
+func NewPostRepositoryConversationMessageRequest(server string, org Org, repo Repo, threadID ThreadID, body PostRepositoryConversationMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostRepositoryConversationMessageRequestWithBody(server, org, repo, threadID, "application/json", bodyReader)
+}
+
+// NewPostRepositoryConversationMessageRequestWithBody constructs an http.Request for the PostRepositoryConversationMessage method, with any body, and a specified content type
+func NewPostRepositoryConversationMessageRequestWithBody(server string, org Org, repo Repo, threadID ThreadID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "thread", threadID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/conversation/threads/%s/messages", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListRepositoryConversationUpdatesRequest constructs an http.Request for the ListRepositoryConversationUpdates method
+func NewListRepositoryConversationUpdatesRequest(server string, org Org, repo Repo, params *ListRepositoryConversationUpdatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/conversation/updates", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetTreeRequest constructs an http.Request for the GetTree method
 func NewGetTreeRequest(server string, org Org, repo Repo, params *GetTreeParams) (*http.Request, error) {
 	var err error
@@ -2575,6 +4141,115 @@ func NewGetTreeRequest(server string, org Org, repo Repo, params *GetTreeParams)
 			req.Header.Set("If-None-Match", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewListTasksRequest constructs an http.Request for the ListTasks method
+func NewListTasksRequest(server string, org Org, params *ListTasksParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/tasks", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.AgentID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent", *params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.RepositoryID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repositoryId", *params.RepositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -2765,6 +4440,104 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTaskWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyTaskResponse, error)
 
+	// ListAgentConversationThreadsWithResponse A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation (the `ListAgentConversationThreads` operationId).
+	ListAgentConversationThreadsWithResponse(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListAgentConversationThreadsResponse, error)
+
+	// StartAgentConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+	StartAgentConversationThreadWithBodyWithResponse(ctx context.Context, org Org, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartAgentConversationThreadResponse, error)
+
+	// StartAgentConversationThreadWithResponse Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+	StartAgentConversationThreadWithResponse(ctx context.Context, org Org, agentID AgentID, body StartAgentConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartAgentConversationThreadResponse, error)
+
+	// GetAgentConversationThreadWithResponse One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/threads/{thread} (the `GetAgentConversationThread` operationId).
+	GetAgentConversationThreadWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, params *GetAgentConversationThreadParams, reqEditors ...RequestEditorFn) (*GetAgentConversationThreadResponse, error)
+
+	// PostAgentConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+	PostAgentConversationMessageWithBodyWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAgentConversationMessageResponse, error)
+
+	// PostAgentConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+	PostAgentConversationMessageWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, body PostAgentConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAgentConversationMessageResponse, error)
+
+	// ListAgentConversationUpdatesWithResponse The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
+	ListAgentConversationUpdatesWithResponse(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListAgentConversationUpdatesResponse, error)
+
+	// ListOrganizationConversationThreadsWithResponse A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
+	ListOrganizationConversationThreadsWithResponse(ctx context.Context, org Org, params *ListOrganizationConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListOrganizationConversationThreadsResponse, error)
+
+	// StartOrganizationConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+	StartOrganizationConversationThreadWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartOrganizationConversationThreadResponse, error)
+
+	// StartOrganizationConversationThreadWithResponse Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+	StartOrganizationConversationThreadWithResponse(ctx context.Context, org Org, body StartOrganizationConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartOrganizationConversationThreadResponse, error)
+
+	// GetOrganizationConversationThreadWithResponse One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/conversation/threads/{thread} (the `GetOrganizationConversationThread` operationId).
+	GetOrganizationConversationThreadWithResponse(ctx context.Context, org Org, threadID ThreadID, params *GetOrganizationConversationThreadParams, reqEditors ...RequestEditorFn) (*GetOrganizationConversationThreadResponse, error)
+
+	// PostOrganizationConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+	PostOrganizationConversationMessageWithBodyWithResponse(ctx context.Context, org Org, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrganizationConversationMessageResponse, error)
+
+	// PostOrganizationConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+	PostOrganizationConversationMessageWithResponse(ctx context.Context, org Org, threadID ThreadID, body PostOrganizationConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrganizationConversationMessageResponse, error)
+
+	// ListOrganizationConversationUpdatesWithResponse The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/conversation/updates (the `ListOrganizationConversationUpdates` operationId).
+	ListOrganizationConversationUpdatesWithResponse(ctx context.Context, org Org, params *ListOrganizationConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListOrganizationConversationUpdatesResponse, error)
+
 	// ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -2898,12 +4671,68 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
 	SubmitReviewWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitReviewResponse, error)
 
+	// ListRepositoryConversationThreadsWithResponse A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation (the `ListRepositoryConversationThreads` operationId).
+	ListRepositoryConversationThreadsWithResponse(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListRepositoryConversationThreadsResponse, error)
+
+	// StartRepositoryConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+	StartRepositoryConversationThreadWithBodyWithResponse(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartRepositoryConversationThreadResponse, error)
+
+	// StartRepositoryConversationThreadWithResponse Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+	StartRepositoryConversationThreadWithResponse(ctx context.Context, org Org, repo Repo, body StartRepositoryConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartRepositoryConversationThreadResponse, error)
+
+	// GetRepositoryConversationThreadWithResponse One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/threads/{thread} (the `GetRepositoryConversationThread` operationId).
+	GetRepositoryConversationThreadWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, params *GetRepositoryConversationThreadParams, reqEditors ...RequestEditorFn) (*GetRepositoryConversationThreadResponse, error)
+
+	// PostRepositoryConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+	PostRepositoryConversationMessageWithBodyWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRepositoryConversationMessageResponse, error)
+
+	// PostRepositoryConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+	PostRepositoryConversationMessageWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, body PostRepositoryConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRepositoryConversationMessageResponse, error)
+
+	// ListRepositoryConversationUpdatesWithResponse The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/updates (the `ListRepositoryConversationUpdates` operationId).
+	ListRepositoryConversationUpdatesWithResponse(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListRepositoryConversationUpdatesResponse, error)
+
 	// GetTreeWithResponse The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
 	GetTreeWithResponse(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*GetTreeResponse, error)
+
+	// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
+	ListTasksWithResponse(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*ListTasksResponse, error)
 
 	// ListTranscriptWithResponse The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
 	//
@@ -2983,6 +4812,886 @@ func (r GetMyTaskResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMyTaskResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListAgentConversationThreadsResponse200Headers the declared response headers of an HTTP 200 response for ListAgentConversationThreads
+type ListAgentConversationThreadsResponse200Headers struct {
+	Link *string
+}
+
+type ListAgentConversationThreadsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the conversation's updates stood when the page was read, as listAgentConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListAgentConversationThreadsResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentConversationThreadsResponse) GetJSON200() *struct {
+	// After Where the conversation's updates stood when the page was read, as listAgentConversationUpdates takes it. Opaque.
+	After   string       `json:"after"`
+	Threads []ChatThread `json:"threads"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListAgentConversationThreadsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListAgentConversationThreadsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListAgentConversationThreadsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListAgentConversationThreadsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentConversationThreadsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentConversationThreadsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentConversationThreadsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentConversationThreadsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentConversationThreadsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// StartAgentConversationThreadResponse201Headers the declared response headers of an HTTP 201 response for StartAgentConversationThread
+type StartAgentConversationThreadResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type StartAgentConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatThread
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *StartAgentConversationThreadResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r StartAgentConversationThreadResponse) GetJSON201() *ChatThread {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r StartAgentConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StartAgentConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StartAgentConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartAgentConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartAgentConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetAgentConversationThreadResponse200Headers the declared response headers of an HTTP 200 response for GetAgentConversationThread
+type GetAgentConversationThreadResponse200Headers struct {
+	ETag string
+}
+
+// GetAgentConversationThreadResponse304Headers the declared response headers of an HTTP 304 response for GetAgentConversationThread
+type GetAgentConversationThreadResponse304Headers struct {
+	ETag string
+}
+
+type GetAgentConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ChatThread
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetAgentConversationThreadResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetAgentConversationThreadResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAgentConversationThreadResponse) GetJSON200() *ChatThread {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetAgentConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetAgentConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetAgentConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAgentConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PostAgentConversationMessageResponse201Headers the declared response headers of an HTTP 201 response for PostAgentConversationMessage
+type PostAgentConversationMessageResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type PostAgentConversationMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatMessage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *PostAgentConversationMessageResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostAgentConversationMessageResponse) GetJSON201() *ChatMessage {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PostAgentConversationMessageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostAgentConversationMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostAgentConversationMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostAgentConversationMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostAgentConversationMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAgentConversationUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+		After   string       `json:"after"`
+		Updates []ChatUpdate `json:"updates"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentConversationUpdatesResponse) GetJSON200() *struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListAgentConversationUpdatesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListAgentConversationUpdatesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListAgentConversationUpdatesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListAgentConversationUpdatesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentConversationUpdatesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentConversationUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentConversationUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentConversationUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentConversationUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListOrganizationConversationThreadsResponse200Headers the declared response headers of an HTTP 200 response for ListOrganizationConversationThreads
+type ListOrganizationConversationThreadsResponse200Headers struct {
+	Link *string
+}
+
+type ListOrganizationConversationThreadsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the conversation's updates stood when the page was read, as listOrganizationConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListOrganizationConversationThreadsResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOrganizationConversationThreadsResponse) GetJSON200() *struct {
+	// After Where the conversation's updates stood when the page was read, as listOrganizationConversationUpdates takes it. Opaque.
+	After   string       `json:"after"`
+	Threads []ChatThread `json:"threads"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListOrganizationConversationThreadsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListOrganizationConversationThreadsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListOrganizationConversationThreadsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListOrganizationConversationThreadsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListOrganizationConversationThreadsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListOrganizationConversationThreadsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrganizationConversationThreadsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrganizationConversationThreadsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOrganizationConversationThreadsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// StartOrganizationConversationThreadResponse201Headers the declared response headers of an HTTP 201 response for StartOrganizationConversationThread
+type StartOrganizationConversationThreadResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type StartOrganizationConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatThread
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *StartOrganizationConversationThreadResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r StartOrganizationConversationThreadResponse) GetJSON201() *ChatThread {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r StartOrganizationConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StartOrganizationConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StartOrganizationConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartOrganizationConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartOrganizationConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetOrganizationConversationThreadResponse200Headers the declared response headers of an HTTP 200 response for GetOrganizationConversationThread
+type GetOrganizationConversationThreadResponse200Headers struct {
+	ETag string
+}
+
+// GetOrganizationConversationThreadResponse304Headers the declared response headers of an HTTP 304 response for GetOrganizationConversationThread
+type GetOrganizationConversationThreadResponse304Headers struct {
+	ETag string
+}
+
+type GetOrganizationConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ChatThread
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetOrganizationConversationThreadResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetOrganizationConversationThreadResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrganizationConversationThreadResponse) GetJSON200() *ChatThread {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrganizationConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrganizationConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrganizationConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrganizationConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrganizationConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrganizationConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrganizationConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrganizationConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PostOrganizationConversationMessageResponse201Headers the declared response headers of an HTTP 201 response for PostOrganizationConversationMessage
+type PostOrganizationConversationMessageResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type PostOrganizationConversationMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatMessage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *PostOrganizationConversationMessageResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrganizationConversationMessageResponse) GetJSON201() *ChatMessage {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PostOrganizationConversationMessageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrganizationConversationMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrganizationConversationMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrganizationConversationMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrganizationConversationMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListOrganizationConversationUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+		After   string       `json:"after"`
+		Updates []ChatUpdate `json:"updates"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOrganizationConversationUpdatesResponse) GetJSON200() *struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListOrganizationConversationUpdatesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListOrganizationConversationUpdatesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListOrganizationConversationUpdatesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListOrganizationConversationUpdatesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListOrganizationConversationUpdatesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListOrganizationConversationUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrganizationConversationUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrganizationConversationUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOrganizationConversationUpdatesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4206,6 +6915,446 @@ func (r SubmitReviewResponse) ContentType() string {
 	return ""
 }
 
+// ListRepositoryConversationThreadsResponse200Headers the declared response headers of an HTTP 200 response for ListRepositoryConversationThreads
+type ListRepositoryConversationThreadsResponse200Headers struct {
+	Link *string
+}
+
+type ListRepositoryConversationThreadsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the conversation's updates stood when the page was read, as listRepositoryConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListRepositoryConversationThreadsResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRepositoryConversationThreadsResponse) GetJSON200() *struct {
+	// After Where the conversation's updates stood when the page was read, as listRepositoryConversationUpdates takes it. Opaque.
+	After   string       `json:"after"`
+	Threads []ChatThread `json:"threads"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRepositoryConversationThreadsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRepositoryConversationThreadsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRepositoryConversationThreadsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListRepositoryConversationThreadsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListRepositoryConversationThreadsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRepositoryConversationThreadsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRepositoryConversationThreadsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRepositoryConversationThreadsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRepositoryConversationThreadsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// StartRepositoryConversationThreadResponse201Headers the declared response headers of an HTTP 201 response for StartRepositoryConversationThread
+type StartRepositoryConversationThreadResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type StartRepositoryConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatThread
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *StartRepositoryConversationThreadResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r StartRepositoryConversationThreadResponse) GetJSON201() *ChatThread {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r StartRepositoryConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StartRepositoryConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StartRepositoryConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartRepositoryConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartRepositoryConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetRepositoryConversationThreadResponse200Headers the declared response headers of an HTTP 200 response for GetRepositoryConversationThread
+type GetRepositoryConversationThreadResponse200Headers struct {
+	ETag string
+}
+
+// GetRepositoryConversationThreadResponse304Headers the declared response headers of an HTTP 304 response for GetRepositoryConversationThread
+type GetRepositoryConversationThreadResponse304Headers struct {
+	ETag string
+}
+
+type GetRepositoryConversationThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ChatThread
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetRepositoryConversationThreadResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetRepositoryConversationThreadResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRepositoryConversationThreadResponse) GetJSON200() *ChatThread {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetRepositoryConversationThreadResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetRepositoryConversationThreadResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRepositoryConversationThreadResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetRepositoryConversationThreadResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRepositoryConversationThreadResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRepositoryConversationThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRepositoryConversationThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRepositoryConversationThreadResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PostRepositoryConversationMessageResponse201Headers the declared response headers of an HTTP 201 response for PostRepositoryConversationMessage
+type PostRepositoryConversationMessageResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type PostRepositoryConversationMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ChatMessage
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *PostRepositoryConversationMessageResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostRepositoryConversationMessageResponse) GetJSON201() *ChatMessage {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PostRepositoryConversationMessageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostRepositoryConversationMessageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostRepositoryConversationMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostRepositoryConversationMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostRepositoryConversationMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRepositoryConversationUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+		After   string       `json:"after"`
+		Updates []ChatUpdate `json:"updates"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRepositoryConversationUpdatesResponse) GetJSON200() *struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRepositoryConversationUpdatesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRepositoryConversationUpdatesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRepositoryConversationUpdatesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListRepositoryConversationUpdatesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListRepositoryConversationUpdatesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRepositoryConversationUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRepositoryConversationUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRepositoryConversationUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRepositoryConversationUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetTreeResponse200Headers the declared response headers of an HTTP 200 response for GetTree
 type GetTreeResponse200Headers struct {
 	ETag string
@@ -4290,6 +7439,86 @@ func (r GetTreeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetTreeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListTasksResponse200Headers the declared response headers of an HTTP 200 response for ListTasks
+type ListTasksResponse200Headers struct {
+	Link *string
+}
+
+type ListTasksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Tasks []Task `json:"tasks"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListTasksResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListTasksResponse) GetJSON200() *struct {
+	Tasks []Task `json:"tasks"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListTasksResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListTasksResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListTasksResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListTasksResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListTasksResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTasksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTasksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTasksResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4499,6 +7728,188 @@ func (c *ClientWithResponses) GetMyTaskWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetMyTaskResponse(rsp)
+}
+
+// ListAgentConversationThreadsWithResponse A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation (the `ListAgentConversationThreads` operationId).
+func (c *ClientWithResponses) ListAgentConversationThreadsWithResponse(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListAgentConversationThreadsResponse, error) {
+	rsp, err := c.ListAgentConversationThreads(ctx, org, agentID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentConversationThreadsResponse(rsp)
+}
+
+// StartAgentConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+func (c *ClientWithResponses) StartAgentConversationThreadWithBodyWithResponse(ctx context.Context, org Org, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartAgentConversationThreadResponse, error) {
+	rsp, err := c.StartAgentConversationThreadWithBody(ctx, org, agentID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartAgentConversationThreadResponse(rsp)
+}
+
+// StartAgentConversationThreadWithResponse Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads (the `StartAgentConversationThread` operationId).
+func (c *ClientWithResponses) StartAgentConversationThreadWithResponse(ctx context.Context, org Org, agentID AgentID, body StartAgentConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartAgentConversationThreadResponse, error) {
+	rsp, err := c.StartAgentConversationThread(ctx, org, agentID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartAgentConversationThreadResponse(rsp)
+}
+
+// GetAgentConversationThreadWithResponse One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/threads/{thread} (the `GetAgentConversationThread` operationId).
+func (c *ClientWithResponses) GetAgentConversationThreadWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, params *GetAgentConversationThreadParams, reqEditors ...RequestEditorFn) (*GetAgentConversationThreadResponse, error) {
+	rsp, err := c.GetAgentConversationThread(ctx, org, agentID, threadID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentConversationThreadResponse(rsp)
+}
+
+// PostAgentConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+func (c *ClientWithResponses) PostAgentConversationMessageWithBodyWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAgentConversationMessageResponse, error) {
+	rsp, err := c.PostAgentConversationMessageWithBody(ctx, org, agentID, threadID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAgentConversationMessageResponse(rsp)
+}
+
+// PostAgentConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages (the `PostAgentConversationMessage` operationId).
+func (c *ClientWithResponses) PostAgentConversationMessageWithResponse(ctx context.Context, org Org, agentID AgentID, threadID ThreadID, body PostAgentConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAgentConversationMessageResponse, error) {
+	rsp, err := c.PostAgentConversationMessage(ctx, org, agentID, threadID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAgentConversationMessageResponse(rsp)
+}
+
+// ListAgentConversationUpdatesWithResponse The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
+func (c *ClientWithResponses) ListAgentConversationUpdatesWithResponse(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListAgentConversationUpdatesResponse, error) {
+	rsp, err := c.ListAgentConversationUpdates(ctx, org, agentID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentConversationUpdatesResponse(rsp)
+}
+
+// ListOrganizationConversationThreadsWithResponse A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
+func (c *ClientWithResponses) ListOrganizationConversationThreadsWithResponse(ctx context.Context, org Org, params *ListOrganizationConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListOrganizationConversationThreadsResponse, error) {
+	rsp, err := c.ListOrganizationConversationThreads(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrganizationConversationThreadsResponse(rsp)
+}
+
+// StartOrganizationConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+func (c *ClientWithResponses) StartOrganizationConversationThreadWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartOrganizationConversationThreadResponse, error) {
+	rsp, err := c.StartOrganizationConversationThreadWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartOrganizationConversationThreadResponse(rsp)
+}
+
+// StartOrganizationConversationThreadWithResponse Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/conversation/threads (the `StartOrganizationConversationThread` operationId).
+func (c *ClientWithResponses) StartOrganizationConversationThreadWithResponse(ctx context.Context, org Org, body StartOrganizationConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartOrganizationConversationThreadResponse, error) {
+	rsp, err := c.StartOrganizationConversationThread(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartOrganizationConversationThreadResponse(rsp)
+}
+
+// GetOrganizationConversationThreadWithResponse One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/conversation/threads/{thread} (the `GetOrganizationConversationThread` operationId).
+func (c *ClientWithResponses) GetOrganizationConversationThreadWithResponse(ctx context.Context, org Org, threadID ThreadID, params *GetOrganizationConversationThreadParams, reqEditors ...RequestEditorFn) (*GetOrganizationConversationThreadResponse, error) {
+	rsp, err := c.GetOrganizationConversationThread(ctx, org, threadID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrganizationConversationThreadResponse(rsp)
+}
+
+// PostOrganizationConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+func (c *ClientWithResponses) PostOrganizationConversationMessageWithBodyWithResponse(ctx context.Context, org Org, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrganizationConversationMessageResponse, error) {
+	rsp, err := c.PostOrganizationConversationMessageWithBody(ctx, org, threadID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrganizationConversationMessageResponse(rsp)
+}
+
+// PostOrganizationConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/conversation/threads/{thread}/messages (the `PostOrganizationConversationMessage` operationId).
+func (c *ClientWithResponses) PostOrganizationConversationMessageWithResponse(ctx context.Context, org Org, threadID ThreadID, body PostOrganizationConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrganizationConversationMessageResponse, error) {
+	rsp, err := c.PostOrganizationConversationMessage(ctx, org, threadID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrganizationConversationMessageResponse(rsp)
+}
+
+// ListOrganizationConversationUpdatesWithResponse The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/conversation/updates (the `ListOrganizationConversationUpdates` operationId).
+func (c *ClientWithResponses) ListOrganizationConversationUpdatesWithResponse(ctx context.Context, org Org, params *ListOrganizationConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListOrganizationConversationUpdatesResponse, error) {
+	rsp, err := c.ListOrganizationConversationUpdates(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrganizationConversationUpdatesResponse(rsp)
 }
 
 // ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
@@ -4748,6 +8159,97 @@ func (c *ClientWithResponses) SubmitReviewWithResponse(ctx context.Context, org 
 	return ParseSubmitReviewResponse(rsp)
 }
 
+// ListRepositoryConversationThreadsWithResponse A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation (the `ListRepositoryConversationThreads` operationId).
+func (c *ClientWithResponses) ListRepositoryConversationThreadsWithResponse(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationThreadsParams, reqEditors ...RequestEditorFn) (*ListRepositoryConversationThreadsResponse, error) {
+	rsp, err := c.ListRepositoryConversationThreads(ctx, org, repo, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRepositoryConversationThreadsResponse(rsp)
+}
+
+// StartRepositoryConversationThreadWithBodyWithResponse Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+func (c *ClientWithResponses) StartRepositoryConversationThreadWithBodyWithResponse(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartRepositoryConversationThreadResponse, error) {
+	rsp, err := c.StartRepositoryConversationThreadWithBody(ctx, org, repo, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartRepositoryConversationThreadResponse(rsp)
+}
+
+// StartRepositoryConversationThreadWithResponse Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads (the `StartRepositoryConversationThread` operationId).
+func (c *ClientWithResponses) StartRepositoryConversationThreadWithResponse(ctx context.Context, org Org, repo Repo, body StartRepositoryConversationThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*StartRepositoryConversationThreadResponse, error) {
+	rsp, err := c.StartRepositoryConversationThread(ctx, org, repo, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartRepositoryConversationThreadResponse(rsp)
+}
+
+// GetRepositoryConversationThreadWithResponse One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/threads/{thread} (the `GetRepositoryConversationThread` operationId).
+func (c *ClientWithResponses) GetRepositoryConversationThreadWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, params *GetRepositoryConversationThreadParams, reqEditors ...RequestEditorFn) (*GetRepositoryConversationThreadResponse, error) {
+	rsp, err := c.GetRepositoryConversationThread(ctx, org, repo, threadID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRepositoryConversationThreadResponse(rsp)
+}
+
+// PostRepositoryConversationMessageWithBodyWithResponse Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+func (c *ClientWithResponses) PostRepositoryConversationMessageWithBodyWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRepositoryConversationMessageResponse, error) {
+	rsp, err := c.PostRepositoryConversationMessageWithBody(ctx, org, repo, threadID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRepositoryConversationMessageResponse(rsp)
+}
+
+// PostRepositoryConversationMessageWithResponse Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages (the `PostRepositoryConversationMessage` operationId).
+func (c *ClientWithResponses) PostRepositoryConversationMessageWithResponse(ctx context.Context, org Org, repo Repo, threadID ThreadID, body PostRepositoryConversationMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRepositoryConversationMessageResponse, error) {
+	rsp, err := c.PostRepositoryConversationMessage(ctx, org, repo, threadID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRepositoryConversationMessageResponse(rsp)
+}
+
+// ListRepositoryConversationUpdatesWithResponse The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/conversation/updates (the `ListRepositoryConversationUpdates` operationId).
+func (c *ClientWithResponses) ListRepositoryConversationUpdatesWithResponse(ctx context.Context, org Org, repo Repo, params *ListRepositoryConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListRepositoryConversationUpdatesResponse, error) {
+	rsp, err := c.ListRepositoryConversationUpdates(ctx, org, repo, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRepositoryConversationUpdatesResponse(rsp)
+}
+
 // GetTreeWithResponse The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -4759,6 +8261,19 @@ func (c *ClientWithResponses) GetTreeWithResponse(ctx context.Context, org Org, 
 		return nil, err
 	}
 	return ParseGetTreeResponse(rsp)
+}
+
+// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
+func (c *ClientWithResponses) ListTasksWithResponse(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*ListTasksResponse, error) {
+	rsp, err := c.ListTasks(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTasksResponse(rsp)
 }
 
 // ListTranscriptWithResponse The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
@@ -4834,6 +8349,804 @@ func ParseGetMyTaskResponse(rsp *http.Response) (*GetMyTaskResponse, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentConversationThreadsResponse parses an HTTP response from a ListAgentConversationThreadsWithResponse call
+func ParseListAgentConversationThreadsResponse(rsp *http.Response) (*ListAgentConversationThreadsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentConversationThreadsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the conversation's updates stood when the page was read, as listAgentConversationUpdates takes it. Opaque.
+			After   string       `json:"after"`
+			Threads []ChatThread `json:"threads"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListAgentConversationThreadsResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseStartAgentConversationThreadResponse parses an HTTP response from a StartAgentConversationThreadWithResponse call
+func ParseStartAgentConversationThreadResponse(rsp *http.Response) (*StartAgentConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartAgentConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers StartAgentConversationThreadResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentConversationThreadResponse parses an HTTP response from a GetAgentConversationThreadWithResponse call
+func ParseGetAgentConversationThreadResponse(rsp *http.Response) (*GetAgentConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetAgentConversationThreadResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetAgentConversationThreadResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostAgentConversationMessageResponse parses an HTTP response from a PostAgentConversationMessageWithResponse call
+func ParsePostAgentConversationMessageResponse(rsp *http.Response) (*PostAgentConversationMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostAgentConversationMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatMessage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers PostAgentConversationMessageResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListAgentConversationUpdatesResponse parses an HTTP response from a ListAgentConversationUpdatesWithResponse call
+func ParseListAgentConversationUpdatesResponse(rsp *http.Response) (*ListAgentConversationUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentConversationUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+			After   string       `json:"after"`
+			Updates []ChatUpdate `json:"updates"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOrganizationConversationThreadsResponse parses an HTTP response from a ListOrganizationConversationThreadsWithResponse call
+func ParseListOrganizationConversationThreadsResponse(rsp *http.Response) (*ListOrganizationConversationThreadsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrganizationConversationThreadsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the conversation's updates stood when the page was read, as listOrganizationConversationUpdates takes it. Opaque.
+			After   string       `json:"after"`
+			Threads []ChatThread `json:"threads"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListOrganizationConversationThreadsResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseStartOrganizationConversationThreadResponse parses an HTTP response from a StartOrganizationConversationThreadWithResponse call
+func ParseStartOrganizationConversationThreadResponse(rsp *http.Response) (*StartOrganizationConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartOrganizationConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers StartOrganizationConversationThreadResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetOrganizationConversationThreadResponse parses an HTTP response from a GetOrganizationConversationThreadWithResponse call
+func ParseGetOrganizationConversationThreadResponse(rsp *http.Response) (*GetOrganizationConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrganizationConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetOrganizationConversationThreadResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetOrganizationConversationThreadResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostOrganizationConversationMessageResponse parses an HTTP response from a PostOrganizationConversationMessageWithResponse call
+func ParsePostOrganizationConversationMessageResponse(rsp *http.Response) (*PostOrganizationConversationMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrganizationConversationMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatMessage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers PostOrganizationConversationMessageResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListOrganizationConversationUpdatesResponse parses an HTTP response from a ListOrganizationConversationUpdatesWithResponse call
+func ParseListOrganizationConversationUpdatesResponse(rsp *http.Response) (*ListOrganizationConversationUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrganizationConversationUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+			After   string       `json:"after"`
+			Updates []ChatUpdate `json:"updates"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -5968,6 +10281,405 @@ func ParseSubmitReviewResponse(rsp *http.Response) (*SubmitReviewResponse, error
 	return response, nil
 }
 
+// ParseListRepositoryConversationThreadsResponse parses an HTTP response from a ListRepositoryConversationThreadsWithResponse call
+func ParseListRepositoryConversationThreadsResponse(rsp *http.Response) (*ListRepositoryConversationThreadsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRepositoryConversationThreadsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the conversation's updates stood when the page was read, as listRepositoryConversationUpdates takes it. Opaque.
+			After   string       `json:"after"`
+			Threads []ChatThread `json:"threads"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListRepositoryConversationThreadsResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseStartRepositoryConversationThreadResponse parses an HTTP response from a StartRepositoryConversationThreadWithResponse call
+func ParseStartRepositoryConversationThreadResponse(rsp *http.Response) (*StartRepositoryConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartRepositoryConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers StartRepositoryConversationThreadResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetRepositoryConversationThreadResponse parses an HTTP response from a GetRepositoryConversationThreadWithResponse call
+func ParseGetRepositoryConversationThreadResponse(rsp *http.Response) (*GetRepositoryConversationThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRepositoryConversationThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ChatThread
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetRepositoryConversationThreadResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetRepositoryConversationThreadResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostRepositoryConversationMessageResponse parses an HTTP response from a PostRepositoryConversationMessageWithResponse call
+func ParsePostRepositoryConversationMessageResponse(rsp *http.Response) (*PostRepositoryConversationMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostRepositoryConversationMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ChatMessage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers PostRepositoryConversationMessageResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListRepositoryConversationUpdatesResponse parses an HTTP response from a ListRepositoryConversationUpdatesWithResponse call
+func ParseListRepositoryConversationUpdatesResponse(rsp *http.Response) (*ListRepositoryConversationUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRepositoryConversationUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+			After   string       `json:"after"`
+			Updates []ChatUpdate `json:"updates"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetTreeResponse parses an HTTP response from a GetTreeWithResponse call
 func ParseGetTreeResponse(rsp *http.Response) (*GetTreeResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6050,6 +10762,75 @@ func ParseGetTreeResponse(rsp *http.Response) (*GetTreeResponse, error) {
 			headers.ETag = value
 		}
 		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListTasksResponse parses an HTTP response from a ListTasksWithResponse call
+func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTasksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Tasks []Task `json:"tasks"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListTasksResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil

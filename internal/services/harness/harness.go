@@ -55,12 +55,19 @@ type Cobranch interface {
 	// ChatUpdates waits a while for updates of one of the organization's chats after the cursor, and answers the threads
 	// they changed, none when it waited in vain, and the cursor after them.
 	ChatUpdates(ctx context.Context, org string, chat Chat, after string) ([]uuid.UUID, string, error)
+	// Tasks lists the tasks of one of the organization's agents in the states named, newest first, at most limit of
+	// them: those private to another than the task's assigner redacted (agents.Task.Redacted).
+	Tasks(ctx context.Context, org string, agent uuid.UUID, states []agents.TaskState, limit int) ([]agents.Task, error)
 }
 
-// Chat names one of an organization's chats: a branch's, by its repository and name, or an issue's, by its number.
+// Chat names one of an organization's chats: a branch's, by its repository and name; an issue's, by its number; or,
+// with Conversation, the private conversation of the task's assigner, about the organization, about the repository
+// Repo names or with the agent Agent names.
 type Chat struct {
 	Repo, Branch string
 	Issue        int64
+	Conversation bool
+	Agent        uuid.UUID
 }
 
 // ChatMessage is a message of a chat's thread, as the model reads it.
