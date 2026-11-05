@@ -3,7 +3,8 @@ import { h } from "../../lib/dom.js";
 import { when } from "../../lib/format.js";
 import { roles } from "../../lib/state.js";
 
-export const nav = { label: "API keys", order: 40 };
+export const nav = { label: "API keys", order: 40, under: "settings" };
+export const crumbs = ({ root }) => [{ label: "Settings", href: root + "/settings" }, { label: "API keys" }];
 export default ({ org, main, can }) => showApiKeys(org, main, can);
 
 // expiryPicker chooses when a new secret stops working: in a year (the default), never, or on a date.
@@ -57,7 +58,7 @@ async function showApiKeys(org, main, can, shown = null) {
       ] : null));
     return row;
   };
-  const sections = [h("h1", {}, "API keys"), error];
+  const sections = [error];
   if (shown) sections.push(reveal(shown));
   sections.push(h("section", { class: "panel" }, h("p", {}, "A key is a principal of this organization that a script acts as, with roles of its own; a key never borrows a person's access. Rotating a key adds a second secret, so the script changes over without failing; then revoke the old one."),
     keys.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Key"), h("th", {}, "Roles"), h("th", {}, "Secrets"), h("th", {}))), h("tbody", {}, keys.map(keyRow))) : h("p", {}, "No API keys yet.")));

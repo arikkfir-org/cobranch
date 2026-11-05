@@ -10,7 +10,7 @@ console="$REGISTRY/cobranch-console:$version"
 backoffice="$REGISTRY/cobranch-back-office:$version"
 docker build --build-arg VERSION="$version" --tag "$cobranch" .
 docker build --tag "$console" web/console
-docker build --tag "$backoffice" web/back-office
+docker build --tag "$backoffice" --file web/back-office/Dockerfile web
 wget -qO- --header 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token |
   sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p' |

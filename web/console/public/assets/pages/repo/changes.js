@@ -1,5 +1,6 @@
 import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
+import { branchSubject } from "../../lib/chat.js";
 import { diffPanel } from "../../lib/diff.js";
 import { h } from "../../lib/dom.js";
 import { icon } from "../../lib/icons.js";
@@ -7,6 +8,9 @@ import { commitReviews, reviewDrafting } from "../../lib/reviews.js";
 
 export const under = "branches";
 export const accepts = (rest) => rest.length > 0;
+export const heading = false;
+export const crumbs = ({ root, at, rest }) => [{ label: "Branches", href: root + "/branches" }, { label: rest.join("/"), href: at.branchPage(rest.join("/")) }, { label: "Changes" }];
+export const subject = ({ org, repo, path, at, rest, can }) => branchSubject(org, repo, path, at, rest.join("/"), can);
 export default ({ path, at, rest, can, fail }) => repositoryChanges(path, at, rest.join("/"), can, fail);
 
 // repositoryChanges is a branch's Changes tab: what it would merge into its base, from where it left it, file by

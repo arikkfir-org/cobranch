@@ -30,3 +30,5 @@ flowchart LR
 | An effect style, such as `Focus/Ring` | `--shadow-focus-ring`, a `box-shadow` whose colours are the variables they're bound to, so it follows the theme. |
 
 The typefaces themselves, Inter and JetBrains Mono, are served with the Console (`public/assets/fonts.css`).
+
+The Back-office draws with the same files: its image is built from `web/` and takes `tokens.css`, `fonts.css`, `fonts/` and `lib/brand.js` from the Console's (`web/back-office/Dockerfile`), so it needs no export of its own.

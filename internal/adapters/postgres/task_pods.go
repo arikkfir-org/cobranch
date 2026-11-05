@@ -159,30 +159,13 @@ func (s *TaskPodStore) Stop(ctx context.Context, taskID uuid.UUID, pod int) (boo
 }
 
 // Fail ends a task that hasn't ended Failed, for reason, and appends the change to its transcript, which no harness
-// writes to any more (taskrunner.Store).
+// writes to any more; a review task's failure changes the status of the branches at its head (taskrunner.Store).
 func (s *TaskPodStore) Fail(ctx context.Context, taskID uuid.UUID, reason string) (bool, error) {
 	failed := false
 	err := transact(ctx, s.pool, s.q, "failing the task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
-		r, err := q.FailTask(ctx, reason, taskID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("failing the task: %w", err)
-		}
-		failed = true
-		last, err := q.LastEntry(ctx, taskID)
-		if err != nil {
-			return fmt.Errorf("reading the transcript's last entry: %w", err)
-		}
-		body, err := json.Marshal(agents.StateChange{State: agents.TaskFailed, Reason: reason})
-		if err != nil {
-			return fmt.Errorf("encoding the state entry: %w", err)
-		}
-		if _, err := q.InsertEntry(ctx, queries.InsertEntryParams{TaskID: taskID, Seq: last + 1, Kind: string(agents.EntryState), Body: body}); err != nil {
-			return fmt.Errorf("appending the state entry: %w", err)
-		}
-		return orgEvent(ctx, q, &r.OrgID, r.AgentID, "task.failed", taskID, map[string]any{"number": r.Number})
+		var err error
+		failed, err = failTask(ctx, q, taskID, reason)
+		return err
 	})
 	return failed, err
 }

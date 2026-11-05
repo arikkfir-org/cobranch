@@ -9,8 +9,8 @@ import (
 )
 
 // Retries of a call of the API, which are safe to repeat: the harness reads, and appends entries that name their
-// numbers, so a repeat answers the entry already there. A call sent once, such as a review's submission, is the
-// exception.
+// numbers, so a repeat answers the entry already there, and the model proxy reports calls by their IDs, which count
+// once. A call sent once, such as a review's submission, is the exception.
 const (
 	attempts       = 6
 	defaultBackoff = time.Second

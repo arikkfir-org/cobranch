@@ -6,7 +6,8 @@
 
 **Status**: Proposed 2026-11-02 · [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Builds the [product’s
 agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Runs agents in the operator’s image · Built by
-[ENG-215](https://linear.app/arikkfir/issue/ENG-215), in eight pull requests
+[ENG-215](https://linear.app/arikkfir/issue/ENG-215), in eight pull requests; spend and caps by
+[ENG-257](https://linear.app/arikkfir/issue/ENG-257)
 
 Every branch carries a real-time, threaded chat whose threads can point at lines of a file. Users create agents, which
 their organization owns and an admin puts on a model from the providers the organization holds keys for; a user assigns
@@ -147,9 +148,14 @@ Google and xAI are added the same way. Model names are the provider’s; Cobranc
 - **A provider is a row of the organization's settings:** one of Anthropic, Google, xAI, OpenAI or DeepSeek, and the ID
   of the organization secret that holds its API key. `org.manage` adds, changes and removes one. A provider whose secret
   is gone shows as broken.
-- **Picking a model** takes `org.principals.manage`: one of the providers the organization has, and the model's name.
+- **Picking a model** takes `org.principals.manage`: one of the models the organization added, under a provider it has.
   Cobranch never checks a name against the provider, and the Console suggests none, which would date: a new model works
   the day it ships.
+- **The organization's models** (**Proposed**, [ENG-257](https://linear.app/arikkfir/issue/ENG-257)) are rows of
+  `models`: a provider's model, its prices per million tokens read and written, and whether it is the model new agents
+  start on. `org.manage` adds, changes and removes one; one an agent runs on stays
+  until no agent does. The agents of an organization when it arrived kept their models, added unpriced, so nothing
+  stopped; an admin prices them. See [Spend and caps](#spend-and-caps).
 - **The agent must read the key.** The controller gives a task its provider's key only if the agent holds `secrets.read`
   on that secret. The Console's model picker offers to grant Secret reader on it in the same step.
 - **Secrets a task receives** are the agent's `secrets` map, each an environment variable named after its key, from a
@@ -200,7 +206,7 @@ Running meanwhile.
 | Running | Its pod started; the harness works |
 | Waiting | The agent asked a question in its thread and waits for an answer; its pod stops after `agents.idle`, and the next message someone else posts in the thread starts its next pod |
 | Succeeded | The agent finished, with its summary |
-| Failed | The agent gave up, the model refused or failed past its retries, the task ran past its timeout, its pod failed three times, or it could not start: no model, a secret it may not read, an installation that runs no pods |
+| Failed | The agent gave up, the model refused or failed past its retries, the task ran past its timeout or [reached its cap](#spend-and-caps), its pod failed three times, or it could not start: no model, a secret it may not read, an installation that runs no pods |
 | Cancelled | Its assigner or an admin cancelled it, or its assigner left the organization |
 
 ## The agent's pod
@@ -241,7 +247,7 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   container that mounts the key; it listens on `127.0.0.1:8090` and sends each of the harness's requests on to the
   provider, with the key in place of any the request carries, and without its trace context or cookies. The harness and
   its tools reach the provider through it, and can spend what the agent may spend, but no command they run reads the
-  key.
+  key. It also mounts the task's token, as which it reports what each turn spent ([Spend and caps](#spend-and-caps)).
 - **A pod that dies is replaced.** On each pass, every few seconds, the controller checks each running or waiting task's
   newest pod: one that failed, exited while its task hadn't ended, or vanished for a minute, it removes and replaces
   with the next, `task-<id>-2` and so on, with a fresh token, and the harness resumes from the transcript; the fourth
@@ -338,6 +344,41 @@ ID, so re-running it never posts twice.
   repository; a task without a repository, only its assigner and admins. The task's page reads it as it grows, every few
   seconds, until the task ends.
 
+## Spend and caps
+
+**Proposed** ([ENG-257](https://linear.app/arikkfir/issue/ENG-257)): every task records what it spent, and stops at its
+cap, saying why.
+
+**The model proxy reports every turn; Cobranch prices it and ends the task at its cap**
+
+![The model proxy reports every turn; Cobranch prices it and ends the task at its cap](agents/spend.svg)
+
+The harness holds no key, so every turn passes the proxy and is metered; a task overshoots its cap by one turn at most.
+
+- **The model proxy meters, not the harness.** The harness holds no key and reaches the provider only through the proxy,
+  so the proxy sees every turn: it sends on only a turn of the task's model, asked whole rather than streamed, reads the
+  tokens the answer says it read and wrote (cached input and thinking included), and reports them as the task's token,
+  under a call ID of its own, before the harness reads the answer.
+- **Cobranch prices the call.** The report carries tokens, never dollars: the REST API prices it at the organization's
+  prices for that model, or its agent's model's, in micro-dollars, and adds it to the task once, however often the
+  report repeats. Amounts travel as decimal strings in US dollars (`"8.00"`).
+- **The cap is the agent's** (**Agreed**, 2026-11-05): each agent's settings carry the most one of its tasks may spend,
+  since two agents on one model may deserve different limits; models carry prices only, and an unset or zero cap is
+  none. Setting it takes a person holding `org.principals.manage`, as picking the agent's model does: its creator alone
+  may not, nor may the agent, which a task's token acts as, so no task lifts its own budget. A task's cap is its agent's
+  as it now stands, so raising it lets a task that ran out go further next time. The
+  call that brings a task's spend to its cap fails the task, Failed with “It spent $1.01, reaching its cap of $1.00 a task.”,
+  in its transcript and an event in its agent's name, and the proxy refuses every turn after. A task that ends otherwise,
+  cancelled or timed out, is learnt of from the report of the turn on its way then, and the proxy withholds that turn's
+  answer: the provider charged for it, but the harness never acts on it.
+- **At most one turn over.** A turn's price is known only once it is answered, so the turn that crosses the cap still
+  answers. A turn whose report fails is answered 503 and its answer held back; the harness asks it again, as it does
+  any 503, and gets the answer once the report lands, so it never acts on a turn Cobranch hasn't recorded.
+- **Tasks live on their agent's page** (**Agreed**, 2026-11-04): a task is work given to an agent, explicitly or by
+  being asked, so the agent's page shows what it is working on, its queue and its history, each task with what it spent
+  against its cap, and the agent's facts show what it spent this month; the Agents page gains Activity and Quotas tabs,
+  and the old Tasks page gives way, its addresses opening the task on its agent's page.
+
 ## Agents act as principals
 
 **Agreed** ([architecture](architecture.md#constraints)): agents use the front door, the same APIs and Git server as
@@ -401,7 +442,9 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 | `GET`, `PUT`, `DELETE /model-providers/{provider}` | `modelProviders`, `setModelProvider`, `removeModelProvider` | `org.read`; `org.manage` |
 | `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`, and its kind's guard; `agents.assign`; its assigner or `org.principals.manage` |
 | `GET`, `POST /tasks/{n}/transcript`; `GET /tasks/{n}/transcript/{seq}` | `Task.transcript`, `appendTranscriptEntry` | Who reads the task; the task's own token appends |
+| `GET /models`; `GET`, `PUT`, `DELETE /models/{provider}/{model}` | `models`, `setModel`, `removeModel` | `org.read`; `org.manage` |
 | `GET /v1/me/task`, outside `/orgs` | `myTask` | A task token, for the task it works |
+| `POST /v1/me/task/spend`, outside `/orgs` | `recordTaskSpend` | A task token, for the task it works; its pod's model proxy reports each turn |
 
 Changes take `If-Match` with the version they read, as every change does; a stale one is refused (412, or
 `precondition.failed`). The Console shows a branch's chat on its page and follows it live; on a branch's file, a click
@@ -410,14 +453,17 @@ threads on the file.
 
 ## Data model
 
-**This slice’s tables: chats, agents, providers, tasks and transcripts**
+**This slice’s tables: chats, agents, providers, models, tasks, transcripts and spend**
 
-![This slice’s tables: chats, agents, providers, tasks and transcripts](agents/er.svg)
+![This slice’s tables: chats, agents, providers, models, tasks, transcripts and spend](agents/er.svg)
 
 `chat_threads`, `chat_messages`, `agents`, `model_providers` and `agent_tasks` carry trigger `audit()`; transcripts are
 the task’s own record and don’t, and task tokens, which Cobranch alone makes and sweeps, don’t either. Every new row
 carries `org_id`, except a task's transcript entries, its tokens and its pods' record, which reach their organization
 through `task_id`. A message’s `task_id` names the task an agent posted it from.
+[ENG-257](https://linear.app/arikkfir/issue/ENG-257) adds `models`, audited, which `agents` names by provider and model,
+`agents.cap`, and `task_spend`, a row per call a task paid for, keyed by its task and the call's ID, which Cobranch alone
+writes and so doesn't audit.
 
 ## Rollout
 
@@ -445,8 +491,10 @@ land.
   as the principals design agreed.
 - **The model sees what the agent reads.** The code and chats a task reads go to its provider; an organization picks
   providers it trusts with them.
-- **Model calls cost money,** charged to the organization's own key; `agents.maxTurns` and the timeout bound one task,
-  and [ENG-238](https://linear.app/arikkfir/issue/ENG-238)'s quotas bound the rest.
+- **Model calls cost money,** charged to the organization's own key; each task's cap bounds what one task spends, to
+  within a turn, and `agents.maxTurns`, the timeout and [ENG-238](https://linear.app/arikkfir/issue/ENG-238)'s quotas
+  bound the rest. A model left unpriced records tokens and costs nothing, so its cap never trips until an admin prices
+  it.
 - **A shell in the pod runs what the model asks.** The pod's bounds are the namespace's: no ingress, egress to DNS, the
   internet and the installation's REST, GraphQL and Git servers, Pod Security `restricted`, no Kubernetes token, and a
   token capped by the assigner.
@@ -488,6 +536,11 @@ land.
 | The email is `<agent ID>@agents.cobranch.invalid`, written by a trigger on `agents`, not one under the Console's host | Migrations and seeds that make agents can't know the host, a host that changes would strand its emails, and `.invalid` never resolves | Proposed |
 | A task's first thread in its branch's or issue's chat becomes its thread, and its messages link the task | A restarted pod finds the thread it started; readers see which task spoke | Proposed |
 | Mentions, agents waking on chat messages by themselves, and agents' files in the object store come later | Keeps this slice to its issue | Proposed |
+| A task is work given to an agent, and shows on its agent's page, with what it spent | The owner's call, 2026-11-04 | Agreed |
+| The organization keeps a catalog of models with their prices; an agent runs only on one of them | Prices need a place; one default for new agents | Proposed |
+| The cap lives on the agent alone, not on its model | Two agents on one model may deserve different limits; the owner's call, 2026-11-05, over a model's cap as a ceiling | Agreed |
+| The model proxy meters each turn and reports tokens; Cobranch prices them | The proxy alone sees every turn; prices stay on the server | Proposed |
+| Money is integer micro-dollars, sent as decimal strings | No floating point; exact sums | Proposed |
 
 ## Open questions
 

@@ -80,6 +80,39 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/task/spend:
+    post:
+      operationId: recordMyTaskSpend
+      summary: >-
+        Records a call of the model of the task the request's task token works, as the model proxy of its pod reports
+        it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the
+        organization's prices for that model of its agent's provider, or for its agent's model when the organization
+        has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its
+        cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers
+        409 task.ended.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUsage"
+      responses:
+        "200":
+          description: What the task spent, with the call.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSpend"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/sessions:
     get:
       operationId: listMySessions
@@ -2003,6 +2036,139 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/models:
+    get:
+      operationId: listModels
+      summary: >-
+        The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps
+        its own tasks. Takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The models.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/models/{provider}/{model}:
+    get:
+      operationId: getModel
+      summary: One of the organization's models, with the agents on it; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/modelName"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The model.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Model"
+        "304":
+          description: The model is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: setModel
+      summary: >-
+        Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *;
+        or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on,
+        makes the one before it no longer so. A provider the organization hasn't added answers 400
+        model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with
+        neither header 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/modelName"
+        - $ref: "#/components/parameters/ifMatchModel"
+        - $ref: "#/components/parameters/ifNoneMatchModel"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelInput"
+      responses:
+        "200":
+          description: The model as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Model"
+        "201":
+          description: The model, added.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Model"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeModel
+      summary: >-
+        Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409
+        model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/modelName"
+        - $ref: "#/components/parameters/ifMatchModel"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -2098,8 +2264,9 @@ paths:
     patch:
       operationId: updateAgent
       summary: >-
-        Changes an agent's name, description or standing instructions; takes being its creator, or
-        org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+        Changes an agent's name, description, standing instructions or cap; takes being its creator, or
+        org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The
+        change names the agent's ETag in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -6888,6 +7055,25 @@ components:
       description: "*, to add a provider the organization hasn't added: one it has refuses with 412."
       schema:
         type: string
+    modelName:
+      name: model
+      in: path
+      required: true
+      description: A model, by the name its provider gives it.
+      schema:
+        type: string
+    ifMatchModel:
+      name: If-Match
+      in: header
+      description: The ETag of the model the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchModel:
+      name: If-None-Match
+      in: header
+      description: "*, to add a model the organization hasn't added: one it has refuses with 412."
+      schema:
+        type: string
     ifMatchTask:
       name: If-Match
       in: header
@@ -9380,6 +9566,9 @@ components:
         model:
           type: string
           description: The model it runs on, as its provider names it; absent while it runs on none.
+        cap:
+          type: string
+          description: The most a task of it may spend, in US dollars such as 2.00; absent for none.
         secrets:
           type: object
           description: The secrets its tasks receive, by the environment variable each goes in.
@@ -9459,6 +9648,11 @@ components:
           type: string
         instructions:
           type: string
+        cap:
+          type: [string, "null"]
+          description: >-
+            The most a task of it may spend, in US dollars such as 2.00, at most $1000000 (400 agent.cap_invalid); null
+            for none.
     ModelProvider:
       type: object
       description: >-
@@ -9505,6 +9699,69 @@ components:
           description: The providers the installation knows, by name, which the organization may add.
           items:
             type: string
+    Model:
+      type: object
+      description: >-
+        One of an organization's models, of a provider it added, which its agents may run on: what the organization
+        pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend
+        is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as
+        3.00.
+      required: [provider, name, inputPrice, outputPrice, default, agents, createdAt, updatedAt, version]
+      properties:
+        provider:
+          type: string
+        name:
+          type: string
+          description: The model's name, as its provider gives it.
+        inputPrice:
+          type: string
+          description: What a million tokens it reads cost, such as 3.00.
+        outputPrice:
+          type: string
+          description: What a million tokens it writes cost, such as 15.00.
+        default:
+          type: boolean
+          description: Whether a new agent starts on it; the organization has at most one.
+        agents:
+          type: array
+          description: The agents that run on it, by name.
+          items:
+            $ref: "#/components/schemas/Principal"
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its agents' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    ModelList:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          description: The organization's models, by provider and name.
+          items:
+            $ref: "#/components/schemas/Model"
+    ModelInput:
+      type: object
+      description: What a model costs and whether it is the default; it replaces what the model had.
+      required: [inputPrice, outputPrice]
+      properties:
+        inputPrice:
+          type: string
+          description: What a million tokens it reads cost, $0 to $10000, such as 3.00.
+        outputPrice:
+          type: string
+          description: What a million tokens it writes cost, $0 to $10000, such as 15.00.
+        default:
+          type: boolean
+          description: Whether a new agent starts on it; absent for not.
     ModelProviderInput:
       type: object
       description: The secret a provider's API key is in.
@@ -9543,7 +9800,7 @@ components:
     Task:
       type: object
       description: A task of one of the organization's agents, which the organization numbers.
-      required: [id, number, agent, kind, title, instructions, state, reason, summary, createdAt, version]
+      required: [id, number, agent, kind, title, instructions, state, reason, summary, spent, inputTokens, outputTokens, createdAt, version]
       properties:
         id:
           type: string
@@ -9601,6 +9858,20 @@ components:
         endedAt:
           type: string
           format: date-time
+        spent:
+          type: string
+          description: What it spent so far, at its organization's prices, in US dollars such as 0.42.
+        inputTokens:
+          type: integer
+          format: int64
+          description: The tokens its model read so far.
+        outputTokens:
+          type: integer
+          format: int64
+          description: The tokens its model wrote so far.
+        cap:
+          type: string
+          description: The most it may spend, its agent's cap, in US dollars; absent for none. It fails once it reaches it.
         version:
           type: integer
           format: int64
@@ -9632,6 +9903,46 @@ components:
           description: >-
             The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME
             in ACME-42; absent for none.
+    TaskUsage:
+      type: object
+      description: A call of a task's model, as the model proxy of its pod reports it.
+      required: [id, model, inputTokens, outputTokens]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The call's own ID, which a repeated report repeats, so that it counts once.
+        model:
+          type: string
+          description: The model the call asked, as its provider names it.
+        inputTokens:
+          type: integer
+          format: int64
+          description: The tokens the model read, 0 to 100000000.
+        outputTokens:
+          type: integer
+          format: int64
+          description: The tokens the model wrote, 0 to 100000000.
+    TaskSpend:
+      type: object
+      description: What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+      required: [spent, inputTokens, outputTokens, ended]
+      properties:
+        spent:
+          type: string
+          description: In US dollars, at its organization's prices, such as 0.42.
+        inputTokens:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+        cap:
+          type: string
+          description: The most it may spend, in US dollars; absent for none.
+        ended:
+          type: boolean
+          description: Whether it has ended; its token then acts no more.
     TranscriptEntryKind:
       type: string
       description: >-

@@ -54,6 +54,7 @@ models:
       artifacts: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
+      models: { resolver: true }
       conversation: { resolver: true }
   Issue:
     fields:
@@ -76,6 +77,10 @@ models:
     fields:
       assigneeId: { omittable: true }
       repositoryId: { omittable: true }
+  # A null clears an agent's own cap; a field left out keeps it.
+  AgentPatch:
+    fields:
+      cap: { omittable: true }
   Repository:
     fields:
       viewerPermissions: { resolver: true }

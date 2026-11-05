@@ -4,6 +4,7 @@ import { repoSlugInput } from "../../lib/repository.js";
 import { go } from "../../lib/router.js";
 
 export const nav = { label: "Settings", order: 90 };
+export const crumbs = [{ label: "Settings" }];
 export const allowed = (can) => can("repo.manage");
 export default ({ org, repo, path, fail }) => repositorySettings(org, repo, path, fail);
 

@@ -43,6 +43,8 @@ type Agent struct {
 	Provider *string `json:"provider,omitempty"`
 	// The model it runs on, as its provider names it; null while it runs on none.
 	Model *string `json:"model,omitempty"`
+	// The most a task of it may spend, in US dollars such as 2.00; null for none.
+	Cap *string `json:"cap,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
 	Secrets []*AgentSecret `json:"secrets"`
 	// A page of the viewer's own conversation with the agent, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
@@ -83,6 +85,8 @@ type AgentPatch struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
+	// The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); null for none.
+	Cap graphql.Omittable[*string] `json:"cap,omitempty"`
 }
 
 // A secret an agent's tasks receive, in the environment variable name.
@@ -924,6 +928,37 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
+// One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type Model struct {
+	Provider string `json:"provider"`
+	// The model's name, as its provider gives it.
+	Name string `json:"name"`
+	// What a million tokens it reads cost, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+	// What a million tokens it writes cost, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+	// Whether a new agent starts on it; the organization has at most one.
+	Default bool `json:"default"`
+	// The agents that run on it, by name.
+	Agents []*CommitPrincipal `json:"agents"`
+	// Who added it; null for one Cobranch added for the agents already on it, and once its adder is gone.
+	CreatedBy *CommitPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What a model costs and whether it is the default; it replaces what the model had.
+type ModelInput struct {
+	// What a million tokens it reads cost, 0 to 10000, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+	// What a million tokens it writes cost, 0 to 10000, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+	// Whether a new agent starts on it; null for not.
+	Default *bool `json:"default,omitempty"`
+}
+
 // A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
 type ModelProvider struct {
 	// The provider's name, as the installation knows it.
@@ -1038,6 +1073,8 @@ type Organization struct {
 	ModelProviders []*ModelProvider `json:"modelProviders"`
 	// The model providers the installation knows, by name: those the organization may add.
 	AvailableModelProviders []string `json:"availableModelProviders"`
+	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	Models []*Model `json:"models"`
 	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`
 	// The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
@@ -1457,6 +1494,14 @@ type Task struct {
 	EndedAt *time.Time `json:"endedAt,omitempty"`
 	// Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
+	// What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent string `json:"spent"`
+	// The tokens its model read so far.
+	InputTokens int64 `json:"inputTokens"`
+	// The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
+	// The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it.
+	Cap *string `json:"cap,omitempty"`
 	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
 	Transcript []*TranscriptEntry `json:"transcript"`
 }
@@ -1480,6 +1525,30 @@ type TaskPage struct {
 	Tasks []*Task `json:"tasks"`
 	// Where the next page starts, as tasks' after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+type TaskSpend struct {
+	// In US dollars, at its organization's prices, such as 0.42.
+	Spent        string `json:"spent"`
+	InputTokens  int64  `json:"inputTokens"`
+	OutputTokens int64  `json:"outputTokens"`
+	// The most it may spend, in US dollars; null for none.
+	Cap *string `json:"cap,omitempty"`
+	// Whether it has ended; its token then acts no more.
+	Ended bool `json:"ended"`
+}
+
+// A call of a task's model, as the model proxy of its pod reports it.
+type TaskUsageInput struct {
+	// The call's own ID, which a repeated report repeats, so that it counts once.
+	ID string `json:"id"`
+	// The model the call asked, as its provider names it.
+	Model string `json:"model"`
+	// The tokens the model read, 0 to 100000000.
+	InputTokens int `json:"inputTokens"`
+	// The tokens the model wrote, 0 to 100000000.
+	OutputTokens int `json:"outputTokens"`
 }
 
 // A step of a task's transcript, numbered from 1 in its task; entries never change.

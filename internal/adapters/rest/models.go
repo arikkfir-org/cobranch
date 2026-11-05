@@ -11,8 +11,8 @@ import (
 	"cobranch.dev/internal/services/agents"
 )
 
-// Models is what the API needs of the agents' service for the providers and models agents run on, and the secrets
-// their tasks receive: part of Agents.
+// Models is what the API needs of the agents' service for the providers and models agents run on, what tasks spend on
+// them, and the secrets their tasks receive: part of Agents.
 type Models interface {
 	ProviderNames() []string
 	ModelProviders(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.ModelProvider, error)
@@ -21,6 +21,11 @@ type Models interface {
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
+	Models(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Model, error)
+	Model(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string) (agents.Model, error)
+	PutModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (agents.Model, bool, error)
+	RemoveModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, version int64) error
+	RecordSpend(ctx context.Context, v agents.Viewer, u agents.Usage) (agents.Spend, error)
 }
 
 func modelProvider(p agents.ModelProvider) ModelProvider {
@@ -44,18 +49,23 @@ func providerPath(org, name string) string {
 // If-None-Match *. It refuses with 428 a PUT that names neither, and with 400 one that names both or another
 // If-None-Match.
 func providerPrecondition(ifMatchHeader, ifNoneMatch *string) (int64, error) {
+	return putPrecondition(ifMatchHeader, ifNoneMatch, "provider")
+}
+
+// putPrecondition is the version of what a PUT adds or changes, which what names, as providerPrecondition reads it.
+func putPrecondition(ifMatchHeader, ifNoneMatch *string, what string) (int64, error) {
 	none := ifNoneMatch != nil && strings.TrimSpace(*ifNoneMatch) != ""
 	some := ifMatchHeader != nil && strings.TrimSpace(*ifMatchHeader) != ""
 	switch {
 	case none && some:
-		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "Name If-Match to change the provider or If-None-Match to add it, not both.")
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "Name If-Match to change the "+what+" or If-None-Match to add it, not both.")
 	case none && strings.TrimSpace(*ifNoneMatch) != "*":
-		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "If-None-Match takes * alone: add the provider only if the organization hasn't.")
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "If-None-Match takes * alone: add the "+what+" only if the organization hasn't.")
 	case none:
 		return agents.NoVersion, nil
 	case !some:
 		return 0, refuse(http.StatusPreconditionRequired, "precondition.required",
-			"Name the provider's ETag in If-Match to change it, or If-None-Match: * to add it.")
+			"Name the "+what+"'s ETag in If-Match to change it, or If-None-Match: * to add it.")
 	}
 	return versionMatch(ifMatchHeader, agents.AnyVersion)
 }

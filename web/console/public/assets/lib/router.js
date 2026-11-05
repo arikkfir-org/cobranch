@@ -1,13 +1,12 @@
-import { orgPages, repoPages } from "./assets.js";
-import { showOrganization } from "./organization.js";
+import { consolePages, orgPages, repoPages } from "./assets.js";
+import { showConsolePage, showOrganization } from "./organization.js";
 import { base, config, follows, me, orgs } from "./state.js";
-import * as help from "../pages/help.js";
-import { showMySettings } from "../pages/settings.js";
 import { showSignIn } from "../pages/sign-in.js";
 import { showWelcome } from "../pages/welcome.js";
 
-// The Console's own paths, which no organization's slug is.
-const reserved = ["sign-in", "new", "join", "invitations", "me", "settings", "help"];
+// The Console's own paths, which no organization's slug is (orgs.ReservedSlugs), besides those of its pages in the
+// app shell (consolePages).
+const reserved = ["sign-in", "new", "join", "invitations", "me"];
 // go navigates within the Console; render draws the page for the path.
 export function go(path, replace) {
   history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
@@ -54,10 +53,9 @@ export function countReads(r) {
 function pageOf(parts) {
   if (!me) return "sign-in";
   const [org, page = "", sub = "", ...rest] = parts;
-  if (org === "settings") return "settings";
-  if (org === "help") return help.view(parts.slice(1));
+  const named = (m, name, after = rest) => typeof m.view === "function" ? m.view(after) : m.view || name;
+  if (consolePages.has(org)) return named(consolePages.get(org), org, parts.slice(1));
   if (!org || reserved.includes(org)) return "welcome";
-  const named = (m, name) => typeof m.view === "function" ? m.view(rest) : m.view || name;
   if (orgPages.has(page)) return named(orgPages.get(page), "organization." + page);
   return repoPages.has(sub) ? named(repoPages.get(sub), "repository." + sub) : "repository.code";
 }
@@ -99,8 +97,7 @@ export function render() {
     return showWelcome();
   }
   if (parts[0] === "new") return showWelcome();
-  if (parts[0] === "settings") return showMySettings();
-  if (parts[0] === "help") return help.showHelp(parts.slice(1));
+  if (consolePages.has(parts[0])) return showConsolePage(parts[0], parts.slice(1));
   if (reserved.includes(parts[0])) return showWelcome();
   return showOrganization(parts[0], parts[1] || "", parts[2] || "", parts.slice(3));
 }

@@ -4,10 +4,13 @@ import { capitalized, whenExactly } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
 import { repoLinks } from "../../lib/repository.js";
 import { go } from "../../lib/router.js";
+import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
 import { taskBadge, taskStates } from "../../lib/tasks.js";
+import { agentItem } from "./agents.js";
 
-export const nav = { label: "Tasks", order: 60 };
+export const nav = { label: "Tasks", order: 60, under: "agents" };
+export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agents" }, { label: "Tasks", href: root + "/tasks" }, ...(sub ? [{ label: "#" + sub }] : [])];
 export default ({ org, main, can, sub }) => sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
 
 const activeTask = (t) => ["queued", "running", "waiting"].includes(t.state);
@@ -131,7 +134,11 @@ async function showTasks(org, main, can) {
     [["", "Every task"], ["active", "Active"], ["succeeded", "Succeeded"], ["failed", "Failed"], ["cancelled", "Cancelled"]]
       .map(([value, label]) => h("option", { value, selected: (query.get("state") || "") === value }, label)));
   const params = new URLSearchParams();
-  if (query.get("agent")) params.set("agent", query.get("agent"));
+  if (query.get("agent")) {
+    params.set("agent", query.get("agent"));
+    api("GET", "/orgs/" + org.slug + "/agents/" + encodeURIComponent(query.get("agent"))).then((a) => remember(org, "agents", agentItem(org, a)),
+      () => { /* no such agent: its tasks say so, and the sidebar keeps what it showed */ });
+  }
   for (const s of query.get("state") === "active" ? ["queued", "running", "waiting"] : query.get("state") ? [query.get("state")] : []) params.append("state", s);
   const rows = h("tbody");
   let next = null;
@@ -161,7 +168,7 @@ async function showTasks(org, main, can) {
     }
   }
   await load("/orgs/" + org.slug + "/tasks" + (params.toString() ? "?" + params : ""));
-  main.replaceChildren(h("h1", {}, "Tasks"), error, h("section", { class: "panel" },
+  main.replaceChildren(error, h("section", { class: "panel" },
     h("div", { class: "row" }, filter, h("span", { class: "spacer" }), can("agents.assign") ? h("a", { class: "button small primary", href: base + org.slug + "/agents", "data-nav": "" }, "Assign a task") : null),
     rows.children.length ? h("table", { class: "runs" }, rows) : h("p", {}, "No tasks here yet. Members who hold ", h("code", {}, "agents.assign"), " assign them to the organization's agents."),
     h("div", {}, older)));
