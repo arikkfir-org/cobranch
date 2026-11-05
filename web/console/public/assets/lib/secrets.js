@@ -7,11 +7,12 @@ import { icon } from "./icons.js";
 import { render } from "./router.js";
 
 // secretsSections lists the secrets at path, an organization's or a repository's, who may read each and when it last
-// changed, with Add secret, in actions when the page gives its heading's actions, otherwise beside the filter, and
-// each row's Change and Delete. The values are never shown: the API keeps them sealed for those granted them. A viewer
-// who manages the organization's grants grants them, in Change, to its members, its API keys, its agents and the jobs
-// of repos.
-export async function secretsSections(org, path, grants, fail, repos, actions) {
+// changed, with Add secret, in actions when the page gives its heading's actions, otherwise beside the section's
+// header, and each row's Change and Delete. The values are never shown: the API keeps them sealed for those granted
+// them. A viewer who manages the organization's grants grants them, in Change, to its members, its API keys, its agents
+// and the jobs of repos. Without readers, as a repository's Secrets tab draws them, the table leaves out who may read
+// each, which Change still says; description replaces the header's line.
+export async function secretsSections(org, path, grants, fail, repos, actions, { readers = true, description } = {}) {
   const item = (s) => "/orgs/" + org.slug + "/secrets/" + s.id;
   const list = (await api("GET", path)).secrets;
   const [access, members, keys, agents, jobs] = await Promise.all([
@@ -29,14 +30,14 @@ export async function secretsSections(org, path, grants, fail, repos, actions) {
   const ghost = (label, onclick) => h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick }, label);
   const row = (s, i) => h("tr", { "data-filter": s.name.toLowerCase() },
     h("td", { class: "cell-two-lines" }, h("code", {}, s.name), h("span", {}, "Value set")),
-    h("td", {}, access[i].length ? access[i].map((a) => h("span", { class: "tag", title: kinds[a.kind] || "Member" }, a.displayName))
-      : h("span", { class: "tag tone-warning", title: "Only those who read every secret here, by a role, read it" }, "Nobody yet")),
+    readers ? h("td", {}, access[i].length ? access[i].map((a) => h("span", { class: "tag", title: kinds[a.kind] || "Member" }, a.displayName))
+      : h("span", { class: "tag tone-warning", title: "Only those who read every secret here, by a role, read it" }, "Nobody yet")) : null,
     h("td", { class: "cell-muted" }, ago(s.updatedAt) + (names.has(s.updatedBy) ? " by " + names.get(s.updatedBy) : "")),
     h("td", { class: "cell-actions" }, ghost("Change", () => changeSecret(item(s), s, ifMatch(s), grants ? { access: access[i], members, keys, agents, jobs } : null, fail)),
       ghost("Delete", () => openDialog({ title: "Delete " + s.name + "?", action: "Delete", danger: true, body: h("p", {}, "Jobs and agents that name it get no value from their next run on."),
         submit: () => api("DELETE", item(s), undefined, ifMatch(s)).then(render) }))));
   const rows = list.map(row);
-  const table = h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Readable by"), h("th", {}, "Changed"), h("th", { "aria-label": "Actions" }))),
+  const table = h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), readers ? h("th", {}, "Readable by") : null, h("th", {}, "Changed"), h("th", { "aria-label": "Actions" }))),
     h("tbody", {}, rows));
   const none = h("p", { class: "cell-muted", hidden: true }, "No secret matches.");
   const filter = h("input", { type: "search", placeholder: "Filter secrets", "aria-label": "Filter secrets", oninput: () => {
@@ -47,7 +48,7 @@ export async function secretsSections(org, path, grants, fail, repos, actions) {
   } });
   return [
     h("header", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Secrets"),
-      h("p", { class: "section-header-description" }, "Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it.")),
+      h("p", { class: "section-header-description" }, description || ["Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it."])),
       actions ? null : add),
     ...(list.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-count" }, plural(list.length, "secret"))), table, none]
       : [h("div", { class: "card empty-centred" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No secrets here yet"),

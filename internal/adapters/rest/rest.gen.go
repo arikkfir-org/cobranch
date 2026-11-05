@@ -1001,6 +1001,24 @@ func (e RepositoryAccessKind) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryGrantThrough.
+const (
+	RepositoryGrantThroughOrganization RepositoryGrantThrough = "organization"
+	RepositoryGrantThroughRepository   RepositoryGrantThrough = "repository"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryGrantThrough enum.
+func (e RepositoryGrantThrough) Valid() bool {
+	switch e {
+	case RepositoryGrantThroughOrganization:
+		return true
+	case RepositoryGrantThroughRepository:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositorySummaryMain.
 const (
 	RepositorySummaryMainFailing RepositorySummaryMain = "failing"
@@ -3268,18 +3286,36 @@ type RepositoryObjectFormat string
 // RepositoryVisibility Who reaches it, as its grants say. Private, its creator and the organization's Owners; internal, someone else too.
 type RepositoryVisibility string
 
-// RepositoryAccess A principal's grants on a repository.
+// RepositoryAccess A principal's roles on a repository.
 type RepositoryAccess struct {
-	DisplayName string               `json:"displayName"`
+	DisplayName string `json:"displayName"`
+
+	// Grants Every role that reaches the repository, how and since when; its grants on the repository first, then its roles at the organization.
+	Grants      []RepositoryGrant    `json:"grants"`
 	Kind        RepositoryAccessKind `json:"kind"`
 	PrincipalId openapi_types.UUID   `json:"principalId"`
 
-	// Roles The roles it holds on the repository, each with the permissions it gives there.
+	// Roles The roles it holds on the repository itself, each with the permissions it gives there; none for a principal the organization's roles alone reach.
 	Roles []Role `json:"roles"`
 }
 
 // RepositoryAccessKind defines model for RepositoryAccess.Kind.
 type RepositoryAccessKind string
+
+// RepositoryGrant A role that reaches a repository, with the permissions it gives there.
+type RepositoryGrant struct {
+	// Role A role granted at the organization, built in or its own.
+	Role Role `json:"role"`
+
+	// Since When the role was granted.
+	Since time.Time `json:"since"`
+
+	// Through repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it.
+	Through RepositoryGrantThrough `json:"through"`
+}
+
+// RepositoryGrantThrough repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it.
+type RepositoryGrantThrough string
 
 // RepositoryInput What makes a repository.
 type RepositoryInput struct {
@@ -5375,7 +5411,7 @@ type ServerInterface interface {
 	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
@@ -38860,7 +38896,7 @@ type StrictServerInterface interface {
 	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
-	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(ctx context.Context, request ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error)
 	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.

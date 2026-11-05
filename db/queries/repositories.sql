@@ -60,11 +60,15 @@ SELECT rp.id FROM repositories rp WHERE rp.org_id = @org_id AND EXISTS (
       AND NOT EXISTS (SELECT 1 FROM grants o WHERE o.principal_id = g.principal_id AND o.role_id = @owner_role_id
                         AND o.scope = 'organization' AND o.scope_id = rp.org_id));
 
--- RepositoryGrants lists the roles every principal holds on the repository, with who they are, by display name.
+-- RepositoryGrants lists the roles that reach the repository, with who holds them and since when, by display name:
+-- each principal's grants on the repository, then its roles at the repository's organization, which reach every
+-- repository of it.
 -- name: RepositoryGrants :many
-SELECT g.principal_id, p.kind, p.display_name, sqlc.embed(r) FROM grants g JOIN roles r ON r.id = g.role_id
+SELECT g.principal_id, p.kind, p.display_name, g.scope, g.created_at, sqlc.embed(r) FROM grants g JOIN roles r ON r.id = g.role_id
 JOIN principals p ON p.id = g.principal_id
-WHERE g.scope = 'repository' AND g.scope_id = @repo_id::uuid ORDER BY p.display_name, g.principal_id, r.name;
+WHERE (g.scope = 'repository' AND g.scope_id = @repo_id::uuid)
+   OR (g.scope = 'organization' AND g.scope_id = (SELECT rp.org_id FROM repositories rp WHERE rp.id = @repo_id::uuid))
+ORDER BY p.display_name, g.principal_id, g.scope DESC, r.name;
 
 -- RepositoryRoles lists the roles a repository grants: the built-in repository roles first, in the order migration 2
 -- gives them, then the organization's own.

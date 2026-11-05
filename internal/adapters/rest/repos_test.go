@@ -88,8 +88,10 @@ func TestRepositoryAccessAPI(t *testing.T) {
 		{name: "who holds grants on it", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/access"), wantStatus: 200,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
 				got := decode[struct{ Access []RepositoryAccess }](t, body)
-				if len(got.Access) != 1 || got.Access[0].PrincipalId != f.olivia.User.ID || got.Access[0].Kind != "user" || got.Access[0].Roles[0].Name != "Maintainer" {
-					t.Errorf("access = %s", body)
+				if len(got.Access) != 1 || got.Access[0].PrincipalId != f.olivia.User.ID || got.Access[0].Kind != "user" || got.Access[0].Roles[0].Name != "Maintainer" ||
+					len(got.Access[0].Grants) != 2 || got.Access[0].Grants[0].Through != "repository" || got.Access[0].Grants[1].Role.Name != "Owner" ||
+					got.Access[0].Grants[1].Through != "organization" {
+					t.Errorf("access = %s, want Olivia as Maintainer here, then as Owner at Acme", body)
 				}
 			}},
 		{name: "grant a Member Developer, who then reads it", viewer: olivia, method: "POST",

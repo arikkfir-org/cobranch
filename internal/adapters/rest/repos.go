@@ -46,7 +46,12 @@ func summary(s repos.Summary) *RepositorySummary {
 
 func access(a repos.Access) RepositoryAccess {
 	return RepositoryAccess{PrincipalId: a.Principal.ID, Kind: RepositoryAccessKind(a.Principal.Kind), DisplayName: a.Principal.DisplayName,
-		Roles: mapAll(a.Roles, role)}
+		Roles: mapAll(a.Roles, role), Grants: mapAll(a.Grants, repositoryGrant)}
+}
+
+// repositoryGrant is a role that reaches a repository as the API answers it.
+func repositoryGrant(g repos.Grant) RepositoryGrant {
+	return RepositoryGrant{Role: role(g.Role), Through: RepositoryGrantThrough(g.Through), Since: g.Since.UTC()}
 }
 
 // repo finds the repository the path names, by its organization's slug and its own, current or old, for a viewer

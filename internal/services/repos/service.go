@@ -36,7 +36,8 @@ type Store interface {
 	// Usage counts the organization's repositories and sums its Git data, and lists those of ids that are its
 	// repositories, by slug, each with its Git data.
 	Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []RepositoryUsage, error)
-	// Access lists the principals holding grants on the repository with their roles there, by display name.
+	// Access lists the principals holding roles on the repository, by display name, each with its Grants: those on the
+	// repository, then those at its organization, whatever their roles give. Roles is the service's to fill.
 	Access(ctx context.Context, repoID uuid.UUID) ([]Access, error)
 	// Roles lists the roles the organization's repositories grant: the built-in repository roles, then its own.
 	Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error)
@@ -293,22 +294,35 @@ func (s *Service) Update(ctx context.Context, v Viewer, repoID uuid.UUID, in Inp
 	return repo, nil
 }
 
-// Access lists who holds grants on the repository, with their roles there; it takes repo.read. The organization's
-// roles reach it too, as its members page shows.
+// Access lists who holds roles on the repository, with each role, how it reaches the repository and since when;
+// it takes repo.read. A grant on the repository counts whatever its role gives there, and a role at the organization
+// only when it gives a repository permission: the organization's members page shows the rest.
 func (s *Service) Access(ctx context.Context, v Viewer, repoID uuid.UUID) ([]Access, error) {
 	if _, _, err := s.require(ctx, v, repoID, PermRead); err != nil {
 		return nil, err
 	}
-	access, err := s.store.Access(ctx, repoID)
+	list, err := s.store.Access(ctx, repoID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the repository's grants: %w", err)
 	}
-	for i := range access {
-		for j, r := range access[i].Roles {
-			access[i].Roles[j].Permissions = RepositoryPermissions(r.Permissions)
+	out := make([]Access, 0, len(list))
+	for _, a := range list {
+		held := Access{Principal: a.Principal}
+		for _, g := range a.Grants {
+			g.Role.Permissions = RepositoryPermissions(g.Role.Permissions)
+			if g.Through == ThroughOrganization && len(g.Role.Permissions) == 0 {
+				continue
+			}
+			held.Grants = append(held.Grants, g)
+			if g.Through == ThroughRepository {
+				held.Roles = append(held.Roles, g.Role)
+			}
+		}
+		if len(held.Grants) > 0 {
+			out = append(out, held)
 		}
 	}
-	return access, nil
+	return out, nil
 }
 
 // Roles lists the roles the repository grants, each with the permissions it holds there: the built-in repository

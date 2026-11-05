@@ -245,19 +245,25 @@ func (q *Queries) RepositoryBySlug(ctx context.Context, orgID uuid.UUID, slug st
 }
 
 const repositoryGrants = `-- name: RepositoryGrants :many
-SELECT g.principal_id, p.kind, p.display_name, r.id, r.scope, r.name, r.description, r.permissions, r.built_in, r.org_id FROM grants g JOIN roles r ON r.id = g.role_id
+SELECT g.principal_id, p.kind, p.display_name, g.scope, g.created_at, r.id, r.scope, r.name, r.description, r.permissions, r.built_in, r.org_id FROM grants g JOIN roles r ON r.id = g.role_id
 JOIN principals p ON p.id = g.principal_id
-WHERE g.scope = 'repository' AND g.scope_id = $1::uuid ORDER BY p.display_name, g.principal_id, r.name
+WHERE (g.scope = 'repository' AND g.scope_id = $1::uuid)
+   OR (g.scope = 'organization' AND g.scope_id = (SELECT rp.org_id FROM repositories rp WHERE rp.id = $1::uuid))
+ORDER BY p.display_name, g.principal_id, g.scope DESC, r.name
 `
 
 type RepositoryGrantsRow struct {
 	PrincipalID uuid.UUID
 	Kind        string
 	DisplayName string
+	Scope       string
+	CreatedAt   time.Time
 	Role        Role
 }
 
-// RepositoryGrants lists the roles every principal holds on the repository, with who they are, by display name.
+// RepositoryGrants lists the roles that reach the repository, with who holds them and since when, by display name:
+// each principal's grants on the repository, then its roles at the repository's organization, which reach every
+// repository of it.
 func (q *Queries) RepositoryGrants(ctx context.Context, repoID uuid.UUID) ([]RepositoryGrantsRow, error) {
 	rows, err := q.db.Query(ctx, repositoryGrants, repoID)
 	if err != nil {
@@ -271,6 +277,8 @@ func (q *Queries) RepositoryGrants(ctx context.Context, repoID uuid.UUID) ([]Rep
 			&i.PrincipalID,
 			&i.Kind,
 			&i.DisplayName,
+			&i.Scope,
+			&i.CreatedAt,
 			&i.Role.ID,
 			&i.Role.Scope,
 			&i.Role.Name,

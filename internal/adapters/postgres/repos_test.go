@@ -53,10 +53,13 @@ func TestRepoStoreCreate(t *testing.T) {
 	if err := f.r.Create(ctx, f.olivia, dup, 0); !errors.Is(err, repos.ErrSlugTaken) {
 		t.Errorf("Create() of a taken slug = %v, want %v", err, repos.ErrSlugTaken)
 	}
+	// Olivia's grant on the repository comes before her role at Acme, which reaches it too.
 	access, err := f.r.Access(ctx, f.website.ID)
-	if err != nil || len(access) != 1 || access[0].Principal.ID != f.olivia || access[0].Principal.Kind != auth.KindUser ||
-		len(access[0].Roles) != 1 || access[0].Roles[0].ID != auth.RoleMaintainer {
-		t.Errorf("Access() = %+v, %v, want Olivia as Maintainer", access, err)
+	i := slices.IndexFunc(access, func(a repos.Access) bool { return a.Principal.ID == f.olivia })
+	if err != nil || i < 0 || access[i].Principal.Kind != auth.KindUser || len(access[i].Grants) != 2 ||
+		access[i].Grants[0].Role.ID != auth.RoleMaintainer || access[i].Grants[0].Through != repos.ThroughRepository || access[i].Grants[0].Since.IsZero() ||
+		access[i].Grants[1].Role.ID != auth.RoleOwner || access[i].Grants[1].Through != repos.ThroughOrganization {
+		t.Errorf("Access() = %+v, %v, want Olivia as Maintainer on the repository, then as Owner at Acme", access, err)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = 'repo.created' AND org_id = $1", f.acme.ID); n != 2 {
 		t.Errorf("%d repo.created events, want 2", n)
@@ -172,8 +175,10 @@ func TestRepoStoreLeave(t *testing.T) {
 		t.Errorf("Max keeps %d grants after his removal, want none", n)
 	}
 	// Olivia's own grants on the repositories stay.
-	if access, err := f.r.Access(ctx, f.website.ID); err != nil || len(access) != 1 || access[0].Principal.ID != f.olivia {
-		t.Errorf("Access() = %+v, %v, want Olivia alone", access, err)
+	access, err := f.r.Access(ctx, f.website.ID)
+	if err != nil || slices.ContainsFunc(access, func(a repos.Access) bool { return a.Principal.ID == f.max }) ||
+		!slices.ContainsFunc(access, func(a repos.Access) bool { return a.Principal.ID == f.olivia }) {
+		t.Errorf("Access() = %+v, %v, want Olivia and not Max", access, err)
 	}
 }
 

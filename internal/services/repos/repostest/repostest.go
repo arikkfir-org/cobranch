@@ -181,22 +181,30 @@ func (s *Store) Update(_ context.Context, _ uuid.UUID, repo repos.Repository) er
 	return nil
 }
 
-// Access lists the principals holding grants on the repository, by display name.
+// Access lists the principals holding roles on the repository, by display name, each with its grants on it, then
+// its roles at its organization; a grant is Since the zero time.
 func (s *Store) Access(_ context.Context, repoID uuid.UUID) ([]repos.Access, error) {
 	var out []repos.Access
-	for _, g := range s.Orgs.Grants {
-		if g.Scope != auth.ScopeRepository || g.ScopeID != repoID {
-			continue
+	orgID := s.Repos[repoID].OrgID
+	for _, through := range []repos.Through{repos.ThroughRepository, repos.ThroughOrganization} {
+		scope, scopeID := auth.ScopeRepository, repoID
+		if through == repos.ThroughOrganization {
+			scope, scopeID = auth.ScopeOrganization, orgID
 		}
-		role, _ := s.role(g.Role)
-		i := slices.IndexFunc(out, func(a repos.Access) bool { return a.Principal.ID == g.Principal })
-		if i < 0 {
-			out = append(out, repos.Access{Principal: repos.Principal{ID: g.Principal, Kind: auth.KindUser, DisplayName: s.Orgs.Names[g.Principal]}})
-			i = len(out) - 1
+		for _, g := range s.Orgs.Grants {
+			if g.Scope != scope || g.ScopeID != scopeID {
+				continue
+			}
+			role, _ := s.role(g.Role)
+			i := slices.IndexFunc(out, func(a repos.Access) bool { return a.Principal.ID == g.Principal })
+			if i < 0 {
+				out = append(out, repos.Access{Principal: repos.Principal{ID: g.Principal, Kind: auth.KindUser, DisplayName: s.Orgs.Names[g.Principal]}})
+				i = len(out) - 1
+			}
+			out[i].Grants = append(out[i].Grants, repos.Grant{Role: role, Through: through})
 		}
-		out[i].Roles = append(out[i].Roles, role)
 	}
-	slices.SortFunc(out, func(a, b repos.Access) int { return strings.Compare(a.Principal.DisplayName, b.Principal.DisplayName) })
+	slices.SortStableFunc(out, func(a, b repos.Access) int { return strings.Compare(a.Principal.DisplayName, b.Principal.DisplayName) })
 	return out, nil
 }
 

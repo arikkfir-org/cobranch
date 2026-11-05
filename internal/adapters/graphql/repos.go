@@ -48,7 +48,12 @@ func repositorySummary(s repos.Summary) *RepositorySummary {
 
 func repositoryAccess(a repos.Access) *RepositoryAccess {
 	return &RepositoryAccess{PrincipalID: a.Principal.ID.String(), Kind: string(a.Principal.Kind), DisplayName: a.Principal.DisplayName,
-		Roles: mapAll(a.Roles, role)}
+		Roles: mapAll(a.Roles, role), Grants: mapAll(a.Grants, repositoryGrant)}
+}
+
+// repositoryGrant is a role that reaches a repository as the API answers it.
+func repositoryGrant(g repos.Grant) *RepositoryGrant {
+	return &RepositoryGrant{Role: role(g.Role), Through: string(g.Through), Since: g.Since.UTC()}
 }
 
 // repositoryInput is input as the domain takes it.

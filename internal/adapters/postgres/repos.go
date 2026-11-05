@@ -230,7 +230,8 @@ func (s *RepoStore) Update(ctx context.Context, actor uuid.UUID, repo repos.Repo
 	})
 }
 
-// Access lists the principals holding grants on the repository with their roles there, by display name.
+// Access lists the principals holding roles on the repository, by display name, each with its grants on it, then
+// its roles at its organization.
 func (s *RepoStore) Access(ctx context.Context, repoID uuid.UUID) ([]repos.Access, error) {
 	rows, err := s.q.RepositoryGrants(ctx, repoID)
 	if err != nil {
@@ -242,7 +243,11 @@ func (s *RepoStore) Access(ctx context.Context, repoID uuid.UUID) ([]repos.Acces
 			out = append(out, repos.Access{Principal: repos.Principal{ID: r.PrincipalID, Kind: auth.Kind(r.Kind), DisplayName: r.DisplayName}})
 		}
 		last := &out[len(out)-1]
-		last.Roles = append(last.Roles, role(r.Role))
+		through := repos.ThroughRepository
+		if r.Scope == string(auth.ScopeOrganization) {
+			through = repos.ThroughOrganization
+		}
+		last.Grants = append(last.Grants, repos.Grant{Role: role(r.Role), Through: through, Since: r.CreatedAt})
 	}
 	return out, nil
 }

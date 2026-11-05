@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 55 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 58 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 62 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -333,7 +333,7 @@ only cue.
 
 ## Screens
 
-Fifty-eight screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Sixty-two screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -384,6 +384,10 @@ Researcher waits for a task.
 | [Agent](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=64-2654) | Working on, Queue and History of its tasks, its settings, and your private chat with it |
 | [Agent · Task](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=81-4443) | One task: its transcript of turns and tool calls, what it came from, and its spend against the cap |
 | [Agent · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-5663) | An agent with no tasks yet |
+| [Repository · Settings](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-16990) | Settings as tabs General, Access and Secrets; the repository's name, URL name and description, and its visibility, which its grants decide |
+| [Repository · Settings · Access](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=215-30550) | Every role that reaches the repository, a row each: who, the role, Direct or the organization's role it comes through, since when; Revoke on the direct ones |
+| [Repository · Settings · Access · Grant role](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=224-34472) | Granting a member, API key or agent one of the repository's roles, in a dialog |
+| [Repository · Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=215-30983) | The repository's own secrets, which its jobs read beside the organization's |
 | [Repository · Artifacts](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-3941) | What agents generated for the repository: documents, diagrams, reports and pages |
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
 | [Settings · General](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-7859) | Settings as tabs; the organization's name, slug and issue key, who joins with what role, and its identity providers |
