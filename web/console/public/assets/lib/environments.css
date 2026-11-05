@@ -1,0 +1,69 @@
+/* An environment's card (Branch · Environment, Repository · Environment): its status lines in Body/Small under the
+   header, its Fact rows edge to edge, a Section line in Body/Small Strong over its objects' table and its deliveries,
+   and each Delivery row: its icon, its number and commit in Code/Small, its commit's subject in Body/Medium, and how
+   it went at its end. The Delivery page's Environment and Target rows; the components draw everything else. */
+.environment-page { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-24); }
+.environment-page > .card { align-self: stretch; }
+.environment-card, .targets-card { container-type: inline-size; }
+.environment-card .card-title { display: flex; align-items: center; gap: var(--space-8); }
+.environment-card .card-title > .icon { color: var(--color-fg-muted); }
+.environment-branch { color: var(--color-fg-link); font: var(--text-code-small); text-decoration: none; }
+.environment-branch:hover, .environment-name:hover, .environment-sha:hover { text-decoration: underline; }
+.environment-status { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.environment-line { display: flex; align-items: flex-start; gap: var(--space-8); min-width: 0; margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
+.environment-line > .badge-quiet { margin-top: 1px; }
+.environment-line > .icon { margin-top: 1px; vertical-align: 0; }
+.environment-line > a:not(.environment-sha) { color: var(--color-fg-link); text-decoration: none; overflow-wrap: anywhere; }
+.environment-line > a:hover { text-decoration: underline; }
+.environment-text { flex: 1; min-width: 0; }
+.environment-text.tone-danger, .environment-message.tone-danger, .delivery-aside.tone-danger, .environment-meta .tone-danger { color: var(--tone-fg); }
+.environment-sha { flex: none; padding-top: 1px; color: var(--color-fg-link); font: var(--text-code-small); text-decoration: none; }
+.environment-facts { padding: 0; }
+.environment-code { font: var(--text-code-small); }
+.environment-quiet { color: var(--color-fg-muted); }
+.environment-section { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12) var(--space-16) var(--space-8); }
+.environment-section > h3 { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-body-small-strong); letter-spacing: normal; text-transform: none; }
+.environment-section-ruled { border-bottom: 1px solid var(--color-border-subtle); }
+.environment-section-ruled, .environment-objects + .environment-section { border-top: 1px solid var(--color-border-subtle); }
+.environment-card > .environment-note { padding-block: 0 var(--space-12); }
+.environment-objects { table-layout: fixed; }
+.environment-objects th:nth-child(2) { width: 172px; }
+.environment-objects th:nth-child(3) { width: 252px; }
+.environment-objects th:nth-child(4) { width: 88px; }
+.environment-objects th:nth-child(5) { width: 122px; }
+.environment-objects td:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.environment-objects td:nth-child(2) { overflow-wrap: anywhere; }
+.environment-objects td:has(> .environment-message) { padding-block: var(--space-12); }
+.environment-message { margin: var(--space-2) 0 0; color: var(--color-fg-muted); font: var(--text-body-small); overflow-wrap: anywhere; }
+.environment-deliveries { margin: 0; padding: 0; list-style: none; }
+.delivery-row { display: flex; align-items: center; gap: var(--space-12); min-width: 0; padding: calc(var(--space-8) + var(--space-2)) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.delivery-row:last-child { border-bottom: 0; }
+.delivery-row > .icon { color: var(--tone-fg, var(--color-fg-muted)); }
+.delivery-row > .environment-sha { padding-top: 0; }
+.delivery-number { flex: none; color: var(--color-fg-muted); font: var(--text-code-small); }
+.delivery-subject { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-body-medium); text-overflow: ellipsis; white-space: nowrap; }
+.delivery-aside { flex: none; max-width: 60%; overflow: hidden; color: var(--color-fg-muted); font: var(--text-body-small); text-overflow: ellipsis; white-space: nowrap; }
+.environment-older { align-self: flex-start; margin: 0 var(--space-16) var(--space-12); }
+.environment-older[hidden] { display: none; }
+
+/* The Delivery page: its Environment rows, each a Card row whose title carries the target, its badges and its
+   branch, and whose meta line its URL, revision and newest delivery; and the Targets table at the screen's widths. */
+.environment-row > .icon { align-self: flex-start; margin-top: 2px; }
+.environment-name { color: inherit; text-decoration: none; }
+.environment-row .card-row-title > .icon { color: var(--color-fg-muted); }
+.environment-meta { display: flex; align-items: center; gap: var(--space-6); }
+.environment-meta > .environment-sha { padding-top: 0; }
+.targets-table { table-layout: fixed; }
+.targets-table th:nth-child(1) { width: 162px; }
+.targets-table th:nth-child(2) { width: 232px; }
+.targets-table th:nth-child(3) { width: 232px; }
+.targets-table th:nth-child(4) { width: 282px; }
+.targets-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.targets-table td.environment-target { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.targets-card > .card-note { padding-block: calc(var(--space-8) + var(--space-2)) var(--space-12); border-top: 1px solid var(--color-border-subtle); }
+/* Narrower, as beside the conversation pane, the objects' table narrows Kind and Health, and Targets drops URL. */
+@container (max-width: 1000px) {
+  .environment-objects th:nth-child(2) { width: 120px; }
+  .environment-objects th:nth-child(3) { width: 200px; }
+  .targets-table :is(th, td):nth-child(5) { display: none; }
+}

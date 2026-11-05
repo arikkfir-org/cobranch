@@ -1,96 +1,47 @@
-import { api, apiPage } from "../../lib/api.js";
+import { api } from "../../lib/api.js";
 import { branchSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
-import { deliversTo, deliveryStates, environmentHealths, environmentSyncs, environmentsPanel } from "../../lib/environments.js";
-import { capitalized, shortSha, whenExactly } from "../../lib/format.js";
-import { badgeOf } from "../../lib/icons.js";
-import { render } from "../../lib/router.js";
+import { emptyCentred, environmentCard, environmentsCard, targetsCard } from "../../lib/environments.js";
+import { icon } from "../../lib/icons.js";
 
 export const nav = { label: "Delivery", order: 30 };
 export const accepts = (rest) => rest.length <= 1;
-export const heading = (rest) => !rest.length;
+export const heading = () => true;
 export const crumbs = ({ root, rest }) => [{ label: "Delivery", href: root + "/environments" }, ...(rest.length ? [{ label: "Environment" }] : [])];
 // subject is an environment's branch's conversation, on the environment's page.
 export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/environments/" + encodeURIComponent(rest[0]))
   .then((e) => (e.branch ? branchSubject(org, repo, path, at, e.branch, can) : null)) : null;
-export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryEnvironment(path, at, rest[0], can, fail) : [await environmentsPanel(path, at, "")];
+export default (ctx) => ctx.rest.length ? environmentPage(ctx, ctx.rest[0]) : deliveryPage(ctx);
 
-// repositoryEnvironment is an environment's page: its target and branch, where it delivers, its sync, health and
-// revision, Redeliver, Pause and Resume for a viewer holding delivery.run, and its deliveries.
-async function repositoryEnvironment(path, at, id, can, fail) {
+// deliveryPage is the repository's Delivery tab: its environments and the targets main's /cobranch.yaml declares, or
+// how to declare them when it declares none.
+async function deliveryPage({ path, at }) {
+  const [envs, targets] = await Promise.all([api("GET", path + "/environments").then((d) => d.environments), api("GET", path + "/targets").then((d) => d.targets)]);
+  const none = emptyCentred("globe", "No delivery targets", "Declare targets under delivery in /cobranch.yaml on main: each names the branches it delivers, " +
+    "a cluster and a namespace. Every live branch a target matches then gets an environment.");
+  if (!targets.length) return envs.length ? [environmentsCard(at, envs), none] : [none];
+  // Environments in the order main declares their targets, as the Targets card lists them; an environment whose target
+  // main no longer declares, until it is torn down, last.
+  const order = new Map(targets.map((t, i) => [t.name, i]));
+  const rank = (e) => (order.has(e.target.displayName) ? order.get(e.target.displayName) : targets.length);
+  envs.sort((a, b) => rank(a) - rank(b));
+  return [environmentsCard(at, envs), targetsCard(at, targets)];
+}
+
+// environmentPage is an environment's page: its card, the full width, under a button back to Delivery.
+async function environmentPage(ctx, id) {
+  const back = h("a", { class: "btn btn-ghost", href: ctx.root + "/environments", "data-nav": "" }, icon("arrow-left"), "Delivery");
   let e;
   try {
-    e = await api("GET", path + "/environments/" + encodeURIComponent(id));
+    e = await api("GET", ctx.path + "/environments/" + encodeURIComponent(id));
   } catch (err) {
     if (err.status !== 404 && err.status !== 400) throw err;
-    return [h("section", { class: "panel" }, h("h3", {}, "Environment"), h("p", {}, "This repository has no such environment."))];
+    return [h("div", { class: "environment-page" }, back, emptyCentred("globe", "No such environment", "This repository has no such environment, or it was torn down."))];
   }
-  const facts = h("dl", { class: "facts" },
-    h("dt", {}, "Branch"), h("dd", {}, h("a", { href: at.branchPage(e.branch), "data-nav": "" }, h("code", {}, e.branch))),
-    h("dt", {}, "Delivers to"), h("dd", {}, deliversTo(e)),
-    h("dt", {}, "State"), h("dd", {}, badgeOf(environmentSyncs, e.sync), " ", badgeOf(environmentHealths, e.health), e.paused ? [" ", h("span", { class: "chip" }, "Paused")] : null),
-    h("dt", {}, "Revision"), h("dd", {}, e.revision ? [h("a", { href: at.commit(e.revision), "data-nav": "" }, h("code", {}, e.revision)), " since ", whenExactly(e.syncedAt)] : "Nothing delivered yet"),
-    h("dt", {}, "Created"), h("dd", {}, whenExactly(e.createdAt)));
-  const title = h("h2", {}, h("code", {}, e.target.displayName), " of ", h("code", {}, e.branch));
-  return [h("section", { class: "panel" }, h("div", { class: "row" }, title, h("div", {}, environmentActions(path, e, can, fail))), facts),
-    await deliveriesPanel(path, at, e, can, fail)];
+  // Whether its branch still is, which says why a teardown deletes it.
+  const live = await api("GET", ctx.path + "/branches/" + encodeURIComponent(e.branch)).then(() => true, (err) => {
+    if (err.status === 404) return false;
+    throw err;
+  });
+  return [h("div", { class: "environment-page" }, back, await environmentCard(ctx, e, { page: true, live }))];
 }
-
-// environmentActions are Redeliver and Pause for an environment that isn't paused, and Resume for one that is, for a
-// viewer holding delivery.run.
-function environmentActions(path, e, can, fail) {
-  if (!can("delivery.run")) return null;
-  const act = (verb, button) => {
-    button.disabled = true;
-    api("POST", path + "/environments/" + e.id + "/" + verb).then(render).catch((err) => { button.disabled = false; fail(err); });
-  };
-  const button = (verb, label, tone, title) => h("button", { class: "button small" + tone, type: "button", title, onclick: (ev) => act(verb, ev.currentTarget) }, label);
-  const name = e.target.displayName + " of " + e.branch;
-  if (e.paused) return button("resume", "Resume", " primary", "Resume " + name + " and deliver the head of " + e.branch);
-  return [button("redeliver", "Redeliver", " primary", "Deliver the head of " + e.branch + " to " + name + " again"), " ",
-    button("pause", "Pause", "", "Pause " + name + ": it takes no delivery until resumed")];
-}
-
-// deliveriesPanel lists an environment's deliveries, newest first, a page at a time: each with its state and why, its
-// commit, what queued it and when, and Start while it waits, for a viewer holding delivery.run.
-async function deliveriesPanel(path, at, e, can, fail) {
-  const rows = h("tbody");
-  let next = null;
-  const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older deliveries");
-  const start = (d, button) => {
-    button.disabled = true;
-    api("POST", path + "/deliveries/" + d.number + "/start").then(render).catch((err) => { button.disabled = false; fail(err); });
-  };
-  const row = (d) => h("tr", {},
-    h("td", { class: "state" }, badgeOf(deliveryStates, d.state)),
-    h("td", {}, "#" + d.number + " ", d.kind === "teardown" ? "Teardown"
-      : [d.kind === "resync" ? "Resync of " : null, h("a", { href: at.commit(d.sha), "data-nav": "" }, h("code", {}, shortSha(d.sha)))],
-      d.reason ? h("p", {}, capitalized(d.reason)) : null, h("p", { class: "muted" }, queuedBy(d), " · ", whenExactly(d.queuedAt))),
-    h("td", { class: "actions" }, can("delivery.run") && d.state === "waiting" ? h("button", { class: "button small primary", type: "button",
-      title: "Start #" + d.number + ", delivering " + shortSha(d.sha) + " to " + e.target.displayName, onclick: (ev) => start(d, ev.currentTarget) }, "Start") : null));
-  async function load(from) {
-    older.disabled = true;
-    try {
-      const page = await apiPage(from);
-      rows.append(...page.data.deliveries.map(row));
-      next = page.next;
-      older.hidden = !next;
-    } catch (err) {
-      fail(err);
-    } finally {
-      older.disabled = false;
-    }
-  }
-  await load(path + "/environments/" + e.id + "/deliveries");
-  const none = h("p", {}, "No deliveries yet. A push to ", h("code", {}, e.branch), " delivers it.");
-  return h("section", { class: "panel" }, h("h3", {}, "Deliveries"), rows.children.length ? h("table", { class: "deliveries" }, rows) : none, h("div", {}, older));
-}
-
-// queuedBy says what queued a delivery, and who started it.
-const queuedBy = (d) => {
-  const by = d.startedBy ? d.startedBy.displayName : "someone since gone";
-  if (d.trigger === "redeliver") return "Redelivered by " + by;
-  if (d.trigger === "resume") return "Resumed by " + by;
-  if (d.trigger === "schedule") return "The controller's schedule";
-  return "A push" + (d.startedBy ? ", started by " + by : "");
-};

@@ -6,7 +6,7 @@ import { ask, dialog } from "../../lib/dialog.js";
 import { diffView } from "../../lib/diff.js";
 import { h } from "../../lib/dom.js";
 import { banner, checkbox, field, input } from "../../lib/forms.js";
-import { environmentsPanel } from "../../lib/environments.js";
+import { environmentsOf } from "../../lib/environments.js";
 import { fromNow, plural, shortSha, subject as messageSubject, whenExactly } from "../../lib/format.js";
 import { commitListRow } from "../../lib/history.js";
 import { authorAvatar, icon } from "../../lib/icons.js";
@@ -57,13 +57,15 @@ async function repositoryBranch(ctx, name) {
   const tab = b.base || tabShown() !== "changes" ? tabShown() : "";
   // The base's requirements, which b's checks stand against: b's own are those of merges into it.
   const base = b.base && checking.includes(b.status) ? await api("GET", ctx.path + "/branches/" + encodeURIComponent(b.base)).catch(() => null) : null;
-  return [branchHeader(ctx, b), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements, tab) : null, branchTabBar(ctx, b, tab),
-    ...await tabContent(ctx, b, tab)].filter(Boolean);
+  // b's environments, which its header opens when exactly one of them has an address, and its Environment tab draws.
+  const envs = api("GET", ctx.path + "/environments?" + new URLSearchParams({ branch: b.name })).then((d) => d.environments);
+  return [branchHeader(ctx, b, envs), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements, tab) : null, branchTabBar(ctx, b, tab),
+    ...await tabContent(ctx, b, tab, envs)].filter(Boolean);
 }
 
 // tabContent is what b's tab shows: its overview, its changes with its chat's threads on their lines and the reviews of
 // its head, the runs of its head and the jobs it starts by hand, or its environments.
-async function tabContent(ctx, b, tab) {
+async function tabContent(ctx, b, tab, envs) {
   const { org, repo, path, at, can, fail } = ctx;
   if (tab === "changes") {
     const drafting = reviewDrafting(path, b, can);
@@ -73,7 +75,7 @@ async function tabContent(ctx, b, tab) {
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
   if (tab === "jobs") return branchJobs(path, at, b, can, fail);
-  if (tab === "environment") return [await environmentsPanel(path, at, b.name)];
+  if (tab === "environment") return environmentsOf(ctx, b, await envs);
   if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
   return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,
     b.commit ? commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)) : null];
@@ -94,16 +96,22 @@ function branchTabBar({ path, at }, b, shown) {
 }
 
 // branchHeader is b's heading: its name and status, who wants to merge what into its base, when it was created and the
-// issue it works on; and Merge and the branch's menu, for a viewer who may use them.
-function branchHeader(ctx, b) {
+// issue it works on; and Environment, which opens the address of its one environment that has one, then Merge and the
+// branch's menu, for a viewer who may use them.
+function branchHeader(ctx, b, envs) {
   const title = h("div", { class: "branch-title" }, icon("git-branch"), h("h1", {}, b.name),
     b.status ? branchBadge(b.status) : h("span", { class: "tag" }, "Default branch"));
   const merge = mayMerge(ctx, b) ? h("button", { class: "btn btn-primary", type: "button", disabled: b.status !== "ready",
     title: b.status === "ready" ? null : "It merges once it is Ready", onclick: () => mergeDialog(ctx, b) }, icon("git-merge"), "Merge") : null;
   const more = h("button", { class: "icon-btn", type: "button", "aria-haspopup": "menu", "aria-label": "More", title: "More" }, icon("ellipsis"));
   more.onclick = () => branchMenu(more, ctx, b);
-  return h("header", { class: "page-header branch-header" }, h("div", { class: "page-header-text" }, title, h("p", { class: "branch-meta" }, branchMeta(ctx, b))),
-    h("div", { class: "page-header-actions" }, merge, more));
+  const actions = h("div", { class: "page-header-actions" }, merge, more);
+  // Environments that fail to arrive leave the header without the button.
+  envs.then((list) => {
+    const open = list.filter((e) => e.url);
+    if (open.length === 1) actions.prepend(h("a", { class: "btn", href: open[0].url, target: "_blank", rel: "noopener", title: "Open " + open[0].url }, "Environment", icon("external-link")));
+  }, () => {});
+  return h("header", { class: "page-header branch-header" }, h("div", { class: "page-header-text" }, title, h("p", { class: "branch-meta" }, branchMeta(ctx, b))), actions);
 }
 
 // branchMeta is the line under b's name: whose head it is and what it would merge, or what it is, when it was created,
