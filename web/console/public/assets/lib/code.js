@@ -19,7 +19,7 @@ export async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
   if (!branches.length) return [noFiles(org, repo)];
   const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
   const toolbar = h("div", { class: "files-toolbar" }, refPicker(branches, tags, ref, (r) => (isFile ? at.blob(r, file) : at.tree(r, file))),
-    filePath(repo, at, ref, file));
+    filePath(repo, at, ref, file), goToFile(path, at, ref, isFile ? file.split("/").slice(0, -1).join("/") : file));
   const onBranch = branches.some((b) => b.name === ref) ? ref : null;
   const shown = isFile ? await repositoryFile(repo, path, at, ref, file, onBranch, can) : await repositoryTree(repo, path, at, ref, file);
   return [toolbar, ...shown];
@@ -68,6 +68,125 @@ function filePath(repo, at, ref, path) {
   const names = [repo.slug, ...(path ? path.split("/") : [])];
   return h("nav", { class: "file-path", "aria-label": "Path" }, names.map((name, i) => [i ? h("span", { class: "file-path-separator", "aria-hidden": "true" }, "/") : null,
     i === names.length - 1 ? h("span", { "aria-current": "page" }, name) : h("a", { href: at.tree(ref, names.slice(1, i + 1).join("/")), "data-nav": "" }, name)]));
+}
+
+// goToFile is the toolbar's Go to file box: as its viewer types, a popover under it lists the ten files of the ref
+// whose paths best hold the letters typed, in order, those under dir, the directory the page shows, first among
+// equals; the letters that matched are marked. The arrow keys move through them, Enter opens the one picked and
+// Escape closes the list. The ref's paths are read once, when the box is first used.
+function goToFile(path, at, ref, dir) {
+  const box = h("input", { type: "text", placeholder: "Go to file", role: "combobox", "aria-label": "Go to file", "aria-autocomplete": "list",
+    "aria-expanded": "false", autocomplete: "off", spellcheck: "false" });
+  const field = h("div", { class: "input goto" }, icon("search"), box);
+  let paths = null, list = null, results = [], at0 = 0;
+  const read = () => (paths ||= api("GET", path + "/paths?" + new URLSearchParams({ ref })).catch((err) => { paths = null; throw err; }));
+  const close = () => {
+    if (!list) return;
+    list.remove();
+    list = null;
+    box.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside, true);
+    window.removeEventListener("scroll", close, true);
+  };
+  const outside = (e) => { if (!field.contains(e.target) && !(list && list.contains(e.target))) close(); };
+  const footer = (text) => h("div", { class: "goto-footer" }, text);
+  const show = (rows) => {
+    if (!list) {
+      list = h("div", { class: "menu app-popover goto-menu", role: "listbox", id: "goto-files" });
+      document.body.append(list);
+      box.setAttribute("aria-controls", "goto-files");
+      box.setAttribute("aria-expanded", "true");
+      document.addEventListener("pointerdown", outside, true);
+      window.addEventListener("scroll", close, true);
+    }
+    list.replaceChildren(...rows.flat());
+    const r = field.getBoundingClientRect();
+    list.style.top = Math.round(r.bottom + 4) + "px";
+    list.style.right = Math.round(document.documentElement.clientWidth - r.right) + "px";
+  };
+  const pick = (i) => {
+    at0 = i;
+    list.querySelectorAll(".goto-result").forEach((row, n) => {
+      row.setAttribute("aria-selected", String(n === i));
+      const hint = row.querySelector(".menu-shortcut");
+      if (n === i && !hint) row.append(h("span", { class: "menu-shortcut" }, "↵ open"));
+      else if (n !== i && hint) hint.remove();
+    });
+  };
+  const update = async () => {
+    const typed = box.value.trim();
+    if (!typed) return close();
+    let all;
+    try {
+      all = await read();
+    } catch (err) {
+      return show([h("div", { class: "goto-none" }, "Can't read this ref's files: " + err.message), footer("esc close")]);
+    }
+    if (box.value.trim() !== typed) return;
+    results = bestPaths(all.paths, typed, 10, dir);
+    if (!results.length) return show([h("div", { class: "goto-none" }, "No file matches \"" + typed + "\""), footer("Type a path or a few of its letters · esc close")]);
+    const total = all.paths.length.toLocaleString("en-US") + (all.truncated ? "+" : "");
+    show([results.map((m) => h("a", { class: "menu-item goto-result", role: "option", href: at.blob(ref, m.path), "data-nav": "", onclick: close },
+      h("span", { class: "goto-path" }, marked(m.path, m.at)))), footer(results.length + " of " + total + " files · ↑↓ move · ↵ open · esc close")]);
+    pick(0);
+  };
+  box.addEventListener("input", update);
+  box.addEventListener("focus", () => { read().catch(() => {}); if (box.value.trim()) update(); });
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (list) { e.preventDefault(); close(); } else box.blur();
+    } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && list && results.length) {
+      e.preventDefault();
+      pick((at0 + (e.key === "ArrowDown" ? 1 : results.length - 1)) % results.length);
+    } else if (e.key === "Enter" && list && results.length) {
+      e.preventDefault();
+      close();
+      go(at.blob(ref, results[at0].path).slice(base.length - 1));
+    }
+  });
+  return field;
+}
+
+// bestPaths are up to n of paths that hold the letters typed (spaces aside) in order, best first: the fewest runs of
+// matched letters, then those under dir, then the shortest path, then by name; each with the positions its letters
+// matched at, leftmost first, or the run that holds them all when there is one.
+function bestPaths(paths, typed, n, dir = "") {
+  const want = typed.toLowerCase().replace(/\s+/g, "");
+  if (!want) return [];
+  const found = [];
+  for (const path of paths) {
+    const lower = path.toLowerCase();
+    const whole = lower.lastIndexOf(want);
+    let at = null;
+    if (whole >= 0) at = Array.from(want, (_, i) => whole + i);
+    else {
+      at = [];
+      for (let i = 0, from = 0; i < want.length; i++) {
+        const k = lower.indexOf(want[i], from);
+        if (k < 0) { at = null; break; }
+        at.push(k);
+        from = k + 1;
+      }
+    }
+    if (!at) continue;
+    const runs = at.filter((k, i) => i === 0 || at[i - 1] !== k - 1).length;
+    found.push({ path, at, runs, far: dir && !path.startsWith(dir + "/") ? 1 : 0 });
+  }
+  found.sort((a, b) => a.runs - b.runs || a.far - b.far || a.path.length - b.path.length || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return found.slice(0, n);
+}
+
+// marked is a path with the letters at the positions given marked, as Go to file's results show them.
+function marked(path, at) {
+  const hit = new Set(at);
+  const parts = [];
+  for (let i = 0; i < path.length;) {
+    let j = i;
+    while (j < path.length && hit.has(j) === hit.has(i)) j++;
+    parts.push(hit.has(i) ? h("span", { class: "goto-match" }, path.slice(i, j)) : path.slice(i, j));
+    i = j;
+  }
+  return parts;
 }
 
 // cloneMenu opens the Clone popover under anchor, the heading's Clone button: the repository's URLs over HTTPS and
@@ -263,10 +382,75 @@ async function repositoryFile(repo, path, at, ref, file, branch, can) {
   const count = f.text === "" ? 0 : f.text.replace(/\n$/, "").split("\n").length;
   const code = count ? fileLines(f.text, lines) : h("div", { class: "card-body" }, h("p", { class: "muted" }, "This file is empty."));
   const said = [plural(count, "line"), size(f.size), language(f.name), f.mode === "100755" ? "executable" : null];
-  const actions = [h("a", { class: "btn btn-ghost btn-sm", href: at.raw(f.commit, f.path), target: "_blank", rel: "noopener" }, "Raw"), historyLink,
-    copyIcon(f.text, "Copy the file's text")];
-  const shown = f.html !== undefined ? markdownFile(f, code, lines) : { views: null, body: code };
-  return [card("file-code", said, [shown.views, actions], shown.body), await lines.panel()].filter(Boolean);
+  const shown = f.html !== undefined ? markdownFile(f, code, lines) : { views: null, body: code, source: () => {} };
+  const blame = count ? blameButton(path, at, f, code, shown.source) : null;
+  const actions = [h("a", { class: "btn btn-ghost btn-sm", href: at.raw(f.commit, f.path), target: "_blank", rel: "noopener" }, "Raw"),
+    blame && blame.button, historyLink, copyIcon(f.text, "Copy the file's text")];
+  return [card("file-code", said, [shown.views, actions], blame && blame.banner, shown.body), await lines.panel()].filter(Boolean);
+}
+
+// blameButton is a text file's Blame button, which shows beside each of its lines, as File · Blame draws them, the
+// commit that last changed it: once per run of lines from one commit, its author, its title and when, over a strip
+// whose strength says how recent it is among the file's commits; the button, Secondary then, hides them again. The
+// page's ?blame keeps it on, so a link shows it too. A Markdown file shows its source to show its blame.
+function blameButton(path, at, f, code, source) {
+  const { el: banner, fail } = failure();
+  const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-pressed": "false", title: "Show who last changed each line" }, "Blame");
+  let blame = null, on = false;
+  const set = async (want) => {
+    if (want) {
+      button.disabled = true;
+      try {
+        blame ||= await api("GET", path + "/blame?" + new URLSearchParams({ ref: f.commit, path: f.path }));
+      } catch (err) {
+        return fail(err);
+      } finally {
+        button.disabled = false;
+      }
+      banner.hidden = true;
+      source();
+      annotate(code, blame, at);
+    } else unannotate(code);
+    on = want;
+    button.className = want ? "btn btn-sm" : "btn btn-ghost btn-sm";
+    button.setAttribute("aria-pressed", String(want));
+    button.title = want ? "Hide who last changed each line" : "Show who last changed each line";
+    button.replaceChildren(...(want ? ["Blame", icon("x")] : ["Blame"]));
+    history.replaceState(null, "", location.pathname + (want ? "?blame" : "") + location.hash);
+  };
+  button.addEventListener("click", () => set(!on));
+  if (new URLSearchParams(location.search).has("blame")) set(true);
+  return { button, banner };
+}
+
+// annotate puts a file's blame beside its lines: each line a Blame cell, its run's first line its commit.
+function annotate(code, blame, at) {
+  const rows = code.querySelectorAll(".file-line");
+  const commits = new Map(blame.commits.map((c) => [c.sha, c]));
+  const times = blame.commits.map((c) => new Date(c.author.at).getTime());
+  const [oldest, newest] = [Math.min(...times), Math.max(...times)];
+  const strength = (c) => (!c ? 0.15 : newest > oldest ? 0.15 + (0.85 * (new Date(c.author.at).getTime() - oldest)) / (newest - oldest) : 1);
+  for (const run of blame.ranges) {
+    const c = commits.get(run.sha);
+    for (let i = 0; i < run.lines; i++) {
+      const row = rows[run.start - 1 + i];
+      if (!row) continue;
+      const age = h("span", { class: "blame-age", style: "opacity: " + strength(c).toFixed(2) });
+      const said = i ? [] : c ? [authorAvatar(c.author), h("a", { class: "blame-title", href: at.commit(c.sha), "data-nav": "", title: subject(c.message) }, subject(c.message)),
+        h("span", { class: "blame-when", title: whenExactly(c.author.at) }, fromNow(c.author.at))]
+        : [h("a", { class: "blame-title", href: at.commit(run.sha), "data-nav": "" }, shortSha(run.sha))];
+      row.prepend(h("span", { class: "blame" }, age, said));
+      row.classList.toggle("blame-start", i === 0);
+    }
+  }
+  code.classList.add("blamed");
+}
+
+// unannotate takes a file's blame from beside its lines.
+function unannotate(code) {
+  code.querySelectorAll(".blame").forEach((el) => el.remove());
+  code.querySelectorAll(".blame-start").forEach((el) => el.classList.remove("blame-start"));
+  code.classList.remove("blamed");
 }
 
 // markdownFile is a Markdown file's views: rendered, or its lines, which it shows first when the page's anchor names
@@ -280,8 +464,8 @@ function markdownFile(f, code, lines) {
     code.hidden = label === "Preview";
     e.currentTarget.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget)));
   } }, label);
-  return { views: h("div", { class: "segmented file-views", role: "group", "aria-label": "View" }, view("Preview", !atLines), view("Source", atLines)),
-    body: [preview, code] };
+  const views = h("div", { class: "segmented file-views", role: "group", "aria-label": "View" }, view("Preview", !atLines), view("Source", atLines));
+  return { views, body: [preview, code], source: () => views.lastChild.click() };
 }
 
 // fileLines is a text's lines, each numbered: a click on a line's number picks that line and a shift-click the lines

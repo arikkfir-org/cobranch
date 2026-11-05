@@ -1,5 +1,6 @@
-/* A repository's files, as the Files and File screens draw them: the ref picker and the path over a directory's
-   latest commit, its entries and its README, or over a file's card and its lines; and the Clone popover. */
+/* A repository's files, as the Files and File screens draw them: the ref picker, the path and Go to file over a
+   directory's latest commit, its entries and its README, or over a file's card and its lines, with their blame; and
+   the Clone popover. */
 .files-toolbar { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
 .ref-picker { max-width: 280px; }
 .ref-picker-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -9,6 +10,13 @@
 .file-path a { color: var(--color-fg-link); text-decoration: none; }
 .file-path a:hover { text-decoration: underline; }
 .file-path-separator { color: var(--color-fg-subtle); }
+.goto { flex: none; width: 240px; margin-left: auto; }
+.goto-menu { width: 480px; max-width: calc(100vw - var(--space-32)); }
+.goto-result[aria-selected="true"] { background: var(--color-bg-selected); }
+.goto-path { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-muted); font: var(--text-code-small); text-overflow: ellipsis; }
+.goto-match { color: var(--color-fg-default); font: var(--text-code-medium); }
+.goto-none { display: flex; align-items: center; height: var(--size-control-md); padding: 0 var(--space-8); color: var(--color-fg-muted); font: var(--text-body-small); }
+.goto-footer { padding: var(--space-6) var(--space-8) var(--space-2); border-top: 1px solid var(--color-border-subtle); color: var(--color-fg-muted); font: var(--text-caption); }
 
 .last-commit { background: var(--color-bg-sunken); }
 .last-commit-row { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-12) var(--space-16); }
@@ -45,6 +53,12 @@
 .file-line-number { flex: none; width: 40px; color: var(--color-fg-subtle); text-align: right; user-select: none; cursor: pointer; }
 .file-line-number:hover { color: var(--color-fg-default); }
 .file-line-text { color: var(--color-fg-default); white-space: pre; tab-size: 4; }
+.blamed .file-line.blame-start:not(:first-child) { border-top: 1px solid var(--color-border-subtle); }
+.blame { display: flex; flex: none; align-items: center; gap: var(--space-8); width: 320px; height: 100%; padding-right: var(--space-12); overflow: hidden; }
+.blame-age { flex: none; width: 3px; height: 100%; background: var(--color-status-info-solid); }
+.blame-title { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-body-small); text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.blame-title:hover { text-decoration: underline; }
+.blame-when { flex: none; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .file-line-link { display: inline-flex; padding: 0; border: 0; background: none; color: var(--color-fg-link); cursor: pointer; }
 .file-image { display: grid; place-items: center; padding: var(--space-48); background: var(--color-bg-sunken); }
 .file-image img { max-width: 100%; max-height: 60vh; }
