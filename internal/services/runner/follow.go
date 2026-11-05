@@ -73,7 +73,7 @@ func (s *Service) follow(ctx context.Context, r Running, pod Pod, ok bool) error
 // end keeps the run's pod's steps and logs, ends the run in state with reason unless it ended already, and removes its
 // pod.
 func (s *Service) end(ctx context.Context, r Running, pod Pod, state jobs.State, reason string) error {
-	if err := s.keep(ctx, r.OrgID, r.RepoID, r.ID, pod); err != nil {
+	if err := s.keep(ctx, r.OrgID, r.RepoID, r.ID, pod, s.now()); err != nil {
 		return err
 	}
 	if _, err := s.store.Finish(ctx, r.ID, state, reason); err != nil {
@@ -85,11 +85,12 @@ func (s *Service) end(ctx context.Context, r Running, pod Pod, state jobs.State,
 	return nil
 }
 
-// keep keeps what the run's pod leaves once it goes: its steps as they stand, in the store, and each of its
-// containers' logs, in the archive. A pod that vanished leaves neither.
-func (s *Service) keep(ctx context.Context, orgID, repoID, runID uuid.UUID, pod Pod) error {
+// keep keeps what the run's pod leaves once it goes: its steps as they stand at the run's end, in the store, and each
+// of its containers' logs, in the archive. A step still running then, as in a pod that outlived its run's timeout or
+// whose run a member cancelled, is kept as stopped (stopped). A pod that vanished leaves neither.
+func (s *Service) keep(ctx context.Context, orgID, repoID, runID uuid.UUID, pod Pod, end time.Time) error {
 	if len(pod.Steps) > 0 {
-		if err := s.store.KeepSteps(ctx, runID, pod.Steps); err != nil {
+		if err := s.store.KeepSteps(ctx, runID, stopped(pod.Steps, end)); err != nil {
 			return fmt.Errorf("keeping run %s's steps: %w", runID, err)
 		}
 	}
@@ -167,9 +168,7 @@ func (s *Service) sweep(ctx context.Context, orgID uuid.UUID) error {
 		case ok && run.State.Active():
 			continue
 		case ok:
-			pod := pods[id]
-			pod.Steps = stopped(pod.Steps, s.endOf(run))
-			if err := s.keep(ctx, orgID, run.RepoID, id, pod); err != nil {
+			if err := s.keep(ctx, orgID, run.RepoID, id, pods[id], s.endOf(run)); err != nil {
 				errs = append(errs, err)
 				continue
 			}
@@ -184,9 +183,9 @@ func (s *Service) sweep(ctx context.Context, orgID uuid.UUID) error {
 // stoppedReason is the reason of a step still running when its run ended, which removing its pod stops.
 const stoppedReason = "Stopped when its run ended"
 
-// stopped answers steps with those still running marked failed at end, as their run's end stops them: the sweep finds
-// a cancelled run's pod still running, and keeps its steps before it removes the pod. A step that started after end
-// ends as it started.
+// stopped answers steps with those still running marked failed at end, as their run's end stops them: a run that
+// timed out or was cancelled ends while its pod still runs, and its steps are kept before the pod is removed. A step
+// that started after end ends as it started.
 func stopped(steps []jobs.Step, end time.Time) []jobs.Step {
 	out := slices.Clone(steps)
 	for i, step := range out {
