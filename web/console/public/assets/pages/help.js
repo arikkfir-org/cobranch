@@ -188,6 +188,7 @@ function surfaces() {
 }
 
 function patterns() {
+  const toned = (el, tone) => { el.classList.add("tone-" + tone); return el; };
   const text = (title, meta, cls = "row-title") => h("div", { class: "row-text" }, h("span", { class: cls }, title), h("span", { class: "row-meta" }, meta));
   const ghost = (glyph, label) => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label }, icon(glyph));
   const annotation = (s) => h("li", { class: "annotation-row" }, h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)), h("span", { class: "row-title" }, "ci/test"),
@@ -197,7 +198,8 @@ function patterns() {
     [["Commit row", ".commit-row"], ["Annotation row", ".annotation-row"], ["Branch row", ".branch-row"], ["Repository row", ".repository-row"], ["Issue row", ".issue-row"], ["Member row", ".member-row"], ["the list", ".list .row-text .row-title .row-meta"],
       ["Section header", ".section-header .section-header-title .section-header-description"], ["Filters", ".filters .filters-count"], ["Card/Row", ".card-row .card-row-text .card-row-title .card-row-meta .card-row-actions .card-row-label"],
       ["Card/Footer", ".card-footer"], ["Card Tone", ".card-success .card-danger"], ["Meter", ".meter .meter-share .meter-bar .meter-warning .meter-danger"],
-      ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"], ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"]],
+      ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"], ["Table/Cell Issue, Person, Unassigned", ".cell-issue .cell-person .cell-unassigned"],
+      ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"], ["Fact row", ".facts .fact-row .fact-label .fact-value"], ["Activity/Event", ".event-row"]],
     h("ul", { class: "list" },
       h("li", { class: "commit-row" }, h("span", { class: "avatar avatar-24" }, "NL"), text("Hand pushes to the push worker before returning", "Noa Levi committed 12 minutes ago"),
         h("span", { class: "row-icons" }, [annotationStatuses.successful, annotationStatuses.successful, annotationStatuses.in_progress].map((s) => h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)))),
@@ -241,5 +243,15 @@ function patterns() {
         h("tr", {}, h("td", { class: "cell-two-lines" }, icon("folder-git-2"), h("code", {}, "website"), h("span", {}, "The project's website and its docs, which a two-line cell with an icon truncates.")),
           h("td", { class: "cell-number" }, "4 · 2 ready"), h("td", {})),
         h("tr", { class: "row-selected" }, h("td", {}, "The row a pane shows"), h("td", { class: "cell-number" }, "340 MiB"), h("td", {})))),
+    h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Issue"), h("th", {}, "Assignee"), h("th", {}, "Branch"))),
+      h("tbody", {}, h("tr", {}, h("td", {}, h("span", { class: "cell-issue" }, toned(icon("circle-dot", "Open"), "success"), h("code", {}, "KF-42"),
+        h("a", { href: "#" }, "Show pushes in the UI before the Git client returns"), h("span", { class: "tag tone-info" }, "Git"))),
+        h("td", {}, h("span", { class: "cell-person" }, h("span", { class: "avatar" }, "NL"), "Noa Levi")), h("td", { class: "cell-mono" }, "feature/push-worker")),
+        h("tr", {}, h("td", {}, h("span", { class: "cell-issue" }, toned(icon("circle-slash", "Canceled"), "neutral"), h("code", {}, "KF-51"), h("a", { href: "#" }, "Public repositories"))),
+          h("td", {}, h("span", { class: "cell-unassigned" }, "Unassigned")), h("td", {}, h("span", { class: "cell-unassigned" }, "–"))))),
+    h("section", { class: "card" }, h("div", { class: "facts" },
+      h("div", { class: "fact-row" }, h("span", { class: "fact-label" }, "Status"), h("div", { class: "fact-value" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "In progress", icon("chevron-down")))),
+      h("div", { class: "fact-row" }, h("span", { class: "fact-label" }, "Created"), h("div", { class: "fact-value" }, "Oct 27, 2026 by Arik Kfir")))),
+    h("ol", { class: "list" }, h("li", { class: "event-row" }, h("span", {}, "Arik Kfir assigned Builder · moved it to In progress"), h("time", {}, "yesterday"))),
     copyField("Your new key", "cbk_live_3f9a2c7e1b4d8e60f1a2b3c4d5e6f7a8", "Shown once. Copy it now; Cobranch keeps only its hash."));
 }
