@@ -23,17 +23,17 @@ const shownActivity = 10;
 // column, and beside them its agents at work and what happened last in the repositories the viewer reads.
 export default async function show({ org, main, can }) {
   const path = "/orgs/" + org.slug;
-  const [attention, repositories, agents, running, activity] = await Promise.all([
+  const [attention, repositories, agents, working, activity] = await Promise.all([
     api("GET", path + "/attention").then((d) => d.branches),
     api("GET", path + "/repos").then((d) => d.repositories),
     api("GET", path + "/agents").then((d) => d.agents),
-    api("GET", path + "/tasks?state=running&limit=100").then((d) => d.tasks, () => []),
+    api("GET", path + "/tasks?state=running&state=waiting&limit=100").then((d) => d.tasks, () => []),
     api("GET", path + "/activity?limit=" + shownActivity).then((d) => d.activity),
   ]);
   const agentIds = new Set(agents.map((a) => a.id));
   main.replaceChildren(h("div", { class: "activity-columns" },
     h("div", { class: "activity-main" }, attentionCard(org, attention, agentIds), repositoriesCard(org, repositories, can)),
-    h("div", { class: "activity-side" }, agentsCard(org, agents, running, can), activityCard(activity))));
+    h("div", { class: "activity-side" }, agentsCard(org, agents, working, can), activityCard(activity))));
 }
 
 // branches is how many branches n is, as a count says it.
@@ -130,10 +130,11 @@ function repositoriesCard(org, list, can) {
 const agentStates = [{ word: "Working", tone: "info" }, { word: "Watching", tone: "ai" }, { word: "Idle", tone: "neutral" }];
 
 // agentsCard is Agents at work: each agent as an Agent row, its name linked to its page over what it does now, and
-// whether it works on a task, watches every push (a built-in agent with a model), or waits for a task.
-function agentsCard(org, agents, running, can) {
+// whether it works on a task (running, or waiting for an answer, as its own page counts it; a running one is named
+// first), watches every push (a built-in agent with a model), or waits for a task.
+function agentsCard(org, agents, working, can) {
   const tasks = new Map();
-  for (const t of running) if (!tasks.has(t.agent.id)) tasks.set(t.agent.id, t);
+  for (const t of working) if (!tasks.has(t.agent.id) || (t.state === "running" && tasks.get(t.agent.id).state !== "running")) tasks.set(t.agent.id, t);
   const at = (a) => {
     const t = tasks.get(a.id);
     if (t) return { state: agentStates[0], does: t.title ? t.title + (t.branch ? " on " + t.branch : "") : "Working on a private task" };
