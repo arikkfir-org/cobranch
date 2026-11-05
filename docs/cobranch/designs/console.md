@@ -1,20 +1,22 @@
 # The Cobranch Console’s files
 
 > **Snapshot.** This design lives in its [Console page](https://claude.ai/artifact/YDmfu6vfypwS1HfsVi1CSh), linked with
-> Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced again once
+> Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-05, and synced again once
 > Cobranch's shape settles.
 
-**Status**: Proposed 2026-11-02 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
-[ENG-252](https://linear.app/arikkfir/issue/ENG-252) · Restructures the Console of [the
-architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
-Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
-[ENG-252](https://linear.app/arikkfir/issue/ENG-252)
+**Status**: Proposed 2026-11-05 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252) · [ENG-255](https://linear.app/arikkfir/issue/ENG-255) ·
+Restructures the Console of [the architecture](architecture.md#components), [code browsing](code-browsing.md) and every
+page since · Served as before: Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its
+first load sped up by [ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
+[ENG-255](https://linear.app/arikkfir/issue/ENG-255)
 
 The Console was one 3,700-line index.html: its styles, router and every page in one file, which every slice that touched
 a page changed, so their pull requests conflicted and fell out of the merge queue. It becomes a shell and native ES
 modules, one per page, which the Console finds by their files’ names rather than through a list, each with its
 stylesheet beside it. A slice that adds a page adds files; two such slices merge in either order. Nothing the Console
-does changes.
+does changes. Every page then draws in one app shell, the design system’s frame, from what its module exports: its place
+in the sidebar, its breadcrumbs and its conversation.
 
 ## Scope
 
@@ -25,6 +27,11 @@ out of the merge queue on conflicts in `web/console/public/index.html`, the one 
 router and every page. This design splits that file without changing what the Console does: same routes, same pages,
 same look, same page views. Only how a load asks for its files changes: the page names them all, so they are asked for
 at once.
+
+It also sets out the app shell every page draws in ([ENG-255](https://linear.app/arikkfir/issue/ENG-255)), the frame of
+the design system's Figma file: a sidebar of the organization's places, a top bar with the breadcrumbs, the conversation
+toggle and the user menu, a content area that scrolls on its own, and one conversation pane whose subject follows the
+page. Each page module says what the shell shows for it, so the shell holds no list of pages either.
 
 **A shell, shared modules, and a module per page that the Console finds by its file’s name**
 
@@ -39,8 +46,8 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | `assets/console.js` | `start`: the configuration, the viewer, their organizations, every page's module and stylesheet, then the first route |
 | `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, with `fonts.css`) |
 | `assets/components.css` | The design system's components, one class for each, which pages compose |
-| `assets/lib/` | The router, the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
-| `assets/pages/` | The pages the router names: `sign-in.js`, `welcome.js`, `settings.js`, `help.js` |
+| `assets/lib/` | The router, the app shell (`layout.js`, `sidebar.js`, `pane.js`, `menu.js`, `shell.css`), the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
+| `assets/pages/` | The Console's own pages: `sign-in.js` and `welcome.js`, which the router names, and every other module with a default export, which draws in the app shell at `/<part>` (`settings.js`: Account and Preferences; `help.js`) |
 | `assets/pages/org/` | An organization's pages, `<part>.js` for `/acme/<part>/…`; `index.js` its home |
 | `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its code |
 
@@ -107,8 +114,39 @@ own paths are the organization slugs no organization may take.
   Caddy for each directory's listing** (`file_server browse`, as [ENG-246](https://linear.app/arikkfir/issue/ENG-246)
   first did): the listings waited for `console.js` and its imports, and the pages for the listings, about ten requests
   in a row before the first page drew.
-- **The four pages outside an organization stay named in the router:** their paths are the Console's own, decided once,
-  as their slugs are reserved for organizations.
+- **The Console's own pages are files too.** A module of `pages/` with a default export draws in the app shell at
+  `/<part>`, as an organization's page does at `/acme/<part>`: Settings and Help so far. Only sign-in and welcome stay
+  named in the router, since they draw outside the shell. Their paths are among the slugs no organization may take,
+  which a test holds.
+
+## The app shell
+
+**The app shell: each part of the frame drawn from what the page’s module exports**
+
+![The app shell: each part of the frame drawn from what the page’s module exports](console/shell.svg)
+
+The shell names no page: a new page that exports `nav` takes its place in the sidebar, or a tab of the page it is
+`under`, and one that exports `subject` gives the pane its conversation. Below 1100px the pane opens over the content;
+at a phone’s width the sidebar goes off-canvas.
+
+- **Everything in the shell comes from the page modules.** The sidebar lists the organization's pages whose `nav` places
+  them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Members, Roles,
+  API keys and Secrets under Settings; Tasks under Agents); `place: "foot"` puts Settings at the sidebar's foot. A page
+  with `nav.items` is a section, which shows five sub items: those the viewer opened last in this browser, as the
+  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent)
+  puts it first.
+- **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
+  the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
+- **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and
+  environments; an issue's comments on the issue; otherwise the organization's, which says there is no conversation yet.
+  A subject is an object or a promise of one, so a file's page can ask which branch its ref is first. Following, the
+  pane changes subject as the viewer moves; Pinned, it keeps the one it shows. Slice G
+  ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)) gives every other page a conversation.
+- **Narrow screens:** below 1100px the pane opens over the content instead of beside it; at a phone's width the sidebar
+  goes off-canvas behind a menu button.
+- **Rejected: a page draws its own heading and chat,** as before: every page repeated the frame, and the chat moved with
+  every page's layout. **Rejected: the shell names the sections** (Issues, Repositories, Agents): the list every new
+  section would edit.
 
 ## A page's module
 
@@ -122,7 +160,10 @@ the rest of the path itself. Every export but `default` is optional.
 | Export | Of | Means | Without it |
 | --- | --- | --- | --- |
 | `default(ctx)` | Both | Draws the page: an organization's into the frame's main element, a repository's as the sections under its tabs | Required |
-| `nav` | Both | `{ label, order }`: its link in the organization's nav or the repository's tabs, sorted by `order` | No link; opened from other pages |
+| `nav` | Both | `{ label, order }`: its link in the sidebar or the repository's tabs, sorted by `order`. An organization's page adds `icon`; `items({ org, can })`, its section's sub items (`{ items, count, whole }`); `under`, the page whose tab it is, with `tab` the parent's own tab's label and `description` the heading's line; and `place: "foot"` | No link; opened from other pages |
+| `crumbs` | Both | Its breadcrumbs after the organization's and the repository's: a list of `{ label, href }`, or a function of what the page shows that returns one | Only the organization's and the repository's |
+| `subject(ctx)` | Both | The conversation the pane shows: `{ key, title, scope, chat, … }`, or a promise of one | The organization's, or the repository's |
+| `heading` | Repository | Whether the repository's heading and tabs draw above it, or a function of the rest of the path | They draw |
 | `allowed(can)` | Both | Whether the viewer may open it, from the permissions they hold there | Anyone who reads the organization or repository |
 | `view` | Both | The name its page views report, or a function of the rest of the path that returns one | `organization.<part>` or `repository.<part>` |
 | `under` | Repository | The tab it lights, as a file and a commit light Code (`""`) | Its own tab |
@@ -155,6 +196,8 @@ insert between the same two lines.
 - **The reserved slugs stay in Go,** where the REST API refuses a repository named like a page, one a line; a test reads
   `pages/org/` and fails until the two agree. A new slug still needs its migration, as the pages `secrets` and `agents`
   did, to move the repositories that had it.
+- **A Console page of its own,** a module of `pages/` with a default export, needs its path among `orgs.ReservedSlugs`;
+  a test fails until it is.
 - **Page views' names are the API's to accept:** the REST API counts only the names `api/openapi.yaml` lists
   ([monitoring](monitoring.md)), so a page that reports its own name adds it there.
 
@@ -170,6 +213,8 @@ insert between the same two lines.
 | An image retagged in place | Two builds under one tag share a release's path; the chart's tags are versions or commits, never reused |
 | Files' names in the shell | Public, and harmless: the names of files anyone may fetch anyway. No directory is listed over HTTP |
 | A failed load's console | Every preload of a release that isn't there logs its 404, about sixty lines, before the shell loads again |
+| A page's subject fails to arrive | The pane shows the organization's or the repository's conversation instead |
+| A browser without storage | The sections show their own newest items instead of those the viewer opened last; the pane starts closed |
 | A Content Security Policy | None today, and none added. Modules and stylesheets are files of the Console's own origin, so a policy of `script-src 'self'` would need only the shell's bootstrap allowed by its hash; the JSON Caddy writes in is data (`application/json`), not a script, and its values are escaped as JSON escapes `<`, `>` and `&` |
 
 ## Rollout
@@ -183,8 +228,16 @@ on nested routes included, and an installation of main once it merges.
 into the shell and asks for every file at once: no chart value, no migration. `config.json` stays for shells of earlier
 releases.
 
+[ENG-255](https://linear.app/arikkfir/issue/ENG-255), one pull request first, draws every page in the app shell and
+gives every page module its crumbs and subject: no chart value, no migration, no API change. Its preview is checked
+against the Figma file's screens at 1440 wide, light and dark. The page groups' contents move onto the design system's
+components after it ([ENG-256](https://linear.app/arikkfir/issue/ENG-256),
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
+
 ## Open questions
 
+- **Account and Preferences, the open switcher, the pane's thread states and the narrow widths** have no Figma frames
+  yet; the Console draws them from the file's components until the file does.
 - **Loading pages lazily** once the Console holds many more modules: every load asks for every file, so the count grows
   with the pages. Measure again when it doubles.
 
