@@ -1,7 +1,7 @@
-/* The Agents pages (pages/org/agents.js, its tabs, lib/agent.js): an agent's page with its header, task rows and facts,
-   the month's figures, an agent's costliest task against its cap, and the events of the Activity tab. Tokens and
-   components.css's components only; the task Row, the Fact and the Stat are frames of the agent's screens, not
-   components of the design system. */
+/* The Agents pages (pages/org/agents.js, its tabs, lib/agent.js, lib/task.js): an agent's page with its header, task
+   rows and facts, a task's page with its transcript and spend, the month's figures, an agent's costliest task against
+   its cap, and the events of the Activity tab. Tokens and components.css's components only; the task Row, the Fact,
+   the Turn and the Stat are frames of the agent's screens, not components of the design system. */
 
 /* An agent's page: its header, then its tasks beside what it runs on. */
 .agent-header { align-items: center; gap: var(--space-12); }
@@ -19,7 +19,7 @@
   border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); text-decoration: none;
 }
 .agent-task:last-child { border-bottom: 0; }
-.agent-task:hover { background: var(--color-bg-hover); }
+a.agent-task:hover { background: var(--color-bg-hover); }
 .agent-task .row-meta { color: var(--color-fg-subtle); }
 .agent-task-number { flex: none; min-width: var(--space-24); color: var(--color-fg-subtle); font: var(--text-code-small); }
 .agent-task-spend { flex: none; min-width: 96px; white-space: nowrap; color: var(--color-fg-default); font: var(--text-code-small); text-align: right; }
@@ -86,4 +86,51 @@
 .agents-table td, .activity-table td:first-child { white-space: nowrap; }
 .agents-table td, .agents-agent .cell-two-lines, .agents-agent .cell-two-lines > * { overflow: hidden; text-overflow: ellipsis; }
 .agents-agent .cell-two-lines { min-width: 0; }
-.table td a.activity-task { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.table td .activity-task { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+
+/* A task's page (lib/task.js): its number beside its title, its transcript's steps (Turn), each a time 44px wide, an
+   icon in its tone, and who or what over its text or a line of code; a tool's call opens to its output. */
+.task-number { flex: none; color: var(--color-fg-muted); font: var(--text-code-large); letter-spacing: var(--text-code-large-tracking); }
+.task-head { display: grid; gap: var(--space-16); min-width: 0; }
+.task-meta { font: var(--text-body-small); }
+.task-steps { margin: 0; padding: 0; list-style: none; }
+.task-steps > li { border-bottom: 1px solid var(--color-border-subtle); }
+.task-steps > li:last-child { border-bottom: 0; }
+.task-step { display: flex; align-items: flex-start; gap: var(--space-12); padding: calc(var(--space-8) + var(--space-2)) var(--space-16); }
+summary.task-step { cursor: pointer; list-style: none; }
+summary.task-step::-webkit-details-marker { display: none; }
+summary.task-step:hover { background: var(--color-bg-hover); }
+.task-step-time { flex: none; width: 44px; color: var(--color-fg-subtle); font: var(--text-code-small); }
+.task-step-icon { display: inline-flex; flex: none; color: var(--color-fg-muted); }
+.task-step-icon:not(.tone-neutral) { color: var(--tone-fg); }
+.task-step-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.task-step-head { display: flex; align-items: center; gap: var(--space-6); min-width: 0; white-space: nowrap; }
+.task-step-name { color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.task-step-note { color: var(--color-fg-muted); font: var(--text-caption); }
+.task-step-note.tone-danger { color: var(--tone-fg); }
+.task-step-body { color: var(--color-fg-default); font: var(--text-body-small); white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-step-code { color: var(--color-fg-default); font: var(--text-code-small); overflow-wrap: anywhere; }
+details[open] > summary.task-step { padding-bottom: var(--space-8); }
+.task-step-more {
+  display: grid; gap: var(--space-4);
+  padding: 0 var(--space-16) calc(var(--space-8) + var(--space-2)) calc(var(--space-16) + 44px + var(--space-12) + var(--size-icon-sm) + var(--space-12));
+}
+.task-step-output {
+  max-height: 480px; margin: 0; padding: var(--space-8) var(--space-12); overflow: auto; border-radius: var(--radius-sm);
+  background: var(--color-bg-sunken); color: var(--color-fg-default); font: var(--text-code-small); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4;
+}
+.task-step-cut { color: var(--color-fg-muted); font: var(--text-caption); }
+
+/* A task's facts: its agent and its assigner with their avatars. */
+.task-fact-who { display: inline-flex; align-items: center; gap: var(--space-6); }
+.agent-facts a { color: var(--color-fg-default); text-decoration: none; }
+.agent-facts a:hover { text-decoration: underline; }
+
+/* What a task spent (Spend): a Meter of it against the cap, then its counts, each a key over the row's width and its
+   value in code type. */
+.task-spend { padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.task-spend-facts { margin: 0; }
+.task-spend-row { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.task-spend-row:last-child { border-bottom: 0; }
+.task-spend-row dt { flex: 1; min-width: 0; color: var(--color-fg-muted); font: var(--text-caption); }
+.task-spend-row dd { margin: 0; color: var(--color-fg-default); font: var(--text-code-small); white-space: nowrap; }

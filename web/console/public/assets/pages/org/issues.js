@@ -1,3 +1,4 @@
+import { taskPage } from "../../lib/agent.js";
 import { api, apiPage } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { issueSubject } from "../../lib/chat.js";
@@ -277,8 +278,8 @@ function issueSide(org, issue, can, choices, save, tag, fail) {
     field("Priority", choices && prioritySelect(issue.priority), (v) => ({ priority: v }), [priorityIcon(issue.priority), " ", issuePriorities[issue.priority].word]),
     field("Assignee", choices && assigneeSelect(choices.members, choices.agents, can("agents.assign"), issue.assignee), (v) => ({ assigneeId: v || null }),
       issue.assignee ? issue.assignee.displayName : "Nobody"),
-    issue.task ? h("div", { class: "field" }, h("strong", {}, "Its task"), h("a", { class: "row", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: issue.assignee.id }),
-      "data-nav": "", title: "The agent's tasks" }, h("span", {}, "#" + issue.task.number), taskBadge(issue.task.state))) : null,
+    issue.task ? h("div", { class: "field" }, h("strong", {}, "Its task"), h("a", { class: "row", href: taskPage(org, issue.task, issue.assignee.id),
+      "data-nav": "" }, h("span", {}, "#" + issue.task.number), taskBadge(issue.task.state))) : null,
     field("Repository", choices && repositorySelect(choices.repositories, issue.repository), (v) => ({ repositoryId: v || null }), issue.repository ? h("code", {}, issue.repository.slug) : "None"),
     issueLabelsField(org, issue, choices, save),
     h("dl", { class: "facts" }, h("dt", {}, "Created by"), h("dd", {}, issue.createdBy ? issue.createdBy.displayName : "Someone since gone"),

@@ -30,9 +30,9 @@ export function subjectOf(m, ctx, fallback) {
 // viewer's own, private to them.
 const orgSubject = (org, can) => privateSubject("org:" + org.slug, org.name, false, "/orgs/" + org.slug + "/conversation", can);
 
-// tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under, as
-// Tasks is under Agents): the parent's, labelled by its nav's tab or its label, then those under it, in order of
-// their nav; null for a page with none.
+// tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under): the
+// parent's, labelled by its nav's tab or its label, then those under it, in order of their nav; null for a page with
+// none.
 function tabsOf(org, can, part, m) {
   const parent = m.nav && m.nav.under ? m.nav.under : part;
   const allowed = (p) => !p.allowed || p.allowed(can);

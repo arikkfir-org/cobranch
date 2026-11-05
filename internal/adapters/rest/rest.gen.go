@@ -761,6 +761,7 @@ const (
 	PageViewPageHelpComponents             PageViewPage = "help.components"
 	PageViewPageOrganization               PageViewPage = "organization"
 	PageViewPageOrganizationAgent          PageViewPage = "organization.agent"
+	PageViewPageOrganizationAgentTask      PageViewPage = "organization.agent-task"
 	PageViewPageOrganizationAgents         PageViewPage = "organization.agents"
 	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
 	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
@@ -800,6 +801,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganization:
 		return true
 	case PageViewPageOrganizationAgent:
+		return true
+	case PageViewPageOrganizationAgentTask:
 		return true
 	case PageViewPageOrganizationAgents:
 		return true
