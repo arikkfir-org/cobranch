@@ -87,7 +87,7 @@ export function repoLinks(org, repo) {
     branchPage: (name, tab) => root + "/branches/" + parts(name) + (tab ? "?tab=" + tab : ""),
     changes: (name) => root + "/branches/" + parts(name) + "?tab=changes",
     commit: (sha) => root + "/commit/" + sha,
-    runs: (sha) => root + "/runs" + (sha ? "?" + new URLSearchParams({ sha }) : ""),
+    runs: (sha) => root + "/runs" + (sha ? "?" + new URLSearchParams({ q: sha.slice(0, 7) }) : ""),
     run: (number) => root + "/runs/" + number,
     environment: (id) => root + "/environments/" + id,
     tree: (ref, path) => root + "/tree/" + parts(ref, path),
