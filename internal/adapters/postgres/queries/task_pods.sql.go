@@ -146,21 +146,31 @@ func (q *Queries) DeferTask(ctx context.Context, until time.Time, taskID uuid.UU
 const failTask = `-- name: FailTask :one
 UPDATE agent_tasks SET state = 'failed', reason = $1, summary = '', ended_at = now()
 WHERE id = $2 AND state IN ('queued', 'running', 'waiting')
-RETURNING org_id, number, agent_id
+RETURNING org_id, number, agent_id, kind, repo_id, sha
 `
 
 type FailTaskRow struct {
 	OrgID   uuid.UUID
 	Number  int64
 	AgentID uuid.UUID
+	Kind    string
+	RepoID  *uuid.UUID
+	Sha     *string
 }
 
-// FailTask ends a task that hasn't ended Failed, for reason, and answers its organization, number and agent; no row
-// when it had ended already.
+// FailTask ends a task that hasn't ended Failed, for reason, and answers its organization, number and agent, and the
+// kind, repository and head of what it works on; no row when it had ended already.
 func (q *Queries) FailTask(ctx context.Context, reason string, iD uuid.UUID) (FailTaskRow, error) {
 	row := q.db.QueryRow(ctx, failTask, reason, iD)
 	var i FailTaskRow
-	err := row.Scan(&i.OrgID, &i.Number, &i.AgentID)
+	err := row.Scan(
+		&i.OrgID,
+		&i.Number,
+		&i.AgentID,
+		&i.Kind,
+		&i.RepoID,
+		&i.Sha,
+	)
 	return i, err
 }
 

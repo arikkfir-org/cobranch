@@ -53,7 +53,11 @@ func (r *mutationResolver) UpdateAgent(ctx context.Context, organizationID strin
 	if err != nil {
 		return nil, err
 	}
-	changed, err := r.Agents.UpdateAgent(ctx, v.User, orgID, agentID, version, agents.Change{Name: input.Name, Description: input.Description, Instructions: input.Instructions})
+	c := agents.Change{Name: input.Name, Description: input.Description, Instructions: input.Instructions}
+	if c.Cap, err = capOrClear(ctx, input.Cap); err != nil {
+		return nil, err
+	}
+	changed, err := r.Agents.UpdateAgent(ctx, v.User, orgID, agentID, version, c)
 	if err != nil {
 		return nil, fail(ctx, err, "agent", "changing the agent")
 	}
@@ -164,6 +168,69 @@ func (r *mutationResolver) RemoveModelProvider(ctx context.Context, organization
 		return false, fail(ctx, err, "model_provider", "removing the model provider")
 	}
 	return true, nil
+}
+
+// SetModel is the resolver for the setModel field.
+func (r *mutationResolver) SetModel(ctx context.Context, organizationID string, provider string, model string, input ModelInput, expectedVersion *int) (*Model, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	version, err := providerVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	in, err := modelInput(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	set, _, err := r.Agents.PutModel(ctx, v.User, orgID, provider, model, in, version)
+	if err != nil {
+		return nil, fail(ctx, err, "model", "setting the model")
+	}
+	return modelOf(set), nil
+}
+
+// RemoveModel is the resolver for the removeModel field.
+func (r *mutationResolver) RemoveModel(ctx context.Context, organizationID string, provider string, model string, expectedVersion *int) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return false, err
+	}
+	version, err := agentVersion(ctx, expectedVersion)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Agents.RemoveModel(ctx, v.User, orgID, provider, model, version); err != nil {
+		return false, fail(ctx, err, "model", "removing the model")
+	}
+	return true, nil
+}
+
+// RecordTaskSpend is the resolver for the recordTaskSpend field.
+func (r *mutationResolver) RecordTaskSpend(ctx context.Context, input TaskUsageInput) (*TaskSpend, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	u, err := usage(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	spend, err := r.Agents.RecordSpend(ctx, v.User, u)
+	if err != nil {
+		return nil, fail(ctx, err, "task", "recording the task's spend")
+	}
+	return &TaskSpend{Spent: spend.Spent.String(), InputTokens: int(spend.Input), OutputTokens: int(spend.Output), Cap: optionalUSD(spend.Cap),
+		Ended: spend.Ended}, nil
 }
 
 // AssignTask is the resolver for the assignTask field.
@@ -309,6 +376,15 @@ func (r *organizationResolver) ModelProviders(ctx context.Context, obj *Organiza
 // AvailableModelProviders is the resolver for the availableModelProviders field.
 func (r *organizationResolver) AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error) {
 	return nonNil(r.Resolver.Agents.ProviderNames()), nil
+}
+
+// Models is the resolver for the models field.
+func (r *organizationResolver) Models(ctx context.Context, obj *Organization) ([]*Model, error) {
+	list, err := resolveOrg(ctx, obj, r.Resolver.Agents.Models, "listing the models")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(list, modelOf), nil
 }
 
 // MyTask is the resolver for the myTask field.

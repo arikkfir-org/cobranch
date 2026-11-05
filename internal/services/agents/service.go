@@ -75,6 +75,20 @@ type Store interface {
 	// SetSecrets names the secrets one of the organization's agents' tasks receive, for actor, at version or at any
 	// version for AnyVersion, and answers it; ErrChanged.
 	SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID, version int64, named map[string]uuid.UUID) (Agent, error)
+	// Models lists the organization's models by provider and name, each with the agents on it.
+	Models(ctx context.Context, orgID uuid.UUID) ([]Model, error)
+	// Model finds one of the organization's models, with the agents on it.
+	Model(ctx context.Context, orgID uuid.UUID, provider, name string) (Model, error)
+	// PutModel adds the model for actor, or changes the one there, as Service.PutModel's version says, and answers it and
+	// whether it added it; ErrChanged, and a validation error for a provider the organization hasn't added.
+	PutModel(ctx context.Context, actor, orgID uuid.UUID, provider, name string, in ModelInput, version int64) (Model, bool, error)
+	// RemoveModel removes the model for actor, at version or at any version for AnyVersion; ErrChanged, ErrModelInUse
+	// while agents run on it.
+	RemoveModel(ctx context.Context, actor, orgID uuid.UUID, provider, name string, version int64) error
+	// RecordSpend records a call of the task's model, priced at its organization's prices, unless the task has one of
+	// that ID, and answers what the task spent; it ends a task that reaches its cap Failed. ErrEnded for a task that has
+	// ended, orgs.ErrNotFound for none.
+	RecordSpend(ctx context.Context, taskID uuid.UUID, u Usage) (Spend, error)
 	// Entries lists at most limit of a task's transcript entries numbered above after, in order.
 	Entries(ctx context.Context, taskID uuid.UUID, after, limit int) ([]Entry, error)
 	// Append records entry e of a task for actor, the next of its transcript, and, given change, moves the task to
@@ -188,7 +202,8 @@ func wrap(what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.As(err, &verr), errors.Is(err, orgs.ErrNotFound), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrNameTaken),
-		errors.Is(err, ErrBuiltIn), errors.Is(err, ErrEnded), errors.Is(err, ErrChanged), errors.Is(err, ErrProviderInUse):
+		errors.Is(err, ErrBuiltIn), errors.Is(err, ErrEnded), errors.Is(err, ErrChanged), errors.Is(err, ErrProviderInUse),
+		errors.Is(err, ErrModelInUse):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)

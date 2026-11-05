@@ -16,12 +16,16 @@ func withKeys(document string) func(*orgFixture) string {
 	}
 }
 
-// onProvider is a document with anthropic added to Acme first, its key in providerKey, and Scout on one of its models
-// when onModel.
+// onProvider is a document with anthropic added to Acme first, its key in providerKey, and its a-model to Acme's models,
+// at $3 and $15 a million tokens and a cap of $8 a task, with Scout on it when onModel.
 func onProvider(onModel bool, document func(*orgFixture) string) func(*orgFixture) string {
 	return func(f *orgFixture) string {
 		ctx := context.Background()
 		if _, _, err := f.agents.SetModelProvider(ctx, f.olivia.User, f.acme.ID, "anthropic", f.providerKey, agents.NoVersion); err != nil {
+			panic(err)
+		}
+		in := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000, Cap: 8_000_000}
+		if _, _, err := f.agents.PutModel(ctx, f.olivia.User, f.acme.ID, "anthropic", "a-model", in, agents.NoVersion); err != nil {
 			panic(err)
 		}
 		if onModel {

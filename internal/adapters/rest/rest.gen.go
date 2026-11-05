@@ -1019,12 +1019,18 @@ type AIReviewState string
 // Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
-	BuiltIn   bool      `json:"builtIn"`
+	BuiltIn bool `json:"builtIn"`
+
+	// Cap The most a task of it may spend, in US dollars such as 2.00, which caps it below its model's cap; absent for none of its own.
+	Cap       *string   `json:"cap,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CreatedBy   *Principal `json:"createdBy,omitempty"`
 	Description string     `json:"description"`
+
+	// EffectiveCap The most a task of it may spend, the lower of its own cap and its model's, in US dollars; absent for none.
+	EffectiveCap *string `json:"effectiveCap,omitempty"`
 
 	// Grants The roles it holds, those at the organization first.
 	Grants []AgentGrant `json:"grants"`
@@ -1037,7 +1043,10 @@ type Agent struct {
 
 	// Model The model it runs on, as its provider names it; absent while it runs on none.
 	Model *string `json:"model,omitempty"`
-	Name  string  `json:"name"`
+
+	// ModelCap The most a task on its model may spend, in US dollars; absent for none.
+	ModelCap *string `json:"modelCap,omitempty"`
+	Name     string  `json:"name"`
 
 	// Provider The model provider it runs on, one the organization added; absent while it runs on none.
 	Provider *string `json:"provider,omitempty"`
@@ -1089,9 +1098,11 @@ type AgentModel struct {
 
 // AgentPatch What changes about an agent; a field left out keeps its value.
 type AgentPatch struct {
-	Description  *string `json:"description,omitempty"`
-	Instructions *string `json:"instructions,omitempty"`
-	Name         *string `json:"name,omitempty"`
+	// Cap The most a task of it may spend, in US dollars such as 2.00, at most $1000000 (400 agent.cap_invalid); its model's cap stays the most it may spend. Null for none of its own.
+	Cap          nullable.Nullable[string] `json:"cap,omitempty"`
+	Description  *string                   `json:"description,omitempty"`
+	Instructions *string                   `json:"instructions,omitempty"`
+	Name         *string                   `json:"name,omitempty"`
 }
 
 // AgentSecrets The secrets an agent's tasks receive.
@@ -2077,6 +2088,57 @@ type MergeResult struct {
 	Head string `json:"head"`
 }
 
+// Model One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it, and the most a task on it may spend. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type Model struct {
+	// Agents The agents that run on it, by name.
+	Agents []Principal `json:"agents"`
+
+	// Cap The most a task on it may spend, such as 8.00; absent for none. An agent may set a lower cap of its own.
+	Cap       *string   `json:"cap,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Default Whether a new agent starts on it; the organization has at most one.
+	Default bool `json:"default"`
+
+	// InputPrice What a million tokens it reads cost, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+
+	// Name The model's name, as its provider gives it.
+	Name string `json:"name"`
+
+	// OutputPrice What a million tokens it writes cost, such as 15.00.
+	OutputPrice string    `json:"outputPrice"`
+	Provider    string    `json:"provider"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its agents' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// ModelInput What a model costs, the most a task on it may spend and whether it is the default; it replaces what the model had.
+type ModelInput struct {
+	// Cap The most a task on it may spend, $0.000001 to $1000000, such as 8.00; absent for none. A model with a cap has a price.
+	Cap *string `json:"cap,omitempty"`
+
+	// Default Whether a new agent starts on it; absent for not.
+	Default *bool `json:"default,omitempty"`
+
+	// InputPrice What a million tokens it reads cost, $0 to $10000, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+
+	// OutputPrice What a million tokens it writes cost, $0 to $10000, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+}
+
+// ModelList defines model for ModelList.
+type ModelList struct {
+	// Models The organization's models, by provider and name.
+	Models []Model `json:"models"`
+}
+
 // ModelProvider A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
 type ModelProvider struct {
 	// Broken Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
@@ -2670,17 +2732,26 @@ type Task struct {
 	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
 
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
-	CancelledBy  *Principal         `json:"cancelledBy,omitempty"`
-	CreatedAt    time.Time          `json:"createdAt"`
-	EndedAt      *time.Time         `json:"endedAt,omitempty"`
-	Id           openapi_types.UUID `json:"id"`
-	Instructions string             `json:"instructions"`
+	CancelledBy *Principal `json:"cancelledBy,omitempty"`
+
+	// Cap The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; absent for none. It fails once it reaches it.
+	Cap       *string            `json:"cap,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	EndedAt   *time.Time         `json:"endedAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens its model read so far.
+	InputTokens  int64  `json:"inputTokens"`
+	Instructions string `json:"instructions"`
 
 	// Kind What it is for; assigned for a task a principal assigned.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
 	Number int64 `json:"number"`
+
+	// OutputTokens The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
 
 	// Reason Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
@@ -2690,7 +2761,10 @@ type Task struct {
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
-	Sha       *string    `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+
+	// Spent What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent     string     `json:"spent"`
 	StartedAt *time.Time `json:"startedAt,omitempty"`
 
 	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
@@ -2724,8 +2798,37 @@ type TaskInput struct {
 	Title string `json:"title"`
 }
 
+// TaskSpend What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+type TaskSpend struct {
+	// Cap The most it may spend, in US dollars; absent for none.
+	Cap *string `json:"cap,omitempty"`
+
+	// Ended Whether it has ended; its token then acts no more.
+	Ended        bool  `json:"ended"`
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+
+	// Spent In US dollars, at its organization's prices, such as 0.42.
+	Spent string `json:"spent"`
+}
+
 // TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 type TaskState string
+
+// TaskUsage A call of a task's model, as the model proxy of its pod reports it.
+type TaskUsage struct {
+	// Id The call's own ID, which a repeated report repeats, so that it counts once.
+	Id openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens the model read, 0 to 100000000.
+	InputTokens int64 `json:"inputTokens"`
+
+	// Model The model the call asked, as its provider names it.
+	Model string `json:"model"`
+
+	// OutputTokens The tokens the model wrote, 0 to 100000000.
+	OutputTokens int64 `json:"outputTokens"`
+}
 
 // TranscriptEntry A step of a task's transcript, numbered from 1 in its task; entries never change.
 type TranscriptEntry struct {
@@ -2861,6 +2964,9 @@ type IfMatchIssue = string
 // IfMatchLabel defines model for ifMatchLabel.
 type IfMatchLabel = string
 
+// IfMatchModel defines model for ifMatchModel.
+type IfMatchModel = string
+
 // IfMatchModelProvider defines model for ifMatchModelProvider.
 type IfMatchModelProvider = string
 
@@ -2876,6 +2982,9 @@ type IfNoneMatch = string
 // IfNoneMatchAnnotation defines model for ifNoneMatchAnnotation.
 type IfNoneMatchAnnotation = string
 
+// IfNoneMatchModel defines model for ifNoneMatchModel.
+type IfNoneMatchModel = string
+
 // IfNoneMatchModelProvider defines model for ifNoneMatchModelProvider.
 type IfNoneMatchModelProvider = string
 
@@ -2890,6 +2999,9 @@ type LabelID = openapi_types.UUID
 
 // MessageID defines model for message.
 type MessageID = openapi_types.UUID
+
+// ModelName defines model for modelName.
+type ModelName = string
 
 // Number defines model for number.
 type Number = int
@@ -3129,6 +3241,27 @@ type SetModelProviderParams struct {
 
 	// IfNoneMatch *, to add a provider the organization hasn't added: one it has refuses with 412.
 	IfNoneMatch *IfNoneMatchModelProvider `json:"If-None-Match,omitempty"`
+}
+
+// RemoveModelParams defines parameters for RemoveModel.
+type RemoveModelParams struct {
+	// IfMatch The ETag of the model the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModel `json:"If-Match,omitempty"`
+}
+
+// GetModelParams defines parameters for GetModel.
+type GetModelParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// SetModelParams defines parameters for SetModel.
+type SetModelParams struct {
+	// IfMatch The ETag of the model the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModel `json:"If-Match,omitempty"`
+
+	// IfNoneMatch *, to add a model the organization hasn't added: one it has refuses with 412.
+	IfNoneMatch *IfNoneMatchModel `json:"If-None-Match,omitempty"`
 }
 
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
@@ -3436,6 +3569,9 @@ type ListBuiltInRolesParamsScope string
 // AddMySSHKeyJSONRequestBody defines body for AddMySSHKey for application/json ContentType.
 type AddMySSHKeyJSONRequestBody = SSHKeyInput
 
+// RecordMyTaskSpendJSONRequestBody defines body for RecordMyTaskSpend for application/json ContentType.
+type RecordMyTaskSpendJSONRequestBody = TaskUsage
+
 // CreateMyTokenJSONRequestBody defines body for CreateMyToken for application/json ContentType.
 type CreateMyTokenJSONRequestBody = PersonalTokenInput
 
@@ -3501,6 +3637,9 @@ type GrantRoleJSONRequestBody GrantRoleJSONBody
 
 // SetModelProviderJSONRequestBody defines body for SetModelProvider for application/json ContentType.
 type SetModelProviderJSONRequestBody = ModelProviderInput
+
+// SetModelJSONRequestBody defines body for SetModel for application/json ContentType.
+type SetModelJSONRequestBody = ModelInput
 
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryInput
@@ -3603,6 +3742,9 @@ type ServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(w http.ResponseWriter, r *http.Request)
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// (POST /me/task/spend)
+	RecordMyTaskSpend(w http.ResponseWriter, r *http.Request)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(w http.ResponseWriter, r *http.Request)
@@ -3771,6 +3913,18 @@ type ServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams)
+	// ListModels The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read.
+	// (GET /orgs/{org}/models)
+	ListModels(w http.ResponseWriter, r *http.Request, org Org)
+	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/models/{provider}/{model})
+	RemoveModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params RemoveModelParams)
+	// GetModel One of the organization's models, with the agents on it; takes org.read.
+	// (GET /orgs/{org}/models/{provider}/{model})
+	GetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params GetModelParams)
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, a cap past $1000000 400 model.cap_invalid, a cap of a model without prices 400 model.cap_unpriced, and a request with neither header 428.
+	// (PUT /orgs/{org}/models/{provider}/{model})
+	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
@@ -4243,6 +4397,20 @@ func (siw *ServerInterfaceWrapper) GetMyTask(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMyTask(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecordMyTaskSpend operation middleware
+func (siw *ServerInterfaceWrapper) RecordMyTaskSpend(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecordMyTaskSpend(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6710,6 +6878,255 @@ func (siw *ServerInterfaceWrapper) SetModelProvider(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetModelProvider(w, r, org, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListModels operation middleware
+func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModels(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveModel operation middleware
+func (siw *ServerInterfaceWrapper) RemoveModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetModel operation middleware
+func (siw *ServerInterfaceWrapper) GetModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetModel operation middleware
+func (siw *ServerInterfaceWrapper) SetModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetModel(w, r, org, provider, model, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11245,6 +11662,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/page-views", wrapper.ReportPageViews)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/task", wrapper.GetMyTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/task/spend", wrapper.RecordMyTaskSpend)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{id}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/tokens", wrapper.ListMyTokens)
@@ -11298,6 +11716,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.RemoveModelProvider)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.GetModelProvider)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.SetModelProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models", wrapper.ListModels)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.RemoveModel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.GetModel)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.SetModel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
@@ -12159,6 +12581,103 @@ type GetMyTaskdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMyTaskdefaultApplicationProblemPlusJSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpendRequestObject struct {
+	Body *RecordMyTaskSpendJSONRequestBody
+}
+
+type RecordMyTaskSpendResponseObject interface {
+	VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error
+}
+
+type RecordMyTaskSpend200JSONResponse TaskSpend
+
+func (response RecordMyTaskSpend200JSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RecordMyTaskSpend400ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend401ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend401ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend403ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend403ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend409ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend409ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpenddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RecordMyTaskSpenddefaultApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -17913,6 +18432,452 @@ type SetModelProviderdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SetModelProviderdefaultApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelsRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListModelsResponseObject interface {
+	VisitListModelsResponse(w http.ResponseWriter) error
+}
+
+type ListModels200JSONResponse ModelList
+
+func (response ListModels200JSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModels401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListModels401ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModels404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListModels404ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListModelsdefaultApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   RemoveModelParams
+}
+
+type RemoveModelResponseObject interface {
+	VisitRemoveModelResponse(w http.ResponseWriter) error
+}
+
+type RemoveModel204Response struct {
+}
+
+func (response RemoveModel204Response) VisitRemoveModelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveModel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveModel401ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel403ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel404ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel409ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel409ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel412ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel412ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel428ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel428ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveModeldefaultApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   GetModelParams
+}
+
+type GetModelResponseObject interface {
+	VisitGetModelResponse(w http.ResponseWriter) error
+}
+
+type GetModel200ResponseHeaders struct {
+	ETag string
+}
+
+type GetModel200JSONResponse struct {
+	Body    Model
+	Headers GetModel200ResponseHeaders
+}
+
+func (response GetModel200JSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModel304ResponseHeaders struct {
+	ETag string
+}
+
+type GetModel304Response struct {
+	Headers GetModel304ResponseHeaders
+}
+
+func (response GetModel304Response) VisitGetModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetModel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetModel401ApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetModel404ApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetModeldefaultApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   SetModelParams
+	Body     *SetModelJSONRequestBody
+}
+
+type SetModelResponseObject interface {
+	VisitSetModelResponse(w http.ResponseWriter) error
+}
+
+type SetModel200ResponseHeaders struct {
+	ETag string
+}
+
+type SetModel200JSONResponse struct {
+	Body    Model
+	Headers SetModel200ResponseHeaders
+}
+
+func (response SetModel200JSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type SetModel201JSONResponse struct {
+	Body    Model
+	Headers SetModel201ResponseHeaders
+}
+
+func (response SetModel201JSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetModel400ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel401ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel403ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel404ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel412ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel428ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetModeldefaultApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -26491,6 +27456,9 @@ type StrictServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(ctx context.Context, request GetMyTaskRequestObject) (GetMyTaskResponseObject, error)
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// (POST /me/task/spend)
+	RecordMyTaskSpend(ctx context.Context, request RecordMyTaskSpendRequestObject) (RecordMyTaskSpendResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(ctx context.Context, request ListMyTokensRequestObject) (ListMyTokensResponseObject, error)
@@ -26659,6 +27627,18 @@ type StrictServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(ctx context.Context, request SetModelProviderRequestObject) (SetModelProviderResponseObject, error)
+	// ListModels The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read.
+	// (GET /orgs/{org}/models)
+	ListModels(ctx context.Context, request ListModelsRequestObject) (ListModelsResponseObject, error)
+	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/models/{provider}/{model})
+	RemoveModel(ctx context.Context, request RemoveModelRequestObject) (RemoveModelResponseObject, error)
+	// GetModel One of the organization's models, with the agents on it; takes org.read.
+	// (GET /orgs/{org}/models/{provider}/{model})
+	GetModel(ctx context.Context, request GetModelRequestObject) (GetModelResponseObject, error)
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, a cap past $1000000 400 model.cap_invalid, a cap of a model without prices 400 model.cap_unpriced, and a request with neither header 428.
+	// (PUT /orgs/{org}/models/{provider}/{model})
+	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -27250,6 +28230,37 @@ func (sh *strictHandler) GetMyTask(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMyTaskResponseObject); ok {
 		if err := validResponse.VisitGetMyTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecordMyTaskSpend operation middleware
+func (sh *strictHandler) RecordMyTaskSpend(w http.ResponseWriter, r *http.Request) {
+	var request RecordMyTaskSpendRequestObject
+
+	var body RecordMyTaskSpendJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecordMyTaskSpend(ctx, request.(RecordMyTaskSpendRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecordMyTaskSpend")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecordMyTaskSpendResponseObject); ok {
+		if err := validResponse.VisitRecordMyTaskSpendResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -28927,6 +29938,126 @@ func (sh *strictHandler) SetModelProvider(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetModelProviderResponseObject); ok {
 		if err := validResponse.VisitSetModelProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListModels operation middleware
+func (sh *strictHandler) ListModels(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListModelsRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListModels(ctx, request.(ListModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListModelsResponseObject); ok {
+		if err := validResponse.VisitListModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveModel operation middleware
+func (sh *strictHandler) RemoveModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params RemoveModelParams) {
+	var request RemoveModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveModel(ctx, request.(RemoveModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveModelResponseObject); ok {
+		if err := validResponse.VisitRemoveModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetModel operation middleware
+func (sh *strictHandler) GetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params GetModelParams) {
+	var request GetModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetModel(ctx, request.(GetModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetModelResponseObject); ok {
+		if err := validResponse.VisitGetModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetModel operation middleware
+func (sh *strictHandler) SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams) {
+	var request SetModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	var body SetModelJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetModel(ctx, request.(SetModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetModelResponseObject); ok {
+		if err := validResponse.VisitSetModelResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -76,11 +76,11 @@ func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (s
 	return slug, nil
 }
 
-// agent is the domain's view of an agents row, with its creator's name.
-func agent(a queries.Agent, creator *string) (agents.Agent, error) {
+// agent is the domain's view of an agents row, with its creator's name and its model's cap.
+func agent(a queries.Agent, creator *string, modelCap *int64) (agents.Agent, error) {
 	out := agents.Agent{ID: a.PrincipalID, OrgID: a.OrgID, Name: a.Name, Description: a.Description, Instructions: a.Instructions,
 		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version,
-		Secrets: map[string]uuid.UUID{}}
+		Secrets: map[string]uuid.UUID{}, Cap: usd(a.Cap), ModelCap: usd(modelCap)}
 	if a.CreatedBy != nil && creator != nil {
 		out.CreatedBy = &agents.Principal{ID: *a.CreatedBy, DisplayName: *creator}
 	}
@@ -123,7 +123,7 @@ func (s *AgentStore) Agents(ctx context.Context, orgID uuid.UUID) ([]agents.Agen
 	}
 	out := make([]agents.Agent, 0, len(rows))
 	for _, r := range rows {
-		a, err := agent(r.Agent, r.CreatorName)
+		a, err := agent(r.Agent, r.CreatorName, r.ModelCap)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +143,7 @@ func findAgent(ctx context.Context, q *queries.Queries, orgID, id uuid.UUID) (ag
 	if err != nil {
 		return agents.Agent{}, fmt.Errorf("finding agent %s: %w", id, notFound(err))
 	}
-	a, err := agent(row.Agent, row.CreatorName)
+	a, err := agent(row.Agent, row.CreatorName, row.ModelCap)
 	if err != nil {
 		return agents.Agent{}, err
 	}
@@ -164,7 +164,8 @@ func (s *AgentStore) CreateAgent(ctx context.Context, actor uuid.UUID, a agents.
 }
 
 // insertAgent records the agent, its principal and its grants for actor in q's transaction, under its organization's
-// lock, as every grant is: CreateAgent's, or that of the organization a built-in agent is made with.
+// lock, as every grant is: CreateAgent's, or that of the organization a built-in agent is made with. The agent starts on
+// the organization's default model, when it has one.
 func insertAgent(ctx context.Context, q *queries.Queries, actor uuid.UUID, a agents.Agent) error {
 	var creator *uuid.UUID
 	if a.CreatedBy != nil {
@@ -179,6 +180,9 @@ func insertAgent(ctx context.Context, q *queries.Queries, actor uuid.UUID, a age
 	if err := q.InsertAgent(ctx, queries.InsertAgentParams{ID: a.ID, OrgID: a.OrgID, Name: a.Name, Description: a.Description,
 		Instructions: a.Instructions, BuiltIn: a.BuiltIn, Purpose: optional(a.Purpose), CreatedBy: creator}); err != nil {
 		return fmt.Errorf("inserting the agent: %w", err)
+	}
+	if err := q.StartOnDefaultModel(ctx, a.ID); err != nil {
+		return fmt.Errorf("putting the agent on the organization's default model: %w", err)
 	}
 	grants := make([]map[string]any, 0, len(a.Grants))
 	for _, g := range a.Grants {
@@ -203,8 +207,11 @@ func (s *AgentStore) UpdateAgent(ctx context.Context, actor, orgID, id uuid.UUID
 		if _, err := q.LockAgent(ctx, id, orgID); err != nil {
 			return fmt.Errorf("locking agent %s: %w", id, notFound(err))
 		}
-		_, err := q.UpdateAgent(ctx, queries.UpdateAgentParams{Name: c.Name, Description: c.Description, Instructions: c.Instructions,
-			ID: id, OrgID: orgID, Version: version})
+		p := queries.UpdateAgentParams{Name: c.Name, Description: c.Description, Instructions: c.Instructions, ID: id, OrgID: orgID, Version: version}
+		if c.Cap != nil {
+			p.SetCap, p.Cap = true, nullUSD(*c.Cap)
+		}
+		_, err := q.UpdateAgent(ctx, p)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return agents.ErrChanged
 		}
@@ -217,7 +224,7 @@ func (s *AgentStore) UpdateAgent(ctx context.Context, actor, orgID, id uuid.UUID
 			}
 		}
 		if err := orgEvent(ctx, q, &orgID, actor, "agent.updated", id, map[string]any{"name": c.Name != nil, "description": c.Description != nil,
-			"instructions": c.Instructions != nil}); err != nil {
+			"instructions": c.Instructions != nil, "cap": c.Cap != nil}); err != nil {
 			return err
 		}
 		out, err = findAgent(ctx, q, orgID, id)
@@ -268,11 +275,12 @@ func (s *AgentStore) ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid
 	return *id, nil
 }
 
-// taskRow is what a read of a task answers: the row and the names around it.
+// taskRow is what a read of a task answers: the row, the names around it, what it spent and its cap.
 type taskRow struct {
 	t                                   queries.AgentTask
 	agent                               string
 	assigner, canceller, repo, branchOf *string
+	spent, input, output, cap           int64
 }
 
 // task is the domain's view of a task's row.
@@ -296,6 +304,7 @@ func task(r taskRow) agents.Task {
 		out.IssueID = *t.IssueID
 	}
 	out.SHA = orEmpty(t.Sha)
+	out.Spent, out.InputTokens, out.OutputTokens, out.Cap = agents.USD(r.spent), r.input, r.output, agents.USD(r.cap)
 	return out
 }
 
@@ -343,7 +352,8 @@ func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFi
 	}
 	out := make([]agents.Task, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName}))
+		out = append(out, task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName, r.Spent, r.InputTokens,
+			r.OutputTokens, r.Cap}))
 	}
 	return out, nil
 }
@@ -359,7 +369,8 @@ func findTask(ctx context.Context, q *queries.Queries, orgID uuid.UUID, number i
 	if err != nil {
 		return agents.Task{}, fmt.Errorf("finding task %d: %w", number, notFound(err))
 	}
-	return task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName}), nil
+	return task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName, r.Spent, r.InputTokens, r.OutputTokens,
+		r.Cap}), nil
 }
 
 // Assign numbers the task in its organization and records it for actor, Queued, and answers it. Called with the

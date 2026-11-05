@@ -558,17 +558,26 @@ type Task struct {
 	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
 
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
-	CancelledBy  *Principal         `json:"cancelledBy,omitempty"`
-	CreatedAt    time.Time          `json:"createdAt"`
-	EndedAt      *time.Time         `json:"endedAt,omitempty"`
-	Id           openapi_types.UUID `json:"id"`
-	Instructions string             `json:"instructions"`
+	CancelledBy *Principal `json:"cancelledBy,omitempty"`
+
+	// Cap The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; absent for none. It fails once it reaches it.
+	Cap       *string            `json:"cap,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	EndedAt   *time.Time         `json:"endedAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens its model read so far.
+	InputTokens  int64  `json:"inputTokens"`
+	Instructions string `json:"instructions"`
 
 	// Kind What it is for; assigned for a task a principal assigned.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
 	Number int64 `json:"number"`
+
+	// OutputTokens The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
 
 	// Reason Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
@@ -578,7 +587,10 @@ type Task struct {
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
-	Sha       *string    `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+
+	// Spent What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent     string     `json:"spent"`
 	StartedAt *time.Time `json:"startedAt,omitempty"`
 
 	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.

@@ -12,17 +12,19 @@ import (
 )
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name, m.cap AS model_cap
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
+    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
 
 type AgentRow struct {
 	Agent       Agent
 	CreatorName *string
+	ModelCap    *int64
 }
 
-// Agent finds one of an organization's agents, with the display name of its creator.
+// Agent finds one of an organization's agents, with the display name of its creator and its model's cap.
 func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (AgentRow, error) {
 	row := q.db.QueryRow(ctx, agent, iD, orgID)
 	var i AgentRow
@@ -41,7 +43,9 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.Model,
 		&i.Agent.Secrets,
 		&i.Agent.Purpose,
+		&i.Agent.Cap,
 		&i.CreatorName,
+		&i.ModelCap,
 	)
 	return i, err
 }
@@ -90,17 +94,19 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name, m.cap AS model_cap
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
+    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
 `
 
 type AgentsRow struct {
 	Agent       Agent
 	CreatorName *string
+	ModelCap    *int64
 }
 
-// Agents lists an organization's agents by name, with the display names of their creators.
+// Agents lists an organization's agents by name, with the display names of their creators and their models' caps.
 func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, error) {
 	rows, err := q.db.Query(ctx, agents, orgID)
 	if err != nil {
@@ -125,7 +131,9 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.Model,
 			&i.Agent.Secrets,
 			&i.Agent.Purpose,
+			&i.Agent.Cap,
 			&i.CreatorName,
+			&i.ModelCap,
 		); err != nil {
 			return nil, err
 		}
@@ -347,10 +355,17 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 
 const task = `-- name: Task :one
 SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
-    rp.slug AS repo_slug, b.name AS branch_name
+    rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
+    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
+    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    CROSS JOIN LATERAL (
+        SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
+            coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
+        FROM task_spend s WHERE s.task_id = t.id
+    ) sp
 WHERE t.org_id = $1 AND t.number = $2
 `
 
@@ -361,10 +376,15 @@ type TaskRow struct {
 	CancellerName *string
 	RepoSlug      *string
 	BranchName    *string
+	Spent         int64
+	InputTokens   int64
+	OutputTokens  int64
+	Cap           int64
 }
 
 // Task finds one of an organization's tasks by its number, with the names of its agent, assigner, canceller,
-// repository and branch.
+// repository and branch, what it spent and the most it may spend: the lower of its agent's cap and its model's, or 0
+// for none.
 func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (TaskRow, error) {
 	row := q.db.QueryRow(ctx, task, orgID, number)
 	var i TaskRow
@@ -395,6 +415,10 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.CancellerName,
 		&i.RepoSlug,
 		&i.BranchName,
+		&i.Spent,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.Cap,
 	)
 	return i, err
 }
@@ -419,10 +443,17 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 
 const tasks = `-- name: Tasks :many
 SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
-    rp.slug AS repo_slug, b.name AS branch_name
+    rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
+    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
+    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    CROSS JOIN LATERAL (
+        SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
+            coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
+        FROM task_spend s WHERE s.task_id = t.id
+    ) sp
 WHERE t.org_id = $1
     AND ($2::uuid IS NULL OR t.agent_id = $2::uuid)
     AND (cardinality($3::text[]) = 0 OR t.state = ANY ($3::text[]))
@@ -451,11 +482,16 @@ type TasksRow struct {
 	CancellerName *string
 	RepoSlug      *string
 	BranchName    *string
+	Spent         int64
+	InputTokens   int64
+	OutputTokens  int64
+	Cap           int64
 }
 
 // Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 // agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
-// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches.
+// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, what each
+// spent and the most it may spend: the lower of its agent's cap and its model's, or 0 for none.
 func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error) {
 	rows, err := q.db.Query(ctx, tasks,
 		arg.OrgID,
@@ -501,6 +537,10 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.CancellerName,
 			&i.RepoSlug,
 			&i.BranchName,
+			&i.Spent,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.Cap,
 		); err != nil {
 			return nil, err
 		}
@@ -526,27 +566,32 @@ func (q *Queries) ThreadBranch(ctx context.Context, id uuid.UUID) (*uuid.UUID, e
 
 const updateAgent = `-- name: UpdateAgent :one
 UPDATE agents SET name = coalesce($1, name), description = coalesce($2, description),
-    instructions = coalesce($3, instructions), updated_at = now()
-WHERE principal_id = $4 AND org_id = $5 AND ($6::bigint < 0 OR version = $6::bigint)
-RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose
+    instructions = coalesce($3, instructions),
+    cap = CASE WHEN $4::boolean THEN $5::bigint ELSE cap END, updated_at = now()
+WHERE principal_id = $6 AND org_id = $7 AND ($8::bigint < 0 OR version = $8::bigint)
+RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose, cap
 `
 
 type UpdateAgentParams struct {
 	Name         *string
 	Description  *string
 	Instructions *string
+	SetCap       bool
+	Cap          *int64
 	ID           uuid.UUID
 	OrgID        uuid.UUID
 	Version      int64
 }
 
-// UpdateAgent changes an agent's fields that aren't null, when it is at version, or at any version when version is
-// negative: none otherwise.
+// UpdateAgent changes an agent's fields that aren't null, and its cap when set_cap says so, to cap or to none for null,
+// when it is at version, or at any version when version is negative: none otherwise.
 func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error) {
 	row := q.db.QueryRow(ctx, updateAgent,
 		arg.Name,
 		arg.Description,
 		arg.Instructions,
+		arg.SetCap,
+		arg.Cap,
 		arg.ID,
 		arg.OrgID,
 		arg.Version,
@@ -567,6 +612,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Model,
 		&i.Secrets,
 		&i.Purpose,
+		&i.Cap,
 	)
 	return i, err
 }

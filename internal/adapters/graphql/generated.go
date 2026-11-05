@@ -54,13 +54,16 @@ type ComplexityRoot struct {
 
 	Agent struct {
 		BuiltIn      func(childComplexity int) int
+		Cap          func(childComplexity int) int
 		CreatedAt    func(childComplexity int) int
 		CreatedBy    func(childComplexity int) int
 		Description  func(childComplexity int) int
+		EffectiveCap func(childComplexity int) int
 		Grants       func(childComplexity int) int
 		ID           func(childComplexity int) int
 		Instructions func(childComplexity int) int
 		Model        func(childComplexity int) int
+		ModelCap     func(childComplexity int) int
 		Name         func(childComplexity int) int
 		Provider     func(childComplexity int) int
 		Secrets      func(childComplexity int) int
@@ -497,6 +500,20 @@ type ComplexityRoot struct {
 		Head   func(childComplexity int) int
 	}
 
+	Model struct {
+		Agents      func(childComplexity int) int
+		Cap         func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		CreatedBy   func(childComplexity int) int
+		Default     func(childComplexity int) int
+		InputPrice  func(childComplexity int) int
+		Name        func(childComplexity int) int
+		OutputPrice func(childComplexity int) int
+		Provider    func(childComplexity int) int
+		UpdatedAt   func(childComplexity int) int
+		Version     func(childComplexity int) int
+	}
+
 	ModelProvider struct {
 		Broken     func(childComplexity int) int
 		CreatedAt  func(childComplexity int) int
@@ -552,8 +569,10 @@ type ComplexityRoot struct {
 		PostChatMessage        func(childComplexity int, repositoryID string, branch string, thread string, input ChatMessageInput) int
 		PostEvent              func(childComplexity int, repositoryID string, name string, branch *string, data any) int
 		PostIssueChatMessage   func(childComplexity int, organizationID string, number int, thread string, input ChatMessageInput) int
+		RecordTaskSpend        func(childComplexity int, input TaskUsageInput) int
 		Redeliver              func(childComplexity int, repositoryID string, environmentID string) int
 		RemoveMember           func(childComplexity int, organizationID string, userID string) int
+		RemoveModel            func(childComplexity int, organizationID string, provider string, model string, expectedVersion *int) int
 		RemoveModelProvider    func(childComplexity int, organizationID string, provider string, expectedVersion *int) int
 		RequestReview          func(childComplexity int, repositoryID string, branch string) int
 		RequestToJoin          func(childComplexity int, slug string, note *string) int
@@ -572,6 +591,7 @@ type ComplexityRoot struct {
 		SetAgentModel          func(childComplexity int, organizationID string, id string, provider *string, model *string, expectedVersion *int) int
 		SetAgentSecrets        func(childComplexity int, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) int
 		SetAnnotation          func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
+		SetModel               func(childComplexity int, organizationID string, provider string, model string, input ModelInput, expectedVersion *int) int
 		SetModelProvider       func(childComplexity int, organizationID string, provider string, secretID string, expectedVersion *int) int
 		StartChatThread        func(childComplexity int, repositoryID string, branch string, input ChatThreadInput) int
 		StartDelivery          func(childComplexity int, repositoryID string, number int) int
@@ -614,6 +634,7 @@ type ComplexityRoot struct {
 		Members                 func(childComplexity int) int
 		MembershipRoleID        func(childComplexity int) int
 		ModelProviders          func(childComplexity int) int
+		Models                  func(childComplexity int) int
 		Name                    func(childComplexity int) int
 		Providers               func(childComplexity int) int
 		Repositories            func(childComplexity int) int
@@ -835,17 +856,21 @@ type ComplexityRoot struct {
 		Branch         func(childComplexity int) int
 		BranchID       func(childComplexity int) int
 		CancelledBy    func(childComplexity int) int
+		Cap            func(childComplexity int) int
 		CreatedAt      func(childComplexity int) int
 		EndedAt        func(childComplexity int) int
 		ID             func(childComplexity int) int
+		InputTokens    func(childComplexity int) int
 		Instructions   func(childComplexity int) int
 		Kind           func(childComplexity int) int
 		Number         func(childComplexity int) int
 		OrganizationID func(childComplexity int) int
+		OutputTokens   func(childComplexity int) int
 		Reason         func(childComplexity int) int
 		RepositoryID   func(childComplexity int) int
 		RepositorySlug func(childComplexity int) int
 		Sha            func(childComplexity int) int
+		Spent          func(childComplexity int) int
 		StartedAt      func(childComplexity int) int
 		State          func(childComplexity int) int
 		Summary        func(childComplexity int) int
@@ -858,6 +883,14 @@ type ComplexityRoot struct {
 	TaskPage struct {
 		NextCursor func(childComplexity int) int
 		Tasks      func(childComplexity int) int
+	}
+
+	TaskSpend struct {
+		Cap          func(childComplexity int) int
+		Ended        func(childComplexity int) int
+		InputTokens  func(childComplexity int) int
+		OutputTokens func(childComplexity int) int
+		Spent        func(childComplexity int) int
 	}
 
 	TranscriptEntry struct {
@@ -937,6 +970,9 @@ type MutationResolver interface {
 	SetAgentSecrets(ctx context.Context, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) (*Agent, error)
 	SetModelProvider(ctx context.Context, organizationID string, provider string, secretID string, expectedVersion *int) (*ModelProvider, error)
 	RemoveModelProvider(ctx context.Context, organizationID string, provider string, expectedVersion *int) (bool, error)
+	SetModel(ctx context.Context, organizationID string, provider string, model string, input ModelInput, expectedVersion *int) (*Model, error)
+	RemoveModel(ctx context.Context, organizationID string, provider string, model string, expectedVersion *int) (bool, error)
+	RecordTaskSpend(ctx context.Context, input TaskUsageInput) (*TaskSpend, error)
 	AssignTask(ctx context.Context, organizationID string, input TaskInput) (*Task, error)
 	CancelTask(ctx context.Context, organizationID string, number int, expectedVersion *int) (*Task, error)
 	AppendTranscriptEntry(ctx context.Context, organizationID string, number int, input TranscriptEntryInput) (*TranscriptEntry, error)
@@ -1016,6 +1052,7 @@ type OrganizationResolver interface {
 	Task(ctx context.Context, obj *Organization, number int) (*Task, error)
 	ModelProviders(ctx context.Context, obj *Organization) ([]*ModelProvider, error)
 	AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error)
+	Models(ctx context.Context, obj *Organization) ([]*Model, error)
 
 	Issues(ctx context.Context, obj *Organization, filter *IssueFilter, first int, after *string) (*IssuePage, error)
 	Issue(ctx context.Context, obj *Organization, number int) (*Issue, error)
@@ -1124,6 +1161,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.BuiltIn(childComplexity), true
+	case "Agent.cap":
+		if e.ComplexityRoot.Agent.Cap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.Cap(childComplexity), true
 	case "Agent.createdAt":
 		if e.ComplexityRoot.Agent.CreatedAt == nil {
 			break
@@ -1142,6 +1185,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Description(childComplexity), true
+	case "Agent.effectiveCap":
+		if e.ComplexityRoot.Agent.EffectiveCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.EffectiveCap(childComplexity), true
 	case "Agent.grants":
 		if e.ComplexityRoot.Agent.Grants == nil {
 			break
@@ -1166,6 +1215,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Model(childComplexity), true
+	case "Agent.modelCap":
+		if e.ComplexityRoot.Agent.ModelCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.ModelCap(childComplexity), true
 	case "Agent.name":
 		if e.ComplexityRoot.Agent.Name == nil {
 			break
@@ -2999,6 +3054,73 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MergeResult.Head(childComplexity), true
 
+	case "Model.agents":
+		if e.ComplexityRoot.Model.Agents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Agents(childComplexity), true
+	case "Model.cap":
+		if e.ComplexityRoot.Model.Cap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Cap(childComplexity), true
+	case "Model.createdAt":
+		if e.ComplexityRoot.Model.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.CreatedAt(childComplexity), true
+	case "Model.createdBy":
+		if e.ComplexityRoot.Model.CreatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.CreatedBy(childComplexity), true
+	case "Model.default":
+		if e.ComplexityRoot.Model.Default == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Default(childComplexity), true
+	case "Model.inputPrice":
+		if e.ComplexityRoot.Model.InputPrice == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.InputPrice(childComplexity), true
+	case "Model.name":
+		if e.ComplexityRoot.Model.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Name(childComplexity), true
+	case "Model.outputPrice":
+		if e.ComplexityRoot.Model.OutputPrice == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.OutputPrice(childComplexity), true
+	case "Model.provider":
+		if e.ComplexityRoot.Model.Provider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Provider(childComplexity), true
+	case "Model.updatedAt":
+		if e.ComplexityRoot.Model.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.UpdatedAt(childComplexity), true
+	case "Model.version":
+		if e.ComplexityRoot.Model.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Model.Version(childComplexity), true
+
 	case "ModelProvider.broken":
 		if e.ComplexityRoot.ModelProvider.Broken == nil {
 			break
@@ -3521,6 +3643,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PostIssueChatMessage(childComplexity, args["organizationId"].(string), args["number"].(int), args["thread"].(string), args["input"].(ChatMessageInput)), true
+	case "Mutation.recordTaskSpend":
+		if e.ComplexityRoot.Mutation.RecordTaskSpend == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_recordTaskSpend_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RecordTaskSpend(childComplexity, args["input"].(TaskUsageInput)), true
 	case "Mutation.redeliver":
 		if e.ComplexityRoot.Mutation.Redeliver == nil {
 			break
@@ -3543,6 +3676,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveMember(childComplexity, args["organizationId"].(string), args["userId"].(string)), true
+	case "Mutation.removeModel":
+		if e.ComplexityRoot.Mutation.RemoveModel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeModel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RemoveModel(childComplexity, args["organizationId"].(string), args["provider"].(string), args["model"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.removeModelProvider":
 		if e.ComplexityRoot.Mutation.RemoveModelProvider == nil {
 			break
@@ -3741,6 +3885,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["input"].(AnnotationInput), args["expectedVersion"].(*int)), true
+	case "Mutation.setModel":
+		if e.ComplexityRoot.Mutation.SetModel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setModel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetModel(childComplexity, args["organizationId"].(string), args["provider"].(string), args["model"].(string), args["input"].(ModelInput), args["expectedVersion"].(*int)), true
 	case "Mutation.setModelProvider":
 		if e.ComplexityRoot.Mutation.SetModelProvider == nil {
 			break
@@ -4044,6 +4199,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.ModelProviders(childComplexity), true
+	case "Organization.models":
+		if e.ComplexityRoot.Organization.Models == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Models(childComplexity), true
 	case "Organization.name":
 		if e.ComplexityRoot.Organization.Name == nil {
 			break
@@ -5106,6 +5267,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.CancelledBy(childComplexity), true
+	case "Task.cap":
+		if e.ComplexityRoot.Task.Cap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Cap(childComplexity), true
 	case "Task.createdAt":
 		if e.ComplexityRoot.Task.CreatedAt == nil {
 			break
@@ -5124,6 +5291,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.ID(childComplexity), true
+	case "Task.inputTokens":
+		if e.ComplexityRoot.Task.InputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.InputTokens(childComplexity), true
 	case "Task.instructions":
 		if e.ComplexityRoot.Task.Instructions == nil {
 			break
@@ -5148,6 +5321,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.OrganizationID(childComplexity), true
+	case "Task.outputTokens":
+		if e.ComplexityRoot.Task.OutputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.OutputTokens(childComplexity), true
 	case "Task.reason":
 		if e.ComplexityRoot.Task.Reason == nil {
 			break
@@ -5172,6 +5351,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.Sha(childComplexity), true
+	case "Task.spent":
+		if e.ComplexityRoot.Task.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Spent(childComplexity), true
 	case "Task.startedAt":
 		if e.ComplexityRoot.Task.StartedAt == nil {
 			break
@@ -5232,6 +5417,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TaskPage.Tasks(childComplexity), true
+
+	case "TaskSpend.cap":
+		if e.ComplexityRoot.TaskSpend.Cap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskSpend.Cap(childComplexity), true
+	case "TaskSpend.ended":
+		if e.ComplexityRoot.TaskSpend.Ended == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskSpend.Ended(childComplexity), true
+	case "TaskSpend.inputTokens":
+		if e.ComplexityRoot.TaskSpend.InputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskSpend.InputTokens(childComplexity), true
+	case "TaskSpend.outputTokens":
+		if e.ComplexityRoot.TaskSpend.OutputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskSpend.OutputTokens(childComplexity), true
+	case "TaskSpend.spent":
+		if e.ComplexityRoot.TaskSpend.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskSpend.Spent(childComplexity), true
 
 	case "TranscriptEntry.body":
 		if e.ComplexityRoot.TranscriptEntry.Body == nil {
@@ -5437,6 +5653,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("LabelInput", ec.unmarshalInputLabelInput),
 			graphql.NewInputUnmarshaler("LabelPatch", ec.unmarshalInputLabelPatch),
 			graphql.NewInputUnmarshaler("MergeInput", ec.unmarshalInputMergeInput),
+			graphql.NewInputUnmarshaler("ModelInput", ec.unmarshalInputModelInput),
 			graphql.NewInputUnmarshaler("NewSecret", ec.unmarshalInputNewSecret),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
@@ -5448,6 +5665,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("SecretChange", ec.unmarshalInputSecretChange),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 			graphql.NewInputUnmarshaler("TaskInput", ec.unmarshalInputTaskInput),
+			graphql.NewInputUnmarshaler("TaskUsageInput", ec.unmarshalInputTaskUsageInput),
 			graphql.NewInputUnmarshaler("TranscriptEntryInput", ec.unmarshalInputTranscriptEntryInput),
 		)
 	}
@@ -5559,6 +5777,8 @@ extend type Organization {
   modelProviders: [ModelProvider!]!
   "The model providers the installation knows, by name: those the organization may add."
   availableModelProviders: [String!]!
+  "The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read."
+  models: [Model!]!
 }
 
 "A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run."
@@ -5572,6 +5792,29 @@ type ModelProvider {
   "Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another."
   broken: Boolean!
   "Who added it; null once they are gone."
+  createdBy: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it, and the most a task on it may spend. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
+type Model {
+  provider: String!
+  "The model's name, as its provider gives it."
+  name: String!
+  "What a million tokens it reads cost, such as 3.00."
+  inputPrice: String!
+  "What a million tokens it writes cost, such as 15.00."
+  outputPrice: String!
+  "The most a task on it may spend, such as 8.00; null for none. An agent may set a lower cap of its own."
+  cap: String
+  "Whether a new agent starts on it; the organization has at most one."
+  default: Boolean!
+  "The agents that run on it, by name."
+  agents: [CommitPrincipal!]!
+  "Who added it; null for one Cobranch added for the agents already on it, and once its adder is gone."
   createdBy: CommitPrincipal
   createdAt: Time!
   updatedAt: Time!
@@ -5607,6 +5850,12 @@ type Agent {
   provider: String
   "The model it runs on, as its provider names it; null while it runs on none."
   model: String
+  "The most a task of it may spend, in US dollars such as 2.00, which caps it below its model's cap; null for none of its own."
+  cap: String
+  "The most a task on its model may spend, in US dollars; null for none."
+  modelCap: String
+  "The most a task of it may spend, the lower of its own cap and its model's, in US dollars; null for none."
+  effectiveCap: String
   "The secrets its tasks receive, by the environment variables they go in."
   secrets: [AgentSecret!]!
 }
@@ -5675,6 +5924,14 @@ type Task {
   endedAt: Time
   "Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+  "What it spent so far, at its organization's prices, in US dollars such as 0.42."
+  spent: String!
+  "The tokens its model read so far."
+  inputTokens: Int!
+  "The tokens its model wrote so far."
+  outputTokens: Int!
+  "The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; null for none. It fails once it reaches it."
+  cap: String
   "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
@@ -5745,6 +6002,44 @@ input AgentPatch {
   name: String
   description: String
   instructions: String
+  "The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); its model's cap stays the most it may spend. Null for none of its own."
+  cap: String
+}
+
+"What a model costs, the most a task on it may spend and whether it is the default; it replaces what the model had."
+input ModelInput {
+  "What a million tokens it reads cost, 0 to 10000, such as 3.00."
+  inputPrice: String!
+  "What a million tokens it writes cost, 0 to 10000, such as 15.00."
+  outputPrice: String!
+  "The most a task on it may spend, 0.000001 to 1000000, such as 8.00; null for none. A model with a cap has a price."
+  cap: String
+  "Whether a new agent starts on it; null for not."
+  default: Boolean
+}
+
+"A call of a task's model, as the model proxy of its pod reports it."
+input TaskUsageInput {
+  "The call's own ID, which a repeated report repeats, so that it counts once."
+  id: ID!
+  "The model the call asked, as its provider names it."
+  model: String!
+  "The tokens the model read, 0 to 100000000."
+  inputTokens: Int!
+  "The tokens the model wrote, 0 to 100000000."
+  outputTokens: Int!
+}
+
+"What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that."
+type TaskSpend {
+  "In US dollars, at its organization's prices, such as 0.42."
+  spent: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  "The most it may spend, in US dollars; null for none."
+  cap: String
+  "Whether it has ended; its token then acts no more."
+  ended: Boolean!
 }
 
 "A secret an agent's tasks receive: the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and one of the organization's secrets or its repositories'."
@@ -5770,11 +6065,11 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or own cap; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
   "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
-  "Puts an agent on a model of a provider the organization added, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
   "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
   setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
@@ -5782,6 +6077,12 @@ extend type Mutation {
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
   "Removes a provider from the organization, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model_provider.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   removeModelProvider(organizationId: ID!, provider: String!, expectedVersion: Int): Boolean!
+  "Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, or changes one of them, and answers it; takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added is refused (BAD_USER_INPUT, model.provider_invalid), a price past 10000 (BAD_USER_INPUT, model.price_invalid), a cap past 1000000 (BAD_USER_INPUT, model.cap_invalid) and a cap of a model without prices (BAD_USER_INPUT, model.cap_unpriced). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
+  setModel(organizationId: ID!, provider: String!, model: String!, input: ModelInput!, expectedVersion: Int): Model!
+  "Removes one of the organization's models, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  removeModel(organizationId: ID!, provider: String!, model: String!, expectedVersion: Int): Boolean!
+  "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
+  recordTaskSpend(input: TaskUsageInput!): TaskSpend!
   "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
@@ -7633,6 +7934,12 @@ func (ec *executionContext) childFields_Agent(ctx context.Context, field graphql
 		return ec.fieldContext_Agent_provider(ctx, field)
 	case "model":
 		return ec.fieldContext_Agent_model(ctx, field)
+	case "cap":
+		return ec.fieldContext_Agent_cap(ctx, field)
+	case "modelCap":
+		return ec.fieldContext_Agent_modelCap(ctx, field)
+	case "effectiveCap":
+		return ec.fieldContext_Agent_effectiveCap(ctx, field)
 	case "secrets":
 		return ec.fieldContext_Agent_secrets(ctx, field)
 	}
@@ -8497,6 +8804,34 @@ func (ec *executionContext) childFields_MergeResult(ctx context.Context, field g
 	return nil, fmt.Errorf("no field named %q was found under type MergeResult", field.Name)
 }
 
+func (ec *executionContext) childFields_Model(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "provider":
+		return ec.fieldContext_Model_provider(ctx, field)
+	case "name":
+		return ec.fieldContext_Model_name(ctx, field)
+	case "inputPrice":
+		return ec.fieldContext_Model_inputPrice(ctx, field)
+	case "outputPrice":
+		return ec.fieldContext_Model_outputPrice(ctx, field)
+	case "cap":
+		return ec.fieldContext_Model_cap(ctx, field)
+	case "default":
+		return ec.fieldContext_Model_default(ctx, field)
+	case "agents":
+		return ec.fieldContext_Model_agents(ctx, field)
+	case "createdBy":
+		return ec.fieldContext_Model_createdBy(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Model_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Model_updatedAt(ctx, field)
+	case "version":
+		return ec.fieldContext_Model_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Model", field.Name)
+}
+
 func (ec *executionContext) childFields_ModelProvider(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "name":
@@ -8577,6 +8912,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_modelProviders(ctx, field)
 	case "availableModelProviders":
 		return ec.fieldContext_Organization_availableModelProviders(ctx, field)
+	case "models":
+		return ec.fieldContext_Organization_models(ctx, field)
 	case "issueKey":
 		return ec.fieldContext_Organization_issueKey(ctx, field)
 	case "issues":
@@ -9019,6 +9356,14 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_endedAt(ctx, field)
 	case "version":
 		return ec.fieldContext_Task_version(ctx, field)
+	case "spent":
+		return ec.fieldContext_Task_spent(ctx, field)
+	case "inputTokens":
+		return ec.fieldContext_Task_inputTokens(ctx, field)
+	case "outputTokens":
+		return ec.fieldContext_Task_outputTokens(ctx, field)
+	case "cap":
+		return ec.fieldContext_Task_cap(ctx, field)
 	case "transcript":
 		return ec.fieldContext_Task_transcript(ctx, field)
 	}
@@ -9033,6 +9378,22 @@ func (ec *executionContext) childFields_TaskPage(ctx context.Context, field grap
 		return ec.fieldContext_TaskPage_nextCursor(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TaskPage", field.Name)
+}
+
+func (ec *executionContext) childFields_TaskSpend(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "spent":
+		return ec.fieldContext_TaskSpend_spent(ctx, field)
+	case "inputTokens":
+		return ec.fieldContext_TaskSpend_inputTokens(ctx, field)
+	case "outputTokens":
+		return ec.fieldContext_TaskSpend_outputTokens(ctx, field)
+	case "cap":
+		return ec.fieldContext_TaskSpend_cap(ctx, field)
+	case "ended":
+		return ec.fieldContext_TaskSpend_ended(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TaskSpend", field.Name)
 }
 
 func (ec *executionContext) childFields_TranscriptEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10491,6 +10852,20 @@ func (ec *executionContext) field_Mutation_postIssueChatMessage_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_recordTaskSpend_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (TaskUsageInput, error) {
+			return ec.unmarshalNTaskUsageInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskUsageInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_redeliver_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10562,6 +10937,44 @@ func (ec *executionContext) field_Mutation_removeModelProvider_args(ctx context.
 		return nil, err
 	}
 	args["expectedVersion"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_removeModel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "provider",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["provider"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "model",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["model"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
 	return args, nil
 }
 
@@ -11118,6 +11531,52 @@ func (ec *executionContext) field_Mutation_setModelProvider_args(ctx context.Con
 		return nil, err
 	}
 	args["expectedVersion"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setModel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "provider",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["provider"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "model",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["model"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ModelInput, error) {
+			return ec.unmarshalNModelInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg4
 	return args, nil
 }
 
@@ -12491,6 +12950,75 @@ func (ec *executionContext) _Agent_model(ctx context.Context, field graphql.Coll
 	)
 }
 func (ec *executionContext) fieldContext_Agent_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_cap(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_cap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_modelCap(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_modelCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ModelCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_modelCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_effectiveCap(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_effectiveCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EffectiveCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_effectiveCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
 }
 
@@ -19729,6 +20257,277 @@ func (ec *executionContext) fieldContext_MergeResult_commit(_ context.Context, f
 	return graphql.NewScalarFieldContext("MergeResult", field, false, false, "String")
 }
 
+func (ec *executionContext) _Model_provider(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_provider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
+}
+
+func (ec *executionContext) _Model_name(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
+}
+
+func (ec *executionContext) _Model_inputPrice(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_inputPrice(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputPrice, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_inputPrice(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
+}
+
+func (ec *executionContext) _Model_outputPrice(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_outputPrice(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputPrice, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_outputPrice(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
+}
+
+func (ec *executionContext) _Model_cap(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_cap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Model_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
+}
+
+func (ec *executionContext) _Model_default(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_default(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Default, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_default(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _Model_agents(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_agents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Agents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CommitPrincipal) graphql.Marshaler {
+			return ec.marshalNCommitPrincipal2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipalᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_agents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Model",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Model_createdBy(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_createdBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Model_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Model",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Model_createdAt(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Model_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Model_version(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Model_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Model_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Model", field, false, false, "Int")
+}
+
 func (ec *executionContext) _ModelProvider_name(ctx context.Context, field graphql.CollectedField, obj *ModelProvider) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20444,6 +21243,138 @@ func (ec *executionContext) fieldContext_Mutation_removeModelProvider(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_removeModelProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setModel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setModel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetModel(ctx, fc.Args["organizationId"].(string), fc.Args["provider"].(string), fc.Args["model"].(string), fc.Args["input"].(ModelInput), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Model) graphql.Marshaler {
+			return ec.marshalNModel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setModel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Model(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setModel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeModel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_removeModel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RemoveModel(ctx, fc.Args["organizationId"].(string), fc.Args["provider"].(string), fc.Args["model"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_removeModel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeModel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_recordTaskSpend(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_recordTaskSpend(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RecordTaskSpend(ctx, fc.Args["input"].(TaskUsageInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TaskSpend) graphql.Marshaler {
+			return ec.marshalNTaskSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskSpend(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_recordTaskSpend(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TaskSpend(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_recordTaskSpend_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -24024,6 +24955,38 @@ func (ec *executionContext) _Organization_availableModelProviders(ctx context.Co
 }
 func (ec *executionContext) fieldContext_Organization_availableModelProviders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Organization", field, true, true, "String")
+}
+
+func (ec *executionContext) _Organization_models(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_models(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().Models(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Model) graphql.Marshaler {
+			return ec.marshalNModel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_models(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Model(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Organization_issueKey(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
@@ -28739,6 +29702,98 @@ func (ec *executionContext) fieldContext_Task_version(_ context.Context, field g
 	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
 }
 
+func (ec *executionContext) _Task_spent(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
+}
+
+func (ec *executionContext) _Task_inputTokens(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_inputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Task_outputTokens(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_outputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Task_cap(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_cap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Task_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
+}
+
 func (ec *executionContext) _Task_transcript(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28836,6 +29891,121 @@ func (ec *executionContext) _TaskPage_nextCursor(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_TaskPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TaskPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _TaskSpend_spent(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskSpend_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskSpend_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _TaskSpend_inputTokens(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskSpend_inputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskSpend_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _TaskSpend_outputTokens(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskSpend_outputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskSpend_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _TaskSpend_cap(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskSpend_cap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TaskSpend_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _TaskSpend_ended(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskSpend_ended(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ended, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskSpend_ended(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Boolean")
 }
 
 func (ec *executionContext) _TranscriptEntry_seq(ctx context.Context, field graphql.CollectedField, obj *TranscriptEntry) (ret graphql.Marshaler) {
@@ -30800,7 +31970,7 @@ func (ec *executionContext) unmarshalInputAgentPatch(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "instructions"}
+	fieldsInOrder := [...]string{"name", "description", "instructions", "cap"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -30828,6 +31998,13 @@ func (ec *executionContext) unmarshalInputAgentPatch(ctx context.Context, obj an
 				return it, err
 			}
 			it.Instructions = data
+		case "cap":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cap"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Cap = graphql.OmittableOf(data)
 		}
 	}
 	return it, nil
@@ -31587,6 +32764,69 @@ func UnmarshalMergeInput(ctx context.Context, raw any) (MergeInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputModelInput(ctx context.Context, obj any) (ModelInput, error) {
+	var it ModelInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inputPrice", "outputPrice", "cap", "default"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inputPrice":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inputPrice"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InputPrice = data
+		case "outputPrice":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("outputPrice"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OutputPrice = data
+		case "cap":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cap"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Cap = data
+		case "default":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("default"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Default = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalModelInput unmarshals raw into the ModelInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalModelInput(ctx context.Context, raw any) (ModelInput, error) {
+	var out ModelInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ModelInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputNewSecret(ctx context.Context, obj any) (NewSecret, error) {
 	var it NewSecret
 	if obj == nil {
@@ -32231,6 +33471,69 @@ func UnmarshalTaskInput(ctx context.Context, raw any) (TaskInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputTaskUsageInput(ctx context.Context, obj any) (TaskUsageInput, error) {
+	var it TaskUsageInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "model", "inputTokens", "outputTokens"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "model":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("model"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Model = data
+		case "inputTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inputTokens"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InputTokens = data
+		case "outputTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("outputTokens"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OutputTokens = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalTaskUsageInput unmarshals raw into the TaskUsageInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalTaskUsageInput(ctx context.Context, raw any) (TaskUsageInput, error) {
+	var out TaskUsageInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "TaskUsageInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputTranscriptEntryInput(ctx context.Context, obj any) (TranscriptEntryInput, error) {
 	var it TranscriptEntryInput
 	if obj == nil {
@@ -32406,6 +33709,21 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "model":
 			out.Values[i] = ec._Agent_model(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "cap":
+			out.Values[i] = ec._Agent_cap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "modelCap":
+			out.Values[i] = ec._Agent_modelCap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "effectiveCap":
+			out.Values[i] = ec._Agent_effectiveCap(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -35180,6 +36498,89 @@ func (ec *executionContext) _MergeResult(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var modelImplementors = []string{"Model"}
+
+func (ec *executionContext) _Model(ctx context.Context, sel ast.SelectionSet, obj *Model) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Model")
+		case "provider":
+			out.Values[i] = ec._Model_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._Model_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inputPrice":
+			out.Values[i] = ec._Model_inputPrice(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outputPrice":
+			out.Values[i] = ec._Model_outputPrice(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cap":
+			out.Values[i] = ec._Model_cap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "default":
+			out.Values[i] = ec._Model_default(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agents":
+			out.Values[i] = ec._Model_agents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdBy":
+			out.Values[i] = ec._Model_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Model_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Model_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._Model_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var modelProviderImplementors = []string{"ModelProvider"}
 
 func (ec *executionContext) _ModelProvider(ctx context.Context, sel ast.SelectionSet, obj *ModelProvider) graphql.Marshaler {
@@ -35347,6 +36748,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "removeModelProvider":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeModelProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setModel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setModel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "removeModel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeModel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recordTaskSpend":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_recordTaskSpend(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -35998,6 +37420,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_availableModelProviders(ctx, field, obj)
+				})
+		case "models":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_models(ctx, field, obj)
 				})
 		case "issueKey":
 			out.Values[i] = ec._Organization_issueKey(ctx, field, obj)
@@ -37503,6 +38931,26 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "spent":
+			out.Values[i] = ec._Task_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "inputTokens":
+			out.Values[i] = ec._Task_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "outputTokens":
+			out.Values[i] = ec._Task_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "cap":
+			out.Values[i] = ec._Task_cap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "transcript":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, true,
@@ -37545,6 +38993,59 @@ func (ec *executionContext) _TaskPage(ctx context.Context, sel ast.SelectionSet,
 		case "nextCursor":
 			out.Values[i] = ec._TaskPage_nextCursor(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var taskSpendImplementors = []string{"TaskSpend"}
+
+func (ec *executionContext) _TaskSpend(ctx context.Context, sel ast.SelectionSet, obj *TaskSpend) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, taskSpendImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TaskSpend")
+		case "spent":
+			out.Values[i] = ec._TaskSpend_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inputTokens":
+			out.Values[i] = ec._TaskSpend_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outputTokens":
+			out.Values[i] = ec._TaskSpend_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cap":
+			out.Values[i] = ec._TaskSpend_cap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "ended":
+			out.Values[i] = ec._TaskSpend_ended(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -38656,6 +40157,22 @@ func (ec *executionContext) marshalNCommitPage2ᚖcobranchᚗdevᚋinternalᚋad
 	return ec._CommitPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNCommitPrincipal2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipalᚄ(ctx context.Context, sel ast.SelectionSet, v []*CommitPrincipal) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx context.Context, sel ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "CommitPrincipal!")
@@ -39327,6 +40844,35 @@ func (ec *executionContext) marshalNMergeResult2ᚖcobranchᚗdevᚋinternalᚋa
 	return ec._MergeResult(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNModel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelᚄ(ctx context.Context, sel ast.SelectionSet, v []*Model) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModel(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModel(ctx context.Context, sel ast.SelectionSet, v *Model) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Model!")
+		return graphql.Null
+	}
+	return ec._Model(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModelInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelInput(ctx context.Context, v any) (ModelInput, error) {
+	res, err := ec.unmarshalInputModelInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNModelProvider2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelProviderᚄ(ctx context.Context, sel ast.SelectionSet, v []*ModelProvider) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -39890,6 +41436,14 @@ func (ec *executionContext) marshalNTaskPage2ᚖcobranchᚗdevᚋinternalᚋadap
 	return ec._TaskPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNTaskSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskSpend(ctx context.Context, sel ast.SelectionSet, v *TaskSpend) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "TaskSpend!")
+		return graphql.Null
+	}
+	return ec._TaskSpend(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNTaskState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskState(ctx context.Context, v any) (TaskState, error) {
 	var res TaskState
 	err := res.UnmarshalGQL(v)
@@ -39898,6 +41452,11 @@ func (ec *executionContext) unmarshalNTaskState2cobranchᚗdevᚋinternalᚋadap
 
 func (ec *executionContext) marshalNTaskState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskState(ctx context.Context, sel ast.SelectionSet, v TaskState) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) unmarshalNTaskUsageInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskUsageInput(ctx context.Context, v any) (TaskUsageInput, error) {
+	res, err := ec.unmarshalInputTaskUsageInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v any) (time.Time, error) {

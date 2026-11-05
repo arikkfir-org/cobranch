@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
 	"cobranch.dev/internal/services/agents"
 )
@@ -67,6 +68,7 @@ func agent(a agents.Agent) Agent {
 	if a.Provider != "" {
 		out.Provider, out.Model = &a.Provider, &a.Model
 	}
+	out.Cap, out.ModelCap, out.EffectiveCap = optionalUSD(a.Cap), optionalUSD(a.ModelCap), optionalUSD(a.EffectiveCap())
 	out.Secrets = make(map[string]uuid.UUID, len(a.Secrets))
 	maps.Copy(out.Secrets, a.Secrets)
 	return out
@@ -76,7 +78,8 @@ func task(t agents.Task) Task {
 	out := Task{Id: t.ID, Number: t.Number, Agent: *agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
 		Title: t.Title, Instructions: t.Instructions, RepositoryId: optionalID(t.RepoID), RepositorySlug: optional(t.RepoSlug),
 		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), Sha: optional(t.SHA), State: TaskState(t.State),
-		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: t.Version}
+		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), Spent: usd(t.Spent), InputTokens: t.InputTokens,
+		OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap), CreatedAt: t.CreatedAt.UTC(), Version: t.Version}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()
 		out.StartedAt = &at
@@ -192,6 +195,9 @@ func (a api) UpdateAgent(ctx context.Context, req UpdateAgentRequestObject) (Upd
 		return nil, err
 	}
 	c := agents.Change{Name: req.Body.Name, Description: req.Body.Description, Instructions: req.Body.Instructions}
+	if c.Cap, err = capOrClear(req.Body.Cap); err != nil {
+		return nil, err
+	}
 	changed, err := a.agents.UpdateAgent(ctx, v, orgID, req.AgentID, match, c)
 	if err != nil {
 		return nil, fail(err, "agent")
@@ -201,6 +207,18 @@ func (a api) UpdateAgent(ctx context.Context, req UpdateAgentRequestObject) (Upd
 		return nil, err
 	}
 	return UpdateAgent200JSONResponse{Body: body, Headers: UpdateAgent200ResponseHeaders{ETag: tag}}, nil
+}
+
+// capOrClear is the cap a merge patch's field names, 0 for null, or nil when it is left out.
+func capOrClear(field nullable.Nullable[string]) (*agents.USD, error) {
+	switch {
+	case !field.IsSpecified():
+		return nil, nil
+	case field.IsNull():
+		return new(agents.USD(0)), nil
+	}
+	u, err := parseUSD(field.MustGet(), "cap", "agent.cap_invalid")
+	return &u, err
 }
 
 // DeleteAgent deletes an agent with its grants and tasks.

@@ -144,11 +144,17 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (int64, erro
 const taskByID = `-- name: TaskByID :one
 SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug, o.issue_key, ag.instructions AS agent_instructions,
-    i.number AS issue_number
+    i.number AS issue_number, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
+    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     LEFT JOIN issues i ON i.id = t.issue_id
+    CROSS JOIN LATERAL (
+        SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
+            coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
+        FROM task_spend s WHERE s.task_id = t.id
+    ) sp
 WHERE t.id = $1
 `
 
@@ -163,6 +169,10 @@ type TaskByIDRow struct {
 	IssueKey          string
 	AgentInstructions string
 	IssueNumber       *int32
+	Spent             int64
+	InputTokens       int64
+	OutputTokens      int64
+	Cap               int64
 }
 
 // TaskByID finds a task by its ID, with the names Task gives it, its organization's slug and issue key, its agent's
@@ -201,6 +211,10 @@ func (q *Queries) TaskByID(ctx context.Context, id uuid.UUID) (TaskByIDRow, erro
 		&i.IssueKey,
 		&i.AgentInstructions,
 		&i.IssueNumber,
+		&i.Spent,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.Cap,
 	)
 	return i, err
 }

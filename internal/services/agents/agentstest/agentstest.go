@@ -48,6 +48,8 @@ type Store struct {
 	providers map[uuid.UUID]map[string]agents.ModelProvider
 	secrets   map[uuid.UUID]Secret
 	entries   map[uuid.UUID][]agents.Entry
+	models    map[modelKey]agents.Model
+	calls     map[uuid.UUID][]uuid.UUID
 	// OrgSlugs are the organizations' slugs, by ID.
 	OrgSlugs map[uuid.UUID]string
 	// IssueOf answers the key and number that name an issue a task works on, by its ID; nil names none.
@@ -65,7 +67,8 @@ func NewStore() *Store {
 		RepoRoles: []orgs.Role{orgstest.Reader, orgstest.Developer, orgstest.Maintainer, orgstest.Automation},
 		Repos:     map[uuid.UUID]Repository{}, Branches: map[uuid.UUID]Branch{}, Threads: map[uuid.UUID]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{},
-		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}}
+		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}, models: map[modelKey]agents.Model{},
+		calls: map[uuid.UUID][]uuid.UUID{}}
 }
 
 // AddAgent records a, as CreateAgent would without checking its name, and answers it as the store keeps it.
@@ -126,7 +129,7 @@ func (s *Store) Agents(_ context.Context, orgID uuid.UUID) ([]agents.Agent, erro
 	var out []agents.Agent
 	for _, a := range s.agents {
 		if a.OrgID == orgID {
-			out = append(out, a)
+			out = append(out, s.capped(a))
 		}
 	}
 	slices.SortFunc(out, func(a, b agents.Agent) int {
@@ -143,7 +146,7 @@ func (s *Store) Agent(_ context.Context, orgID, id uuid.UUID) (agents.Agent, err
 	if !ok || a.OrgID != orgID {
 		return agents.Agent{}, orgs.ErrNotFound
 	}
-	return a, nil
+	return s.capped(a), nil
 }
 
 // taken reports whether another of the organization's agents than id has the name, in any case.
@@ -164,6 +167,11 @@ func (s *Store) CreateAgent(_ context.Context, actor uuid.UUID, a agents.Agent) 
 		return agents.ErrNameTaken
 	}
 	a.CreatedAt, a.UpdatedAt, a.Version = s.Now, s.Now, 1
+	for k, m := range s.models {
+		if k.org == a.OrgID && m.Default {
+			a.Provider, a.Model = m.Provider, m.Name
+		}
+	}
 	slices.SortStableFunc(a.Grants, func(x, y agents.Grant) int { return cmp.Compare(x.RepoSlug, y.RepoSlug) })
 	s.agents[a.ID] = a
 	s.Names[a.ID] = a.Name
@@ -189,12 +197,15 @@ func (s *Store) UpdateAgent(_ context.Context, actor, orgID, id uuid.UUID, versi
 			*field = *value
 		}
 	}
+	if c.Cap != nil {
+		a.Cap = *c.Cap
+	}
 	a.UpdatedAt = s.Now
 	a.Version++
 	s.agents[id] = a
 	s.Names[id] = a.Name
 	s.Events = append(s.Events, "agent.updated "+a.Name+" by "+s.Names[actor])
-	return a, nil
+	return s.capped(a), nil
 }
 
 // DeleteAgent deletes one of the organization's agents at version, with its tasks.
@@ -249,7 +260,7 @@ func (s *Store) Tasks(_ context.Context, orgID uuid.UUID, f agents.TaskFilter, r
 			(t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && !slices.Contains(hidden, t.Kind) &&
 			(f.Before == 0 || t.Number < f.Before)
 		if match && len(out) < limit {
-			out = append(out, t)
+			out = append(out, s.spending(t))
 		}
 	}
 	return out, nil
@@ -268,7 +279,7 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 	if i < 0 {
 		return agents.Task{}, orgs.ErrNotFound
 	}
-	return s.tasks[i], nil
+	return s.spending(s.tasks[i]), nil
 }
 
 // TaskByID finds a task by its ID, with its organization's slug from OrgSlugs, its agent's instructions and email, and

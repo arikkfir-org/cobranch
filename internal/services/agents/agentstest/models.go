@@ -133,7 +133,7 @@ func (s *Store) changeAgent(actor, orgID, id uuid.UUID, version int64, event str
 	a.Version++
 	s.agents[id] = a
 	s.Events = append(s.Events, event+" "+a.Name+" by "+s.Names[actor])
-	return a, nil
+	return s.capped(a), nil
 }
 
 // SetModel puts one of the organization's agents on a model of a provider it added, or on none.
@@ -143,6 +143,9 @@ func (s *Store) SetModel(_ context.Context, actor, orgID, id uuid.UUID, version 
 	return s.changeAgent(actor, orgID, id, version, "agent.model_set", func(a *agents.Agent) error {
 		if _, ok := s.providers[orgID][provider]; provider != "" && !ok {
 			return &orgs.ValidationError{Field: "provider", Code: "agent.provider_invalid", Message: "the organization hasn't added this provider"}
+		}
+		if _, ok := s.models[modelKey{orgID, provider, model}]; provider != "" && !ok {
+			return &orgs.ValidationError{Field: "model", Code: "agent.model_invalid", Message: "the organization hasn't added this model"}
 		}
 		a.Provider, a.Model = provider, model
 		return nil

@@ -11,6 +11,16 @@ import (
 	"github.com/google/uuid"
 )
 
+const deleteModel = `-- name: DeleteModel :exec
+DELETE FROM models WHERE org_id = $1 AND provider = $2 AND model = $3
+`
+
+// DeleteModel removes a model from an organization.
+func (q *Queries) DeleteModel(ctx context.Context, orgID uuid.UUID, provider string, model string) error {
+	_, err := q.db.Exec(ctx, deleteModel, orgID, provider, model)
+	return err
+}
+
 const deleteModelProvider = `-- name: DeleteModelProvider :exec
 DELETE FROM model_providers WHERE org_id = $1 AND provider = $2
 `
@@ -19,6 +29,41 @@ DELETE FROM model_providers WHERE org_id = $1 AND provider = $2
 func (q *Queries) DeleteModelProvider(ctx context.Context, orgID uuid.UUID, provider string) error {
 	_, err := q.db.Exec(ctx, deleteModelProvider, orgID, provider)
 	return err
+}
+
+const insertModel = `-- name: InsertModel :execrows
+INSERT INTO models (org_id, provider, model, input_price, output_price, cap, is_default, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (org_id, provider, model) DO NOTHING
+`
+
+type InsertModelParams struct {
+	OrgID       uuid.UUID
+	Provider    string
+	Model       string
+	InputPrice  int64
+	OutputPrice int64
+	Cap         *int64
+	IsDefault   bool
+	CreatedBy   *uuid.UUID
+}
+
+// InsertModel adds a model to an organization, unless it has it.
+func (q *Queries) InsertModel(ctx context.Context, arg InsertModelParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertModel,
+		arg.OrgID,
+		arg.Provider,
+		arg.Model,
+		arg.InputPrice,
+		arg.OutputPrice,
+		arg.Cap,
+		arg.IsDefault,
+		arg.CreatedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertModelProvider = `-- name: InsertModelProvider :execrows
@@ -47,6 +92,18 @@ func (q *Queries) InsertModelProvider(ctx context.Context, arg InsertModelProvid
 	return result.RowsAffected(), nil
 }
 
+const lockModel = `-- name: LockModel :one
+SELECT version FROM models WHERE org_id = $1 AND provider = $2 AND model = $3 FOR UPDATE
+`
+
+// LockModel holds one of an organization's models until the transaction ends, and answers its version.
+func (q *Queries) LockModel(ctx context.Context, orgID uuid.UUID, provider string, model string) (int64, error) {
+	row := q.db.QueryRow(ctx, lockModel, orgID, provider, model)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
 const lockModelProvider = `-- name: LockModelProvider :one
 SELECT version FROM model_providers WHERE org_id = $1 AND provider = $2 FOR UPDATE
 `
@@ -57,6 +114,88 @@ func (q *Queries) LockModelProvider(ctx context.Context, orgID uuid.UUID, provid
 	var version int64
 	err := row.Scan(&version)
 	return version, err
+}
+
+const model = `-- name: Model :one
+SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.cap, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
+FROM models m LEFT JOIN principals c ON c.id = m.created_by
+WHERE m.org_id = $1 AND m.provider = $2 AND m.model = $3
+`
+
+type ModelRow struct {
+	Model       Model
+	CreatorName *string
+}
+
+// Model finds one of an organization's models, with the name of its creator.
+func (q *Queries) Model(ctx context.Context, orgID uuid.UUID, provider string, name string) (ModelRow, error) {
+	row := q.db.QueryRow(ctx, model, orgID, provider, name)
+	var i ModelRow
+	err := row.Scan(
+		&i.Model.OrgID,
+		&i.Model.Provider,
+		&i.Model.Model,
+		&i.Model.InputPrice,
+		&i.Model.OutputPrice,
+		&i.Model.Cap,
+		&i.Model.IsDefault,
+		&i.Model.CreatedBy,
+		&i.Model.CreatedAt,
+		&i.Model.UpdatedAt,
+		&i.Model.Version,
+		&i.CreatorName,
+	)
+	return i, err
+}
+
+const modelAgentCount = `-- name: ModelAgentCount :one
+SELECT count(*) FROM agents WHERE org_id = $1 AND provider = $2 AND model = $3
+`
+
+// ModelAgentCount counts an organization's agents that run on one of its models.
+func (q *Queries) ModelAgentCount(ctx context.Context, orgID uuid.UUID, provider *string, model *string) (int64, error) {
+	row := q.db.QueryRow(ctx, modelAgentCount, orgID, provider, model)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const modelAgents = `-- name: ModelAgents :many
+SELECT principal_id, name, provider::text AS provider, model::text AS model FROM agents
+WHERE org_id = $1 AND provider IS NOT NULL ORDER BY lower(name), principal_id
+`
+
+type ModelAgentsRow struct {
+	PrincipalID uuid.UUID
+	Name        string
+	Provider    string
+	Model       string
+}
+
+// ModelAgents lists the agents of an organization that run on its models, by name, with the model each runs on.
+func (q *Queries) ModelAgents(ctx context.Context, orgID uuid.UUID) ([]ModelAgentsRow, error) {
+	rows, err := q.db.Query(ctx, modelAgents, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ModelAgentsRow
+	for rows.Next() {
+		var i ModelAgentsRow
+		if err := rows.Scan(
+			&i.PrincipalID,
+			&i.Name,
+			&i.Provider,
+			&i.Model,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const modelProvider = `-- name: ModelProvider :one
@@ -120,6 +259,51 @@ func (q *Queries) ModelProviders(ctx context.Context, orgID uuid.UUID) ([]ModelP
 			&i.ModelProvider.UpdatedAt,
 			&i.ModelProvider.Version,
 			&i.SecretName,
+			&i.CreatorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const models = `-- name: Models :many
+SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.cap, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
+FROM models m LEFT JOIN principals c ON c.id = m.created_by
+WHERE m.org_id = $1 ORDER BY m.provider, m.model
+`
+
+type ModelsRow struct {
+	Model       Model
+	CreatorName *string
+}
+
+// Models lists an organization's models, by provider and name, with the names of their creators.
+func (q *Queries) Models(ctx context.Context, orgID uuid.UUID) ([]ModelsRow, error) {
+	rows, err := q.db.Query(ctx, models, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ModelsRow
+	for rows.Next() {
+		var i ModelsRow
+		if err := rows.Scan(
+			&i.Model.OrgID,
+			&i.Model.Provider,
+			&i.Model.Model,
+			&i.Model.InputPrice,
+			&i.Model.OutputPrice,
+			&i.Model.Cap,
+			&i.Model.IsDefault,
+			&i.Model.CreatedBy,
+			&i.Model.CreatedAt,
+			&i.Model.UpdatedAt,
+			&i.Model.Version,
 			&i.CreatorName,
 		); err != nil {
 			return nil, err
@@ -218,6 +402,18 @@ func (q *Queries) SetAgentSecrets(ctx context.Context, arg SetAgentSecretsParams
 	return version, err
 }
 
+const shareModel = `-- name: ShareModel :one
+SELECT version FROM models WHERE org_id = $1 AND provider = $2 AND model = $3 FOR SHARE
+`
+
+// ShareModel holds one of an organization's models against removal until the transaction ends.
+func (q *Queries) ShareModel(ctx context.Context, orgID uuid.UUID, provider string, model string) (int64, error) {
+	row := q.db.QueryRow(ctx, shareModel, orgID, provider, model)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
 const shareModelProvider = `-- name: ShareModelProvider :one
 SELECT version FROM model_providers WHERE org_id = $1 AND provider = $2 FOR SHARE
 `
@@ -228,6 +424,58 @@ func (q *Queries) ShareModelProvider(ctx context.Context, orgID uuid.UUID, provi
 	var version int64
 	err := row.Scan(&version)
 	return version, err
+}
+
+const startOnDefaultModel = `-- name: StartOnDefaultModel :exec
+UPDATE agents a SET provider = m.provider, model = m.model
+FROM models m WHERE a.principal_id = $1 AND m.org_id = a.org_id AND m.is_default
+`
+
+// StartOnDefaultModel puts a new agent of an organization on the organization's default model, when it has one.
+func (q *Queries) StartOnDefaultModel(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, startOnDefaultModel, id)
+	return err
+}
+
+const unsetDefaultModel = `-- name: UnsetDefaultModel :exec
+UPDATE models SET is_default = false, updated_at = now()
+WHERE org_id = $1 AND is_default AND NOT (provider = $2 AND model = $3)
+`
+
+// UnsetDefaultModel makes none of an organization's models but the one named its default.
+func (q *Queries) UnsetDefaultModel(ctx context.Context, orgID uuid.UUID, provider string, model string) error {
+	_, err := q.db.Exec(ctx, unsetDefaultModel, orgID, provider, model)
+	return err
+}
+
+const updateModel = `-- name: UpdateModel :exec
+UPDATE models SET input_price = $1, output_price = $2, cap = $3, is_default = $4,
+    updated_at = now()
+WHERE org_id = $5 AND provider = $6 AND model = $7
+`
+
+type UpdateModelParams struct {
+	InputPrice  int64
+	OutputPrice int64
+	Cap         *int64
+	IsDefault   bool
+	OrgID       uuid.UUID
+	Provider    string
+	Model       string
+}
+
+// UpdateModel changes what one of an organization's models costs, its cap and whether it is the default.
+func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) error {
+	_, err := q.db.Exec(ctx, updateModel,
+		arg.InputPrice,
+		arg.OutputPrice,
+		arg.Cap,
+		arg.IsDefault,
+		arg.OrgID,
+		arg.Provider,
+		arg.Model,
+	)
+	return err
 }
 
 const updateModelProvider = `-- name: UpdateModelProvider :exec

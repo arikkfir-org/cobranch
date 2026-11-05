@@ -20,7 +20,8 @@ import (
 	"cobranch.dev/internal/services/taskrunner"
 )
 
-// taskPodFixture is Acme with Scout on Anthropic's model, a key for it, and a secret of Scout's.
+// taskPodFixture is Acme with Scout on Anthropic's model, at $3 and $15 a million tokens and a cap of $1 a task, a key
+// for it, and a secret of Scout's.
 type taskPodFixture struct {
 	*agentFixture
 	s          *TaskPodStore
@@ -34,6 +35,10 @@ func newTaskPodFixture(t *testing.T) *taskPodFixture {
 	f.s = NewTaskPodStore(f.pool)
 	f.key, f.token = f.addSecret(t, uuid.Nil, "anthropic-key"), f.addSecret(t, uuid.Nil, "token")
 	if _, _, err := f.a.SetModelProvider(ctx, f.olivia, f.acme.ID, "anthropic", f.key, agents.NoVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.a.PutModel(ctx, f.olivia, f.acme.ID, "anthropic", "test-model", agents.ModelInput{InputPrice: 3_000_000,
+		OutputPrice: 15_000_000, Cap: 1_000_000}, agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.a.SetModel(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, "anthropic", "test-model"); err != nil {
