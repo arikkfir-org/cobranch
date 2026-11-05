@@ -4905,6 +4905,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/diff-counts:
+    get:
+      operationId: getBranchDiffCounts
+      summary: >-
+        How much the branch's diff changes, without its files: the files and lines it adds and removes, counted in
+        full, which the Console shows on the branch's Files changed tab; takes repo.read. Main merges into nothing and
+        answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The branch's diff's counts.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiffCounts"
+        "304":
+          description: The counts are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/viewed:
     get:
       operationId: getViewedFiles
@@ -10294,6 +10331,31 @@ components:
         deletions:
           type: integer
           description: The lines it removes, in every file it changes, those it left out included.
+    DiffCounts:
+      type: object
+      description: How much a diff changes, without its files, counted in full whatever the limits of a diff.
+      required: [head, files, additions, deletions]
+      properties:
+        base:
+          type: string
+          description: >-
+            The commit it runs from: a branch's merge base with its base's tip. Absent when the branch shares no
+            history with its base, so the diff runs from the empty tree.
+        baseTip:
+          type: string
+          description: The branch's base's tip, which its merge base is reckoned from.
+        head:
+          type: string
+          description: The commit it runs to.
+        files:
+          type: integer
+          description: The files it changes.
+        additions:
+          type: integer
+          description: The lines it adds.
+        deletions:
+          type: integer
+          description: The lines it removes.
     FileDiff:
       type: object
       description: One file's change.

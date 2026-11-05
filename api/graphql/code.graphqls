@@ -35,6 +35,8 @@ extend type Repository {
   blame(ref: String! = "main", path: String!): Blame
   "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
   branchDiff(name: String!): Diff
+  "How much the branch of name's diff, as branchDiff reckons it, changes, without its files: the files and lines it adds and removes, counted in full; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. An installation without a Git server answers UNAVAILABLE."
+  branchDiffCounts(name: String!): DiffCounts
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
   commitDiff(sha: String!): Diff
   "The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous)."
@@ -196,6 +198,22 @@ type File {
   text: String
   "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
   html: String
+}
+
+"How much a diff changes, without its files, counted in full whatever the limits of a diff."
+type DiffCounts {
+  "The commit it runs from: a branch's merge base with its base's tip. Null when the branch shares no history with its base, so the diff runs from the empty tree."
+  base: String
+  "The branch's base's tip, which its merge base is reckoned from."
+  baseTip: String
+  "The commit it runs to."
+  head: String!
+  "The files it changes."
+  files: Int!
+  "The lines it adds."
+  additions: Int!
+  "The lines it removes."
+  deletions: Int!
 }
 
 "A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it."

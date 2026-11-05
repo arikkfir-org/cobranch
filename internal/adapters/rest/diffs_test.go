@@ -60,10 +60,40 @@ func TestDiffAPI(t *testing.T) {
 	})
 }
 
+func TestDiffCountsAPI(t *testing.T) {
+	const feature = "/v1/orgs/acme/repos/website/branches/feature/diff-counts"
+	runOrgCases(t, []orgCase{
+		{name: "a branch's files and lines, without them", viewer: olivia, method: "GET", path: fixed(feature), wantStatus: 200,
+			check: diffCounted(DiffCounts{Base: optional(shaOf("c")), BaseTip: optional(shaOf("c")), Head: shaOf("d"), Files: 7, Additions: 2, Deletions: 6})},
+		{name: "a branch with nothing to merge counts none", viewer: olivia, method: "GET",
+			path: fixed("/v1/orgs/acme/repos/website/branches/feature%2Flogin/diff-counts"), wantStatus: 200,
+			check: diffCounted(DiffCounts{Base: optional(shaOf("c")), BaseTip: optional(shaOf("c")), Head: shaOf("c")})},
+		{name: "main merges into nothing", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/main/diff-counts"),
+			wantStatus: 400, wantCode: "branch.default"},
+		{name: "a branch that isn't", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/gone/diff-counts"),
+			wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a Member who doesn't read it counts nothing", viewer: maxim, method: "GET", path: fixed(feature), wantStatus: 404,
+			wantCode: "repository.not_found"},
+		{name: "no one signed in", method: "GET", path: fixed(feature), wantStatus: 401, wantCode: "auth.unauthenticated"},
+	})
+}
+
+// diffCounted checks that a diff's counts are want.
+func diffCounted(want DiffCounts) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, _ *orgFixture, body []byte) {
+		got := decode[DiffCounts](t, body)
+		if text(got.Base) != text(want.Base) || text(got.BaseTip) != text(want.BaseTip) || got.Head != want.Head || got.Files != want.Files ||
+			got.Additions != want.Additions || got.Deletions != want.Deletions {
+			t.Errorf("counts = %s, want %+v", body, want)
+		}
+	}
+}
+
 func TestDiffAPIRevalidates(t *testing.T) {
 	tests := []struct{ name, path string }{
 		{name: "a branch's", path: "/v1/orgs/acme/repos/website/branches/feature/diff"},
 		{name: "a commit's", path: "/v1/orgs/acme/repos/website/commits/" + shaOf("b") + "/diff"},
+		{name: "a branch's counts", path: "/v1/orgs/acme/repos/website/branches/feature/diff-counts"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

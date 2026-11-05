@@ -652,6 +652,22 @@ type Diff struct {
 	Deletions int `json:"deletions"`
 }
 
+// How much a diff changes, without its files, counted in full whatever the limits of a diff.
+type DiffCounts struct {
+	// The commit it runs from: a branch's merge base with its base's tip. Null when the branch shares no history with its base, so the diff runs from the empty tree.
+	Base *string `json:"base,omitempty"`
+	// The branch's base's tip, which its merge base is reckoned from.
+	BaseTip *string `json:"baseTip,omitempty"`
+	// The commit it runs to.
+	Head string `json:"head"`
+	// The files it changes.
+	Files int `json:"files"`
+	// The lines it adds.
+	Additions int `json:"additions"`
+	// The lines it removes.
+	Deletions int `json:"deletions"`
+}
+
 // One of a hunk's lines, without its newline.
 type DiffLine struct {
 	Kind LineKind `json:"kind"`
@@ -1534,6 +1550,8 @@ type Repository struct {
 	Blame *Blame `json:"blame,omitempty"`
 	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
+	// How much the branch of name's diff, as branchDiff reckons it, changes, without its files: the files and lines it adds and removes, counted in full; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. An installation without a Git server answers UNAVAILABLE.
+	BranchDiffCounts *DiffCounts `json:"branchDiffCounts,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
 	// The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous).

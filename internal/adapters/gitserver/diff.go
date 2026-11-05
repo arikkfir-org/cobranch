@@ -24,10 +24,12 @@ var diffArgs = []string{"--find-renames", "--no-color", "--no-ext-diff", "--no-t
 
 // readDiff answers the change to the request's commit from the commit its base names, or from the empty tree without
 // one, or, when it asks for the merge base, from the merge base of the two: the files Git's raw output lists, with
-// their counts, and their hunks up to the limits of a diff.
+// their counts, and their hunks up to the limits of a diff; or, when it asks for counts, no files, each counted as
+// left out, which reads git diff's numstat output alone.
 func (s *Server) readDiff(w http.ResponseWriter, r *http.Request, o objects) error {
 	ctx := r.Context()
 	baseRef, mergeBase := r.URL.Query().Get("base"), r.URL.Query().Get("mergeBase") == "true"
+	countsOnly := r.URL.Query().Get("counts") == "true"
 	if (baseRef != "" && code.ValidateRef(baseRef) != nil) || (mergeBase && baseRef == "") {
 		problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "base must be a ref the API takes, and mergeBase needs one"})
 		return nil
@@ -42,17 +44,33 @@ func (s *Server) readDiff(w http.ResponseWriter, r *http.Request, o objects) err
 			return err
 		}
 	}
-	files, totals, err := s.diffFiles(ctx, o.dir, from, o.commit)
-	if err != nil {
-		return err
-	}
-	d.Additions, d.Deletions, d.FilesLeftOut = totals.additions, totals.deletions, totals.files-len(files)
-	if d.Files, err = s.diffHunks(ctx, o.dir, from, o.commit, files); err != nil {
+	if d, err = s.diffOf(ctx, o.dir, d, from, countsOnly); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(gitinternal.DiffOf(d)) // a caller gone away gets nothing more
 	return nil
+}
+
+// diffOf is d, which runs from from, with its counts and, unless countsOnly, its files and their hunks.
+func (s *Server) diffOf(ctx context.Context, dir string, d code.Diff, from string, countsOnly bool) (code.Diff, error) {
+	if countsOnly {
+		totals, err := s.diffCounts(ctx, dir, nil, true, from, d.Head)
+		if err != nil {
+			return code.Diff{}, err
+		}
+		d.Additions, d.Deletions, d.FilesLeftOut = totals.additions, totals.deletions, totals.files
+		return d, nil
+	}
+	files, totals, err := s.diffFiles(ctx, dir, from, d.Head)
+	if err != nil {
+		return code.Diff{}, err
+	}
+	d.Additions, d.Deletions, d.FilesLeftOut = totals.additions, totals.deletions, totals.files-len(files)
+	if d.Files, err = s.diffHunks(ctx, dir, from, d.Head, files); err != nil {
+		return code.Diff{}, err
+	}
+	return d, nil
 }
 
 // diffEnds resolves the commits a diff runs between: its head, the request's commit, and its base, the commit
@@ -124,6 +142,17 @@ func (s *Server) diffFiles(ctx context.Context, dir, from, to string) ([]code.Fi
 	}, raw...); err != nil {
 		return nil, diffTotals{}, err
 	}
+	totals, err := s.diffCounts(ctx, dir, files, limited, from, to)
+	if err != nil {
+		return nil, diffTotals{}, err
+	}
+	return files, totals, nil
+}
+
+// diffCounts counts every file and line that change from commit or tree from to commit to, from git diff's numstat
+// output, and gives files, the first of them that the raw output listed, their counts; limited says the raw output
+// stopped short of the end.
+func (s *Server) diffCounts(ctx context.Context, dir string, files []code.FileDiff, limited bool, from, to string) (diffTotals, error) {
 	var totals diffTotals
 	numstat := append(append([]string{"diff", "--numstat", "-z"}, diffArgs...), from, to)
 	if err := s.stream(ctx, dir, func(r *bufio.Reader) (bool, error) {
@@ -131,9 +160,9 @@ func (s *Server) diffFiles(ctx context.Context, dir, from, to string) ([]code.Fi
 		totals, err = addCounts(&nulTokens{r: r}, files, limited)
 		return false, err
 	}, numstat...); err != nil {
-		return nil, diffTotals{}, err
+		return diffTotals{}, err
 	}
-	return files, totals, nil
+	return totals, nil
 }
 
 // stream runs git with args over the repository at dir and hands consume its output as git prints it. When consume

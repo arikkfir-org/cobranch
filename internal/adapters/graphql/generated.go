@@ -418,6 +418,15 @@ type ComplexityRoot struct {
 		Head         func(childComplexity int) int
 	}
 
+	DiffCounts struct {
+		Additions func(childComplexity int) int
+		Base      func(childComplexity int) int
+		BaseTip   func(childComplexity int) int
+		Deletions func(childComplexity int) int
+		Files     func(childComplexity int) int
+		Head      func(childComplexity int) int
+	}
+
 	DiffLine struct {
 		Kind      func(childComplexity int) int
 		New       func(childComplexity int) int
@@ -981,6 +990,7 @@ type ComplexityRoot struct {
 		Blob              func(childComplexity int, ref string, path string) int
 		Branch            func(childComplexity int, name string) int
 		BranchDiff        func(childComplexity int, name string) int
+		BranchDiffCounts  func(childComplexity int, name string) int
 		Branches          func(childComplexity int) int
 		Chat              func(childComplexity int, branch string, first int, after *string) int
 		Commit            func(childComplexity int, sha string) int
@@ -1444,6 +1454,7 @@ type RepositoryResolver interface {
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
 	Blame(ctx context.Context, obj *Repository, ref string, path string) (*Blame, error)
 	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
+	BranchDiffCounts(ctx context.Context, obj *Repository, name string) (*DiffCounts, error)
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
 	ViewedFiles(ctx context.Context, obj *Repository, branch string) (*ViewedFiles, error)
 	Conversation(ctx context.Context, obj *Repository, first int, after *string) (*ChatPage, error)
@@ -3066,6 +3077,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Diff.Head(childComplexity), true
+
+	case "DiffCounts.additions":
+		if e.ComplexityRoot.DiffCounts.Additions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.Additions(childComplexity), true
+	case "DiffCounts.base":
+		if e.ComplexityRoot.DiffCounts.Base == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.Base(childComplexity), true
+	case "DiffCounts.baseTip":
+		if e.ComplexityRoot.DiffCounts.BaseTip == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.BaseTip(childComplexity), true
+	case "DiffCounts.deletions":
+		if e.ComplexityRoot.DiffCounts.Deletions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.Deletions(childComplexity), true
+	case "DiffCounts.files":
+		if e.ComplexityRoot.DiffCounts.Files == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.Files(childComplexity), true
+	case "DiffCounts.head":
+		if e.ComplexityRoot.DiffCounts.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffCounts.Head(childComplexity), true
 
 	case "DiffLine.kind":
 		if e.ComplexityRoot.DiffLine.Kind == nil {
@@ -6157,6 +6205,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.BranchDiff(childComplexity, args["name"].(string)), true
+	case "Repository.branchDiffCounts":
+		if e.ComplexityRoot.Repository.BranchDiffCounts == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_branchDiffCounts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.BranchDiffCounts(childComplexity, args["name"].(string)), true
 	case "Repository.branches":
 		if e.ComplexityRoot.Repository.Branches == nil {
 			break
@@ -8430,6 +8489,8 @@ extend type Repository {
   blame(ref: String! = "main", path: String!): Blame
   "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
   branchDiff(name: String!): Diff
+  "How much the branch of name's diff, as branchDiff reckons it, changes, without its files: the files and lines it adds and removes, counted in full; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. An installation without a Git server answers UNAVAILABLE."
+  branchDiffCounts(name: String!): DiffCounts
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
   commitDiff(sha: String!): Diff
   "The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous)."
@@ -8591,6 +8652,22 @@ type File {
   text: String
   "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
   html: String
+}
+
+"How much a diff changes, without its files, counted in full whatever the limits of a diff."
+type DiffCounts {
+  "The commit it runs from: a branch's merge base with its base's tip. Null when the branch shares no history with its base, so the diff runs from the empty tree."
+  base: String
+  "The branch's base's tip, which its merge base is reckoned from."
+  baseTip: String
+  "The commit it runs to."
+  head: String!
+  "The files it changes."
+  files: Int!
+  "The lines it adds."
+  additions: Int!
+  "The lines it removes."
+  deletions: Int!
 }
 
 "A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it."
@@ -11163,6 +11240,24 @@ func (ec *executionContext) childFields_Diff(ctx context.Context, field graphql.
 	return nil, fmt.Errorf("no field named %q was found under type Diff", field.Name)
 }
 
+func (ec *executionContext) childFields_DiffCounts(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "base":
+		return ec.fieldContext_DiffCounts_base(ctx, field)
+	case "baseTip":
+		return ec.fieldContext_DiffCounts_baseTip(ctx, field)
+	case "head":
+		return ec.fieldContext_DiffCounts_head(ctx, field)
+	case "files":
+		return ec.fieldContext_DiffCounts_files(ctx, field)
+	case "additions":
+		return ec.fieldContext_DiffCounts_additions(ctx, field)
+	case "deletions":
+		return ec.fieldContext_DiffCounts_deletions(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DiffCounts", field.Name)
+}
+
 func (ec *executionContext) childFields_DiffLine(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "kind":
@@ -12119,6 +12214,8 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_blame(ctx, field)
 	case "branchDiff":
 		return ec.fieldContext_Repository_branchDiff(ctx, field)
+	case "branchDiffCounts":
+		return ec.fieldContext_Repository_branchDiffCounts(ctx, field)
 	case "commitDiff":
 		return ec.fieldContext_Repository_commitDiff(ctx, field)
 	case "viewedFiles":
@@ -16002,6 +16099,20 @@ func (ec *executionContext) field_Repository_blob_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["path"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_branchDiffCounts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
 	return args, nil
 }
 
@@ -22906,6 +23017,144 @@ func (ec *executionContext) _Diff_deletions(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_Diff_deletions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Diff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffCounts_base(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_base(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Base, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_base(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "String")
+}
+
+func (ec *executionContext) _DiffCounts_baseTip(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_baseTip(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BaseTip, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_baseTip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "String")
+}
+
+func (ec *executionContext) _DiffCounts_head(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "String")
+}
+
+func (ec *executionContext) _DiffCounts_files(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_files(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Files, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_files(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffCounts_additions(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_additions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Additions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_additions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffCounts_deletions(ctx context.Context, field graphql.CollectedField, obj *DiffCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffCounts_deletions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deletions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffCounts_deletions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffCounts", field, false, false, "Int")
 }
 
 func (ec *executionContext) _DiffLine_kind(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
@@ -36059,6 +36308,50 @@ func (ec *executionContext) fieldContext_Repository_branchDiff(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_branchDiffCounts(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_branchDiffCounts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().BranchDiffCounts(ctx, obj, fc.Args["name"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DiffCounts) graphql.Marshaler {
+			return ec.marshalODiffCounts2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffCounts(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_branchDiffCounts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DiffCounts(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_branchDiffCounts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Repository_commitDiff(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -46209,6 +46502,64 @@ func (ec *executionContext) _Diff(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var diffCountsImplementors = []string{"DiffCounts"}
+
+func (ec *executionContext) _DiffCounts(ctx context.Context, sel ast.SelectionSet, obj *DiffCounts) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, diffCountsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DiffCounts")
+		case "base":
+			out.Values[i] = ec._DiffCounts_base(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "baseTip":
+			out.Values[i] = ec._DiffCounts_baseTip(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._DiffCounts_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "files":
+			out.Values[i] = ec._DiffCounts_files(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "additions":
+			out.Values[i] = ec._DiffCounts_additions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletions":
+			out.Values[i] = ec._DiffCounts_deletions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var diffLineImplementors = []string{"DiffLine"}
 
 func (ec *executionContext) _DiffLine(ctx context.Context, sel ast.SelectionSet, obj *DiffLine) graphql.Marshaler {
@@ -50077,6 +50428,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_branchDiff(ctx, field, obj)
+				})
+		case "branchDiffCounts":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_branchDiffCounts(ctx, field, obj)
 				})
 		case "commitDiff":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -54874,6 +55231,13 @@ func (ec *executionContext) marshalODiff2ᚖcobranchᚗdevᚋinternalᚋadapters
 		return graphql.Null
 	}
 	return ec._Diff(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalODiffCounts2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffCounts(ctx context.Context, sel ast.SelectionSet, v *DiffCounts) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._DiffCounts(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOEnvironment2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironment(ctx context.Context, sel ast.SelectionSet, v *Environment) graphql.Marshaler {
