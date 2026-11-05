@@ -9,7 +9,7 @@ import (
 // textTokens are the text styles' custom properties: --text-<name> a font shorthand, in the style's typeface, and
 // --text-<name>-tracking its letter-spacing, 0px where it has none, so that a rule that sets both never inherits
 // another style's.
-func textTokens(styles []textStyle, fonts map[string]string) (string, error) {
+func textTokens(styles []textStyle) (string, error) {
 	var b strings.Builder
 	b.WriteString("\n  /* Text styles */\n")
 	for _, s := range styles {

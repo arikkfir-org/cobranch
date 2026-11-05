@@ -31,7 +31,7 @@ func stylesheet(e export) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	texts, err := textTokens(e.TextStyles, fonts)
+	texts, err := textTokens(e.TextStyles)
 	if err != nil {
 		return "", err
 	}
@@ -75,6 +75,7 @@ func fontFamilies(styles []textStyle) (map[string]string, error) {
 	return fonts, nil
 }
 
+// fontKind is the kind of typeface a text style is in: mono for the Code styles, sans for the rest.
 func fontKind(s textStyle) string {
 	if strings.HasPrefix(s.Name, "Code/") {
 		return "mono"
@@ -86,31 +87,40 @@ func fontKind(s textStyle) string {
 func modes(collections []collection) (string, string, error) {
 	var light, dark strings.Builder
 	for _, c := range collections {
-		if len(c.Modes) == 0 {
-			return "", "", fmt.Errorf("collection %s has no modes", c.Name)
-		}
-		if len(c.Modes) > 1 {
-			fmt.Fprintf(&light, "\n  /* %s, %s */\n", c.Name, c.Modes[0])
-		} else {
-			fmt.Fprintf(&light, "\n  /* %s */\n", c.Name)
-		}
-		for _, mode := range c.Modes[1:] {
-			if !darkModes[mode] {
-				return "", "", fmt.Errorf("collection %s has mode %s, which tokens.css doesn't carry", c.Name, mode)
-			}
-		}
-		for _, v := range c.Variables {
-			if err := declare(&light, v, c.Modes[0], true); err != nil {
-				return "", "", err
-			}
-			for _, mode := range c.Modes[1:] {
-				if err := declare(&dark, v, mode, false); err != nil {
-					return "", "", err
-				}
-			}
+		if err := collectionModes(&light, &dark, c); err != nil {
+			return "", "", err
 		}
 	}
 	return light.String(), dark.String(), nil
+}
+
+// collectionModes writes a collection's custom properties: its first mode's to light, under a comment naming it, and
+// its dark mode's to dark. A mode tokens.css doesn't carry fails it.
+func collectionModes(light, dark *strings.Builder, c collection) error {
+	if len(c.Modes) == 0 {
+		return fmt.Errorf("collection %s has no modes", c.Name)
+	}
+	if len(c.Modes) > 1 {
+		fmt.Fprintf(light, "\n  /* %s, %s */\n", c.Name, c.Modes[0])
+	} else {
+		fmt.Fprintf(light, "\n  /* %s */\n", c.Name)
+	}
+	for _, mode := range c.Modes[1:] {
+		if !darkModes[mode] {
+			return fmt.Errorf("collection %s has mode %s, which tokens.css doesn't carry", c.Name, mode)
+		}
+	}
+	for _, v := range c.Variables {
+		if err := declare(light, v, c.Modes[0], true); err != nil {
+			return err
+		}
+		for _, mode := range c.Modes[1:] {
+			if err := declare(dark, v, mode, false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // declare writes the custom property of a variable in a mode, and its description when described.
