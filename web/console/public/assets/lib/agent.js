@@ -219,8 +219,10 @@ function taskCards(org, a, can, tasks, working, refresh) {
   ];
 }
 
-// fact is one of a card's facts (Fact): its key and its value, in code type when mono.
-export const fact = (key, value, mono) => h("div", { class: "fact-row" }, h("dt", {}, key), h("dd", { class: mono ? "fact-row-code" : "" }, value));
+// fact is one of a card's facts (Fact row): its label and its value, Kind=Code when the value is code (a slug, a
+// branch, a secret's name).
+export const fact = (label, value, code) => h("div", { class: "fact-row" + (code ? " fact-row-code" : "") },
+  h("span", { class: "fact-label" }, label), h("div", { class: "fact-value" }, value));
 
 // factsCard is what agent a runs on and as: its model, the secret its provider's key is in, the secrets its tasks
 // receive, its standing instructions, whom it acts as, its cap, and what it spent this month.
@@ -231,9 +233,9 @@ function factsCard(a, providers, report) {
   const month = report && report.agents.find((s) => s.agent.id === a.id);
   const spentNow = month ? micros(month.spent) : 0;
   const thisMonth = usd(spentNow) + (month && month.tasks ? " over " + plural(month.tasks, "task") : " · no tasks");
-  return card("Agent", "", h("dl", { class: "agent-facts" },
-    fact("Model", a.model || "Not set", true), fact("Provider key", key, !!provider && !provider.broken && !!provider.secretName),
-    fact("Secrets", secrets.length ? secrets.join(", ") : "None", true), fact("Instructions", h("span", { class: "fact-row-clamp" }, a.instructions || "None")),
+  return card("Agent", "", h("div", { class: "agent-facts" },
+    fact("Model", a.model || "Not set", !!a.model), fact("Provider key", key, !!provider && !provider.broken && !!provider.secretName),
+    fact("Secrets", secrets.length ? secrets.join(", ") : "None", secrets.length > 0), fact("Instructions", h("span", { class: "fact-row-clamp" }, a.instructions || "None")),
     fact("Acts as", "Whoever assigned the task; never more than them."),
     fact("Spend cap", a.cap ? dollars(a.cap) + " a task" : a.model ? "None" : "None until a model is set"),
     fact("This month", report ? thisMonth : "–")));
@@ -242,7 +244,7 @@ function factsCard(a, providers, report) {
 // activityCard is what happened to agent a's latest tasks, the newest five events.
 function activityCard(a, tasks) {
   const latest = events(tasks).slice(0, 5);
-  return card("Activity", "", latest.length ? h("dl", { class: "agent-facts" }, latest.map((e) => fact(since(e.at), eventText(e, true))))
+  return card("Activity", "", latest.length ? h("div", { class: "agent-facts" }, latest.map((e) => fact(since(e.at), eventText(e, true))))
     : emptyState("activity", "No activity yet", a.name + " has not run a task."));
 }
 

@@ -133,7 +133,7 @@ function factsCard(org, t) {
   else if (links) rows.push(fact("Repository", h("a", { href: base + org.slug + "/" + t.repositorySlug, "data-nav": "" }, t.repositorySlug), true));
   rows.push(fact("Assigned by", t.assignedBy ? who(t.assignedBy) : "Someone since gone"));
   rows.push(t.startedAt ? fact("Started", moment(t.startedAt)) : fact("Queued", moment(t.createdAt)));
-  return card("Task", "", h("dl", { class: "agent-facts" }, rows));
+  return card("Task", "", h("div", { class: "agent-facts" }, rows));
 }
 
 // spendCard is what t spent (Spend): against its agent's cap on a Meter, warning from 80% of it and danger once
