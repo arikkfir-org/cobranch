@@ -62,7 +62,7 @@ export function repositoriesTable(org, list) {
   const rows = new Map(list.map((r) => [r, repositoryRow(org, r)]));
   const tbody = h("tbody", {});
   const none = h("p", { class: "cell-muted", hidden: true }, "No repository matches.");
-  const table = h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", {}, "Visibility"), h("th", {}, "Default branch"),
+  const table = h("table", { class: "table repositories-table" }, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", {}, "Visibility"), h("th", {}, "Default branch"),
     h("th", {}, "Open branches"), h("th", {}, "Status"), h("th", {}, "Last push"))), tbody);
   let order = 0;
   const sort = h("button", { class: "btn btn-sm", type: "button", title: "Change the order", onclick: () => { order = (order + 1) % orders.length; draw(); } });
