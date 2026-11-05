@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { consolePages, orgPages } from "./assets.js";
+import { privateSubject } from "./chat.js";
 import { h } from "./dom.js";
 import { frame, notFound, pageHeading } from "./layout.js";
 import { showRepository } from "./repository.js";
@@ -26,8 +27,8 @@ export function subjectOf(m, ctx, fallback) {
 }
 
 // orgSubject is an organization's conversation, which every page of the organization that names no other has: each
-// viewer's own, private to them, which no page has yet.
-const orgSubject = (org) => ({ key: "org:" + org.slug, title: org.name, scope: "Nothing to follow on this page", chat: null });
+// viewer's own, private to them.
+const orgSubject = (org, can) => privateSubject("org:" + org.slug, org.name, false, "/orgs/" + org.slug + "/conversation", can);
 
 // tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under, as
 // Tasks is under Agents): the parent's, labelled by its nav's tab or its label, then those under it, in order of
@@ -67,12 +68,12 @@ export async function showOrganization(slug, page, sub, rest) {
   const shown = orgPages.get(page);
   if (shown && shown.allowed && !shown.allowed(can)) return go("/" + org.slug);
   const crumb = { label: org.name, href: base + org.slug };
-  if (!shown) return showRepository(org, can, crumb, orgSubject(org), page, sub, rest);
+  if (!shown) return showRepository(org, can, crumb, orgSubject(org, can), page, sub, rest);
   const ctx = { org, can, sub, rest, root: base + org.slug };
   const tabs = tabsOf(org, can, page, shown);
   const part = tabs ? tabs.parent : page;
   const head = tabs ? pageHeading({ title: tabs.title, description: tabs.description, tabs: tabs.tabs }) : shown.heading ? shown.heading(ctx) : null;
-  const main = frame({ org, can, part, crumbs: [crumb, ...crumbsOf(shown, ctx)], subject: subjectOf(shown, ctx, orgSubject(org)), head });
+  const main = frame({ org, can, part, crumbs: [crumb, ...crumbsOf(shown, ctx)], subject: subjectOf(shown, ctx, orgSubject(org, can)), head });
   return shown.default({ org, main, can, sub, rest, head });
 }
 

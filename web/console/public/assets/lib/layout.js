@@ -106,6 +106,6 @@ export function frame({ org, can, part, crumbs, subject, head }) {
   const main = h("main", { class: "page" });
   shell.content.replaceChildren(...[head, main].filter(Boolean));
   shell.content.scrollTop = 0;
-  converse(subject);
+  converse(subject, can("agents.assign"));
   return main;
 }
