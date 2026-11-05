@@ -2,9 +2,9 @@
    the same variants and states, drawn from the tokens in tokens.css alone, so both themes follow; the few sizes a
    component keeps as its own in Figma (an avatar's, a textarea's, a dialog's width) are custom properties on it. A page
    composes these classes and styles no component of its own; a component changes in Figma first, then here, and the
-   change reaches every page (docs/cobranch/designs/design-system.md). Each block names its Figma component; the shell's
-   own components (App/*, Nav item, Nav/Sub item, Chat message) are in lib/shell.css. The page /help/components draws
-   every one of them, and Figma's Code Connect points each component at its class here. */
+   change reaches every page (docs/cobranch/designs/design-system.md). Each block names its Figma component; the app
+   shell's own components (App/*, Nav item, Nav/Sub item, Chat message) are the shell's. The page /help/components draws
+   every one of these, and each component in the Figma file names its class here and links this file. */
 
 /* Tones: the status language's six tones, and inverse for Merged. A badge, quiet badge, tag, icon or banner takes its
    colours from the tone class on it or around it. */

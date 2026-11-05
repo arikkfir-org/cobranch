@@ -37,9 +37,10 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | --- | --- |
 | `index.html` | The shell: a `<div id="app">`, the configuration and every file's name, which Caddy writes in, and a bootstrap that asks for every file and the viewer at once, imports its release's `console.js`, and loads again when it fails |
 | `assets/console.js` | `start`: the configuration, the viewer, their organizations, every page's module and stylesheet, then the first route |
-| `assets/console.css` | What every page shares: the design system's tokens, elements, layout and status language |
+| `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, with `fonts.css`) |
+| `assets/components.css` | The design system's components, one class for each, which pages compose |
 | `assets/lib/` | The router, the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
-| `assets/pages/` | The pages the router names: `sign-in.js`, `welcome.js`, `settings.js` |
+| `assets/pages/` | The pages the router names: `sign-in.js`, `welcome.js`, `settings.js`, `help.js` |
 | `assets/pages/org/` | An organization's pages, `<part>.js` for `/acme/<part>/…`; `index.js` its home |
 | `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its code |
 
@@ -106,7 +107,7 @@ own paths are the organization slugs no organization may take.
   Caddy for each directory's listing** (`file_server browse`, as [ENG-246](https://linear.app/arikkfir/issue/ENG-246)
   first did): the listings waited for `console.js` and its imports, and the pages for the listings, about ten requests
   in a row before the first page drew.
-- **The three pages outside an organization stay named in the router:** their paths are the Console's own, decided once,
+- **The four pages outside an organization stay named in the router:** their paths are the Console's own, decided once,
   as their slugs are reserved for organizations.
 
 ## A page's module

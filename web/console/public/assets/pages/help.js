@@ -1,15 +1,18 @@
 import { annotationStatuses } from "../lib/annotations.js";
+import { logo, mark, markSmall } from "../lib/brand.js";
 import { branchStatuses } from "../lib/branches.js";
 import { app, h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
 import { viewerLinks } from "../lib/layout.js";
 import { reviewStates } from "../lib/reviews.js";
 import { base } from "../lib/state.js";
+import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
 
-// Help: the Console's reference pages, behind the sign-in. /help/components draws every component of the design
-// system's Figma file, in the file's order and under its names, each with the class components.css gives it, so a
+// Help: the Console's reference pages, behind the sign-in. /help/components draws every component of components.css
+// and the brand's marks, in the Figma file's order and under its names, each with the class that draws it, so a
 // reviewer holds the page beside the Figma file's Components page, in either theme, and a designer finds which code a
 // component is. It draws from the classes alone: what differs from Figma is a bug in components.css or in the file.
+// The app shell's own components are drawn around every page, this one included, not as specimens.
 
 export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
 export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
@@ -27,7 +30,7 @@ export function showHelp(rest) {
 export default function show({ main, rest }) {
   if (rest[0] === "components") return main.append(...components());
   main.append(h("h1", {}, "Help"), h("ul", {}, h("li", {}, h("a", { href: base + "help/components", "data-nav": "" }, "Components"),
-    ": every component of the design system, as the Console draws it.")));
+    ": the design system's components and marks, as the Console draws them.")));
 }
 
 // section is one of the Components page's sections: its title, what it says, the Figma components and classes it
@@ -43,8 +46,14 @@ const toneName = (t) => t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1);
 
 function components() {
   return [h("h1", {}, "Components"),
-    h("p", {}, "Every component of the design system's Figma file, drawn by the Console's own classes in both themes. Hover a control to see its hover state and Tab to it to see its focus ring; the user menu switches the theme."),
-    buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), patterns()];
+    h("p", {}, "Every component of the Console's component stylesheet, and the brand's marks, as the design system's Figma file draws them. Hover a control to see its hover state and Tab to it to see its focus ring; the segmented control under Forms switches the theme, to compare both. The app shell's own components (App/*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are the frame around this page."),
+    brand(), buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), patterns()];
+}
+
+function brand() {
+  return section("Brand", "The mark is an ink square with a person and an agent on one trunk, for 24px and up; the logo sets the wordmark beside it. The small mark, the branch graph, is for 16px and the favicon. Both follow the theme. Brand/Credit is the app shell's.",
+    [["Brand/Logo", "logo() mark()"], ["Brand/Mark small", "markSmall()"]],
+    grid(["Brand/Logo", "The mark alone", "Brand/Mark small"], [[logo(), mark("Cobranch"), markSmall("Cobranch")]]));
 }
 
 function buttons() {
@@ -107,10 +116,11 @@ function forms() {
   const select = (attrs = {}) => h("span", { class: "select" }, h("select", attrs, ["Anthropic", "OpenAI", "A local model"].map((m) => h("option", {}, m))));
   const textarea = (attrs = {}) => h("textarea", { class: "textarea", ...attrs }, "Work the issue or the branch you are given. Open a branch named after the issue, keep commits small, and ask in the chat before changing an API.");
   const check = (cls, type, label, attrs) => h("label", { class: cls }, h("input", { type, name: cls, ...attrs }), label);
-  const choices = ["Light", "Dark", "System"].map((label, i) => h("button", { type: "button", "aria-pressed": i ? "false" : "true", onclick: (e) => {
-    for (const c of choices) c.setAttribute("aria-pressed", c === e.currentTarget ? "true" : "false");
-  } }, label));
-  return section("Forms", "Select, Checkbox, Radio, Textarea and Segmented control follow Input: label above the control, 32px controls, radius/md, border/strong at rest, border/focus with the Focus/Ring effect when focused, status/danger when in error. The segmented control is the theme switch and any short exclusive choice.",
+  const choices = themes.map((t) => h("button", { type: "button", onclick: () => setTheme(t) }, t[0].toUpperCase() + t.slice(1)));
+  const pressed = () => choices.forEach((c, i) => c.setAttribute("aria-pressed", themes[i] === theme() ? "true" : "false"));
+  pressed();
+  onThemeChange(() => { if (choices[0].isConnected) pressed(); });
+  return section("Forms", "Select, Checkbox, Radio, Textarea and Segmented control follow Input: label above the control, 32px controls, radius/md, border/strong at rest, border/focus with the Focus/Ring effect when focused, status/danger when in error. The segmented control is the theme switch and any short exclusive choice; this one switches the Console's theme.",
     [["Select", ".select"], ["Textarea", ".textarea"], ["Checkbox", ".checkbox"], ["Radio", ".radio"], ["Segmented control", ".segmented"]],
     h("div", { class: "specimens-fields" },
       field("Label", select()), field("Focus it", select()), field("Label", select({ "aria-invalid": "true" }), "Say what to do about the error"), field("Label", select({ disabled: true }))),
