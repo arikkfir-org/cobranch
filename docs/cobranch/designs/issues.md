@@ -284,9 +284,10 @@ screen](design-system.md#screens) draws it.
 Each property saves as soon as it changes, naming the version it was made from; a change someone else made first reloads
 the page instead of overwriting it.
 
-- **The list** at `/<org>/issues` groups open issues by state, Urgent first within each, and filters by assignee (Me
-  among them), repository, label and text; a switch shows closed ones. Each row is the design system's Issue row:
-  identifier, title, priority, labels, assignee's avatar, the linked branches' count.
+- **The list** at `/<org>/issues` is a table with its header row, under the tabs Open, Closed and All with their
+  counts, and filters by text, repository, assignee (Me and Nobody among them) and label; a filtered list counts what
+  it shows of the tab's issues. Each row is the issue's state icon, identifier, title and labels, then its repository,
+  assignee, branch and when it last changed.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
   description, its branches with their status as branch rows, its activity, newest first, and its [comments](#comments),
   live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
