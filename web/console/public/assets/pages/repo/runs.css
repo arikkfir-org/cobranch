@@ -1,6 +1,24 @@
-/* A run's page: its jobs' logs. */
-pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); background: var(--color-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-code-medium); color: var(--color-fg-default); }
-.logs { display: grid; gap: var(--space-12); }
+/* A run's page (Repository · Jobs · Run): its header, a title line in Heading/Medium over a line of what it ran and why
+   in Body/Small that wraps, and its banner; then its 300px Steps card beside the selected step's log, or under it beside
+   the conversation pane. The components draw everything else. */
+.run-page { display: flex; flex-direction: column; gap: var(--space-24); container-type: inline-size; }
+.run-header { display: grid; gap: var(--space-6); min-width: 0; }
+.run-meta-slot { display: contents; }
+.run-title-line { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.run-title-line > .icon { color: var(--color-fg-muted); }
+.run-title { display: flex; gap: var(--space-12); min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); overflow-wrap: anywhere; }
+.run-number { color: var(--color-fg-muted); white-space: nowrap; }
+.run-actions { display: flex; align-items: center; gap: var(--space-12); flex: none; margin-left: auto; }
+.run-meta { display: flex; align-items: flex-start; gap: var(--space-8); min-width: 0; margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
+.run-meta > .icon { color: var(--color-fg-muted); }
+.run-meta > a { padding-top: 1px; color: var(--color-fg-link); font: var(--text-code-small); white-space: nowrap; text-decoration: none; }
+.run-meta a:hover { text-decoration: underline; }
+.run-meta-text { flex: 1; min-width: 0; }
+.run-meta-text a { color: var(--color-fg-link); text-decoration: none; }
+.run-columns { display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: start; gap: var(--space-24); }
+@container (max-width: 760px) {
+  .run-columns { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* The Jobs screen: its filters over its table, and the table's columns at the widths the screen draws them; the
    components draw everything else. */
