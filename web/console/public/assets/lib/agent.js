@@ -57,10 +57,18 @@ export const statusBadge = (working) => working ? quiet("Working", "ai") : quiet
 export const whoAvatar = (p, size = 20) => avatar(p.displayName, agentIds.has(p.id), size);
 // agentPage is the address of an agent's page.
 export const agentPage = (org, id) => base + org.slug + "/agents/" + id;
-// taskPage is the address of a task's page.
-export const taskPage = (org, t) => base + org.slug + "/tasks/" + t.number;
+// taskPage is the address of a task's page, under its agent's: t's own agent's, or agent's for a task that doesn't name
+// it (TaskCost).
+export const taskPage = (org, t, agent) => agentPage(org, t.agent ? t.agent.id : agent) + "/tasks/" + t.number;
 // taskTitle is a task's title, or what stands for one its asker keeps private (a redacted place in the queue).
 export const taskTitle = (t) => t.title || "Asked for in private";
+// hiddenTask says whether t was asked in another's private conversation: the API answers its number, agent, kind, state
+// and times alone, and no page of it.
+export const hiddenTask = (t) => t.private && !t.title;
+// taskLink is a link to t's page, of class cls, holding children; or the children alone for a task asked in another's
+// private conversation, which opens no page.
+export const taskLink = (org, t, cls, ...children) => hiddenTask(t) ? h("span", { class: cls }, ...children)
+  : h("a", { class: cls, href: taskPage(org, t), "data-nav": "" }, ...children);
 // place is where a task works: its repository and branch, or anywhere.
 const place = (t) => t.repositorySlug ? [t.repositorySlug, t.branch].filter(Boolean).join(" · ") : "Anywhere";
 
@@ -79,8 +87,9 @@ function momentOf(t) {
 }
 
 // taskRow is one of an agent's tasks as its page lists it: its number, title and where it works, its state, what it
-// spent against its cap, when, and who assigned it; it opens the task.
-export const taskRow = (org, t) => h("a", { class: "agent-task", href: taskPage(org, t), "data-nav": "" },
+// spent against its cap, when, and who assigned it; it opens the task, unless it was asked in another's private
+// conversation.
+export const taskRow = (org, t) => taskLink(org, t, "agent-task",
   h("span", { class: "agent-task-number" }, "#" + t.number),
   h("span", { class: "row-text" }, h("span", { class: "row-title" }, taskTitle(t)), h("span", { class: "row-meta" }, place(t))),
   stateBadge(t.state), h("span", { class: "agent-task-spend" }, spendOf(t)), h("span", { class: "agent-task-when" }, momentOf(t)),
@@ -211,7 +220,7 @@ function taskCards(org, a, can, tasks, working, refresh) {
 }
 
 // fact is one of a card's facts (Fact): its key and its value, in code type when mono.
-const fact = (key, value, mono) => h("div", { class: "fact-row" }, h("dt", {}, key), h("dd", { class: mono ? "fact-row-code" : "" }, value));
+export const fact = (key, value, mono) => h("div", { class: "fact-row" }, h("dt", {}, key), h("dd", { class: mono ? "fact-row-code" : "" }, value));
 
 // factsCard is what agent a runs on and as: its model, the secret its provider's key is in, the secrets its tasks
 // receive, its standing instructions, whom it acts as, its cap, and what it spent this month.

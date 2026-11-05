@@ -1,3 +1,4 @@
+import { taskPage } from "../../lib/agent.js";
 import { api, apiPage } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { issueSubject } from "../../lib/chat.js";
@@ -450,7 +451,7 @@ function issueFacts({ org, issue, can, choices, save }) {
     menu("Assignee", issue.assignee ? issue.assignee.displayName : "Nobody yet", (close) => [item("Nobody", !issue.assignee, () => { close(); save({ assigneeId: null }); }),
       members.map((m) => item(m.displayName + (m.userId === me.id ? " (you)" : ""), m.userId === issue.assignee?.id, () => { close(); save({ assigneeId: m.userId }); }, avatar(m.displayName))),
       offered.map((a) => item(a.name, a.id === issue.assignee?.id, () => { close(); save({ assigneeId: a.id }); }, avatar(a.name, true)))]),
-    issue.task && taskAtWork[issue.task.state] ? fact("Task", h("a", { class: "issue-task", href: base + org.slug + "/tasks/" + issue.task.number, "data-nav": "" }, "#" + issue.task.number),
+    issue.task && taskAtWork[issue.task.state] ? fact("Task", h("a", { class: "issue-task", href: taskPage(org, issue.task, issue.assignee.id), "data-nav": "" }, "#" + issue.task.number),
       h("span", { class: "badge-quiet tone-" + taskAtWork[issue.task.state].tone }, taskAtWork[issue.task.state].word)) : null,
     menu("Labels", issue.labels.length ? issue.labels.map((l) => l.name).join(", ") : "None", (close) => labels.length
       ? labels.map((l) => item(l.name, held.includes(l.id), () => {

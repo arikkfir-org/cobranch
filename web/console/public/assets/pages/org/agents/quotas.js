@@ -45,7 +45,7 @@ function costliestMeter(org, a, highest) {
   const share = cap ? cost / cap : highest ? cost / highest : 0;
   const tone = !cap ? "" : share >= 1 ? " meter-danger" : share >= 0.8 ? " meter-warning" : "";
   const said = !cap ? usd(cost) : share >= 1 ? usd(cost) + " · cap reached, task failed" : usd(cost) + " · " + Math.round(share * 100) + "%";
-  return h("a", { class: "quota" + tone, href: taskPage(org, a.costliest), "data-nav": "", title: "#" + a.costliest.number + " " + a.costliest.title },
+  return h("a", { class: "quota" + tone, href: taskPage(org, a.costliest, a.agent.id), "data-nav": "", title: "#" + a.costliest.number + " " + a.costliest.title },
     h("span", { class: "meter-track" }, h("span", { class: "meter-bar", style: "width: " + Math.min(100, share * 100).toFixed(1) + "%" })),
     h("span", { class: "quota-said" }, said));
 }
