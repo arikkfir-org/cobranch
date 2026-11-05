@@ -3298,7 +3298,7 @@ paths:
   /orgs/{org}/issues:
     get:
       operationId: listIssues
-      summary: A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+      summary: A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: state
@@ -3357,12 +3357,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [issues]
+                required: [issues, counts]
                 properties:
                   issues:
                     type: array
                     items:
                       $ref: "#/components/schemas/Issue"
+                  counts:
+                    $ref: "#/components/schemas/IssueCounts"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -7679,6 +7681,8 @@ components:
           $ref: "#/components/schemas/IssueTask"
         repository:
           $ref: "#/components/schemas/IssueRepository"
+        branch:
+          $ref: "#/components/schemas/IssueLiveBranch"
         labels:
           type: array
           description: The organization's labels it carries, by name.
@@ -7722,6 +7726,31 @@ components:
           type: string
         name:
           type: string
+    IssueLiveBranch:
+      type: object
+      description: The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+      required: [repository, name]
+      properties:
+        repository:
+          type: object
+          required: [id, slug]
+          properties:
+            id:
+              type: string
+              format: uuid
+            slug:
+              type: string
+        name:
+          type: string
+    IssueCounts:
+      type: object
+      description: How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+      required: [open, closed]
+      properties:
+        open:
+          type: integer
+        closed:
+          type: integer
     IssueInput:
       type: object
       description: What creates an issue.

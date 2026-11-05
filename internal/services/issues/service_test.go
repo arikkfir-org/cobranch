@@ -180,13 +180,16 @@ func TestList(t *testing.T) {
 	if err != nil || len(rest.Issues) != 1 || rest.Issues[0].Number != 1 || rest.Next != "" {
 		t.Errorf("List(next) = %+v, %v; want ACME-1 alone", rest, err)
 	}
+	if page.Open != 3 || page.Closed != 1 || rest.Open != 3 || rest.Closed != 1 {
+		t.Errorf("List()'s counts = %d open and %d closed, then %d and %d; want 3 and 1 on every page", page.Open, page.Closed, rest.Open, rest.Closed)
+	}
 	all, err := f.service.List(ctx, f.max, f.acme.ID, issues.Filter{States: issues.States})
 	if err != nil || len(all.Issues) != 4 {
 		t.Errorf("List(every state) = %d, %v; want 4", len(all.Issues), err)
 	}
 	byID, err := f.service.List(ctx, f.max, f.acme.ID, issues.Filter{States: issues.States, Text: "acme-4"})
-	if err != nil || len(byID.Issues) != 1 || byID.Issues[0].Number != 4 {
-		t.Errorf("List(acme-4) = %+v, %v; want ACME-4", byID, err)
+	if err != nil || len(byID.Issues) != 1 || byID.Issues[0].Number != 4 || byID.Open != 0 || byID.Closed != 1 {
+		t.Errorf("List(acme-4) = %+v, %v; want ACME-4, closed", byID, err)
 	}
 	for name, filter := range map[string]issues.Filter{
 		"a cursor that isn't": {Cursor: "nope"}, "a state that isn't": {States: []issues.State{"doing"}}, "too many": {Limit: 101},

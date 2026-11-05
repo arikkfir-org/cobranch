@@ -2093,6 +2093,9 @@ type Issue struct {
 	// Assignee Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Assignee *Principal `json:"assignee,omitempty"`
 
+	// Branch The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+	Branch *IssueLiveBranch `json:"branch,omitempty"`
+
 	// ClosedAt When it was last done or canceled; absent while it is open.
 	ClosedAt  *time.Time `json:"closedAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
@@ -2163,6 +2166,12 @@ type IssueChange struct {
 // IssueChangeField defines model for IssueChange.Field.
 type IssueChangeField string
 
+// IssueCounts How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+type IssueCounts struct {
+	Closed int `json:"closed"`
+	Open   int `json:"open"`
+}
+
 // IssueEvent Something that happened to an issue.
 type IssueEvent struct {
 	// Actor Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
@@ -2222,6 +2231,15 @@ type IssueLabel struct {
 	Color LabelColor         `json:"color"`
 	Id    openapi_types.UUID `json:"id"`
 	Name  string             `json:"name"`
+}
+
+// IssueLiveBranch The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+type IssueLiveBranch struct {
+	Name       string `json:"name"`
+	Repository struct {
+		Id   openapi_types.UUID `json:"id"`
+		Slug string             `json:"slug"`
+	} `json:"repository"`
 }
 
 // IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
@@ -4618,7 +4636,7 @@ type ServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(w http.ResponseWriter, r *http.Request, org Org, id Id)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
 	// (GET /orgs/{org}/issues)
 	ListIssues(w http.ResponseWriter, r *http.Request, org Org, params ListIssuesParams)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
@@ -21431,7 +21449,9 @@ type ListIssues200ResponseHeaders struct {
 
 type ListIssues200JSONResponse struct {
 	Body struct {
-		Issues []Issue `json:"issues"`
+		// Counts How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+		Counts IssueCounts `json:"counts"`
+		Issues []Issue     `json:"issues"`
 	}
 	Headers ListIssues200ResponseHeaders
 }
@@ -35540,7 +35560,7 @@ type StrictServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(ctx context.Context, request CancelInvitationRequestObject) (CancelInvitationResponseObject, error)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
 	// (GET /orgs/{org}/issues)
 	ListIssues(ctx context.Context, request ListIssuesRequestObject) (ListIssuesResponseObject, error)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.

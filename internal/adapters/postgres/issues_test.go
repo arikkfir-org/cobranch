@@ -141,18 +141,20 @@ func TestIssueStoreList(t *testing.T) {
 		name string
 		q    issues.Query
 		want []int
+		// counts are Counts' open and closed: the issues q matches in any state and on any page.
+		counts [2]int
 	}{
-		{"open", issues.Query{States: issues.OpenStates}, []int{2, 1}},
-		{"closed", issues.Query{States: []issues.State{issues.StateDone, issues.StateCanceled}}, []int{3}},
-		{"Max's", issues.Query{States: issues.States, AssigneeID: &maxID}, []int{1}},
-		{"nobody's", issues.Query{States: issues.States, AssigneeID: &nobody}, []int{3, 2}},
-		{"website's", issues.Query{States: issues.States, RepositoryID: &website}, []int{2}},
-		{"no repository's", issues.Query{States: issues.States, RepositoryID: &nobody}, []int{3, 1}},
-		{"text in title or description", issues.Query{States: issues.States, Text: "LOGIN"}, []int{2, 1}},
-		{"a literal percent", issues.Query{States: issues.States, Text: "100%"}, []int{1}},
-		{"a wildcard that isn't", issues.Query{States: issues.States, Text: "_"}, nil},
-		{"by number", issues.Query{States: issues.States, Text: "ACME-3", Number: 3}, []int{3}},
-		{"below 3", issues.Query{States: issues.States, Below: 3}, []int{2, 1}},
+		{"open", issues.Query{States: issues.OpenStates}, []int{2, 1}, [2]int{2, 1}},
+		{"closed", issues.Query{States: []issues.State{issues.StateDone, issues.StateCanceled}}, []int{3}, [2]int{2, 1}},
+		{"Max's", issues.Query{States: issues.States, AssigneeID: &maxID}, []int{1}, [2]int{1, 0}},
+		{"nobody's", issues.Query{States: issues.States, AssigneeID: &nobody}, []int{3, 2}, [2]int{1, 1}},
+		{"website's", issues.Query{States: issues.States, RepositoryID: &website}, []int{2}, [2]int{1, 0}},
+		{"no repository's", issues.Query{States: issues.States, RepositoryID: &nobody}, []int{3, 1}, [2]int{1, 1}},
+		{"text in title or description", issues.Query{States: issues.States, Text: "LOGIN"}, []int{2, 1}, [2]int{2, 0}},
+		{"a literal percent", issues.Query{States: issues.States, Text: "100%"}, []int{1}, [2]int{1, 0}},
+		{"a wildcard that isn't", issues.Query{States: issues.States, Text: "_"}, nil, [2]int{0, 0}},
+		{"by number", issues.Query{States: issues.States, Text: "ACME-3", Number: 3}, []int{3}, [2]int{0, 1}},
+		{"below 3", issues.Query{States: issues.States, Below: 3}, []int{2, 1}, [2]int{2, 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.q.Limit = 10
@@ -166,6 +168,10 @@ func TestIssueStoreList(t *testing.T) {
 			}
 			if !slices.Equal(numbers, tc.want) {
 				t.Errorf("numbers = %v, want %v", numbers, tc.want)
+			}
+			open, closed, err := f.is.Counts(ctx, f.acme.ID, tc.q)
+			if err != nil || [2]int{open, closed} != tc.counts {
+				t.Errorf("Counts() = %d open, %d closed, %v; want %v", open, closed, err, tc.counts)
 			}
 		})
 	}

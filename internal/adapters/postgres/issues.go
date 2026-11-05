@@ -116,6 +116,24 @@ func (s *IssueStore) List(ctx context.Context, orgID uuid.UUID, q issues.Query) 
 	return out, more, nil
 }
 
+// Counts counts the organization's issues that q matches in any state and on any page: open, then closed.
+func (s *IssueStore) Counts(ctx context.Context, orgID uuid.UUID, q issues.Query) (int, int, error) {
+	open := make([]string, 0, len(issues.OpenStates))
+	for _, st := range issues.OpenStates {
+		open = append(open, string(st))
+	}
+	labels := q.LabelIDs
+	if labels == nil {
+		labels = []uuid.UUID{}
+	}
+	row, err := s.q.IssueCounts(ctx, queries.IssueCountsParams{Open: open, OrgID: orgID, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID, LabelIds: labels,
+		Pattern: pattern(q.Text), Number: narrow(q.Number)})
+	if err != nil {
+		return 0, 0, fmt.Errorf("counting the issues: %w", err)
+	}
+	return int(row.Open), int(row.Closed), nil
+}
+
 // narrow is a number of the list's query as the query's integer, or 0 when it is no issue's number: a text's number
 // then matches no issue, and a cursor's sets no bound, as every issue is below it.
 func narrow(n int) int32 {
@@ -288,6 +306,7 @@ func issueOf(r queries.IssueByNumberRow) issues.Issue {
 		out.Assignee = &issues.Principal{ID: *i.AssigneeID, DisplayName: *r.AssigneeName, Agent: r.AssigneeKind != nil && *r.AssigneeKind == string(auth.KindAgent)}
 	}
 	out.Task = issueTaskOf(r.Task)
+	out.Branch = issueBranchOf(r.Branch)
 	if i.CreatedBy != nil && r.CreatorName != nil {
 		out.CreatedBy = &issues.Principal{ID: *i.CreatedBy, DisplayName: *r.CreatorName}
 	}
@@ -295,6 +314,23 @@ func issueOf(r queries.IssueByNumberRow) issues.Issue {
 		out.Repository = &issues.Repository{ID: *i.RepoID, Slug: *r.RepoSlug, Name: *r.RepoName}
 	}
 	return out
+}
+
+// issueBranchOf is the live branch linked to an issue last, from the JSON IssueByNumber reads; nil for none.
+func issueBranchOf(raw []byte) *issues.LiveBranch {
+	if len(raw) == 0 {
+		return nil
+	}
+	var b struct {
+		Repo uuid.UUID `json:"repo"`
+		Slug string    `json:"slug"`
+		Name string    `json:"name"`
+	}
+	// The query builds this JSON itself: it never fails to read, and an issue shows no branch if it somehow did.
+	if err := json.Unmarshal(raw, &b); err != nil {
+		return nil
+	}
+	return &issues.LiveBranch{Repository: issues.Repository{ID: b.Repo, Slug: b.Slug}, Name: b.Name}
 }
 
 // issueTaskOf is the task an issue's agent assignee works on it in, from the JSON IssueByNumber reads; nil for none.

@@ -99,6 +99,13 @@ type Repository struct {
 	Name string
 }
 
+// LiveBranch is the live branch linked to an issue last, as the organization's list of issues shows it: its
+// repository, by ID and slug, and its name.
+type LiveBranch struct {
+	Repository Repository
+	Name       string
+}
+
 // Issue is a piece of an organization's work.
 type Issue struct {
 	ID    uuid.UUID
@@ -120,6 +127,8 @@ type Issue struct {
 	Task *Task
 	// Repository is the repository it is about; nil for none, or for a viewer who doesn't read it.
 	Repository *Repository
+	// Branch is the live branch linked to it last; nil for none, or for a viewer who doesn't read its repository.
+	Branch *LiveBranch
 	// Labels are the organization's labels it carries, by name.
 	Labels []IssueLabel
 	// CreatedBy is who created it; nil once they are gone.
@@ -192,6 +201,8 @@ const (
 type Page struct {
 	Issues []Issue
 	Next   string
+	// Open and Closed count the issues the filter matches in every state, open and closed: those its tabs offer.
+	Open, Closed int
 }
 
 // Query is a Filter as the store runs it: its states and text resolved, and its cursor decoded into the number the
