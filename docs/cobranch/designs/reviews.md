@@ -281,6 +281,9 @@ adds them to it.
   the patch only as far as the limits, going through no more than 4 MiB of the files it leaves out before it leaves out
   the rest. An answer's ETag is the pair of commits, which never change, so a client revalidates rather than reads it
   again.
+- **Its counts alone:** a branch's diff's counts (its files, and the lines it adds and removes, in full, whatever the
+  limits) come from `git diff`'s count of each file's lines alone, with no listing of files and no patch, so a branch's
+  page counts its Files changed tab on every tab without reading the change.
 
 ## Jobs on reviews
 
@@ -314,7 +317,8 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
   review's state: Waiting, Queued, Running, Failed with its reason, or its review. Its menu asks the AI reviewer for
   another review, or starts one that waits.
 - **Its Files changed tab** (`…/branches/<branch>?tab=changes`: a query, since a branch's name may hold `/`;
-  `…/changes/<branch>` sends there) shows the branch's diff against `main`: a card listing its files, then file by
+  `…/changes/<branch>` sends there), its tab counting the files the diff changes, shows the branch's diff against
+  `main`: a card listing its files, then file by
   file, Unified or Split, with the reviews of its head beneath; a reviewer drafts comments on lines, then submits
   Approve, Request changes or Comment with a body. The branch chat's open threads on the diff's lines (at its head,
   or on a removed line at its base, a review's comments among them) show under their lines, with Reply, Resolve and
@@ -334,6 +338,7 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 | `POST /commits/{sha}/reviews` | `submitReview` | `reviews.submit` |
 | `GET /reviews/{id}` | `Repository.review` | `repo.read` |
 | `GET /branches/{branch}/diff` | `Repository.branchDiff` | `repo.read` |
+| `GET /branches/{branch}/diff-counts` | `Repository.branchDiffCounts` | `repo.read` |
 | `GET /commits/{sha}/diff` | `Repository.commitDiff` | `repo.read` |
 | `POST /branches/{branch}/review` | `requestReview` | `repo.push` |
 | `GET /branches/{branch}/viewed` | `Repository.viewedFiles` | `repo.read`, signed in |
