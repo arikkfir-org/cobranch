@@ -106,7 +106,7 @@ function reviewItem(c, r, older) {
   const kind = agent ? h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent")
     : r.person ? null : h("span", { class: "tag", title: "Only people's approvals count towards required approvals" }, "Not a person");
   return h("li", { class: "review" + (older ? " earlier" : "") },
-    h("div", { class: "review-header" }, reviewer ? principalAvatar(reviewer, 24) : null,
+    h("div", { class: "review-header" }, reviewer ? principalAvatar(reviewer, 24, !agent && !r.person) : null,
       h("strong", { class: "review-who" }, reviewer ? reviewer.displayName : "A principal since gone"), kind,
       h("span", { class: "review-when", title: whenExactly(r.submittedAt) }, "on " + shortSha(c.sha) + " · " + fromNow(r.submittedAt)), reviewBadge(r.state)),
     r.html ? h("div", { class: "review-body chat-message-body" }, messageBody(r.html)) : r.body ? h("pre", { class: "review-body" }, r.body) : null);
