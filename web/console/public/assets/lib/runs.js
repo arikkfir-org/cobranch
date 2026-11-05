@@ -90,27 +90,29 @@ export async function branchJobs(path, at, b, can, fail) {
   }
   const pushes = new Map([...latest].sort(([x], [y]) => (x === b.head ? -1 : y === b.head ? 1 : pushed.get(y).localeCompare(pushed.get(x)))));
   if (pushes.size === 1 && !pushes.get(b.head).length && !(b.manualJobs || []).length) {
-    return [noRuns("play", "No runs on this branch", ["The jobs ", h("code", {}, "/cobranch.yaml"), " declares run when what they name under ", h("code", {}, "on"), " happens, such as a push."])];
+    return [noRuns("play", "No runs on this branch", ["Jobs run when a push to this branch matches what they name under ", h("code", {}, "on"), ". Manual jobs appear here with a Run button."])];
   }
   const cards = await Promise.all([...pushes].map(([sha, runs], i) => i < 2 ? pushCard(path, at, b, sha, runs, pushed.get(sha), can, fail) : null));
   const earlier = [...pushes].slice(2);
   if (!earlier.length) return cards.filter(Boolean);
   const open = h("a", { class: "earlier-pushes", href: "#", role: "button" }, earlier.length + " earlier push" + (earlier.length === 1 ? "" : "es"));
+  const line = h("p", {}, open);
   open.addEventListener("click", async (e) => {
     e.preventDefault();
-    open.replaceWith(...await Promise.all(earlier.map(([sha, runs]) => pushCard(path, at, b, sha, runs, pushed.get(sha), can, fail))));
+    line.replaceWith(...await Promise.all(earlier.map(([sha, runs]) => pushCard(path, at, b, sha, runs, pushed.get(sha), can, fail))));
   });
-  return [...cards.filter(Boolean), h("p", {}, open)];
+  return [...cards.filter(Boolean), line];
 }
 
-// pushCard is one push's card on a branch's Jobs tab: when its first run was queued, the runs at sha, by their jobs'
-// names, each with its job's annotation there, and, at b's head, the jobs it starts by hand and Re-run all.
+// pushCard is one push's card on a branch's Jobs tab: when it was pushed (b's last move for its head, else when its
+// first run was queued), the runs at sha, by their jobs' names, each with its job's annotation there, and, at b's head,
+// the jobs it starts by hand that haven't run there, and Re-run all.
 async function pushCard(path, at, b, sha, runs, queuedAt, can, fail) {
   const head = sha === b.head;
   // A commit that can't be read leaves its rows without what their annotations found.
   const found = await api("GET", path + "/commits/" + sha).then((c) => new Map(c.annotations.map((a) => [a.name, a.summary])), () => new Map());
   runs.sort((x, y) => x.job.displayName.localeCompare(y.job.displayName));
-  const manual = head && can("jobs.run") ? (b.manualJobs || []).filter((job) => !runs.some((r) => r.job.displayName === job)) : [];
+  const manual = head ? (b.manualJobs || []).filter((job) => !runs.some((r) => r.job.displayName === job)) : [];
   const ended = runs.length && runs.every((r) => !["waiting", "queued", "running"].includes(r.state));
   const rerun = head && ended && can("jobs.run") ? h("button", { class: "btn btn-sm", type: "button", title: "Run each job again at " + shortSha(sha) }, "Re-run all") : null;
   rerun?.addEventListener("click", async () => {
@@ -123,11 +125,14 @@ async function pushCard(path, at, b, sha, runs, queuedAt, can, fail) {
       fail(err);
     }
   });
-  const rows = [...runs.map((r) => jobRow(at, r, found.get(r.job.displayName))), ...manual.map((job) => manualRow(path, at, b, job, fail))];
+  const rows = [...runs.map((r) => jobRow(at, r, found.get(r.job.displayName))), ...manual.map((job) => manualRow(path, at, b, job, can, fail))];
+  const when = head ? b.updatedAt : queuedAt;
+  const counted = [runs.length ? plural(runs.length, "job") : "no jobs", manual.length ? manual.length + " manual" : null].filter(Boolean).join(" · ");
   return h("section", { class: "card push-card" },
     h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "On " + shortSha(sha)),
-      runs.length ? h("span", { class: "card-meta", title: whenExactly(queuedAt) }, since(queuedAt) + " · " + plural(runs.length, "job")) : null, rerun),
-    rows.length ? h("ul", { class: "list" }, rows) : h("p", { class: "card-body card-note" }, "No jobs ran on this push."));
+      h("span", { class: "card-meta", title: whenExactly(when) }, since(when) + " · " + counted), rerun),
+    rows.length ? h("ul", { class: "list" }, rows)
+      : h("p", { class: "card-body card-note" }, h("span", {}, "No jobs ran on this push: nothing in ", h("code", {}, "/cobranch.yaml"), " names it.")));
 }
 
 // jobRow is a run in a push's card (Annotation row): its status, as its job's annotation says it; its job; what the
@@ -143,17 +148,17 @@ function jobRow(at, r, found) {
     h("a", { href: at.run(r.number), "data-nav": "", title: r.job.displayName + " #" + r.number }, "Details"));
 }
 
-// manualRow is a job b's head starts by hand, in its card: its name, and Run, which starts it at the head and opens
-// its run.
-function manualRow(path, at, b, job, fail) {
-  const run = h("button", { class: "btn btn-sm", type: "button", title: "Run " + job + " at " + shortSha(b.head) }, "Run");
-  run.addEventListener("click", () => {
+// manualRow is a job b's head starts by hand, in its card: its name, and, for a viewer holding jobs.run, Run, which
+// starts it at the head and opens its run.
+function manualRow(path, at, b, job, can, fail) {
+  const run = can("jobs.run") ? h("button", { class: "btn btn-sm", type: "button", title: "Run " + job + " at " + shortSha(b.head) }, icon("play"), "Run") : null;
+  run?.addEventListener("click", () => {
     run.disabled = true;
     api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/jobs/" + encodeURIComponent(job) + "/runs")
       .then((r) => go(at.run(r.number))).catch((err) => { run.disabled = false; fail(err); });
   });
-  return h("li", { class: "annotation-row" }, h("span", { class: "tone-neutral" }, icon("circle", "Not run")),
-    h("span", { class: "row-title" }, job), h("span", { class: "row-description" }, "Runs when a member starts it"), machineAvatar(job), run);
+  return h("li", { class: "annotation-row manual-job" }, h("span", { class: "manual-job-icon" }, icon("play", "Manual")),
+    h("span", { class: "row-title" }, job), h("span", { class: "row-description" }, "Manual · runs when a member starts it"), run);
 }
 
 // noRuns is the card a list of runs shows when it has none: an Empty state saying why, and action under it, if any.

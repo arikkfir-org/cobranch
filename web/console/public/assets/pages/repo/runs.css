@@ -25,6 +25,10 @@ pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding
   .runs-filters > .filters-count { flex-basis: 100%; }
 }
 
-/* A branch's Jobs tab: a card per push, and the link that opens the earlier ones. */
+/* A branch's Jobs tab: a card per push, a job its head starts by hand in a row of the Annotation row's box around a
+   Small button, a head nothing ran on in a line, and the link that opens the earlier pushes. */
+.push-card .manual-job { padding-block: var(--space-8); }
+.manual-job-icon { color: var(--color-fg-muted); }
+.push-card > .card-note { padding-block: var(--space-12); }
 .earlier-pushes { font: var(--text-body-small); text-decoration: none; }
 .earlier-pushes:hover { text-decoration: underline; }
