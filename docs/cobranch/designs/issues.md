@@ -213,7 +213,8 @@ REST’s `…/chat/updates?wait=15` follow it alike.
 - **They go with the issue.** Deleting an issue deletes its chat, its messages and their events with it; the audit log
   keeps what they said. A comment made while the issue is deleted either lands first, and goes with it, or finds no
   issue.
-- **The issue page shows them** under its activity, newest thread first, with a box to comment for `issues.write`.
+- **The conversation pane shows them** beside the issue page, newest thread first, with a box to comment for
+  `issues.write`.
 
 ## Agents
 
