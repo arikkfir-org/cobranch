@@ -1,7 +1,7 @@
 # Cobranch Back-office
 
 > **Snapshot.** This design lives in its [Back-office page](https://claude.ai/artifact/Eer3q2KsCAMzT2pXWPKzt1), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-05, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Proposed 2026-10-31 · [ENG-219](https://linear.app/arikkfir/issue/ENG-219) · Builds on [principals and
@@ -203,8 +203,9 @@ Changing or removing a provider takes effect on the next sign-in. Sessions alrea
 
 ![The Back-office’s first pages](back-office/pages.svg)
 
-The pages use the design system’s tokens and components, as the Console’s do; until the web apps’ build-out, the
-Back-office is one page of plain JavaScript like the Console.
+The pages use the design system’s tokens and components, as the Console’s do: its image takes the Console’s
+`tokens.css`, typefaces and marks when it is built, and its theme follows the system’s. Until the web apps’ build-out,
+the Back-office is one page of plain JavaScript like the Console.
 
 The [design system](design-system.md#screens) hasn't drawn the Back-office's screens; its pages reuse the Console's
 components: tables, forms, status badges and the one-time dialog for a new secret.

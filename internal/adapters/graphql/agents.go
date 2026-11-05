@@ -34,6 +34,10 @@ type Agents interface {
 	Work(ctx context.Context, v agents.Viewer) (agents.Work, error)
 	Transcript(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, after, limit int) ([]agents.Entry, error)
 	Append(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, e agents.Entry) (agents.Entry, bool, error)
+	Models(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Model, error)
+	PutModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (agents.Model, bool, error)
+	RemoveModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, version int64) error
+	RecordSpend(ctx context.Context, v agents.Viewer, u agents.Usage) (agents.Spend, error)
 }
 
 func agentPrincipal(p *agents.Principal) *CommitPrincipal {
@@ -60,7 +64,7 @@ func orEmpty(s *string) string {
 }
 
 func agent(a agents.Agent) *Agent {
-	out := &Agent{ID: a.ID.String(), Name: a.Name, Description: a.Description, Instructions: a.Instructions, BuiltIn: a.BuiltIn,
+	out := &Agent{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Name: a.Name, Description: a.Description, Instructions: a.Instructions, BuiltIn: a.BuiltIn,
 		CreatedBy: agentPrincipal(a.CreatedBy), CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), Version: int(a.Version),
 		Grants: make([]*AgentGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
@@ -69,6 +73,7 @@ func agent(a agents.Agent) *Agent {
 	if a.Provider != "" {
 		out.Provider, out.Model = &a.Provider, &a.Model
 	}
+	out.Cap = optionalUSD(a.Cap)
 	out.Secrets = make([]*AgentSecret, 0, len(a.Secrets))
 	for _, name := range slices.Sorted(maps.Keys(a.Secrets)) {
 		out.Secrets = append(out.Secrets, &AgentSecret{Name: name, SecretID: a.Secrets[name].String()})
@@ -120,7 +125,8 @@ func task(t agents.Task) *Task {
 	out := &Task{ID: t.ID.String(), OrganizationID: t.OrgID.String(), Number: int(t.Number), Agent: agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
 		Title: t.Title, Instructions: t.Instructions, RepositoryID: idOf(t.RepoID), RepositorySlug: text(t.RepoSlug), BranchID: idOf(t.BranchID),
 		Branch: text(t.Branch), ThreadID: idOf(t.ThreadID), Sha: text(t.SHA), State: TaskState(strings.ToUpper(string(t.State))), Reason: t.Reason, Summary: t.Summary,
-		CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: int(t.Version)}
+		CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: int(t.Version), Spent: t.Spent.String(),
+		InputTokens: t.InputTokens, OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap)}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()
 		out.StartedAt = &at

@@ -15,9 +15,12 @@ async function agentItems({ org }) {
   const [agents, running] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
     api("GET", "/orgs/" + org.slug + "/tasks?state=running&limit=100").then((d) => new Set(d.tasks.map((t) => t.agent.id)), () => new Set())]);
   setAgents(new Set(agents.map((a) => a.id)));
-  return { whole: true, count: agents.length, items: agents.map((a) => ({ key: a.id, label: a.name, href: base + org.slug + "/agents/" + a.id, avatar: "agent",
+  return { whole: true, count: agents.length, items: agents.map((a) => ({ ...agentItem(org, a),
     dot: running.has(a.id) ? "ai" : null, dotLabel: running.has(a.id) ? "Working" : null })) };
 }
+
+// agentItem is agent a as a sub item of the sidebar's Agents: it opens the agent's tasks, which put it first there.
+export const agentItem = (org, a) => ({ key: a.id, label: a.name, href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), avatar: "agent" });
 
 // grantChips names an agent's grants: a role at the organization, or a role on one of its repositories.
 const grantChips = (grants) => grants.length ? grants.map((g) => h("span", { class: "chip" }, g.roleName, g.repositorySlug ? " on " + g.repositorySlug : ""))
@@ -78,9 +81,11 @@ async function showAgents(org, main, can, problem = null) {
   main.replaceChildren(...sections);
 }
 
-// modelEditor puts agent a on a model of one of the organization's providers, or on none, in place of row; it offers
-// a viewer who manages the organization's grants to let the agent read the provider's key in the same step, which a
-// task needs to run. done draws the page again, with what went wrong, if anything.
+// modelEditor puts agent a on a model of one of the organization's providers, or on none, in place of row; it adds a
+// model the organization hasn't to its models, unpriced, for a viewer who manages the organization, since an agent
+// runs only on one of them, and offers a viewer who manages the organization's grants to let the agent read the
+// provider's key in the same step, which a task needs to run. done draws the page again, with what went wrong, if
+// anything.
 function modelEditor(org, a, providers, can, row, done) {
   const provider = h("select", {}, h("option", { value: "" }, "None"),
     providers.map((p) => h("option", { value: p.name, selected: p.name === a.provider }, p.name + (p.broken ? " (its key is gone)" : ""))));
@@ -90,6 +95,10 @@ function modelEditor(org, a, providers, can, row, done) {
     e.preventDefault();
     const picked = providers.find((p) => p.name === provider.value);
     try {
+      if (picked && can("org.manage")) {
+        await api("PUT", "/orgs/" + org.slug + "/models/" + encodeURIComponent(picked.name) + "/" + encodeURIComponent(model.value.trim()),
+          { inputPrice: "0", outputPrice: "0" }, { "If-None-Match": "*" }).catch((err) => { if (err.code !== "precondition.failed") throw err; });
+      }
       await api("PUT", "/orgs/" + org.slug + "/agents/" + a.id + "/model", picked ? { provider: picked.name, model: model.value } : {}, { "If-Match": `"${a.version}"` });
     } catch (err) {
       return done(err.message);
@@ -100,7 +109,7 @@ function modelEditor(org, a, providers, can, row, done) {
   } }, h("h3", {}, a.name + "'s model"),
     providers.length ? null : h("p", {}, "The organization has no model providers yet: an admin adds one, with its key, in Settings."),
     h("label", {}, "Provider", provider),
-    h("label", {}, "Model", h("span", {}, "Its name as the provider knows it. Cobranch doesn't check it, so a model works the day the provider ships it."), model),
+    h("label", {}, "Model", h("span", {}, "Its name as the provider knows it, one of the organization's models; an admin's new one is added unpriced. Cobranch doesn't check it, so a model works the day the provider ships it."), model),
     can("org.grants.manage") ? h("label", { class: "check" }, grant, "Let the agent read the provider's key (Secret reader on it), as its tasks need") : null,
     h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(row) }, "Cancel")))));
   return editor;

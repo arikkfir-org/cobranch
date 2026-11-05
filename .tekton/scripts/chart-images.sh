@@ -5,5 +5,5 @@ set -eu
 sh .tekton/scripts/go-cache-seed.sh
 docker build --build-arg VERSION="$VERSION" --tag "cobranch:$VERSION" .
 docker build --tag "cobranch-console:$VERSION" web/console
-docker build --tag "cobranch-back-office:$VERSION" web/back-office
+docker build --tag "cobranch-back-office:$VERSION" --file web/back-office/Dockerfile web
 docker pull --quiet "$(cat .ci/postgresql-image)"

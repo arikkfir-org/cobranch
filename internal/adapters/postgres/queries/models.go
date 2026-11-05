@@ -26,6 +26,7 @@ type Agent struct {
 	Model        *string
 	Secrets      []byte
 	Purpose      *string
+	Cap          *int64
 }
 
 type AgentTask struct {
@@ -106,21 +107,22 @@ type ChatMessage struct {
 }
 
 type ChatThread struct {
-	ID         uuid.UUID
-	OrgID      uuid.UUID
-	RepoID     *uuid.UUID
-	BranchID   *uuid.UUID
-	Sha        *string
-	Path       *string
-	StartLine  *int32
-	EndLine    *int32
-	CreatedBy  *uuid.UUID
-	CreatedAt  time.Time
-	ResolvedAt *time.Time
-	ResolvedBy *uuid.UUID
-	Version    int64
-	ReviewID   *uuid.UUID
-	IssueID    *uuid.UUID
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	RepoID         *uuid.UUID
+	BranchID       *uuid.UUID
+	Sha            *string
+	Path           *string
+	StartLine      *int32
+	EndLine        *int32
+	CreatedBy      *uuid.UUID
+	CreatedAt      time.Time
+	ResolvedAt     *time.Time
+	ResolvedBy     *uuid.UUID
+	Version        int64
+	ReviewID       *uuid.UUID
+	IssueID        *uuid.UUID
+	ConversationID *uuid.UUID
 }
 
 type Commit struct {
@@ -333,6 +335,19 @@ type Membership struct {
 	JoinedAt time.Time
 }
 
+type Model struct {
+	OrgID       uuid.UUID
+	Provider    string
+	Model       string
+	InputPrice  int64
+	OutputPrice int64
+	IsDefault   bool
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type ModelProvider struct {
 	OrgID     uuid.UUID
 	Provider  string
@@ -362,6 +377,13 @@ type OrganizationLimit struct {
 	Version      int64
 	UpdatedAt    time.Time
 	UpdatedBy    *uuid.UUID
+}
+
+type Preference struct {
+	PrincipalID uuid.UUID
+	Theme       string
+	UpdatedAt   time.Time
+	Version     int64
 }
 
 type Principal struct {

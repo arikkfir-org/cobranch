@@ -1,8 +1,7 @@
 import { api } from "../lib/api.js";
-import { logo } from "../lib/brand.js";
-import { app, h } from "../lib/dom.js";
+import { h } from "../lib/dom.js";
 import { when } from "../lib/format.js";
-import { signOut } from "../lib/layout.js";
+import { showCard, signOut } from "../lib/layout.js";
 import { go } from "../lib/router.js";
 import { base, me, orgs, setOrgs } from "../lib/state.js";
 
@@ -27,8 +26,7 @@ export async function showWelcome() {
     h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs/" + encodeURIComponent(joinSlug.value) + "/join-requests", { note: note.value }).then(() => showWelcome()).catch(fail); } },
       h("label", {}, "Organization slug", joinSlug), h("label", {}, "Note", note), h("div", {}, h("button", { class: "button", type: "submit" }, "Ask to join"))),
     requests.length ? h("p", {}, "Waiting: ", requests.map((r, i) => [i ? ", " : "", h("strong", {}, r.orgName)]), ".") : null));
-  document.body.className = "centered";
-  app.replaceChildren(h("main", { class: "card" }, h("h1", { class: "brand" }, logo()), ...sections));
+  showCard(...sections);
 }
 
 // createOrganization is the form that creates an organization, with how many the viewer created against the most a

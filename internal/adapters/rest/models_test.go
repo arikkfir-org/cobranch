@@ -8,10 +8,15 @@ import (
 	"cobranch.dev/internal/services/agents"
 )
 
-// withProvider has Olivia add anthropic to Acme, its key in providerKey.
+// withProvider has Olivia add anthropic to Acme, its key in providerKey, and its a-model to Acme's models, at $3 and $15
+// a million tokens.
 func (f *orgFixture) withProvider(t *testing.T) {
 	t.Helper()
 	if _, _, err := f.agents.SetModelProvider(t.Context(), f.olivia.User, f.acme.ID, "anthropic", f.providerKey, agents.NoVersion); err != nil {
+		t.Fatal(err)
+	}
+	in := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000}
+	if _, _, err := f.agents.PutModel(t.Context(), f.olivia.User, f.acme.ID, "anthropic", "a-model", in, agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -28,10 +33,19 @@ func onProvider(t *testing.T, path func(*orgFixture) string) func(*orgFixture) s
 func onModel(t *testing.T, path func(*orgFixture) string) func(*orgFixture) string {
 	return func(f *orgFixture) string {
 		f.withProvider(t)
-		if _, err := f.agents.SetModel(t.Context(), f.olivia.User, f.acme.ID, f.scout.ID, "anthropic", "a-model", agents.AnyVersion); err != nil {
-			t.Fatal(err)
-		}
+		f.withScoutOnModel(t)
 		return path(f)
+	}
+}
+
+// withScoutOnModel has Olivia put Scout on a-model, with a cap of $8 a task.
+func (f *orgFixture) withScoutOnModel(t *testing.T) {
+	t.Helper()
+	if _, err := f.agents.SetModel(t.Context(), f.olivia.User, f.acme.ID, f.scout.ID, "anthropic", "a-model", agents.AnyVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.agents.UpdateAgent(t.Context(), f.olivia.User, f.acme.ID, f.scout.ID, agents.AnyVersion, agents.Change{Cap: new(agents.USD(8_000_000))}); err != nil {
+		t.Fatal(err)
 	}
 }
 

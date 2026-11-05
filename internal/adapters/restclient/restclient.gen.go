@@ -558,17 +558,26 @@ type Task struct {
 	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
 
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
-	CancelledBy  *Principal         `json:"cancelledBy,omitempty"`
-	CreatedAt    time.Time          `json:"createdAt"`
-	EndedAt      *time.Time         `json:"endedAt,omitempty"`
-	Id           openapi_types.UUID `json:"id"`
-	Instructions string             `json:"instructions"`
+	CancelledBy *Principal `json:"cancelledBy,omitempty"`
+
+	// Cap The most it may spend, its agent's cap, in US dollars; absent for none. It fails once it reaches it.
+	Cap       *string            `json:"cap,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	EndedAt   *time.Time         `json:"endedAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens its model read so far.
+	InputTokens  int64  `json:"inputTokens"`
+	Instructions string `json:"instructions"`
 
 	// Kind What it is for; assigned for a task a principal assigned.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
 	Number int64 `json:"number"`
+
+	// OutputTokens The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
 
 	// Reason Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
@@ -578,7 +587,10 @@ type Task struct {
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
-	Sha       *string    `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+
+	// Spent What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent     string     `json:"spent"`
 	StartedAt *time.Time `json:"startedAt,omitempty"`
 
 	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
@@ -595,8 +607,37 @@ type Task struct {
 	Version int64 `json:"version"`
 }
 
+// TaskSpend What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+type TaskSpend struct {
+	// Cap The most it may spend, in US dollars; absent for none.
+	Cap *string `json:"cap,omitempty"`
+
+	// Ended Whether it has ended; its token then acts no more.
+	Ended        bool  `json:"ended"`
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+
+	// Spent In US dollars, at its organization's prices, such as 0.42.
+	Spent string `json:"spent"`
+}
+
 // TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 type TaskState string
+
+// TaskUsage A call of a task's model, as the model proxy of its pod reports it.
+type TaskUsage struct {
+	// Id The call's own ID, which a repeated report repeats, so that it counts once.
+	Id openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens the model read, 0 to 100000000.
+	InputTokens int64 `json:"inputTokens"`
+
+	// Model The model the call asked, as its provider names it.
+	Model string `json:"model"`
+
+	// OutputTokens The tokens the model wrote, 0 to 100000000.
+	OutputTokens int64 `json:"outputTokens"`
+}
 
 // TranscriptEntry A step of a task's transcript, numbered from 1 in its task; entries never change.
 type TranscriptEntry struct {
@@ -790,6 +831,9 @@ type ListTranscriptParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// RecordMyTaskSpendJSONRequestBody defines body for RecordMyTaskSpend for application/json ContentType.
+type RecordMyTaskSpendJSONRequestBody = TaskUsage
+
 // StartIssueChatThreadJSONRequestBody defines body for StartIssueChatThread for application/json ContentType.
 type StartIssueChatThreadJSONRequestBody = ChatThreadInput
 
@@ -886,6 +930,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+	RecordMyTaskSpendWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+	RecordMyTaskSpend(ctx context.Context, body RecordMyTaskSpendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 	//
@@ -1032,6 +1090,40 @@ type ClientInterface interface {
 // Corresponds with GET /me/task (the `GetMyTask` operationId).
 func (c *Client) GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMyTaskRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+func (c *Client) RecordMyTaskSpendWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordMyTaskSpendRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+func (c *Client) RecordMyTaskSpend(ctx context.Context, body RecordMyTaskSpendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordMyTaskSpendRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1434,6 +1526,46 @@ func NewGetMyTaskRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewRecordMyTaskSpendRequest calls the generic RecordMyTaskSpend builder with application/json body
+func NewRecordMyTaskSpendRequest(server string, body RecordMyTaskSpendJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRecordMyTaskSpendRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRecordMyTaskSpendRequestWithBody constructs an http.Request for the RecordMyTaskSpend method, with any body, and a specified content type
+func NewRecordMyTaskSpendRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/me/task/spend")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -2738,6 +2870,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTaskWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyTaskResponse, error)
 
+	// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+	RecordMyTaskSpendWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordMyTaskSpendResponse, error)
+
+	// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+	RecordMyTaskSpendWithResponse(ctx context.Context, body RecordMyTaskSpendJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordMyTaskSpendResponse, error)
+
 	// ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -2956,6 +3102,82 @@ func (r GetMyTaskResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMyTaskResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RecordMyTaskSpendResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TaskSpend
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RecordMyTaskSpendResponse) GetJSON200() *TaskSpend {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RecordMyTaskSpendResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RecordMyTaskSpendResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RecordMyTaskSpendResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RecordMyTaskSpendResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RecordMyTaskSpendResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RecordMyTaskSpendResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RecordMyTaskSpendResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RecordMyTaskSpendResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RecordMyTaskSpendResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4474,6 +4696,32 @@ func (c *ClientWithResponses) GetMyTaskWithResponse(ctx context.Context, reqEdit
 	return ParseGetMyTaskResponse(rsp)
 }
 
+// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+func (c *ClientWithResponses) RecordMyTaskSpendWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordMyTaskSpendResponse, error) {
+	rsp, err := c.RecordMyTaskSpendWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordMyTaskSpendResponse(rsp)
+}
+
+// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
+func (c *ClientWithResponses) RecordMyTaskSpendWithResponse(ctx context.Context, body RecordMyTaskSpendJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordMyTaskSpendResponse, error) {
+	rsp, err := c.RecordMyTaskSpend(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordMyTaskSpendResponse(rsp)
+}
+
 // ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -4807,6 +5055,67 @@ func ParseGetMyTaskResponse(rsp *http.Response) (*GetMyTaskResponse, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRecordMyTaskSpendResponse parses an HTTP response from a RecordMyTaskSpendWithResponse call
+func ParseRecordMyTaskSpendResponse(rsp *http.Response) (*RecordMyTaskSpendResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RecordMyTaskSpendResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TaskSpend
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

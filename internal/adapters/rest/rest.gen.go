@@ -125,6 +125,138 @@ func (e AnnotationStatus) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactAudience.
+const (
+	ArtifactAudienceOrganization ArtifactAudience = "organization"
+	ArtifactAudiencePrivate      ArtifactAudience = "private"
+	ArtifactAudienceRepository   ArtifactAudience = "repository"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactAudience enum.
+func (e ArtifactAudience) Valid() bool {
+	switch e {
+	case ArtifactAudienceOrganization:
+		return true
+	case ArtifactAudiencePrivate:
+		return true
+	case ArtifactAudienceRepository:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactGrantKind.
+const (
+	ArtifactGrantKindAgent  ArtifactGrantKind = "agent"
+	ArtifactGrantKindApiKey ArtifactGrantKind = "api_key"
+	ArtifactGrantKindJob    ArtifactGrantKind = "job"
+	ArtifactGrantKindUser   ArtifactGrantKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactGrantKind enum.
+func (e ArtifactGrantKind) Valid() bool {
+	switch e {
+	case ArtifactGrantKindAgent:
+		return true
+	case ArtifactGrantKindApiKey:
+		return true
+	case ArtifactGrantKindJob:
+		return true
+	case ArtifactGrantKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactKind.
+const (
+	Diagram  ArtifactKind = "diagram"
+	Document ArtifactKind = "document"
+	Page     ArtifactKind = "page"
+	Report   ArtifactKind = "report"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactKind enum.
+func (e ArtifactKind) Valid() bool {
+	switch e {
+	case Diagram:
+		return true
+	case Document:
+		return true
+	case Page:
+		return true
+	case Report:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactMediaType.
+const (
+	ImagesvgXml  ArtifactMediaType = "image/svg+xml"
+	Texthtml     ArtifactMediaType = "text/html"
+	Textmarkdown ArtifactMediaType = "text/markdown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactMediaType enum.
+func (e ArtifactMediaType) Valid() bool {
+	switch e {
+	case ImagesvgXml:
+		return true
+	case Texthtml:
+		return true
+	case Textmarkdown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactReach.
+const (
+	ArtifactReachEdit ArtifactReach = "edit"
+	ArtifactReachNone ArtifactReach = "none"
+	ArtifactReachView ArtifactReach = "view"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactReach enum.
+func (e ArtifactReach) Valid() bool {
+	switch e {
+	case ArtifactReachEdit:
+		return true
+	case ArtifactReachNone:
+		return true
+	case ArtifactReachView:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactRole.
+const (
+	Editor ArtifactRole = "editor"
+	Owner  ArtifactRole = "owner"
+	Viewer ArtifactRole = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRole enum.
+func (e ArtifactRole) Valid() bool {
+	switch e {
+	case Editor:
+		return true
+	case Owner:
+		return true
+	case Viewer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BranchCheckKind.
 const (
 	BranchCheckKindAi               BranchCheckKind = "ai"
@@ -463,25 +595,25 @@ func (e IssueChangeField) Valid() bool {
 
 // Defines values for IssuePriority.
 const (
-	High   IssuePriority = "high"
-	Low    IssuePriority = "low"
-	Medium IssuePriority = "medium"
-	None   IssuePriority = "none"
-	Urgent IssuePriority = "urgent"
+	IssuePriorityHigh   IssuePriority = "high"
+	IssuePriorityLow    IssuePriority = "low"
+	IssuePriorityMedium IssuePriority = "medium"
+	IssuePriorityNone   IssuePriority = "none"
+	IssuePriorityUrgent IssuePriority = "urgent"
 )
 
 // Valid indicates whether the value is a known member of the IssuePriority enum.
 func (e IssuePriority) Valid() bool {
 	switch e {
-	case High:
+	case IssuePriorityHigh:
 		return true
-	case Low:
+	case IssuePriorityLow:
 		return true
-	case Medium:
+	case IssuePriorityMedium:
 		return true
-	case None:
+	case IssuePriorityNone:
 		return true
-	case Urgent:
+	case IssuePriorityUrgent:
 		return true
 	default:
 		return false
@@ -757,16 +889,16 @@ func (e RepositoryObjectFormat) Valid() bool {
 
 // Defines values for RepositoryVisibility.
 const (
-	Internal RepositoryVisibility = "internal"
-	Private  RepositoryVisibility = "private"
+	RepositoryVisibilityInternal RepositoryVisibility = "internal"
+	RepositoryVisibilityPrivate  RepositoryVisibility = "private"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryVisibility enum.
 func (e RepositoryVisibility) Valid() bool {
 	switch e {
-	case Internal:
+	case RepositoryVisibilityInternal:
 		return true
-	case Private:
+	case RepositoryVisibilityPrivate:
 		return true
 	default:
 		return false
@@ -911,6 +1043,27 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for Theme.
+const (
+	Dark   Theme = "dark"
+	Light  Theme = "light"
+	System Theme = "system"
+)
+
+// Valid indicates whether the value is a known member of the Theme enum.
+func (e Theme) Valid() bool {
+	switch e {
+	case Dark:
+		return true
+	case Light:
+		return true
+	case System:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TranscriptEntryKind.
 const (
 	TranscriptEntryKindInput  TranscriptEntryKind = "input"
@@ -1028,7 +1181,10 @@ type AIReviewState string
 // Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
-	BuiltIn   bool      `json:"builtIn"`
+	BuiltIn bool `json:"builtIn"`
+
+	// Cap The most a task of it may spend, in US dollars such as 2.00; absent for none.
+	Cap       *string   `json:"cap,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
@@ -1098,9 +1254,11 @@ type AgentModel struct {
 
 // AgentPatch What changes about an agent; a field left out keeps its value.
 type AgentPatch struct {
-	Description  *string `json:"description,omitempty"`
-	Instructions *string `json:"instructions,omitempty"`
-	Name         *string `json:"name,omitempty"`
+	// Cap The most a task of it may spend, in US dollars such as 2.00, at most $1000000 (400 agent.cap_invalid); null for none.
+	Cap          nullable.Nullable[string] `json:"cap,omitempty"`
+	Description  *string                   `json:"description,omitempty"`
+	Instructions *string                   `json:"instructions,omitempty"`
+	Name         *string                   `json:"name,omitempty"`
 }
 
 // AgentSecrets The secrets an agent's tasks receive.
@@ -1196,6 +1354,158 @@ type ApiKeySecret struct {
 	Id         openapi_types.UUID `json:"id"`
 	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
+}
+
+// Artifact A document, a diagram, a report or a page that a repository owns, as its readers see it: its versions' bodies come from getArtifactVersion.
+type Artifact struct {
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent *Principal `json:"agent,omitempty"`
+
+	// Audience Its widest audience, as the list's badge names it.
+	Audience ArtifactAudience `json:"audience"`
+
+	// Branch The branch it came from; empty for none.
+	Branch    string    `json:"branch"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Head Its newest version's number, the one it shows.
+	Head int32              `json:"head"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType  `json:"mediaType"`
+	OrgId     openapi_types.UUID `json:"orgId"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+
+	// Permissions What the caller holds on it, sorted; getArtifact alone answers it.
+	Permissions *[]string `json:"permissions,omitempty"`
+
+	// Repository The repository that owns an artifact.
+	Repository ArtifactRepository `json:"repository"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+	Summary          string        `json:"summary"`
+
+	// TaskNumber The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
+	TaskNumber *int64    `json:"taskNumber,omitempty"`
+	Title      string    `json:"title"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+
+	// UpdatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	UpdatedBy *Principal `json:"updatedBy,omitempty"`
+
+	// Version Its version, which every change and every new version bumps, and its ETag carries.
+	Version int64 `json:"version"`
+}
+
+// ArtifactAudience Its widest audience, as the list's badge names it.
+type ArtifactAudience string
+
+// ArtifactAccess Who reaches an artifact; grants on its repository and at its organization reach it too.
+type ArtifactAccess struct {
+	Grants []ArtifactGrant `json:"grants"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+}
+
+// ArtifactGrant A role a principal holds on an artifact itself.
+type ArtifactGrant struct {
+	DisplayName string             `json:"displayName"`
+	Kind        ArtifactGrantKind  `json:"kind"`
+	PrincipalId openapi_types.UUID `json:"principalId"`
+
+	// Role A role an artifact grants, from viewing to managing.
+	Role ArtifactRole `json:"role"`
+}
+
+// ArtifactGrantKind defines model for ArtifactGrant.Kind.
+type ArtifactGrantKind string
+
+// ArtifactKind What an artifact is for, which picks its icon and its filter, never its format.
+type ArtifactKind string
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList struct {
+	Artifacts []Artifact `json:"artifacts"`
+}
+
+// ArtifactMediaType The format a version is written in.
+type ArtifactMediaType string
+
+// ArtifactPatch The fields of an artifact a change sets; those it leaves out stay as they are.
+type ArtifactPatch struct {
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	Summary          *string        `json:"summary,omitempty"`
+	Title            *string        `json:"title,omitempty"`
+}
+
+// ArtifactReach How far an audience reaches an artifact.
+type ArtifactReach string
+
+// ArtifactRepository The repository that owns an artifact.
+type ArtifactRepository struct {
+	Id   openapi_types.UUID `json:"id"`
+	Slug string             `json:"slug"`
+}
+
+// ArtifactRole A role an artifact grants, from viewing to managing.
+type ArtifactRole string
+
+// ArtifactShare Who an artifact is shared with, and as what.
+type ArtifactShare struct {
+	PrincipalId openapi_types.UUID `json:"principalId"`
+
+	// Role A role an artifact grants, from viewing to managing.
+	Role ArtifactRole `json:"role"`
+}
+
+// ArtifactVersion A version of an artifact, which never changes.
+type ArtifactVersion struct {
+	ArtifactId openapi_types.UUID `json:"artifactId"`
+
+	// Author Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Author *Principal `json:"author,omitempty"`
+
+	// Body Its text; getArtifactVersion alone answers it.
+	Body      *string   `json:"body,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Html A Markdown body rendered and sanitized as the Console shows it; getArtifactVersion alone answers it.
+	Html *string            `json:"html,omitempty"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+	Note      string            `json:"note"`
+	Number    int32             `json:"number"`
+
+	// Size Its body's length in bytes.
+	Size int64 `json:"size"`
+
+	// TaskNumber The number of the agent's task it was written in; absent for none.
+	TaskNumber *int64 `json:"taskNumber,omitempty"`
+}
+
+// ArtifactVersionList defines model for ArtifactVersionList.
+type ArtifactVersionList struct {
+	Versions []ArtifactVersion `json:"versions"`
 }
 
 // Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
@@ -2089,6 +2399,51 @@ type MergeResult struct {
 	Head string `json:"head"`
 }
 
+// Model One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type Model struct {
+	// Agents The agents that run on it, by name.
+	Agents    []Principal `json:"agents"`
+	CreatedAt time.Time   `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Default Whether a new agent starts on it; the organization has at most one.
+	Default bool `json:"default"`
+
+	// InputPrice What a million tokens it reads cost, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+
+	// Name The model's name, as its provider gives it.
+	Name string `json:"name"`
+
+	// OutputPrice What a million tokens it writes cost, such as 15.00.
+	OutputPrice string    `json:"outputPrice"`
+	Provider    string    `json:"provider"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its agents' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// ModelInput What a model costs and whether it is the default; it replaces what the model had.
+type ModelInput struct {
+	// Default Whether a new agent starts on it; absent for not.
+	Default *bool `json:"default,omitempty"`
+
+	// InputPrice What a million tokens it reads cost, $0 to $10000, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+
+	// OutputPrice What a million tokens it writes cost, $0 to $10000, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+}
+
+// ModelList defines model for ModelList.
+type ModelList struct {
+	// Models The organization's models, by provider and name.
+	Models []Model `json:"models"`
+}
+
 // ModelProvider A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
 type ModelProvider struct {
 	// Broken Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
@@ -2144,6 +2499,54 @@ type MyTask struct {
 
 	// Task A task of one of the organization's agents, which the organization numbers.
 	Task Task `json:"task"`
+}
+
+// NewArtifact What makes an artifact with its first version.
+type NewArtifact struct {
+	// Body Its first version's body, 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Branch The branch it came from; an agent's task names its own when absent.
+	Branch *string `json:"branch,omitempty"`
+
+	// Id The artifact's ID, and its first version's, which the call that makes it picks so that it makes it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why the version was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+
+	// Summary At most 500 characters.
+	Summary *string `json:"summary,omitempty"`
+
+	// Title 1 to 200 characters.
+	Title string `json:"title"`
+}
+
+// NewArtifactVersion What adds a version.
+type NewArtifactVersion struct {
+	// Body 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Id The version's ID, which the call that adds it picks so that it adds it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why it was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
 }
 
 // NewSecret What makes a secret.
@@ -2294,6 +2697,21 @@ type PersonalTokenInput struct {
 // PostedEvent What a posted event queued.
 type PostedEvent struct {
 	Runs []Run `json:"runs"`
+}
+
+// Preferences How Cobranch looks to a person, wherever they sign in.
+type Preferences struct {
+	// Theme The colours the Console draws in; system follows the operating system's.
+	Theme Theme `json:"theme"`
+
+	// Version Counts their changes, 0 before the first; their ETag.
+	Version int64 `json:"version"`
+}
+
+// PreferencesPatch What changes the preferences, as a merge patch; a field left out keeps its value.
+type PreferencesPatch struct {
+	// Theme The colours the Console draws in; system follows the operating system's.
+	Theme *Theme `json:"theme,omitempty"`
 }
 
 // Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
@@ -2695,17 +3113,26 @@ type Task struct {
 	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
 
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
-	CancelledBy  *Principal         `json:"cancelledBy,omitempty"`
-	CreatedAt    time.Time          `json:"createdAt"`
-	EndedAt      *time.Time         `json:"endedAt,omitempty"`
-	Id           openapi_types.UUID `json:"id"`
-	Instructions string             `json:"instructions"`
+	CancelledBy *Principal `json:"cancelledBy,omitempty"`
+
+	// Cap The most it may spend, its agent's cap, in US dollars; absent for none. It fails once it reaches it.
+	Cap       *string            `json:"cap,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	EndedAt   *time.Time         `json:"endedAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens its model read so far.
+	InputTokens  int64  `json:"inputTokens"`
+	Instructions string `json:"instructions"`
 
 	// Kind What it is for; assigned for a task a principal assigned.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
 	Number int64 `json:"number"`
+
+	// OutputTokens The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
 
 	// Reason Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
@@ -2715,7 +3142,10 @@ type Task struct {
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
-	Sha       *string    `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+
+	// Spent What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent     string     `json:"spent"`
 	StartedAt *time.Time `json:"startedAt,omitempty"`
 
 	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
@@ -2749,8 +3179,40 @@ type TaskInput struct {
 	Title string `json:"title"`
 }
 
+// TaskSpend What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+type TaskSpend struct {
+	// Cap The most it may spend, in US dollars; absent for none.
+	Cap *string `json:"cap,omitempty"`
+
+	// Ended Whether it has ended; its token then acts no more.
+	Ended        bool  `json:"ended"`
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+
+	// Spent In US dollars, at its organization's prices, such as 0.42.
+	Spent string `json:"spent"`
+}
+
 // TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 type TaskState string
+
+// TaskUsage A call of a task's model, as the model proxy of its pod reports it.
+type TaskUsage struct {
+	// Id The call's own ID, which a repeated report repeats, so that it counts once.
+	Id openapi_types.UUID `json:"id"`
+
+	// InputTokens The tokens the model read, 0 to 100000000.
+	InputTokens int64 `json:"inputTokens"`
+
+	// Model The model the call asked, as its provider names it.
+	Model string `json:"model"`
+
+	// OutputTokens The tokens the model wrote, 0 to 100000000.
+	OutputTokens int64 `json:"outputTokens"`
+}
+
+// Theme The colours the Console draws in; system follows the operating system's.
+type Theme string
 
 // TranscriptEntry A step of a task's transcript, numbered from 1 in its task; entries never change.
 type TranscriptEntry struct {
@@ -2856,6 +3318,9 @@ type AgentID = openapi_types.UUID
 // Name defines model for annotation.
 type Name = string
 
+// ArtifactVersionNumber defines model for artifactVersionNumber.
+type ArtifactVersionNumber = int32
+
 // BranchName defines model for branch.
 type BranchName = string
 
@@ -2874,6 +3339,9 @@ type IfMatchAgent = string
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
 
+// IfMatchArtifact defines model for ifMatchArtifact.
+type IfMatchArtifact = string
+
 // IfMatchBranch defines model for ifMatchBranch.
 type IfMatchBranch = string
 
@@ -2886,8 +3354,14 @@ type IfMatchIssue = string
 // IfMatchLabel defines model for ifMatchLabel.
 type IfMatchLabel = string
 
+// IfMatchModel defines model for ifMatchModel.
+type IfMatchModel = string
+
 // IfMatchModelProvider defines model for ifMatchModelProvider.
 type IfMatchModelProvider = string
+
+// IfMatchPreferences defines model for ifMatchPreferences.
+type IfMatchPreferences = string
 
 // IfMatchSecret defines model for ifMatchSecret.
 type IfMatchSecret = string
@@ -2900,6 +3374,9 @@ type IfNoneMatch = string
 
 // IfNoneMatchAnnotation defines model for ifNoneMatchAnnotation.
 type IfNoneMatchAnnotation = string
+
+// IfNoneMatchModel defines model for ifNoneMatchModel.
+type IfNoneMatchModel = string
 
 // IfNoneMatchModelProvider defines model for ifNoneMatchModelProvider.
 type IfNoneMatchModelProvider = string
@@ -2915,6 +3392,9 @@ type LabelID = openapi_types.UUID
 
 // MessageID defines model for message.
 type MessageID = openapi_types.UUID
+
+// ModelName defines model for modelName.
+type ModelName = string
 
 // Number defines model for number.
 type Number = int
@@ -2958,6 +3438,18 @@ type ThreadID = openapi_types.UUID
 // UserID defines model for user.
 type UserID = openapi_types.UUID
 
+// GetMyPreferencesParams defines parameters for GetMyPreferences.
+type GetMyPreferencesParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateMyPreferencesParams defines parameters for UpdateMyPreferences.
+type UpdateMyPreferencesParams struct {
+	// IfMatch The ETag of the preferences the change was made from, "0" before the first change, or * for whichever are there; a change made meanwhile is refused with 412.
+	IfMatch *IfMatchPreferences `json:"If-Match,omitempty"`
+}
+
 // GetMyUsageParams defines parameters for GetMyUsage.
 type GetMyUsageParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
@@ -2990,6 +3482,54 @@ type UpdateAgentParams struct {
 	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
 }
 
+// ListAgentConversationThreadsParams defines parameters for ListAgentConversationThreads.
+type ListAgentConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetAgentConversationThreadParams defines parameters for GetAgentConversationThread.
+type GetAgentConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateAgentConversationThreadParams defines parameters for UpdateAgentConversationThread.
+type UpdateAgentConversationThreadParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// DeleteAgentConversationMessageParams defines parameters for DeleteAgentConversationMessage.
+type DeleteAgentConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// GetAgentConversationMessageParams defines parameters for GetAgentConversationMessage.
+type GetAgentConversationMessageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// EditAgentConversationMessageParams defines parameters for EditAgentConversationMessage.
+type EditAgentConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// ListAgentConversationUpdatesParams defines parameters for ListAgentConversationUpdates.
+type ListAgentConversationUpdatesParams struct {
+	// After Where the updates start, as listAgentConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
 // SetAgentModelParams defines parameters for SetAgentModel.
 type SetAgentModelParams struct {
 	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -3000,6 +3540,93 @@ type SetAgentModelParams struct {
 type SetAgentSecretsParams struct {
 	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
 	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
+// DeleteArtifactParams defines parameters for DeleteArtifact.
+type DeleteArtifactParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// GetArtifactParams defines parameters for GetArtifact.
+type GetArtifactParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateArtifactParams defines parameters for UpdateArtifact.
+type UpdateArtifactParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// AddArtifactVersionParams defines parameters for AddArtifactVersion.
+type AddArtifactVersionParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// GetArtifactVersionParams defines parameters for GetArtifactVersion.
+type GetArtifactVersionParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetArtifactVersionRawParams defines parameters for GetArtifactVersionRaw.
+type GetArtifactVersionRawParams struct {
+	// Download Whether to answer the body as an attachment, named after the artifact's title and the version's format.
+	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListOrganizationConversationThreadsParams defines parameters for ListOrganizationConversationThreads.
+type ListOrganizationConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetOrganizationConversationThreadParams defines parameters for GetOrganizationConversationThread.
+type GetOrganizationConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateOrganizationConversationThreadParams defines parameters for UpdateOrganizationConversationThread.
+type UpdateOrganizationConversationThreadParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// DeleteOrganizationConversationMessageParams defines parameters for DeleteOrganizationConversationMessage.
+type DeleteOrganizationConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// GetOrganizationConversationMessageParams defines parameters for GetOrganizationConversationMessage.
+type GetOrganizationConversationMessageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// EditOrganizationConversationMessageParams defines parameters for EditOrganizationConversationMessage.
+type EditOrganizationConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// ListOrganizationConversationUpdatesParams defines parameters for ListOrganizationConversationUpdates.
+type ListOrganizationConversationUpdatesParams struct {
+	// After Where the updates start, as listOrganizationConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // InviteJSONBody defines parameters for Invite.
@@ -3156,9 +3783,36 @@ type SetModelProviderParams struct {
 	IfNoneMatch *IfNoneMatchModelProvider `json:"If-None-Match,omitempty"`
 }
 
+// RemoveModelParams defines parameters for RemoveModel.
+type RemoveModelParams struct {
+	// IfMatch The ETag of the model the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModel `json:"If-Match,omitempty"`
+}
+
+// GetModelParams defines parameters for GetModel.
+type GetModelParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// SetModelParams defines parameters for SetModel.
+type SetModelParams struct {
+	// IfMatch The ETag of the model the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModel `json:"If-Match,omitempty"`
+
+	// IfNoneMatch *, to add a model the organization hasn't added: one it has refuses with 412.
+	IfNoneMatch *IfNoneMatchModel `json:"If-None-Match,omitempty"`
+}
+
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
 type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
+}
+
+// ListArtifactsParams defines parameters for ListArtifacts.
+type ListArtifactsParams struct {
+	// Kind Only the artifacts of this kind.
+	Kind *ArtifactKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
 // GetBlobParams defines parameters for GetBlob.
@@ -3288,6 +3942,54 @@ type ListReviewsParams struct {
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListRepositoryConversationThreadsParams defines parameters for ListRepositoryConversationThreads.
+type ListRepositoryConversationThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetRepositoryConversationThreadParams defines parameters for GetRepositoryConversationThread.
+type GetRepositoryConversationThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateRepositoryConversationThreadParams defines parameters for UpdateRepositoryConversationThread.
+type UpdateRepositoryConversationThreadParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// DeleteRepositoryConversationMessageParams defines parameters for DeleteRepositoryConversationMessage.
+type DeleteRepositoryConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// GetRepositoryConversationMessageParams defines parameters for GetRepositoryConversationMessage.
+type GetRepositoryConversationMessageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// EditRepositoryConversationMessageParams defines parameters for EditRepositoryConversationMessage.
+type EditRepositoryConversationMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// ListRepositoryConversationUpdatesParams defines parameters for ListRepositoryConversationUpdates.
+type ListRepositoryConversationUpdatesParams struct {
+	// After Where the updates start, as listRepositoryConversationThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // GetDeliveryParams defines parameters for GetDelivery.
@@ -3458,8 +4160,14 @@ type ListBuiltInRolesParams struct {
 // ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
 type ListBuiltInRolesParamsScope string
 
+// UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody defines body for UpdateMyPreferences for application/merge-patch+json ContentType.
+type UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody = PreferencesPatch
+
 // AddMySSHKeyJSONRequestBody defines body for AddMySSHKey for application/json ContentType.
 type AddMySSHKeyJSONRequestBody = SSHKeyInput
+
+// RecordMyTaskSpendJSONRequestBody defines body for RecordMyTaskSpend for application/json ContentType.
+type RecordMyTaskSpendJSONRequestBody = TaskUsage
 
 // CreateMyTokenJSONRequestBody defines body for CreateMyToken for application/json ContentType.
 type CreateMyTokenJSONRequestBody = PersonalTokenInput
@@ -3476,6 +4184,18 @@ type CreateAgentJSONRequestBody = AgentInput
 // UpdateAgentApplicationMergePatchPlusJSONRequestBody defines body for UpdateAgent for application/merge-patch+json ContentType.
 type UpdateAgentApplicationMergePatchPlusJSONRequestBody = AgentPatch
 
+// StartAgentConversationThreadJSONRequestBody defines body for StartAgentConversationThread for application/json ContentType.
+type StartAgentConversationThreadJSONRequestBody = ChatThreadInput
+
+// UpdateAgentConversationThreadApplicationMergePatchPlusJSONRequestBody defines body for UpdateAgentConversationThread for application/merge-patch+json ContentType.
+type UpdateAgentConversationThreadApplicationMergePatchPlusJSONRequestBody = ChatThreadPatch
+
+// PostAgentConversationMessageJSONRequestBody defines body for PostAgentConversationMessage for application/json ContentType.
+type PostAgentConversationMessageJSONRequestBody = ChatMessageInput
+
+// EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody defines body for EditAgentConversationMessage for application/merge-patch+json ContentType.
+type EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
+
 // SetAgentModelJSONRequestBody defines body for SetAgentModel for application/json ContentType.
 type SetAgentModelJSONRequestBody = AgentModel
 
@@ -3487,6 +4207,27 @@ type CreateAPIKeyJSONRequestBody = ApiKeyInput
 
 // RotateAPIKeyJSONRequestBody defines body for RotateAPIKey for application/json ContentType.
 type RotateAPIKeyJSONRequestBody = SecretInput
+
+// UpdateArtifactApplicationMergePatchPlusJSONRequestBody defines body for UpdateArtifact for application/merge-patch+json ContentType.
+type UpdateArtifactApplicationMergePatchPlusJSONRequestBody = ArtifactPatch
+
+// ShareArtifactJSONRequestBody defines body for ShareArtifact for application/json ContentType.
+type ShareArtifactJSONRequestBody = ArtifactShare
+
+// AddArtifactVersionJSONRequestBody defines body for AddArtifactVersion for application/json ContentType.
+type AddArtifactVersionJSONRequestBody = NewArtifactVersion
+
+// StartOrganizationConversationThreadJSONRequestBody defines body for StartOrganizationConversationThread for application/json ContentType.
+type StartOrganizationConversationThreadJSONRequestBody = ChatThreadInput
+
+// UpdateOrganizationConversationThreadApplicationMergePatchPlusJSONRequestBody defines body for UpdateOrganizationConversationThread for application/merge-patch+json ContentType.
+type UpdateOrganizationConversationThreadApplicationMergePatchPlusJSONRequestBody = ChatThreadPatch
+
+// PostOrganizationConversationMessageJSONRequestBody defines body for PostOrganizationConversationMessage for application/json ContentType.
+type PostOrganizationConversationMessageJSONRequestBody = ChatMessageInput
+
+// EditOrganizationConversationMessageApplicationMergePatchPlusJSONRequestBody defines body for EditOrganizationConversationMessage for application/merge-patch+json ContentType.
+type EditOrganizationConversationMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
 
 // InviteJSONRequestBody defines body for Invite for application/json ContentType.
 type InviteJSONRequestBody InviteJSONBody
@@ -3527,6 +4268,9 @@ type GrantRoleJSONRequestBody GrantRoleJSONBody
 // SetModelProviderJSONRequestBody defines body for SetModelProvider for application/json ContentType.
 type SetModelProviderJSONRequestBody = ModelProviderInput
 
+// SetModelJSONRequestBody defines body for SetModel for application/json ContentType.
+type SetModelJSONRequestBody = ModelInput
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryInput
 
@@ -3535,6 +4279,9 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
+
+// CreateArtifactJSONRequestBody defines body for CreateArtifact for application/json ContentType.
+type CreateArtifactJSONRequestBody = NewArtifact
 
 // StartChatThreadJSONRequestBody defines body for StartChatThread for application/json ContentType.
 type StartChatThreadJSONRequestBody = ChatThreadInput
@@ -3559,6 +4306,18 @@ type SetAnnotationJSONRequestBody = AnnotationInput
 
 // SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
 type SubmitReviewJSONRequestBody = ReviewInput
+
+// StartRepositoryConversationThreadJSONRequestBody defines body for StartRepositoryConversationThread for application/json ContentType.
+type StartRepositoryConversationThreadJSONRequestBody = ChatThreadInput
+
+// UpdateRepositoryConversationThreadApplicationMergePatchPlusJSONRequestBody defines body for UpdateRepositoryConversationThread for application/merge-patch+json ContentType.
+type UpdateRepositoryConversationThreadApplicationMergePatchPlusJSONRequestBody = ChatThreadPatch
+
+// PostRepositoryConversationMessageJSONRequestBody defines body for PostRepositoryConversationMessage for application/json ContentType.
+type PostRepositoryConversationMessageJSONRequestBody = ChatMessageInput
+
+// EditRepositoryConversationMessageApplicationMergePatchPlusJSONRequestBody defines body for EditRepositoryConversationMessage for application/merge-patch+json ContentType.
+type EditRepositoryConversationMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
 
 // PostEventJSONRequestBody defines body for PostEvent for application/json ContentType.
 type PostEventJSONRequestBody = EventInput
@@ -3610,6 +4369,12 @@ type ServerInterface interface {
 	// ListMyOrganizations The organizations the user belongs to, by name.
 	// (GET /me/organizations)
 	ListMyOrganizations(w http.ResponseWriter, r *http.Request)
+	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
+	// (GET /me/preferences)
+	GetMyPreferences(w http.ResponseWriter, r *http.Request, params GetMyPreferencesParams)
+	// UpdateMyPreferences Changes the viewer's preferences the merge patch (RFC 7396) names. The change names the ETag it was made from in If-Match ("0" before the first change, * for whichever is there); without it, the answer is 428.
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(w http.ResponseWriter, r *http.Request, params UpdateMyPreferencesParams)
 	// ListMySessions The user's live sessions, newest first.
 	// (GET /me/sessions)
 	ListMySessions(w http.ResponseWriter, r *http.Request)
@@ -3628,6 +4393,9 @@ type ServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(w http.ResponseWriter, r *http.Request)
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// (POST /me/task/spend)
+	RecordMyTaskSpend(w http.ResponseWriter, r *http.Request)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(w http.ResponseWriter, r *http.Request)
@@ -3661,9 +4429,36 @@ type ServerInterface interface {
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params GetAgentParams)
-	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams)
+	// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/agents/{agent}/conversation)
+	ListAgentConversationThreads(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationThreadsParams)
+	// StartAgentConversationThread Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/agents/{agent}/conversation/threads)
+	StartAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID)
+	// GetAgentConversationThread One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+	// (GET /orgs/{org}/agents/{agent}/conversation/threads/{thread})
+	GetAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, params GetAgentConversationThreadParams)
+	// UpdateAgentConversationThread Resolves one of the threads of the viewer's conversation with the agent, or opens it again; takes org.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/agents/{agent}/conversation/threads/{thread})
+	UpdateAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, params UpdateAgentConversationThreadParams)
+	// PostAgentConversationMessage Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages)
+	PostAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID)
+	// DeleteAgentConversationMessage Deletes a message of the viewer's conversation with the agent, which empties it and keeps its place in its thread, marked with who deleted it; takes org.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	DeleteAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params DeleteAgentConversationMessageParams)
+	// GetAgentConversationMessage One of the messages of one of the threads of the viewer's conversation with the agent; takes org.read.
+	// (GET /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	GetAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params GetAgentConversationMessageParams)
+	// EditAgentConversationMessage Changes the body of one of the viewer's messages in their conversation with the agent; takes org.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	EditAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params EditAgentConversationMessageParams)
+	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
+	ListAgentConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationUpdatesParams)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams)
@@ -3685,6 +4480,63 @@ type ServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, secretID SecretID)
+	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/artifacts/{id})
+	DeleteArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteArtifactParams)
+	// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	// (GET /orgs/{org}/artifacts/{id})
+	GetArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetArtifactParams)
+	// UpdateArtifact Changes the fields the merge patch (RFC 7396) names of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/artifacts/{id})
+	UpdateArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params UpdateArtifactParams)
+	// GetArtifactAccess Who reaches an artifact, its audiences and the roles principals hold on the artifact itself, by name; grants on its repository and at its organization reach it too. Takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/access)
+	GetArtifactAccess(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// ShareArtifact Gives one of the organization's members, API keys or agents a role on the artifact, in place of any role it held on it; takes artifacts.manage on it and every permission the role gives.
+	// (POST /orgs/{org}/artifacts/{id}/access)
+	ShareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// UnshareArtifact Takes every role a principal holds on the artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository or at its organization, and its audiences, still reach it.
+	// (DELETE /orgs/{org}/artifacts/{id}/access/{principal})
+	UnshareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
+	// ListArtifactVersions An artifact's versions, newest first, without their bodies; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions)
+	ListArtifactVersions(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	// (POST /orgs/{org}/artifacts/{id}/versions)
+	AddArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, params AddArtifactVersionParams)
+	// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version})
+	GetArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionParams)
+	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
+	GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams)
+	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/conversation)
+	ListOrganizationConversationThreads(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationThreadsParams)
+	// StartOrganizationConversationThread Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/conversation/threads)
+	StartOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org)
+	// GetOrganizationConversationThread One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+	// (GET /orgs/{org}/conversation/threads/{thread})
+	GetOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, params GetOrganizationConversationThreadParams)
+	// UpdateOrganizationConversationThread Resolves one of the threads of the viewer's conversation about the organization, or opens it again; takes org.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/conversation/threads/{thread})
+	UpdateOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, params UpdateOrganizationConversationThreadParams)
+	// PostOrganizationConversationMessage Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/conversation/threads/{thread}/messages)
+	PostOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID)
+	// DeleteOrganizationConversationMessage Deletes a message of the viewer's conversation about the organization, which empties it and keeps its place in its thread, marked with who deleted it; takes org.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	DeleteOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params DeleteOrganizationConversationMessageParams)
+	// GetOrganizationConversationMessage One of the messages of one of the threads of the viewer's conversation about the organization; takes org.read.
+	// (GET /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	GetOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params GetOrganizationConversationMessageParams)
+	// EditOrganizationConversationMessage Changes the body of one of the viewer's messages in their conversation about the organization; takes org.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	EditOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params EditOrganizationConversationMessageParams)
+	// ListOrganizationConversationUpdates The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/conversation/updates)
+	ListOrganizationConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationUpdatesParams)
 	// ListInvitations The organization's invitations that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org)
@@ -3796,6 +4648,18 @@ type ServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams)
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	// (GET /orgs/{org}/models)
+	ListModels(w http.ResponseWriter, r *http.Request, org Org)
+	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/models/{provider}/{model})
+	RemoveModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params RemoveModelParams)
+	// GetModel One of the organization's models, with the agents on it; takes org.read.
+	// (GET /orgs/{org}/models/{provider}/{model})
+	GetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params GetModelParams)
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
+	// (PUT /orgs/{org}/models/{provider}/{model})
+	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
@@ -3817,6 +4681,12 @@ type ServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
+	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// (GET /orgs/{org}/repos/{repo}/artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams)
+	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// (POST /orgs/{org}/repos/{repo}/artifacts)
+	CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
@@ -3898,6 +4768,33 @@ type ServerInterface interface {
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	// ListRepositoryConversationThreads A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/repos/{repo}/conversation)
+	ListRepositoryConversationThreads(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryConversationThreadsParams)
+	// StartRepositoryConversationThread Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/repos/{repo}/conversation/threads)
+	StartRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// GetRepositoryConversationThread One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/conversation/threads/{thread})
+	GetRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, params GetRepositoryConversationThreadParams)
+	// UpdateRepositoryConversationThread Resolves one of the threads of the viewer's conversation about the repository, or opens it again; takes repo.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/repos/{repo}/conversation/threads/{thread})
+	UpdateRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, params UpdateRepositoryConversationThreadParams)
+	// PostRepositoryConversationMessage Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages)
+	PostRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID)
+	// DeleteRepositoryConversationMessage Deletes a message of the viewer's conversation about the repository, which empties it and keeps its place in its thread, marked with who deleted it; takes repo.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	DeleteRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params DeleteRepositoryConversationMessageParams)
+	// GetRepositoryConversationMessage One of the messages of one of the threads of the viewer's conversation about the repository; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	GetRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params GetRepositoryConversationMessageParams)
+	// EditRepositoryConversationMessage Changes the body of one of the viewer's messages in their conversation about the repository; takes repo.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	EditRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params EditRepositoryConversationMessageParams)
+	// ListRepositoryConversationUpdates The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/repos/{repo}/conversation/updates)
+	ListRepositoryConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryConversationUpdatesParams)
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -4169,6 +5066,88 @@ func (siw *ServerInterfaceWrapper) ListMyOrganizations(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMyPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyPreferences(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateMyPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchPreferences
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMyPreferences(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMySessions operation middleware
 func (siw *ServerInterfaceWrapper) ListMySessions(w http.ResponseWriter, r *http.Request) {
 
@@ -4268,6 +5247,20 @@ func (siw *ServerInterfaceWrapper) GetMyTask(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMyTask(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecordMyTaskSpend operation middleware
+func (siw *ServerInterfaceWrapper) RecordMyTaskSpend(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecordMyTaskSpend(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4667,6 +5660,580 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListAgentConversationThreads operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentConversationThreads(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentConversationThreadsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentConversationThreads(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartAgentConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) StartAgentConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartAgentConversationThread(w, r, org, agentID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentConversationThread(w, r, org, agentID, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgentConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgentConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAgentConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgentConversationThread(w, r, org, agentID, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostAgentConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostAgentConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostAgentConversationMessage(w, r, org, agentID, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgentConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgentConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteAgentConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgentConversationMessage(w, r, org, agentID, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentConversationMessage(w, r, org, agentID, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditAgentConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditAgentConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditAgentConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditAgentConversationMessage(w, r, org, agentID, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentConversationUpdates operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentConversationUpdates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentConversationUpdatesParams
+
+	// ------------- Required query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentConversationUpdates(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetAgentModel operation middleware
 func (siw *ServerInterfaceWrapper) SetAgentModel(w http.ResponseWriter, r *http.Request) {
 
@@ -4942,6 +6509,1033 @@ func (siw *ServerInterfaceWrapper) RevokeAPIKeySecret(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeAPIKeySecret(w, r, org, keyID, secretID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateArtifactParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateArtifact(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactAccess operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactAccess(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShareArtifact operation middleware
+func (siw *ServerInterfaceWrapper) ShareArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShareArtifact(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnshareArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UnshareArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnshareArtifact(w, r, org, id, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifactVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifactVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifactVersions(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) AddArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddArtifactVersionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchArtifact
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddArtifactVersion(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version ArtifactVersionNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int32", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactVersionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactVersion(w, r, org, id, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactVersionRaw operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version ArtifactVersionNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int32", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactVersionRawParams
+
+	// ------------- Optional query parameter "download" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "download", r.URL.Query(), &params.Download, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "download"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "download", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactVersionRaw(w, r, org, id, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationConversationThreads operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationConversationThreads(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationConversationThreadsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationConversationThreads(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartOrganizationConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) StartOrganizationConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartOrganizationConversationThread(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationConversationThread(w, r, org, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOrganizationConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOrganizationConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateOrganizationConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOrganizationConversationThread(w, r, org, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostOrganizationConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostOrganizationConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostOrganizationConversationMessage(w, r, org, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOrganizationConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOrganizationConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOrganizationConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOrganizationConversationMessage(w, r, org, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationConversationMessage(w, r, org, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditOrganizationConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditOrganizationConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditOrganizationConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditOrganizationConversationMessage(w, r, org, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationConversationUpdates operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationConversationUpdates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationConversationUpdatesParams
+
+	// ------------- Required query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationConversationUpdates(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6744,6 +9338,255 @@ func (siw *ServerInterfaceWrapper) SetModelProvider(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListModels operation middleware
+func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModels(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveModel operation middleware
+func (siw *ServerInterfaceWrapper) RemoveModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetModel operation middleware
+func (siw *ServerInterfaceWrapper) GetModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetModel operation middleware
+func (siw *ServerInterfaceWrapper) SetModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "model" -------------
+	var model ModelName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "model", r.PathValue("model"), &model, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatchModel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositories operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
 
@@ -6989,6 +9832,92 @@ func (siw *ServerInterfaceWrapper) RevokeRepositoryRole(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeRepositoryRole(w, r, org, repo, principalID, roleID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactsParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifacts(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArtifact(w, r, org, repo)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8764,6 +11693,580 @@ func (siw *ServerInterfaceWrapper) SubmitReview(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SubmitReview(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryConversationThreads operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryConversationThreads(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryConversationThreadsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryConversationThreads(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartRepositoryConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) StartRepositoryConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartRepositoryConversationThread(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepositoryConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRepositoryConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryConversationThread(w, r, org, repo, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRepositoryConversationThread operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRepositoryConversationThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateRepositoryConversationThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRepositoryConversationThread(w, r, org, repo, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostRepositoryConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostRepositoryConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostRepositoryConversationMessage(w, r, org, repo, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRepositoryConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRepositoryConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRepositoryConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRepositoryConversationMessage(w, r, org, repo, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepositoryConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRepositoryConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryConversationMessage(w, r, org, repo, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditRepositoryConversationMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditRepositoryConversationMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditRepositoryConversationMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditRepositoryConversationMessage(w, r, org, repo, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryConversationUpdates operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryConversationUpdates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryConversationUpdatesParams
+
+	// ------------- Required query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryConversationUpdates(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11270,6 +14773,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/page-views", wrapper.ReportPageViews)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/task", wrapper.GetMyTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/task/spend", wrapper.RecordMyTaskSpend)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{id}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/tokens", wrapper.ListMyTokens)
@@ -11278,6 +14782,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/ssh-keys", wrapper.ListMySSHKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/ssh-keys", wrapper.AddMySSHKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/ssh-keys/{id}", wrapper.DeleteMySSHKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/preferences", wrapper.GetMyPreferences)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/me/preferences", wrapper.UpdateMyPreferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/organizations", wrapper.ListMyOrganizations)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/usage", wrapper.GetMyUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
@@ -11312,6 +14818,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.ListSecretAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.GrantSecret)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access/{principal}", wrapper.RevokeSecret)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.DeleteArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.UpdateArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions", wrapper.ListArtifactVersions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions", wrapper.AddArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions/{version}", wrapper.GetArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/versions/{version}/raw", wrapper.GetArtifactVersionRaw)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access", wrapper.GetArtifactAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access", wrapper.ShareArtifact)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}/access/{principal}", wrapper.UnshareArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.ListInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.Invite)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/invitations/{id}", wrapper.CancelInvitation)
@@ -11323,6 +14839,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.RemoveModelProvider)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.GetModelProvider)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.SetModelProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models", wrapper.ListModels)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.RemoveModel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.GetModel)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.SetModel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
@@ -11330,6 +14850,24 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/model", wrapper.SetAgentModel)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/secrets", wrapper.SetAgentSecrets)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/conversation", wrapper.ListOrganizationConversationThreads)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/conversation/threads", wrapper.StartOrganizationConversationThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}", wrapper.GetOrganizationConversationThread)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}", wrapper.UpdateOrganizationConversationThread)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}/messages", wrapper.PostOrganizationConversationMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}/messages/{message}", wrapper.DeleteOrganizationConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}/messages/{message}", wrapper.GetOrganizationConversationMessage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/conversation/threads/{thread}/messages/{message}", wrapper.EditOrganizationConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/conversation/updates", wrapper.ListOrganizationConversationUpdates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation", wrapper.ListAgentConversationThreads)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads", wrapper.StartAgentConversationThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}", wrapper.GetAgentConversationThread)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}", wrapper.UpdateAgentConversationThread)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages", wrapper.PostAgentConversationMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message}", wrapper.DeleteAgentConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message}", wrapper.GetAgentConversationMessage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message}", wrapper.EditAgentConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/conversation/updates", wrapper.ListAgentConversationUpdates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.ListTasks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.AssignTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}", wrapper.GetTask)
@@ -11368,6 +14906,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.ListRepositorySecrets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.CreateRepositorySecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/artifacts", wrapper.CreateArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/jobs", wrapper.ListRepositoryJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
@@ -11387,6 +14927,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}", wrapper.GetChatMessage)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}", wrapper.EditChatMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/updates", wrapper.ListChatUpdates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation", wrapper.ListRepositoryConversationThreads)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads", wrapper.StartRepositoryConversationThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}", wrapper.GetRepositoryConversationThread)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}", wrapper.UpdateRepositoryConversationThread)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages", wrapper.PostRepositoryConversationMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message}", wrapper.DeleteRepositoryConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message}", wrapper.GetRepositoryConversationMessage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message}", wrapper.EditRepositoryConversationMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/conversation/updates", wrapper.ListRepositoryConversationUpdates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
@@ -11792,6 +15341,217 @@ func (response ListMyOrganizationsdefaultApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type GetMyPreferencesRequestObject struct {
+	Params GetMyPreferencesParams
+}
+
+type GetMyPreferencesResponseObject interface {
+	VisitGetMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type GetMyPreferences200ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyPreferences200JSONResponse struct {
+	Body    Preferences
+	Headers GetMyPreferences200ResponseHeaders
+}
+
+func (response GetMyPreferences200JSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferences304ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyPreferences304Response struct {
+	Headers GetMyPreferences304ResponseHeaders
+}
+
+func (response GetMyPreferences304Response) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetMyPreferences401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyPreferences401ApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferences403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMyPreferences403ApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMyPreferencesdefaultApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesRequestObject struct {
+	Params UpdateMyPreferencesParams
+	Body   *UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateMyPreferencesResponseObject interface {
+	VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type UpdateMyPreferences200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateMyPreferences200JSONResponse struct {
+	Body    Preferences
+	Headers UpdateMyPreferences200ResponseHeaders
+}
+
+func (response UpdateMyPreferences200JSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMyPreferences400ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences401ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences403ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences412ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences428ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMyPreferencesdefaultApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMySessionsRequestObject struct {
 }
 
@@ -12184,6 +15944,103 @@ type GetMyTaskdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMyTaskdefaultApplicationProblemPlusJSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpendRequestObject struct {
+	Body *RecordMyTaskSpendJSONRequestBody
+}
+
+type RecordMyTaskSpendResponseObject interface {
+	VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error
+}
+
+type RecordMyTaskSpend200JSONResponse TaskSpend
+
+func (response RecordMyTaskSpend200JSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RecordMyTaskSpend400ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend401ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend401ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend403ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend403ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpend409ApplicationProblemPlusJSONResponse Problem
+
+func (response RecordMyTaskSpend409ApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecordMyTaskSpenddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RecordMyTaskSpenddefaultApplicationProblemPlusJSONResponse) VisitRecordMyTaskSpendResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -13309,6 +17166,1084 @@ func (response UpdateAgentdefaultApplicationProblemPlusJSONResponse) VisitUpdate
 	return err
 }
 
+type ListAgentConversationThreadsRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  ListAgentConversationThreadsParams
+}
+
+type ListAgentConversationThreadsResponseObject interface {
+	VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error
+}
+
+type ListAgentConversationThreads200ResponseHeaders struct {
+	Link *string
+}
+
+type ListAgentConversationThreads200JSONResponse struct {
+	Body struct {
+		// After Where the conversation's updates stood when the page was read, as listAgentConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	Headers ListAgentConversationThreads200ResponseHeaders
+}
+
+func (response ListAgentConversationThreads200JSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationThreads400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAgentConversationThreads400ApplicationProblemPlusJSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationThreads401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationThreads401ApplicationProblemPlusJSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationThreads403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationThreads403ApplicationProblemPlusJSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationThreads404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationThreads404ApplicationProblemPlusJSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationThreadsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAgentConversationThreadsdefaultApplicationProblemPlusJSONResponse) VisitListAgentConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThreadRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Body    *StartAgentConversationThreadJSONRequestBody
+}
+
+type StartAgentConversationThreadResponseObject interface {
+	VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type StartAgentConversationThread201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartAgentConversationThread201JSONResponse struct {
+	Body    ChatThread
+	Headers StartAgentConversationThread201ResponseHeaders
+}
+
+func (response StartAgentConversationThread201JSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartAgentConversationThread400ApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartAgentConversationThread401ApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartAgentConversationThread403ApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartAgentConversationThread404ApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThread409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartAgentConversationThread409ApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartAgentConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartAgentConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitStartAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	AgentID  AgentID  `json:"agent"`
+	ThreadID ThreadID `json:"thread"`
+	Params   GetAgentConversationThreadParams
+}
+
+type GetAgentConversationThreadResponseObject interface {
+	VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type GetAgentConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgentConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers GetAgentConversationThread200ResponseHeaders
+}
+
+func (response GetAgentConversationThread200JSONResponse) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationThread304ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgentConversationThread304Response struct {
+	Headers GetAgentConversationThread304ResponseHeaders
+}
+
+func (response GetAgentConversationThread304Response) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetAgentConversationThread401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgentConversationThread401ApplicationProblemPlusJSONResponse) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAgentConversationThread403ApplicationProblemPlusJSONResponse) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAgentConversationThread404ApplicationProblemPlusJSONResponse) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetAgentConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitGetAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	AgentID  AgentID  `json:"agent"`
+	ThreadID ThreadID `json:"thread"`
+	Params   UpdateAgentConversationThreadParams
+	Body     *UpdateAgentConversationThreadApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateAgentConversationThreadResponseObject interface {
+	VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type UpdateAgentConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateAgentConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers UpdateAgentConversationThread200ResponseHeaders
+}
+
+func (response UpdateAgentConversationThread200JSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgentConversationThread400ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgentConversationThread401ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgentConversationThread403ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgentConversationThread404ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgentConversationThread412ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThread428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgentConversationThread428ApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateAgentConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitUpdateAgentConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessageRequestObject struct {
+	Org      Org      `json:"org"`
+	AgentID  AgentID  `json:"agent"`
+	ThreadID ThreadID `json:"thread"`
+	Body     *PostAgentConversationMessageJSONRequestBody
+}
+
+type PostAgentConversationMessageResponseObject interface {
+	VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type PostAgentConversationMessage201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type PostAgentConversationMessage201JSONResponse struct {
+	Body    ChatMessage
+	Headers PostAgentConversationMessage201ResponseHeaders
+}
+
+func (response PostAgentConversationMessage201JSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostAgentConversationMessage400ApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostAgentConversationMessage401ApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostAgentConversationMessage403ApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostAgentConversationMessage404ApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response PostAgentConversationMessage409ApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostAgentConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostAgentConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitPostAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	AgentID   AgentID   `json:"agent"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    DeleteAgentConversationMessageParams
+}
+
+type DeleteAgentConversationMessageResponseObject interface {
+	VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteAgentConversationMessage204Response struct {
+}
+
+func (response DeleteAgentConversationMessage204Response) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAgentConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAgentConversationMessage401ApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgentConversationMessage403ApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgentConversationMessage404ApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgentConversationMessage412ApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgentConversationMessage428ApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteAgentConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitDeleteAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	AgentID   AgentID   `json:"agent"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    GetAgentConversationMessageParams
+}
+
+type GetAgentConversationMessageResponseObject interface {
+	VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type GetAgentConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgentConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers GetAgentConversationMessage200ResponseHeaders
+}
+
+func (response GetAgentConversationMessage200JSONResponse) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationMessage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgentConversationMessage304Response struct {
+	Headers GetAgentConversationMessage304ResponseHeaders
+}
+
+func (response GetAgentConversationMessage304Response) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetAgentConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgentConversationMessage401ApplicationProblemPlusJSONResponse) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAgentConversationMessage403ApplicationProblemPlusJSONResponse) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAgentConversationMessage404ApplicationProblemPlusJSONResponse) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetAgentConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitGetAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	AgentID   AgentID   `json:"agent"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    EditAgentConversationMessageParams
+	Body      *EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody
+}
+
+type EditAgentConversationMessageResponseObject interface {
+	VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type EditAgentConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type EditAgentConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers EditAgentConversationMessage200ResponseHeaders
+}
+
+func (response EditAgentConversationMessage200JSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EditAgentConversationMessage400ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage401ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage403ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage404ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage409ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage412ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response EditAgentConversationMessage428ApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditAgentConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EditAgentConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitEditAgentConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdatesRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  ListAgentConversationUpdatesParams
+}
+
+type ListAgentConversationUpdatesResponseObject interface {
+	VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error
+}
+
+type ListAgentConversationUpdates200JSONResponse struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+}
+
+func (response ListAgentConversationUpdates200JSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAgentConversationUpdates400ApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdates401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationUpdates401ApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdates403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationUpdates403ApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgentConversationUpdates404ApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentConversationUpdatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAgentConversationUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetAgentModelRequestObject struct {
 	Org     Org     `json:"org"`
 	AgentID AgentID `json:"agent"`
@@ -14023,6 +18958,2106 @@ type RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse) VisitRevokeAPIKeySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params DeleteArtifactParams
+}
+
+type DeleteArtifactResponseObject interface {
+	VisitDeleteArtifactResponse(w http.ResponseWriter) error
+}
+
+type DeleteArtifact204Response struct {
+}
+
+func (response DeleteArtifact204Response) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteArtifact401ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact403ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact404ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact412ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifact428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteArtifact428ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteArtifactdefaultApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params GetArtifactParams
+}
+
+type GetArtifactResponseObject interface {
+	VisitGetArtifactResponse(w http.ResponseWriter) error
+}
+
+type GetArtifact200ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers GetArtifact200ResponseHeaders
+}
+
+func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifact304ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifact304Response struct {
+	Headers GetArtifact304ResponseHeaders
+}
+
+func (response GetArtifact304Response) VisitGetArtifactResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifact401ApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifact404ApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params UpdateArtifactParams
+	Body   *UpdateArtifactApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateArtifactResponseObject interface {
+	VisitUpdateArtifactResponse(w http.ResponseWriter) error
+}
+
+type UpdateArtifact200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers UpdateArtifact200ResponseHeaders
+}
+
+func (response UpdateArtifact200JSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateArtifact400ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact401ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact403ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact404ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact412ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifact428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateArtifact428ApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateArtifactdefaultApplicationProblemPlusJSONResponse) VisitUpdateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccessRequestObject struct {
+	Org Org `json:"org"`
+	Id  Id  `json:"id"`
+}
+
+type GetArtifactAccessResponseObject interface {
+	VisitGetArtifactAccessResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactAccess200JSONResponse ArtifactAccess
+
+func (response GetArtifactAccess200JSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccess401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactAccess401ApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccess404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactAccess404ApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactAccessdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactAccessdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifactRequestObject struct {
+	Org  Org `json:"org"`
+	Id   Id  `json:"id"`
+	Body *ShareArtifactJSONRequestBody
+}
+
+type ShareArtifactResponseObject interface {
+	VisitShareArtifactResponse(w http.ResponseWriter) error
+}
+
+type ShareArtifact204Response struct {
+}
+
+func (response ShareArtifact204Response) VisitShareArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ShareArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ShareArtifact400ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact401ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact403ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareArtifact404ApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ShareArtifactdefaultApplicationProblemPlusJSONResponse) VisitShareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifactRequestObject struct {
+	Org         Org         `json:"org"`
+	Id          Id          `json:"id"`
+	PrincipalID PrincipalID `json:"principal"`
+}
+
+type UnshareArtifactResponseObject interface {
+	VisitUnshareArtifactResponse(w http.ResponseWriter) error
+}
+
+type UnshareArtifact204Response struct {
+}
+
+func (response UnshareArtifact204Response) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UnshareArtifact401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UnshareArtifact401ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareArtifact403ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareArtifact404ApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnshareArtifactdefaultApplicationProblemPlusJSONResponse) VisitUnshareArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersionsRequestObject struct {
+	Org Org `json:"org"`
+	Id  Id  `json:"id"`
+}
+
+type ListArtifactVersionsResponseObject interface {
+	VisitListArtifactVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifactVersions200JSONResponse ArtifactVersionList
+
+func (response ListArtifactVersions200JSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersions401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListArtifactVersions401ApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersions404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifactVersions404ApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactVersionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListArtifactVersionsdefaultApplicationProblemPlusJSONResponse) VisitListArtifactVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersionRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params AddArtifactVersionParams
+	Body   *AddArtifactVersionJSONRequestBody
+}
+
+type AddArtifactVersionResponseObject interface {
+	VisitAddArtifactVersionResponse(w http.ResponseWriter) error
+}
+
+type AddArtifactVersion200ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AddArtifactVersion200JSONResponse struct {
+	Body    ArtifactVersion
+	Headers AddArtifactVersion200ResponseHeaders
+}
+
+func (response AddArtifactVersion200JSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AddArtifactVersion201JSONResponse struct {
+	Body    ArtifactVersion
+	Headers AddArtifactVersion201ResponseHeaders
+}
+
+func (response AddArtifactVersion201JSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AddArtifactVersion400ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion401ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion401ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion403ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion403ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion404ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion404ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion409ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion409ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion412ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion412ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersion428ApplicationProblemPlusJSONResponse Problem
+
+func (response AddArtifactVersion428ApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddArtifactVersiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AddArtifactVersiondefaultApplicationProblemPlusJSONResponse) VisitAddArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRequestObject struct {
+	Org     Org                   `json:"org"`
+	Id      Id                    `json:"id"`
+	Version ArtifactVersionNumber `json:"version"`
+	Params  GetArtifactVersionParams
+}
+
+type GetArtifactVersionResponseObject interface {
+	VisitGetArtifactVersionResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactVersion200ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifactVersion200JSONResponse struct {
+	Body    ArtifactVersion
+	Headers GetArtifactVersion200ResponseHeaders
+}
+
+func (response GetArtifactVersion200JSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersion304ResponseHeaders struct {
+	ETag string
+}
+
+type GetArtifactVersion304Response struct {
+	Headers GetArtifactVersion304ResponseHeaders
+}
+
+func (response GetArtifactVersion304Response) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifactVersion401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactVersion401ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersion404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactVersion404ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactVersiondefaultApplicationProblemPlusJSONResponse) VisitGetArtifactVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRawRequestObject struct {
+	Org     Org                   `json:"org"`
+	Id      Id                    `json:"id"`
+	Version ArtifactVersionNumber `json:"version"`
+	Params  GetArtifactVersionRawParams
+}
+
+type GetArtifactVersionRawResponseObject interface {
+	VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactVersionRaw200ResponseHeaders struct {
+	CacheControl              string
+	ContentDisposition        *string
+	ContentSecurityPolicy     string
+	CrossOriginResourcePolicy string
+	ETag                      string
+	XContentTypeOptions       string
+}
+
+type GetArtifactVersionRaw200AsteriskResponse struct {
+	Body          io.Reader
+	Headers       GetArtifactVersionRaw200ResponseHeaders
+	ContentType   string
+	ContentLength int64
+}
+
+func (response GetArtifactVersionRaw200AsteriskResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", response.ContentType)
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.Header().Set("Content-Security-Policy", fmt.Sprint(response.Headers.ContentSecurityPolicy))
+	w.Header().Set("Cross-Origin-Resource-Policy", fmt.Sprint(response.Headers.CrossOriginResourcePolicy))
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetArtifactVersionRaw304ResponseHeaders struct {
+	CacheControl string
+	ETag         string
+}
+
+type GetArtifactVersionRaw304Response struct {
+	Headers GetArtifactVersionRaw304ResponseHeaders
+}
+
+func (response GetArtifactVersionRaw304Response) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetArtifactVersionRaw401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifactVersionRaw401ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRaw404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactVersionRaw404ApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreadsRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListOrganizationConversationThreadsParams
+}
+
+type ListOrganizationConversationThreadsResponseObject interface {
+	VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error
+}
+
+type ListOrganizationConversationThreads200ResponseHeaders struct {
+	Link *string
+}
+
+type ListOrganizationConversationThreads200JSONResponse struct {
+	Body struct {
+		// After Where the conversation's updates stood when the page was read, as listOrganizationConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	Headers ListOrganizationConversationThreads200ResponseHeaders
+}
+
+func (response ListOrganizationConversationThreads200JSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreads400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrganizationConversationThreads400ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreads401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationThreads401ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreads403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationThreads403ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreads404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationThreads404ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationThreadsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOrganizationConversationThreadsdefaultApplicationProblemPlusJSONResponse) VisitListOrganizationConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThreadRequestObject struct {
+	Org  Org `json:"org"`
+	Body *StartOrganizationConversationThreadJSONRequestBody
+}
+
+type StartOrganizationConversationThreadResponseObject interface {
+	VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type StartOrganizationConversationThread201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartOrganizationConversationThread201JSONResponse struct {
+	Body    ChatThread
+	Headers StartOrganizationConversationThread201ResponseHeaders
+}
+
+func (response StartOrganizationConversationThread201JSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartOrganizationConversationThread400ApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartOrganizationConversationThread401ApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartOrganizationConversationThread403ApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartOrganizationConversationThread404ApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThread409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartOrganizationConversationThread409ApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitStartOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	ThreadID ThreadID `json:"thread"`
+	Params   GetOrganizationConversationThreadParams
+}
+
+type GetOrganizationConversationThreadResponseObject interface {
+	VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers GetOrganizationConversationThread200ResponseHeaders
+}
+
+func (response GetOrganizationConversationThread200JSONResponse) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationThread304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationConversationThread304Response struct {
+	Headers GetOrganizationConversationThread304ResponseHeaders
+}
+
+func (response GetOrganizationConversationThread304Response) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationConversationThread401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationConversationThread401ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationConversationThread403ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationConversationThread404ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	ThreadID ThreadID `json:"thread"`
+	Params   UpdateOrganizationConversationThreadParams
+	Body     *UpdateOrganizationConversationThreadApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateOrganizationConversationThreadResponseObject interface {
+	VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type UpdateOrganizationConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateOrganizationConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers UpdateOrganizationConversationThread200ResponseHeaders
+}
+
+func (response UpdateOrganizationConversationThread200JSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrganizationConversationThread400ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateOrganizationConversationThread401ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateOrganizationConversationThread403ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateOrganizationConversationThread404ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateOrganizationConversationThread412ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThread428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateOrganizationConversationThread428ApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateOrganizationConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitUpdateOrganizationConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessageRequestObject struct {
+	Org      Org      `json:"org"`
+	ThreadID ThreadID `json:"thread"`
+	Body     *PostOrganizationConversationMessageJSONRequestBody
+}
+
+type PostOrganizationConversationMessageResponseObject interface {
+	VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type PostOrganizationConversationMessage201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type PostOrganizationConversationMessage201JSONResponse struct {
+	Body    ChatMessage
+	Headers PostOrganizationConversationMessage201ResponseHeaders
+}
+
+func (response PostOrganizationConversationMessage201JSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostOrganizationConversationMessage400ApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostOrganizationConversationMessage401ApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostOrganizationConversationMessage403ApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostOrganizationConversationMessage404ApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response PostOrganizationConversationMessage409ApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitPostOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    DeleteOrganizationConversationMessageParams
+}
+
+type DeleteOrganizationConversationMessageResponseObject interface {
+	VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteOrganizationConversationMessage204Response struct {
+}
+
+func (response DeleteOrganizationConversationMessage204Response) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOrganizationConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteOrganizationConversationMessage401ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganizationConversationMessage403ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganizationConversationMessage404ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganizationConversationMessage412ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganizationConversationMessage428ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitDeleteOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    GetOrganizationConversationMessageParams
+}
+
+type GetOrganizationConversationMessageResponseObject interface {
+	VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers GetOrganizationConversationMessage200ResponseHeaders
+}
+
+func (response GetOrganizationConversationMessage200JSONResponse) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationMessage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationConversationMessage304Response struct {
+	Headers GetOrganizationConversationMessage304ResponseHeaders
+}
+
+func (response GetOrganizationConversationMessage304Response) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationConversationMessage401ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationConversationMessage403ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationConversationMessage404ApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    EditOrganizationConversationMessageParams
+	Body      *EditOrganizationConversationMessageApplicationMergePatchPlusJSONRequestBody
+}
+
+type EditOrganizationConversationMessageResponseObject interface {
+	VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type EditOrganizationConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type EditOrganizationConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers EditOrganizationConversationMessage200ResponseHeaders
+}
+
+func (response EditOrganizationConversationMessage200JSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EditOrganizationConversationMessage400ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage401ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage403ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage404ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage409ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage412ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response EditOrganizationConversationMessage428ApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EditOrganizationConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitEditOrganizationConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdatesRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListOrganizationConversationUpdatesParams
+}
+
+type ListOrganizationConversationUpdatesResponseObject interface {
+	VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error
+}
+
+type ListOrganizationConversationUpdates200JSONResponse struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+}
+
+func (response ListOrganizationConversationUpdates200JSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrganizationConversationUpdates400ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdates401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationUpdates401ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdates403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationUpdates403ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationConversationUpdates404ApplicationProblemPlusJSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationConversationUpdatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOrganizationConversationUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListOrganizationConversationUpdatesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -17949,6 +24984,452 @@ func (response SetModelProviderdefaultApplicationProblemPlusJSONResponse) VisitS
 	return err
 }
 
+type ListModelsRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListModelsResponseObject interface {
+	VisitListModelsResponse(w http.ResponseWriter) error
+}
+
+type ListModels200JSONResponse ModelList
+
+func (response ListModels200JSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModels401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListModels401ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModels404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListModels404ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListModelsdefaultApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   RemoveModelParams
+}
+
+type RemoveModelResponseObject interface {
+	VisitRemoveModelResponse(w http.ResponseWriter) error
+}
+
+type RemoveModel204Response struct {
+}
+
+func (response RemoveModel204Response) VisitRemoveModelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveModel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveModel401ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel403ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel404ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel409ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel409ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel412ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel412ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModel428ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModel428ApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveModeldefaultApplicationProblemPlusJSONResponse) VisitRemoveModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   GetModelParams
+}
+
+type GetModelResponseObject interface {
+	VisitGetModelResponse(w http.ResponseWriter) error
+}
+
+type GetModel200ResponseHeaders struct {
+	ETag string
+}
+
+type GetModel200JSONResponse struct {
+	Body    Model
+	Headers GetModel200ResponseHeaders
+}
+
+func (response GetModel200JSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModel304ResponseHeaders struct {
+	ETag string
+}
+
+type GetModel304Response struct {
+	Headers GetModel304ResponseHeaders
+}
+
+func (response GetModel304Response) VisitGetModelResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetModel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetModel401ApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetModel404ApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetModeldefaultApplicationProblemPlusJSONResponse) VisitGetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelRequestObject struct {
+	Org      Org       `json:"org"`
+	Provider Provider  `json:"provider"`
+	Model    ModelName `json:"model"`
+	Params   SetModelParams
+	Body     *SetModelJSONRequestBody
+}
+
+type SetModelResponseObject interface {
+	VisitSetModelResponse(w http.ResponseWriter) error
+}
+
+type SetModel200ResponseHeaders struct {
+	ETag string
+}
+
+type SetModel200JSONResponse struct {
+	Body    Model
+	Headers SetModel200ResponseHeaders
+}
+
+func (response SetModel200JSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type SetModel201JSONResponse struct {
+	Body    Model
+	Headers SetModel201ResponseHeaders
+}
+
+func (response SetModel201JSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetModel400ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel401ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel403ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel404ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel412ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModel428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModel428ApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetModeldefaultApplicationProblemPlusJSONResponse) VisitSetModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoriesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -18578,6 +26059,238 @@ type RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListArtifactsParams
+}
+
+type ListArtifactsResponseObject interface {
+	VisitListArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListArtifacts200JSONResponse ArtifactList
+
+func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListArtifacts400ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifacts401ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListArtifacts404ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifactsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListArtifactsdefaultApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *CreateArtifactJSONRequestBody
+}
+
+type CreateArtifactResponseObject interface {
+	VisitCreateArtifactResponse(w http.ResponseWriter) error
+}
+
+type CreateArtifact200ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers CreateArtifact200ResponseHeaders
+}
+
+func (response CreateArtifact200JSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateArtifact201JSONResponse struct {
+	Body    Artifact
+	Headers CreateArtifact201ResponseHeaders
+}
+
+func (response CreateArtifact201JSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArtifact400ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact401ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact403ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact404ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateArtifact409ApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateArtifactdefaultApplicationProblemPlusJSONResponse) VisitCreateArtifactResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -21603,6 +29316,1084 @@ type SubmitReviewdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SubmitReviewdefaultApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreadsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListRepositoryConversationThreadsParams
+}
+
+type ListRepositoryConversationThreadsResponseObject interface {
+	VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryConversationThreads200ResponseHeaders struct {
+	Link *string
+}
+
+type ListRepositoryConversationThreads200JSONResponse struct {
+	Body struct {
+		// After Where the conversation's updates stood when the page was read, as listRepositoryConversationUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	Headers ListRepositoryConversationThreads200ResponseHeaders
+}
+
+func (response ListRepositoryConversationThreads200JSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreads400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryConversationThreads400ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreads401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationThreads401ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreads403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationThreads403ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreads404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationThreads404ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationThreadsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoryConversationThreadsdefaultApplicationProblemPlusJSONResponse) VisitListRepositoryConversationThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThreadRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *StartRepositoryConversationThreadJSONRequestBody
+}
+
+type StartRepositoryConversationThreadResponseObject interface {
+	VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type StartRepositoryConversationThread201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartRepositoryConversationThread201JSONResponse struct {
+	Body    ChatThread
+	Headers StartRepositoryConversationThread201ResponseHeaders
+}
+
+func (response StartRepositoryConversationThread201JSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartRepositoryConversationThread400ApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRepositoryConversationThread401ApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRepositoryConversationThread403ApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRepositoryConversationThread404ApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThread409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRepositoryConversationThread409ApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitStartRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	Repo     Repo     `json:"repo"`
+	ThreadID ThreadID `json:"thread"`
+	Params   GetRepositoryConversationThreadParams
+}
+
+type GetRepositoryConversationThreadResponseObject interface {
+	VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepositoryConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers GetRepositoryConversationThread200ResponseHeaders
+}
+
+func (response GetRepositoryConversationThread200JSONResponse) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationThread304ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepositoryConversationThread304Response struct {
+	Headers GetRepositoryConversationThread304ResponseHeaders
+}
+
+func (response GetRepositoryConversationThread304Response) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetRepositoryConversationThread401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryConversationThread401ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryConversationThread403ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryConversationThread404ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	Repo     Repo     `json:"repo"`
+	ThreadID ThreadID `json:"thread"`
+	Params   UpdateRepositoryConversationThreadParams
+	Body     *UpdateRepositoryConversationThreadApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateRepositoryConversationThreadResponseObject interface {
+	VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error
+}
+
+type UpdateRepositoryConversationThread200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateRepositoryConversationThread200JSONResponse struct {
+	Body    ChatThread
+	Headers UpdateRepositoryConversationThread200ResponseHeaders
+}
+
+func (response UpdateRepositoryConversationThread200JSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateRepositoryConversationThread400ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryConversationThread401ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryConversationThread403ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryConversationThread404ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryConversationThread412ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThread428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryConversationThread428ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateRepositoryConversationThreaddefaultApplicationProblemPlusJSONResponse) VisitUpdateRepositoryConversationThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessageRequestObject struct {
+	Org      Org      `json:"org"`
+	Repo     Repo     `json:"repo"`
+	ThreadID ThreadID `json:"thread"`
+	Body     *PostRepositoryConversationMessageJSONRequestBody
+}
+
+type PostRepositoryConversationMessageResponseObject interface {
+	VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type PostRepositoryConversationMessage201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type PostRepositoryConversationMessage201JSONResponse struct {
+	Body    ChatMessage
+	Headers PostRepositoryConversationMessage201ResponseHeaders
+}
+
+func (response PostRepositoryConversationMessage201JSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostRepositoryConversationMessage400ApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostRepositoryConversationMessage401ApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostRepositoryConversationMessage403ApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostRepositoryConversationMessage404ApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response PostRepositoryConversationMessage409ApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitPostRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Repo      Repo      `json:"repo"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    DeleteRepositoryConversationMessageParams
+}
+
+type DeleteRepositoryConversationMessageResponseObject interface {
+	VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteRepositoryConversationMessage204Response struct {
+}
+
+func (response DeleteRepositoryConversationMessage204Response) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRepositoryConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteRepositoryConversationMessage401ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryConversationMessage403ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryConversationMessage404ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryConversationMessage412ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryConversationMessage428ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitDeleteRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Repo      Repo      `json:"repo"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    GetRepositoryConversationMessageParams
+}
+
+type GetRepositoryConversationMessageResponseObject interface {
+	VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepositoryConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers GetRepositoryConversationMessage200ResponseHeaders
+}
+
+func (response GetRepositoryConversationMessage200JSONResponse) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationMessage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepositoryConversationMessage304Response struct {
+	Headers GetRepositoryConversationMessage304ResponseHeaders
+}
+
+func (response GetRepositoryConversationMessage304Response) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetRepositoryConversationMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryConversationMessage401ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryConversationMessage403ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryConversationMessage404ApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitGetRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Repo      Repo      `json:"repo"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    EditRepositoryConversationMessageParams
+	Body      *EditRepositoryConversationMessageApplicationMergePatchPlusJSONRequestBody
+}
+
+type EditRepositoryConversationMessageResponseObject interface {
+	VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error
+}
+
+type EditRepositoryConversationMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type EditRepositoryConversationMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers EditRepositoryConversationMessage200ResponseHeaders
+}
+
+func (response EditRepositoryConversationMessage200JSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EditRepositoryConversationMessage400ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage401ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage403ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage404ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage409ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage412ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response EditRepositoryConversationMessage428ApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EditRepositoryConversationMessagedefaultApplicationProblemPlusJSONResponse) VisitEditRepositoryConversationMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdatesRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListRepositoryConversationUpdatesParams
+}
+
+type ListRepositoryConversationUpdatesResponseObject interface {
+	VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryConversationUpdates200JSONResponse struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+}
+
+func (response ListRepositoryConversationUpdates200JSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryConversationUpdates400ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdates401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationUpdates401ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdates403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationUpdates403ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryConversationUpdates404ApplicationProblemPlusJSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryConversationUpdatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoryConversationUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListRepositoryConversationUpdatesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -26500,6 +35291,12 @@ type StrictServerInterface interface {
 	// ListMyOrganizations The organizations the user belongs to, by name.
 	// (GET /me/organizations)
 	ListMyOrganizations(ctx context.Context, request ListMyOrganizationsRequestObject) (ListMyOrganizationsResponseObject, error)
+	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
+	// (GET /me/preferences)
+	GetMyPreferences(ctx context.Context, request GetMyPreferencesRequestObject) (GetMyPreferencesResponseObject, error)
+	// UpdateMyPreferences Changes the viewer's preferences the merge patch (RFC 7396) names. The change names the ETag it was made from in If-Match ("0" before the first change, * for whichever is there); without it, the answer is 428.
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(ctx context.Context, request UpdateMyPreferencesRequestObject) (UpdateMyPreferencesResponseObject, error)
 	// ListMySessions The user's live sessions, newest first.
 	// (GET /me/sessions)
 	ListMySessions(ctx context.Context, request ListMySessionsRequestObject) (ListMySessionsResponseObject, error)
@@ -26518,6 +35315,9 @@ type StrictServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(ctx context.Context, request GetMyTaskRequestObject) (GetMyTaskResponseObject, error)
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// (POST /me/task/spend)
+	RecordMyTaskSpend(ctx context.Context, request RecordMyTaskSpendRequestObject) (RecordMyTaskSpendResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(ctx context.Context, request ListMyTokensRequestObject) (ListMyTokensResponseObject, error)
@@ -26551,9 +35351,36 @@ type StrictServerInterface interface {
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
-	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
+	// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/agents/{agent}/conversation)
+	ListAgentConversationThreads(ctx context.Context, request ListAgentConversationThreadsRequestObject) (ListAgentConversationThreadsResponseObject, error)
+	// StartAgentConversationThread Starts a thread on the viewer's conversation with the agent, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/agents/{agent}/conversation/threads)
+	StartAgentConversationThread(ctx context.Context, request StartAgentConversationThreadRequestObject) (StartAgentConversationThreadResponseObject, error)
+	// GetAgentConversationThread One of the threads of the viewer's conversation with the agent, with its messages in the order they were posted; takes org.read.
+	// (GET /orgs/{org}/agents/{agent}/conversation/threads/{thread})
+	GetAgentConversationThread(ctx context.Context, request GetAgentConversationThreadRequestObject) (GetAgentConversationThreadResponseObject, error)
+	// UpdateAgentConversationThread Resolves one of the threads of the viewer's conversation with the agent, or opens it again; takes org.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/agents/{agent}/conversation/threads/{thread})
+	UpdateAgentConversationThread(ctx context.Context, request UpdateAgentConversationThreadRequestObject) (UpdateAgentConversationThreadResponseObject, error)
+	// PostAgentConversationMessage Posts a message to one of the threads of the viewer's conversation with the agent; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages)
+	PostAgentConversationMessage(ctx context.Context, request PostAgentConversationMessageRequestObject) (PostAgentConversationMessageResponseObject, error)
+	// DeleteAgentConversationMessage Deletes a message of the viewer's conversation with the agent, which empties it and keeps its place in its thread, marked with who deleted it; takes org.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	DeleteAgentConversationMessage(ctx context.Context, request DeleteAgentConversationMessageRequestObject) (DeleteAgentConversationMessageResponseObject, error)
+	// GetAgentConversationMessage One of the messages of one of the threads of the viewer's conversation with the agent; takes org.read.
+	// (GET /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	GetAgentConversationMessage(ctx context.Context, request GetAgentConversationMessageRequestObject) (GetAgentConversationMessageResponseObject, error)
+	// EditAgentConversationMessage Changes the body of one of the viewer's messages in their conversation with the agent; takes org.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/agents/{agent}/conversation/threads/{thread}/messages/{message})
+	EditAgentConversationMessage(ctx context.Context, request EditAgentConversationMessageRequestObject) (EditAgentConversationMessageResponseObject, error)
+	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
+	ListAgentConversationUpdates(ctx context.Context, request ListAgentConversationUpdatesRequestObject) (ListAgentConversationUpdatesResponseObject, error)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(ctx context.Context, request SetAgentModelRequestObject) (SetAgentModelResponseObject, error)
@@ -26575,6 +35402,63 @@ type StrictServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(ctx context.Context, request RevokeAPIKeySecretRequestObject) (RevokeAPIKeySecretResponseObject, error)
+	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/artifacts/{id})
+	DeleteArtifact(ctx context.Context, request DeleteArtifactRequestObject) (DeleteArtifactResponseObject, error)
+	// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	// (GET /orgs/{org}/artifacts/{id})
+	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+	// UpdateArtifact Changes the fields the merge patch (RFC 7396) names of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/artifacts/{id})
+	UpdateArtifact(ctx context.Context, request UpdateArtifactRequestObject) (UpdateArtifactResponseObject, error)
+	// GetArtifactAccess Who reaches an artifact, its audiences and the roles principals hold on the artifact itself, by name; grants on its repository and at its organization reach it too. Takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/access)
+	GetArtifactAccess(ctx context.Context, request GetArtifactAccessRequestObject) (GetArtifactAccessResponseObject, error)
+	// ShareArtifact Gives one of the organization's members, API keys or agents a role on the artifact, in place of any role it held on it; takes artifacts.manage on it and every permission the role gives.
+	// (POST /orgs/{org}/artifacts/{id}/access)
+	ShareArtifact(ctx context.Context, request ShareArtifactRequestObject) (ShareArtifactResponseObject, error)
+	// UnshareArtifact Takes every role a principal holds on the artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository or at its organization, and its audiences, still reach it.
+	// (DELETE /orgs/{org}/artifacts/{id}/access/{principal})
+	UnshareArtifact(ctx context.Context, request UnshareArtifactRequestObject) (UnshareArtifactResponseObject, error)
+	// ListArtifactVersions An artifact's versions, newest first, without their bodies; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions)
+	ListArtifactVersions(ctx context.Context, request ListArtifactVersionsRequestObject) (ListArtifactVersionsResponseObject, error)
+	// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	// (POST /orgs/{org}/artifacts/{id}/versions)
+	AddArtifactVersion(ctx context.Context, request AddArtifactVersionRequestObject) (AddArtifactVersionResponseObject, error)
+	// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version})
+	GetArtifactVersion(ctx context.Context, request GetArtifactVersionRequestObject) (GetArtifactVersionResponseObject, error)
+	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
+	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
+	GetArtifactVersionRaw(ctx context.Context, request GetArtifactVersionRawRequestObject) (GetArtifactVersionRawResponseObject, error)
+	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/conversation)
+	ListOrganizationConversationThreads(ctx context.Context, request ListOrganizationConversationThreadsRequestObject) (ListOrganizationConversationThreadsResponseObject, error)
+	// StartOrganizationConversationThread Starts a thread on the viewer's conversation about the organization, with its first message, and the conversation with its first thread; takes org.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/conversation/threads)
+	StartOrganizationConversationThread(ctx context.Context, request StartOrganizationConversationThreadRequestObject) (StartOrganizationConversationThreadResponseObject, error)
+	// GetOrganizationConversationThread One of the threads of the viewer's conversation about the organization, with its messages in the order they were posted; takes org.read.
+	// (GET /orgs/{org}/conversation/threads/{thread})
+	GetOrganizationConversationThread(ctx context.Context, request GetOrganizationConversationThreadRequestObject) (GetOrganizationConversationThreadResponseObject, error)
+	// UpdateOrganizationConversationThread Resolves one of the threads of the viewer's conversation about the organization, or opens it again; takes org.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/conversation/threads/{thread})
+	UpdateOrganizationConversationThread(ctx context.Context, request UpdateOrganizationConversationThreadRequestObject) (UpdateOrganizationConversationThreadResponseObject, error)
+	// PostOrganizationConversationMessage Posts a message to one of the threads of the viewer's conversation about the organization; takes org.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/conversation/threads/{thread}/messages)
+	PostOrganizationConversationMessage(ctx context.Context, request PostOrganizationConversationMessageRequestObject) (PostOrganizationConversationMessageResponseObject, error)
+	// DeleteOrganizationConversationMessage Deletes a message of the viewer's conversation about the organization, which empties it and keeps its place in its thread, marked with who deleted it; takes org.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	DeleteOrganizationConversationMessage(ctx context.Context, request DeleteOrganizationConversationMessageRequestObject) (DeleteOrganizationConversationMessageResponseObject, error)
+	// GetOrganizationConversationMessage One of the messages of one of the threads of the viewer's conversation about the organization; takes org.read.
+	// (GET /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	GetOrganizationConversationMessage(ctx context.Context, request GetOrganizationConversationMessageRequestObject) (GetOrganizationConversationMessageResponseObject, error)
+	// EditOrganizationConversationMessage Changes the body of one of the viewer's messages in their conversation about the organization; takes org.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/conversation/threads/{thread}/messages/{message})
+	EditOrganizationConversationMessage(ctx context.Context, request EditOrganizationConversationMessageRequestObject) (EditOrganizationConversationMessageResponseObject, error)
+	// ListOrganizationConversationUpdates The changes to the viewer's conversation about the organization after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/conversation/updates)
+	ListOrganizationConversationUpdates(ctx context.Context, request ListOrganizationConversationUpdatesRequestObject) (ListOrganizationConversationUpdatesResponseObject, error)
 	// ListInvitations The organization's invitations that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(ctx context.Context, request ListInvitationsRequestObject) (ListInvitationsResponseObject, error)
@@ -26686,6 +35570,18 @@ type StrictServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(ctx context.Context, request SetModelProviderRequestObject) (SetModelProviderResponseObject, error)
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	// (GET /orgs/{org}/models)
+	ListModels(ctx context.Context, request ListModelsRequestObject) (ListModelsResponseObject, error)
+	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/models/{provider}/{model})
+	RemoveModel(ctx context.Context, request RemoveModelRequestObject) (RemoveModelResponseObject, error)
+	// GetModel One of the organization's models, with the agents on it; takes org.read.
+	// (GET /orgs/{org}/models/{provider}/{model})
+	GetModel(ctx context.Context, request GetModelRequestObject) (GetModelResponseObject, error)
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
+	// (PUT /orgs/{org}/models/{provider}/{model})
+	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -26707,6 +35603,12 @@ type StrictServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
+	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// (GET /orgs/{org}/repos/{repo}/artifacts)
+	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
+	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// (POST /orgs/{org}/repos/{repo}/artifacts)
+	CreateArtifact(ctx context.Context, request CreateArtifactRequestObject) (CreateArtifactResponseObject, error)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
@@ -26788,6 +35690,33 @@ type StrictServerInterface interface {
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(ctx context.Context, request SubmitReviewRequestObject) (SubmitReviewResponseObject, error)
+	// ListRepositoryConversationThreads A page of the viewer's own conversation about the repository, which only they read: its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the conversation's updates stood when the page was read: listRepositoryConversationUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/repos/{repo}/conversation)
+	ListRepositoryConversationThreads(ctx context.Context, request ListRepositoryConversationThreadsRequestObject) (ListRepositoryConversationThreadsResponseObject, error)
+	// StartRepositoryConversationThread Starts a thread on the viewer's conversation about the repository, with its first message, and the conversation with its first thread; takes repo.read. A conversation's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/repos/{repo}/conversation/threads)
+	StartRepositoryConversationThread(ctx context.Context, request StartRepositoryConversationThreadRequestObject) (StartRepositoryConversationThreadResponseObject, error)
+	// GetRepositoryConversationThread One of the threads of the viewer's conversation about the repository, with its messages in the order they were posted; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/conversation/threads/{thread})
+	GetRepositoryConversationThread(ctx context.Context, request GetRepositoryConversationThreadRequestObject) (GetRepositoryConversationThreadResponseObject, error)
+	// UpdateRepositoryConversationThread Resolves one of the threads of the viewer's conversation about the repository, or opens it again; takes repo.read. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/repos/{repo}/conversation/threads/{thread})
+	UpdateRepositoryConversationThread(ctx context.Context, request UpdateRepositoryConversationThreadRequestObject) (UpdateRepositoryConversationThreadResponseObject, error)
+	// PostRepositoryConversationMessage Posts a message to one of the threads of the viewer's conversation about the repository; takes repo.read. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages)
+	PostRepositoryConversationMessage(ctx context.Context, request PostRepositoryConversationMessageRequestObject) (PostRepositoryConversationMessageResponseObject, error)
+	// DeleteRepositoryConversationMessage Deletes a message of the viewer's conversation about the repository, which empties it and keeps its place in its thread, marked with who deleted it; takes repo.read. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	DeleteRepositoryConversationMessage(ctx context.Context, request DeleteRepositoryConversationMessageRequestObject) (DeleteRepositoryConversationMessageResponseObject, error)
+	// GetRepositoryConversationMessage One of the messages of one of the threads of the viewer's conversation about the repository; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	GetRepositoryConversationMessage(ctx context.Context, request GetRepositoryConversationMessageRequestObject) (GetRepositoryConversationMessageResponseObject, error)
+	// EditRepositoryConversationMessage Changes the body of one of the viewer's messages in their conversation about the repository; takes repo.read, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/repos/{repo}/conversation/threads/{thread}/messages/{message})
+	EditRepositoryConversationMessage(ctx context.Context, request EditRepositoryConversationMessageRequestObject) (EditRepositoryConversationMessageResponseObject, error)
+	// ListRepositoryConversationUpdates The changes to the viewer's conversation about the repository after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
+	// (GET /orgs/{org}/repos/{repo}/conversation/updates)
+	ListRepositoryConversationUpdates(ctx context.Context, request ListRepositoryConversationUpdatesRequestObject) (ListRepositoryConversationUpdatesResponseObject, error)
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(ctx context.Context, request GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error)
@@ -27129,6 +36058,65 @@ func (sh *strictHandler) ListMyOrganizations(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// GetMyPreferences operation middleware
+func (sh *strictHandler) GetMyPreferences(w http.ResponseWriter, r *http.Request, params GetMyPreferencesParams) {
+	var request GetMyPreferencesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyPreferences(ctx, request.(GetMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitGetMyPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMyPreferences operation middleware
+func (sh *strictHandler) UpdateMyPreferences(w http.ResponseWriter, r *http.Request, params UpdateMyPreferencesParams) {
+	var request UpdateMyPreferencesRequestObject
+
+	request.Params = params
+
+	var body UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMyPreferences(ctx, request.(UpdateMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitUpdateMyPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMySessions operation middleware
 func (sh *strictHandler) ListMySessions(w http.ResponseWriter, r *http.Request) {
 	var request ListMySessionsRequestObject
@@ -27277,6 +36265,37 @@ func (sh *strictHandler) GetMyTask(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMyTaskResponseObject); ok {
 		if err := validResponse.VisitGetMyTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecordMyTaskSpend operation middleware
+func (sh *strictHandler) RecordMyTaskSpend(w http.ResponseWriter, r *http.Request) {
+	var request RecordMyTaskSpendRequestObject
+
+	var body RecordMyTaskSpendJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecordMyTaskSpend(ctx, request.(RecordMyTaskSpendRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecordMyTaskSpend")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecordMyTaskSpendResponseObject); ok {
+		if err := validResponse.VisitRecordMyTaskSpendResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -27631,6 +36650,293 @@ func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, org
 	}
 }
 
+// ListAgentConversationThreads operation middleware
+func (sh *strictHandler) ListAgentConversationThreads(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationThreadsParams) {
+	var request ListAgentConversationThreadsRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgentConversationThreads(ctx, request.(ListAgentConversationThreadsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgentConversationThreads")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentConversationThreadsResponseObject); ok {
+		if err := validResponse.VisitListAgentConversationThreadsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartAgentConversationThread operation middleware
+func (sh *strictHandler) StartAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID) {
+	var request StartAgentConversationThreadRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+
+	var body StartAgentConversationThreadJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartAgentConversationThread(ctx, request.(StartAgentConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartAgentConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartAgentConversationThreadResponseObject); ok {
+		if err := validResponse.VisitStartAgentConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgentConversationThread operation middleware
+func (sh *strictHandler) GetAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, params GetAgentConversationThreadParams) {
+	var request GetAgentConversationThreadRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentConversationThread(ctx, request.(GetAgentConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentConversationThreadResponseObject); ok {
+		if err := validResponse.VisitGetAgentConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAgentConversationThread operation middleware
+func (sh *strictHandler) UpdateAgentConversationThread(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, params UpdateAgentConversationThreadParams) {
+	var request UpdateAgentConversationThreadRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+	request.Params = params
+
+	var body UpdateAgentConversationThreadApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAgentConversationThread(ctx, request.(UpdateAgentConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAgentConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAgentConversationThreadResponseObject); ok {
+		if err := validResponse.VisitUpdateAgentConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostAgentConversationMessage operation middleware
+func (sh *strictHandler) PostAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID) {
+	var request PostAgentConversationMessageRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+
+	var body PostAgentConversationMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostAgentConversationMessage(ctx, request.(PostAgentConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostAgentConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostAgentConversationMessageResponseObject); ok {
+		if err := validResponse.VisitPostAgentConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAgentConversationMessage operation middleware
+func (sh *strictHandler) DeleteAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params DeleteAgentConversationMessageParams) {
+	var request DeleteAgentConversationMessageRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAgentConversationMessage(ctx, request.(DeleteAgentConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAgentConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAgentConversationMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteAgentConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgentConversationMessage operation middleware
+func (sh *strictHandler) GetAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params GetAgentConversationMessageParams) {
+	var request GetAgentConversationMessageRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentConversationMessage(ctx, request.(GetAgentConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentConversationMessageResponseObject); ok {
+		if err := validResponse.VisitGetAgentConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditAgentConversationMessage operation middleware
+func (sh *strictHandler) EditAgentConversationMessage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, threadID ThreadID, messageID MessageID, params EditAgentConversationMessageParams) {
+	var request EditAgentConversationMessageRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	var body EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditAgentConversationMessage(ctx, request.(EditAgentConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditAgentConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditAgentConversationMessageResponseObject); ok {
+		if err := validResponse.VisitEditAgentConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAgentConversationUpdates operation middleware
+func (sh *strictHandler) ListAgentConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationUpdatesParams) {
+	var request ListAgentConversationUpdatesRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgentConversationUpdates(ctx, request.(ListAgentConversationUpdatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgentConversationUpdates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentConversationUpdatesResponseObject); ok {
+		if err := validResponse.VisitListAgentConversationUpdatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SetAgentModel operation middleware
 func (sh *strictHandler) SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams) {
 	var request SetAgentModelRequestObject
@@ -27845,6 +37151,584 @@ func (sh *strictHandler) RevokeAPIKeySecret(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeAPIKeySecretResponseObject); ok {
 		if err := validResponse.VisitRevokeAPIKeySecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteArtifact operation middleware
+func (sh *strictHandler) DeleteArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteArtifactParams) {
+	var request DeleteArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteArtifact(ctx, request.(DeleteArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteArtifactResponseObject); ok {
+		if err := validResponse.VisitDeleteArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifact operation middleware
+func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetArtifactParams) {
+	var request GetArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifact(ctx, request.(GetArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
+		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateArtifact operation middleware
+func (sh *strictHandler) UpdateArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params UpdateArtifactParams) {
+	var request UpdateArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	var body UpdateArtifactApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateArtifact(ctx, request.(UpdateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateArtifactResponseObject); ok {
+		if err := validResponse.VisitUpdateArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactAccess operation middleware
+func (sh *strictHandler) GetArtifactAccess(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request GetArtifactAccessRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactAccess(ctx, request.(GetArtifactAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactAccessResponseObject); ok {
+		if err := validResponse.VisitGetArtifactAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShareArtifact operation middleware
+func (sh *strictHandler) ShareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request ShareArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	var body ShareArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShareArtifact(ctx, request.(ShareArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShareArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShareArtifactResponseObject); ok {
+		if err := validResponse.VisitShareArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnshareArtifact operation middleware
+func (sh *strictHandler) UnshareArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID) {
+	var request UnshareArtifactRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnshareArtifact(ctx, request.(UnshareArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnshareArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnshareArtifactResponseObject); ok {
+		if err := validResponse.VisitUnshareArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListArtifactVersions operation middleware
+func (sh *strictHandler) ListArtifactVersions(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request ListArtifactVersionsRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifactVersions(ctx, request.(ListArtifactVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifactVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactVersionsResponseObject); ok {
+		if err := validResponse.VisitListArtifactVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddArtifactVersion operation middleware
+func (sh *strictHandler) AddArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, params AddArtifactVersionParams) {
+	var request AddArtifactVersionRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	var body AddArtifactVersionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddArtifactVersion(ctx, request.(AddArtifactVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddArtifactVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddArtifactVersionResponseObject); ok {
+		if err := validResponse.VisitAddArtifactVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactVersion operation middleware
+func (sh *strictHandler) GetArtifactVersion(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionParams) {
+	var request GetArtifactVersionRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Version = version
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactVersion(ctx, request.(GetArtifactVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactVersionResponseObject); ok {
+		if err := validResponse.VisitGetArtifactVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactVersionRaw operation middleware
+func (sh *strictHandler) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams) {
+	var request GetArtifactVersionRawRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Version = version
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactVersionRaw(ctx, request.(GetArtifactVersionRawRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactVersionRaw")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactVersionRawResponseObject); ok {
+		if err := validResponse.VisitGetArtifactVersionRawResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrganizationConversationThreads operation middleware
+func (sh *strictHandler) ListOrganizationConversationThreads(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationThreadsParams) {
+	var request ListOrganizationConversationThreadsRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrganizationConversationThreads(ctx, request.(ListOrganizationConversationThreadsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrganizationConversationThreads")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrganizationConversationThreadsResponseObject); ok {
+		if err := validResponse.VisitListOrganizationConversationThreadsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartOrganizationConversationThread operation middleware
+func (sh *strictHandler) StartOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org) {
+	var request StartOrganizationConversationThreadRequestObject
+
+	request.Org = org
+
+	var body StartOrganizationConversationThreadJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartOrganizationConversationThread(ctx, request.(StartOrganizationConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartOrganizationConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartOrganizationConversationThreadResponseObject); ok {
+		if err := validResponse.VisitStartOrganizationConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationConversationThread operation middleware
+func (sh *strictHandler) GetOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, params GetOrganizationConversationThreadParams) {
+	var request GetOrganizationConversationThreadRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationConversationThread(ctx, request.(GetOrganizationConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationConversationThreadResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateOrganizationConversationThread operation middleware
+func (sh *strictHandler) UpdateOrganizationConversationThread(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, params UpdateOrganizationConversationThreadParams) {
+	var request UpdateOrganizationConversationThreadRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+	request.Params = params
+
+	var body UpdateOrganizationConversationThreadApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateOrganizationConversationThread(ctx, request.(UpdateOrganizationConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateOrganizationConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateOrganizationConversationThreadResponseObject); ok {
+		if err := validResponse.VisitUpdateOrganizationConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostOrganizationConversationMessage operation middleware
+func (sh *strictHandler) PostOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID) {
+	var request PostOrganizationConversationMessageRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+
+	var body PostOrganizationConversationMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostOrganizationConversationMessage(ctx, request.(PostOrganizationConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostOrganizationConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostOrganizationConversationMessageResponseObject); ok {
+		if err := validResponse.VisitPostOrganizationConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOrganizationConversationMessage operation middleware
+func (sh *strictHandler) DeleteOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params DeleteOrganizationConversationMessageParams) {
+	var request DeleteOrganizationConversationMessageRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOrganizationConversationMessage(ctx, request.(DeleteOrganizationConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOrganizationConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOrganizationConversationMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteOrganizationConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationConversationMessage operation middleware
+func (sh *strictHandler) GetOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params GetOrganizationConversationMessageParams) {
+	var request GetOrganizationConversationMessageRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationConversationMessage(ctx, request.(GetOrganizationConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationConversationMessageResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditOrganizationConversationMessage operation middleware
+func (sh *strictHandler) EditOrganizationConversationMessage(w http.ResponseWriter, r *http.Request, org Org, threadID ThreadID, messageID MessageID, params EditOrganizationConversationMessageParams) {
+	var request EditOrganizationConversationMessageRequestObject
+
+	request.Org = org
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	var body EditOrganizationConversationMessageApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditOrganizationConversationMessage(ctx, request.(EditOrganizationConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditOrganizationConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditOrganizationConversationMessageResponseObject); ok {
+		if err := validResponse.VisitEditOrganizationConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrganizationConversationUpdates operation middleware
+func (sh *strictHandler) ListOrganizationConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationUpdatesParams) {
+	var request ListOrganizationConversationUpdatesRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrganizationConversationUpdates(ctx, request.(ListOrganizationConversationUpdatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrganizationConversationUpdates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrganizationConversationUpdatesResponseObject); ok {
+		if err := validResponse.VisitListOrganizationConversationUpdatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -28961,6 +38845,126 @@ func (sh *strictHandler) SetModelProvider(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListModels operation middleware
+func (sh *strictHandler) ListModels(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListModelsRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListModels(ctx, request.(ListModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListModelsResponseObject); ok {
+		if err := validResponse.VisitListModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveModel operation middleware
+func (sh *strictHandler) RemoveModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params RemoveModelParams) {
+	var request RemoveModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveModel(ctx, request.(RemoveModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveModelResponseObject); ok {
+		if err := validResponse.VisitRemoveModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetModel operation middleware
+func (sh *strictHandler) GetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params GetModelParams) {
+	var request GetModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetModel(ctx, request.(GetModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetModelResponseObject); ok {
+		if err := validResponse.VisitGetModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetModel operation middleware
+func (sh *strictHandler) SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams) {
+	var request SetModelRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Model = model
+	request.Params = params
+
+	var body SetModelJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetModel(ctx, request.(SetModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetModelResponseObject); ok {
+		if err := validResponse.VisitSetModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRepositories operation middleware
 func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, org Org) {
 	var request ListRepositoriesRequestObject
@@ -29165,6 +39169,68 @@ func (sh *strictHandler) RevokeRepositoryRole(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeRepositoryRoleResponseObject); ok {
 		if err := validResponse.VisitRevokeRepositoryRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListArtifacts operation middleware
+func (sh *strictHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams) {
+	var request ListArtifactsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListArtifacts(ctx, request.(ListArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListArtifactsResponseObject); ok {
+		if err := validResponse.VisitListArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateArtifact operation middleware
+func (sh *strictHandler) CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request CreateArtifactRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body CreateArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateArtifact(ctx, request.(CreateArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateArtifactResponseObject); ok {
+		if err := validResponse.VisitCreateArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -30004,6 +40070,293 @@ func (sh *strictHandler) SubmitReview(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SubmitReviewResponseObject); ok {
 		if err := validResponse.VisitSubmitReviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryConversationThreads operation middleware
+func (sh *strictHandler) ListRepositoryConversationThreads(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryConversationThreadsParams) {
+	var request ListRepositoryConversationThreadsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryConversationThreads(ctx, request.(ListRepositoryConversationThreadsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryConversationThreads")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryConversationThreadsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryConversationThreadsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartRepositoryConversationThread operation middleware
+func (sh *strictHandler) StartRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request StartRepositoryConversationThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body StartRepositoryConversationThreadJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartRepositoryConversationThread(ctx, request.(StartRepositoryConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartRepositoryConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartRepositoryConversationThreadResponseObject); ok {
+		if err := validResponse.VisitStartRepositoryConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryConversationThread operation middleware
+func (sh *strictHandler) GetRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, params GetRepositoryConversationThreadParams) {
+	var request GetRepositoryConversationThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryConversationThread(ctx, request.(GetRepositoryConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryConversationThreadResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateRepositoryConversationThread operation middleware
+func (sh *strictHandler) UpdateRepositoryConversationThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, params UpdateRepositoryConversationThreadParams) {
+	var request UpdateRepositoryConversationThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+	request.Params = params
+
+	var body UpdateRepositoryConversationThreadApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateRepositoryConversationThread(ctx, request.(UpdateRepositoryConversationThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateRepositoryConversationThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateRepositoryConversationThreadResponseObject); ok {
+		if err := validResponse.VisitUpdateRepositoryConversationThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostRepositoryConversationMessage operation middleware
+func (sh *strictHandler) PostRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID) {
+	var request PostRepositoryConversationMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+
+	var body PostRepositoryConversationMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostRepositoryConversationMessage(ctx, request.(PostRepositoryConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostRepositoryConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostRepositoryConversationMessageResponseObject); ok {
+		if err := validResponse.VisitPostRepositoryConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRepositoryConversationMessage operation middleware
+func (sh *strictHandler) DeleteRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params DeleteRepositoryConversationMessageParams) {
+	var request DeleteRepositoryConversationMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRepositoryConversationMessage(ctx, request.(DeleteRepositoryConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRepositoryConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRepositoryConversationMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteRepositoryConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryConversationMessage operation middleware
+func (sh *strictHandler) GetRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params GetRepositoryConversationMessageParams) {
+	var request GetRepositoryConversationMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryConversationMessage(ctx, request.(GetRepositoryConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryConversationMessageResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditRepositoryConversationMessage operation middleware
+func (sh *strictHandler) EditRepositoryConversationMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, threadID ThreadID, messageID MessageID, params EditRepositoryConversationMessageParams) {
+	var request EditRepositoryConversationMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	var body EditRepositoryConversationMessageApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditRepositoryConversationMessage(ctx, request.(EditRepositoryConversationMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditRepositoryConversationMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditRepositoryConversationMessageResponseObject); ok {
+		if err := validResponse.VisitEditRepositoryConversationMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryConversationUpdates operation middleware
+func (sh *strictHandler) ListRepositoryConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryConversationUpdatesParams) {
+	var request ListRepositoryConversationUpdatesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryConversationUpdates(ctx, request.(ListRepositoryConversationUpdatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryConversationUpdates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryConversationUpdatesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryConversationUpdatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -281,7 +281,7 @@ const goneBanner = (s) => h("div", { class: "banner app-pane-live", role: "statu
   h("div", { class: "banner-text" }, h("p", {}, h("code", {}, s.title), " was deleted. Its conversation stays here, read-only.")));
 
 // followChat applies a chat's updates after cursor after as they come, until signal stops it (the pane stops it when it
-// closes or shows another conversation) or the chat is gone; its banner, live, says when it doesn't follow, and it tries again,
+// closes, shows another conversation or a card replaces the shell) or the chat is gone; its banner, live, says when it doesn't follow, and it tries again,
 // waiting longer each time, when a read fails.
 async function followChat(chat, after, apply, live, signal) {
   let delay = 1000;

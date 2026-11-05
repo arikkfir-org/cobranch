@@ -58,7 +58,7 @@ classes that map its components. A fix to a component reaches every screen and e
 
 Colour has two layers: primitives hold raw values, and semantic tokens alias them per mode. Components use semantic
 tokens only, and Light and Dark are two modes of the one `Color` collection, so a frame changes theme by switching its
-mode. Both themes are equal: the system's setting decides, and a person may override it.
+mode. Both themes are equal: the system's setting decides, and a person may override it. The choice is kept with the person (`/v1/me/preferences`), so every browser they sign in from follows it; each browser keeps a copy to draw its first frame in the right theme.
 
 **Primitives** (`Primitives`): a cool gray in 15 steps, from `gray/0` #ffffff to `gray/1000` #0c0d0f; blue, green,
 amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 50 and 60% for overlays and shadows.
@@ -357,7 +357,7 @@ Researcher waits for a task.
 | [Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9367) | The organization's own secrets, which its repositories' jobs share |
 | [Settings · Usage](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9789) | What the organization uses against the installation's limits, and each repository's Git data |
 | [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
-| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with a cap per task |
+| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
@@ -457,7 +457,8 @@ The Figma file is the source of truth, and the Console follows it, never leads.
    [`tokens.css`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/public/assets/tokens.css) from it;
    nobody edits `tokens.css` by hand, and CI fails when it differs from the export. A pull request that changes it names
    the Figma change it carries. The steps are in the tools'
-   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md).
+   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md). The Back-office's image
+   takes the Console's `tokens.css`, typefaces and marks when it is built, so one export reaches both.
 3. **Components map one to one.** Each Figma component is one class of the Console's component stylesheet, named after
    it. A page composes those classes and writes no component CSS of its own, so a component fix reaches every page.
 4. **Screens are the acceptance test.** A page group is done when the Console matches its Figma screen at 1440 wide,
@@ -506,7 +507,7 @@ preference unless `data-theme="light"`.
 | Where do labels go? | Above their fields (2026-11-04) |
 | Where does a conversation live? | One pane on the right, whose subject follows the page (2026-11-04) |
 | Tables or rich rows for lists? | Proposed: tables for organization-level lists, rich rows inside a page |
-| How does an agent's spend show? | Proposed: on each task row of the agent's page |
-| How are models capped? | Proposed: a cap per task on the model, which an agent may lower |
+| How does an agent's spend show? | On each task row of the agent's page, against its cap, and the month so far on its facts (2026-11-05) |
+| How are models capped? | They aren't: the cap per task is each agent's, and models carry prices only (2026-11-05) |
 | Where do artifacts appear? | Proposed: a tab on their repository, and posted into the conversation that asked for them |
 | Who may see an artifact? | Proposed: grants to the repository's members, the organization, people and agents, each view or edit |

@@ -20,6 +20,7 @@ const openKey = "cobranch.pane";
 const opened = () => { try { return localStorage.getItem(openKey) === "open"; } catch { return false; } };
 
 let shown = null; // the subject the pane shows, or will once it opens
+let page = null; // the subject of the page on screen, which Following shows
 let pinned = false; // whether it stays on its subject while the viewer moves to another page's
 let drawn = null; // { key, stop } of the conversation drawn, while the pane is open
 const pane = h("aside", { class: "app-pane", "aria-label": "Conversation", hidden: !opened() });
@@ -44,6 +45,10 @@ const stop = () => {
   drawn = null;
 };
 
+// leave stops following the conversation the pane shows, as a card that replaces the shell does (showCard); the pane
+// draws it again once a page in the shell gives it its subject.
+export const leave = () => stop();
+
 let given = 0; // numbers the subjects pages give, so that one a page works out late never replaces a later page's
 
 // converse gives the pane the page's subject, or a promise of it: it shows it, unless it is pinned to another, and a
@@ -52,6 +57,7 @@ export function converse(subject) {
   const n = ++given;
   Promise.resolve(subject).catch(() => null).then((s) => {
     if (n !== given || !s) return;
+    page = s;
     if (!pinned || !shown) shown = s;
     if (pane.hidden && shown.chat && location.hash.startsWith("#thread-")) return setOpen(true);
     if (!pane.hidden) draw();
@@ -70,7 +76,9 @@ function header(s) {
     h("button", { class: "menu-item", type: "button", role: "menuitemradio", "aria-checked": String(pinned === (m === "pinned")), title, onclick: () => {
       close();
       pinned = m === "pinned";
-      pane.querySelector(".app-pane-header").replaceWith(header(s));
+      if (!pinned && page) shown = page;
+      pane.querySelector(".app-pane-header").replaceWith(header(shown));
+      draw();
     } }, icon(m === "pinned" ? "pin" : "message-square"), h("span", {}, word)))));
   return h("header", { class: "app-pane-header" },
     h("div", { class: "app-pane-title" }, h("strong", {}, "Conversation"), s.title ? h(s.code ? "code" : "span", { class: "app-pane-subject" }, s.title) : null, mode,

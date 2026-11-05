@@ -9,16 +9,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
 )
 
-// ChatStore keeps the branches' chats (db/migrations/00022_chats.sql) and the issues' (00039_issue_chats.sql):
-// chats.Store on PostgreSQL, through the queries sqlc generates from db/queries. Each change runs in a transaction
-// that acts for its principal, holds the chat's lock, appends the chat's event and notifies the servers that listen.
+// foreignKeyViolation is PostgreSQL's error code for a row that names a row that isn't there.
+const foreignKeyViolation = "23503"
+
+// ChatStore keeps the branches' chats (db/migrations/00022_chats.sql), the issues' (00039_issue_chats.sql) and the
+// private conversations (00048_conversations.sql): chats.Store on PostgreSQL, through the queries sqlc generates from
+// db/queries. Each change runs in a transaction that acts for its principal, holds the chat's lock, appends the chat's
+// event and notifies the servers that listen.
 type ChatStore struct {
 	pool *pgxpool.Pool
 	q    *queries.Queries
@@ -70,6 +76,41 @@ func (s *ChatStore) Issue(ctx context.Context, orgID uuid.UUID, number int) (cha
 	}
 	return chats.Subject{OrgID: row.OrgID, IssueID: row.ID, Number: int(row.Number), Issue: row.IssueKey + "-" + strconv.Itoa(int(row.Number)),
 		Org: row.OrgSlug}, nil
+}
+
+// Conversation finds owner's private conversation about the organization, its repository repoID or with its agent
+// agentID as a chat's subject, made or not; repos.ErrNotFound when the organization has no such repository or agent
+// (chats.Store).
+func (s *ChatStore) Conversation(ctx context.Context, owner, orgID, repoID, agentID uuid.UUID) (chats.Subject, error) {
+	subj := chats.Subject{OrgID: orgID, OwnerID: owner, ConversationID: chats.ConversationID(owner, orgID, repoID, agentID)}
+	var err error
+	switch {
+	case repoID != uuid.Nil:
+		var row queries.RepositoryConversationSubjectRow
+		if row, err = s.q.RepositoryConversationSubject(ctx, git.DefaultBranch, orgID, repoID); err == nil {
+			subj.RepoID, subj.Org, subj.Repo, subj.Branch = row.ID, row.OrgSlug, row.RepoSlug, git.DefaultBranch
+			if row.Head != nil {
+				subj.Head = *row.Head
+			}
+		}
+	case agentID != uuid.Nil:
+		var row queries.AgentConversationSubjectRow
+		if row, err = s.q.AgentConversationSubject(ctx, orgID, agentID); err == nil {
+			subj.AgentID, subj.Agent, subj.Org = row.PrincipalID, row.Name, row.OrgSlug
+		}
+	default:
+		var row queries.OrganizationConversationSubjectRow
+		if row, err = s.q.OrganizationConversationSubject(ctx, orgID); err == nil {
+			subj.Org = row.Slug
+		}
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return chats.Subject{}, repos.ErrNotFound
+	}
+	if err != nil {
+		return chats.Subject{}, fmt.Errorf("finding the conversation's subject: %w", err)
+	}
+	return subj, nil
 }
 
 // Head finds the object a branch is at now, deleted or not, or repos.ErrNotFound (chats.Store).
@@ -243,9 +284,13 @@ func holdChat(ctx context.Context, q *queries.Queries, subj chats.Subject) error
 	return live(ctx, q, subj)
 }
 
-// live checks that the subject's chat takes changes: that its issue is there, which it then holds from deletion until
-// the transaction ends, or that its branch was not deleted, chats.ErrBranchDeleted otherwise.
+// live checks that the subject's chat takes changes: that its issue is there, or its conversation, which it makes the
+// first time, and then holds either from deletion until the transaction ends; or that its branch was not deleted,
+// chats.ErrBranchDeleted otherwise.
 func live(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
+	if subj.Private() {
+		return holdConversation(ctx, q, subj)
+	}
 	if subj.OfIssue() {
 		if _, err := q.HoldIssue(ctx, subj.IssueID); errors.Is(err, pgx.ErrNoRows) {
 			return repos.ErrNotFound
@@ -266,11 +311,38 @@ func live(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
 	return nil
 }
 
+// holdConversation makes the subject's conversation unless it is there, and holds it from deletion until the
+// transaction ends: repos.ErrNotFound once its owner, or what it is about, is gone.
+func holdConversation(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
+	p := queries.EnsureConversationParams{ID: subj.ConversationID, OrgID: subj.OrgID, OwnerID: subj.OwnerID}
+	switch subj.Kind() {
+	case chats.KindRepository:
+		p.RepoID = &subj.RepoID
+	case chats.KindAgent:
+		p.AgentID = &subj.AgentID
+	}
+	var pgErr *pgconn.PgError
+	if err := q.EnsureConversation(ctx, p); errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation {
+		return repos.ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("making the conversation: %w", err)
+	}
+	if _, err := q.HoldConversation(ctx, subj.ConversationID); errors.Is(err, pgx.ErrNoRows) {
+		return repos.ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("holding the conversation: %w", err)
+	}
+	return nil
+}
+
 // chatChanged appends the event of a change of kind to the subject's chat, which holdChat holds, about the thread and
 // the message, if any, and notifies the servers that listen once the transaction commits.
 func chatChanged(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, kind chats.UpdateKind, e chatEvent) error {
 	details := map[string]any{"repo": subj.RepoID, "thread": e.Thread}
-	if subj.OfIssue() {
+	switch {
+	case subj.Private():
+		details = map[string]any{"conversation": subj.ConversationID, "thread": e.Thread}
+	case subj.OfIssue():
 		details = map[string]any{"issue": subj.IssueID, "thread": e.Thread}
 	}
 	if e.Message != nil {
@@ -328,7 +400,10 @@ func (s *ChatStore) StartThread(ctx context.Context, by chats.Poster, subj chats
 // reviewID names when it is set, with its first message, and reports whether it did: not when a thread of id is there.
 func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
 	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &by.ID, ReviewID: reviewID}
-	if subj.OfIssue() {
+	switch {
+	case subj.Private():
+		p.RepoID, p.BranchID, p.ConversationID = nil, nil, &subj.ConversationID
+	case subj.OfIssue():
 		p.RepoID, p.BranchID, p.IssueID = nil, nil, &subj.IssueID
 	}
 	if anchor != nil {

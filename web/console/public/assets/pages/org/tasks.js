@@ -4,8 +4,10 @@ import { capitalized, whenExactly } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
 import { repoLinks } from "../../lib/repository.js";
 import { go } from "../../lib/router.js";
+import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
 import { taskBadge, taskStates } from "../../lib/tasks.js";
+import { agentItem } from "./agents.js";
 
 export const nav = { label: "Tasks", order: 60, under: "agents" };
 export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agents" }, { label: "Tasks", href: root + "/tasks" }, ...(sub ? [{ label: "#" + sub }] : [])];
@@ -132,7 +134,11 @@ async function showTasks(org, main, can) {
     [["", "Every task"], ["active", "Active"], ["succeeded", "Succeeded"], ["failed", "Failed"], ["cancelled", "Cancelled"]]
       .map(([value, label]) => h("option", { value, selected: (query.get("state") || "") === value }, label)));
   const params = new URLSearchParams();
-  if (query.get("agent")) params.set("agent", query.get("agent"));
+  if (query.get("agent")) {
+    params.set("agent", query.get("agent"));
+    api("GET", "/orgs/" + org.slug + "/agents/" + encodeURIComponent(query.get("agent"))).then((a) => remember(org, "agents", agentItem(org, a)),
+      () => { /* no such agent: its tasks say so, and the sidebar keeps what it showed */ });
+  }
   for (const s of query.get("state") === "active" ? ["queued", "running", "waiting"] : query.get("state") ? [query.get("state")] : []) params.append("state", s);
   const rows = h("tbody");
   let next = null;

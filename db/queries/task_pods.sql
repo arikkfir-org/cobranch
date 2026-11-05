@@ -58,12 +58,12 @@ FROM agent_tasks t
 WHERE p.task_id = @task_id AND p.attempt = @attempt AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
 RETURNING p.task_id;
 
--- FailTask ends a task that hasn't ended Failed, for reason, and answers its organization, number and agent; no row
--- when it had ended already.
+-- FailTask ends a task that hasn't ended Failed, for reason, and answers its organization, number and agent, and the
+-- kind, repository and head of what it works on; no row when it had ended already.
 -- name: FailTask :one
 UPDATE agent_tasks SET state = 'failed', reason = @reason, summary = '', ended_at = now()
 WHERE id = @id AND state IN ('queued', 'running', 'waiting')
-RETURNING org_id, number, agent_id;
+RETURNING org_id, number, agent_id, kind, repo_id, sha;
 
 -- ActiveTasks lists the tasks that run or wait in the pods the controller started, with their newest pod, when their
 -- newest token was issued, when they last changed state, whether their pod stopped while they wait, and whether

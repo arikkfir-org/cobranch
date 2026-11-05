@@ -140,6 +140,8 @@ func TestParseSettingsRefused(t *testing.T) {
 			wantErr: `/cobranch.yaml: line 5: "COBRANCH_TOKEN" is no environment variable a secret may take`},
 		{name: "an unknown permission", settings: "jobs:\n  a:\n    on: {push: }\n    script: x\n    permissions: [repo.write]\n",
 			wantErr: `/cobranch.yaml: line 5: "repo.write" is no repository permission`},
+		{name: "an artifact permission", settings: "jobs:\n  a:\n    on: {push: }\n    script: x\n    permissions: [repo.read, artifacts.create]\n",
+			wantErr: `/cobranch.yaml: line 5: "artifacts.create" is no permission a job declares: its runs reach no artifact`},
 		{name: "a day's timeout", settings: "jobs:\n  a:\n    on: {push: }\n    script: x\n    timeout: 25h\n",
 			wantErr: "/cobranch.yaml: line 5: timeout must be a duration such as 30m or 2h, at most 24h"},
 		{name: "following itself", settings: "jobs:\n  a:\n    on: {annotation: {names: [a]}}\n    script: x\n",

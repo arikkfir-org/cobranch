@@ -71,10 +71,10 @@ Console loads no more modules: every page’s is already in.
   (`pages/org/settings/`) and `fonts/` (its `templates`,
   at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
   the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
-  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to arrive.
-  Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the modules
-  before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s. At 500
-  ms, 1.7 s against 5.2 s and 2.1 s.
+  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
+  arrive. Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the
+  modules before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s.
+  At 500 ms, 1.7 s against 5.2 s and 2.1 s.
 - **The root comes from the configuration.** An operator may mount the Console at a prefix, which its route strips:
   `consoleUrl`'s path is then the root every module and link starts from, as the pages' links already did.
 - **So does the release.** The configuration names the release of the server that answered (`COBRANCH_RELEASE`, which
@@ -144,8 +144,8 @@ at a phone’s width the sidebar goes off-canvas.
   them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Tasks under
   Agents), and Settings draws its tabs from its own directory; `place: "foot"` puts Settings at the sidebar's foot. A page
   with `nav.items` is a section, which shows five sub items: those the viewer opened last in this browser, as the
-  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent)
-  puts it first.
+  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent's
+  tasks) puts it first.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and

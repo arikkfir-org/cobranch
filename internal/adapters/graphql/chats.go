@@ -16,6 +16,9 @@ import (
 type Chats interface {
 	Branch(ctx context.Context, v chats.Viewer, repoID uuid.UUID, name string) (chats.Subject, error)
 	Issue(ctx context.Context, v chats.Viewer, orgID uuid.UUID, number int) (chats.Subject, error)
+	Organization(ctx context.Context, v chats.Viewer, orgID uuid.UUID) (chats.Subject, error)
+	Repository(ctx context.Context, v chats.Viewer, orgID, repoID uuid.UUID) (chats.Subject, error)
+	Agent(ctx context.Context, v chats.Viewer, orgID, agentID uuid.UUID) (chats.Subject, error)
 	Threads(ctx context.Context, v chats.Viewer, subj chats.Subject, before uuid.UUID, limit int) (chats.Page, error)
 	StartThread(ctx context.Context, v chats.Viewer, subj chats.Subject, in chats.ThreadInput) (chats.Thread, error)
 	Post(ctx context.Context, v chats.Viewer, subj chats.Subject, threadID uuid.UUID, in chats.MessageInput) (chats.Message, error)
@@ -125,10 +128,7 @@ func (r *Resolver) chatPage(ctx context.Context, v chats.Viewer, subj chats.Subj
 
 // subjectKind is what the subject is, as a refusal names what isn't there.
 func subjectKind(subj chats.Subject) string {
-	if subj.OfIssue() {
-		return "issue"
-	}
-	return "branch"
+	return string(subj.Kind())
 }
 
 // startThread starts a thread on the subject's chat for the viewer.

@@ -132,9 +132,10 @@ func (s *AgentStore) SecretRepository(ctx context.Context, orgID, secretID uuid.
 	return *repoID, nil
 }
 
-// SetModel puts one of the organization's agents on a model of a provider it added, or on none with both empty, for
-// actor, holding the provider against removal meanwhile, at version or at any version for agents.AnyVersion, and
-// answers it; agents.ErrChanged, and a validation error for a provider the organization hasn't added (agents.Store).
+// SetModel puts one of the organization's agents on one of its models, or on none with both empty, for actor, holding
+// the provider and the model against removal meanwhile, at version or at any version for agents.AnyVersion, and
+// answers it; agents.ErrChanged, and a validation error for a provider or a model the organization hasn't added
+// (agents.Store).
 // The AI reviewer's model changes the status of the branches whose base requires its approval.
 func (s *AgentStore) SetModel(ctx context.Context, actor, orgID, id uuid.UUID, version int64, provider, model string) (agents.Agent, error) {
 	return s.changeAgent(ctx, actor, orgID, id, "picking the agent's model", func(ctx context.Context, q *queries.Queries) error {
@@ -144,6 +145,12 @@ func (s *AgentStore) SetModel(ctx context.Context, actor, orgID, id uuid.UUID, v
 				return &orgs.ValidationError{Field: "provider", Code: "agent.provider_invalid", Message: "the organization hasn't added this provider"}
 			} else if err != nil {
 				return fmt.Errorf("holding model provider %s: %w", provider, err)
+			}
+			if _, err := q.ShareModel(ctx, orgID, provider, model); errors.Is(err, pgx.ErrNoRows) {
+				return &orgs.ValidationError{Field: "model", Code: "agent.model_invalid",
+					Message: "the organization hasn't added this model: add it to its models, with its prices, first"}
+			} else if err != nil {
+				return fmt.Errorf("holding model %s of %s: %w", model, provider, err)
 			}
 			params.Provider, params.Model = &provider, &model
 		}

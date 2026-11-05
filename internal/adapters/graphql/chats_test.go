@@ -36,8 +36,9 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 	}
 }
 
-// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' counterparts.
-var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage)":\{"id":"([0-9a-f-]{36})"`)
+// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' or conversations'
+// counterparts.
+var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage|startConversationThread|postConversationMessage)":\{"id":"([0-9a-f-]{36})"`)
 
 // agentOnTask is Scout, a Developer on the website, through the token of its task numbered number, whose number the
 // chats know.
@@ -240,7 +241,7 @@ func TestChatUpdatesSubscription(t *testing.T) {
 	f := newOrgFixture()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets)))
+	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets, f.artifacts)))
 	defer srv.Close()
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
 	if conn, err := dialWS(ctx, url, "https://elsewhere.example.com"); err == nil {

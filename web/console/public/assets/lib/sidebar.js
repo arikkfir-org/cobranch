@@ -57,8 +57,12 @@ function subItems(org, part) {
   return [...mine, ...items.filter((i) => !keys.has(i.key))].slice(0, shown);
 }
 
-// current is whether a link's path is the page shown, or a page under it.
-const current = (href) => location.pathname === href || location.pathname.startsWith(href + "/");
+// current is whether a link's path is the page shown, or a page under it, with every parameter its query names.
+function current(href) {
+  const link = new URL(href, location.origin);
+  const shown = new URLSearchParams(location.search);
+  return (location.pathname === link.pathname || location.pathname.startsWith(link.pathname + "/")) && [...link.searchParams].every(([k, v]) => shown.get(k) === v);
+}
 
 // subItem is a section's row (Nav/Sub item): its leading icon or an agent's avatar, its label, and its status dot.
 function subItem(i) {
