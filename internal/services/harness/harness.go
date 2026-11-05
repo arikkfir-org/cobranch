@@ -68,6 +68,9 @@ type Cobranch interface {
 	// names it, and answers its number and the artifact's ETag now; adding it again answers it as it is.
 	// ErrArtifactChanged when the artifact changed since etag.
 	AddArtifactVersion(ctx context.Context, org string, id uuid.UUID, etag string, v ArtifactVersion) (int, string, error)
+	// Queue answers the head of the queue of one of the organization's agents: its oldest queued tasks, at most limit,
+	// oldest first as it takes them, redacted as Tasks does, and how many tasks the queue holds in all.
+	Queue(ctx context.Context, org string, agent uuid.UUID, limit int) ([]agents.Task, int, error)
 }
 
 // ErrArtifactChanged is an artifact that changed since the version a new one was made from.

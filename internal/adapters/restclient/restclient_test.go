@@ -34,6 +34,9 @@ type api struct {
 	chats []string
 	// conversation is the private conversation the token's task talks in; nil for none.
 	conversation *MyTaskConversation
+	// queued is how many tasks Scout's queue holds, #1 the oldest, which a list of its queued tasks alone pages through
+	// newest first; 0 lists the tasks of tasks.
+	queued int
 }
 
 var agentID, assignerID = uuid.New(), uuid.New()

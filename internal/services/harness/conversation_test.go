@@ -94,6 +94,39 @@ func queue() []agents.Task {
 	}
 }
 
+// queueCases are TestChat's cases of the tasks tool's queue: one longer than the tool lists, and one it can't read.
+func queueCases() []chatCase {
+	return []chatCase{
+		{name: "a queue longer than the tool lists shows its head and how many follow", conversation: &agents.Conversation{AgentID: scout},
+			tasks: longQueue(), turns: []harness.Turn{calling(call("a", "tasks", `{}`)), done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				listed := lastResult(m.requests[1])
+				containsAll(t, listed, "Your queue, in the order you will take it:\n- 1. #8 queued", "- 50. #57 queued since",
+					"- 50. #57 queued since 2026-11-05 10:00 UTC: More, asked by Noah\n- and 3 more after them\n\nEnded last:")
+				if strings.Contains(listed, "#58") {
+					t.Errorf("the tool listed past the head of the queue: %s", listed)
+				}
+			}},
+		{name: "a refused listing of the queue", conversation: &agents.Conversation{AgentID: scout}, queueErr: errors.New("the API answered 500"),
+			turns: []harness.Turn{calling(call("a", "tasks", `{}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				resultAt(2, "tasks failed: listing your queue: the API answered 500", true)(t, c, nil, nil)
+			}},
+	}
+}
+
+// longQueue is queue() with 51 more tasks queued after it, #10 to #60, so the queue holds 53: more than the tasks tool
+// lists.
+func longQueue() []agents.Task {
+	tasks := queue()
+	noah := &agents.Principal{ID: uuid.New(), DisplayName: "Noah"}
+	for n := int64(10); n <= 60; n++ {
+		tasks = append(tasks, agents.Task{Number: n, Agent: agents.Principal{ID: scout, DisplayName: "Scout"}, Title: "More", AssignedBy: noah,
+			State: agents.TaskQueued, CreatedAt: time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)})
+	}
+	return tasks
+}
+
 // talkedIn checks that the task started one thread, of the chat named.
 func talkedIn(t *testing.T, c *cobranch, chat harness.Chat) {
 	t.Helper()

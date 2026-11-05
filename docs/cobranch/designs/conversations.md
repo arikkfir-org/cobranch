@@ -156,8 +156,9 @@ The tool lists only what the person may see: their own tasks, and the others the
 person’s private task shows as a place in the queue, nothing more.
 
 - **A tasks tool.** A task asked in a conversation with its own agent gets a `tasks` tool beside its chat tools, and its
-  prompt says so: what the agent works on now and its queue, oldest first as it will take them, each queued task with
-  its place, then the ten it ended last. Each line names the task's number, its state and since when, its title, who
+  prompt says so: what the agent works on now and the head of its queue, the 50 it will take first, oldest first, each
+  with its place, and how many follow them; then the ten it ended last. The list pages newest first, so the tool reads
+  the queue to its end for its head. Each line names the task's number, its state and since when, its title, who
   asked for it and where it works; another person's private task shows its number, state and times alone. A task asked
   of another agent in that conversation gets no such tool.
 - **The same records as the agent's page,** read through the REST API's task list with the task's token, so the agent
@@ -196,15 +197,27 @@ person’s private task shows as a place in the queue, nothing more.
 
 - **Each page names its subject.** A page module exports `subject(ctx)`, the app shell's contract: its key, title, kind,
   the chat's base path, what posting and moderating take, the composer's placeholder, and whether the subject is gone.
-  The shell's pane reads, posts and follows whatever the page names, and switches when the page does.
-- **Private or shared, said once.** The pane's header names the subject and marks a private conversation "Only you", a
-  shared chat with who reads it.
-- **The composer's @** lists the organization's agents the viewer may assign; picking one sets `ask`. A task's messages
-  show its agent, its number and its state, which link to the task's page.
+  The shell's pane reads, posts and follows whatever the page names, and switches when the page does. The
+  organization's and a repository's pages that name no other subject show the viewer's own conversation about them,
+  and an agent's page (its tasks, until the agent page lands) the viewer's conversation with the agent.
+- **Private or shared, said once.** The pane's header names the subject and marks a private conversation "Private to
+  you", a shared chat with who reads it. An agent's conversation is headed by the agent's name, and says every message
+  asks it.
+- **Ask, or @.** For a viewer who holds `agents.assign`, Ask at the composer's end, or typing @ at the start of a word,
+  opens the organization's agents above it; picking one sets `ask` and shows the agent as its tag in Ask's place, whose
+  × asks nobody again. A thread's reply is the same box, with the same Ask. An agent's conversation has no Ask: every
+  new thread asks its agent. A message that asked an agent reads "Asked Researcher · #12" under its text, the number
+  linking to the task; an agent's own messages carry its Agent tag, which links to the task it works.
+- **Private tasks in lists.** Another person's private task shows as "Asked in private", with the agent, its number,
+  state and times, and no link.
 - **Artifacts in the pane.** An artifact an agent generates in a conversation shows in that conversation's pane as a
-  card that opens it. It belongs to the chat's repository unless the chat is an issue's or the organization's, and one
-  generated in a private conversation stays private to its person until they share it; the artifact's records are the
-  [artifacts](artifacts.md) design's ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)).
+  card under the message that names it (the message's `artifact`): its title, then its format and who reads it ("Markdown
+  · only you", "SVG · members of website"), and Open to its page. It belongs to the chat's repository unless the chat is
+  an issue's or the organization's, and one generated in a private conversation stays private to its person until they
+  share it; the artifact's records are the [artifacts](artifacts.md) design's
+  ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)). Everyone who reads the thread sees the card, but the pane
+  reads the artifact itself, once per card, for the format and audience: a viewer the artifact's grants keep out gets
+  its kind alone and no Open.
 - **Built on the new shell** ([ENG-255](https://linear.app/arikkfir/issue/ENG-255)): the organization's and
   repositories' pages hand their conversations to the pane as they move onto it.
 

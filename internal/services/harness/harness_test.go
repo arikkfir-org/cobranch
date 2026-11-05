@@ -34,7 +34,8 @@ type cobranch struct {
 	waited  int
 	started uuid.UUID
 	cancel  context.CancelFunc
-	// tasks are the organization's tasks, oldest first, as the task's token sees them; tasksErr fails their listing.
+	// tasks are the organization's tasks, oldest first, as the task's token sees them; tasksErr fails their listing,
+	// and queueErr that of the queue.
 	tasks    []agents.Task
 	tasksErr error
 	// artifacts are the organization's artifacts by ID; made the artifacts the task wrote, each time it did; cards the
@@ -42,6 +43,7 @@ type cobranch struct {
 	artifacts map[uuid.UUID]*artifact
 	made      []harness.NewArtifact
 	cards     []uuid.UUID
+	queueErr  error
 }
 
 // wait is what a wait for the chat's updates sees: nothing, a message someone posts to a thread, the task's own when
@@ -163,6 +165,22 @@ func (c *cobranch) Tasks(_ context.Context, org string, agent uuid.UUID, states 
 		}
 	}
 	return out, nil
+}
+
+func (c *cobranch) Queue(_ context.Context, org string, agent uuid.UUID, limit int) ([]agents.Task, int, error) {
+	if org != c.work.OrgSlug {
+		return nil, 0, errors.New("another organization")
+	}
+	if c.queueErr != nil {
+		return nil, 0, c.queueErr
+	}
+	var queued []agents.Task
+	for _, t := range c.tasks {
+		if t.Agent.ID == agent && t.State == agents.TaskQueued {
+			queued = append(queued, t)
+		}
+	}
+	return queued[:min(limit, len(queued))], len(queued), nil
 }
 
 func (c *cobranch) Transcript(_ context.Context, org string, number int64) ([]agents.Entry, error) {
