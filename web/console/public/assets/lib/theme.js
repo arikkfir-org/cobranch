@@ -27,10 +27,19 @@ function draw(choice) {
 }
 
 // followPreferences reads the signed-in person's preferences and draws their theme when this browser's copy is
-// another, as when they chose it in another browser. It never fails: the copy stands in.
+// another, as when they chose it in another browser. A choice this browser kept before the person had preferences
+// (version 0) becomes theirs instead, unless another browser saves one first, which this one then follows. It never
+// fails: the copy stands in.
 export async function followPreferences() {
   try {
-    const p = await api("GET", "/me/preferences");
+    let p = await api("GET", "/me/preferences");
+    if (p.version === 0 && theme() !== "system") {
+      try {
+        p = await api("PATCH", "/me/preferences", { theme: theme() }, { "Content-Type": "application/merge-patch+json", "If-Match": '"0"' });
+      } catch {
+        p = await api("GET", "/me/preferences");
+      }
+    }
     if (themes.includes(p.theme) && p.theme !== theme()) draw(p.theme);
   } catch { /* the browser's copy stands in */ }
 }
