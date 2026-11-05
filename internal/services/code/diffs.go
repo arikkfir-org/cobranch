@@ -71,16 +71,19 @@ type Hunk struct {
 	Lines    []DiffLine
 }
 
-// FileDiff is one file's change: its path, and the one it had before when it was renamed; its modes, "" where it is
-// absent; how many lines it adds and removes, 0 for a binary file; and its hunks, none for a binary file and when
-// Truncated, when it passes MaxFileDiffLines, MaxFileDiffBytes or MaxDiffLineBytes, or the diff passed MaxDiffLines or
-// MaxDiffBytes before it.
+// FileDiff is one file's change: its path, and the one it had before when it was renamed; its modes and objects, ""
+// where it is absent; how many lines it adds and removes, 0 for a binary file; and its hunks, none for a binary file
+// and when Truncated, when it passes MaxFileDiffLines, MaxFileDiffBytes or MaxDiffLineBytes, or the diff passed
+// MaxDiffLines or MaxDiffBytes before it.
 type FileDiff struct {
-	Status    FileStatus
-	Path      string
-	OldPath   string
-	OldMode   string
-	Mode      string
+	Status  FileStatus
+	Path    string
+	OldPath string
+	OldMode string
+	Mode    string
+	// OldObject and Object name its content before and after, which a person's Viewed mark holds on to.
+	OldObject string
+	Object    string
 	Binary    bool
 	Additions int
 	Deletions int

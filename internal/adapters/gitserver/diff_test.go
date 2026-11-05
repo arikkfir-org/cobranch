@@ -180,6 +180,22 @@ func TestInternalDiff(t *testing.T) {
 	}
 }
 
+// checkObjects checks that each of d's files names the objects of its content before and after in full, but the
+// side an added or a deleted file lacks.
+func checkObjects(t *testing.T, d code.Diff) {
+	t.Helper()
+	for _, f := range d.Files {
+		if (f.Status == code.FileAdded) != (f.OldObject == "") || (f.Status == code.FileDeleted) != (f.Object == "") {
+			t.Errorf("Diff() %s %s: objects %q > %q", f.Status, f.Path, f.OldObject, f.Object)
+		}
+		for _, o := range []string{f.OldObject, f.Object} {
+			if o != "" && code.ValidateSHA("object", o) != nil {
+				t.Errorf("Diff() %s: object %q isn't a whole object name", f.Path, o)
+			}
+		}
+	}
+}
+
 func TestInternalDiffHunks(t *testing.T) {
 	t.Parallel()
 	d := newDiffed(t)
@@ -217,9 +233,10 @@ func TestInternalDiffHunks(t *testing.T) {
 	}
 }
 
-// checkFiles checks that d lists the files want summarizes, or, without want, wantFiles files.
+// checkFiles checks that d lists the files want summarizes, or, without want, wantFiles files, each naming its objects.
 func checkFiles(t *testing.T, d code.Diff, want []string, wantFiles int) {
 	t.Helper()
+	checkObjects(t, d)
 	if want == nil && wantFiles > 0 {
 		if len(d.Files) != wantFiles {
 			t.Errorf("Diff() lists %d files, want %d", len(d.Files), wantFiles)

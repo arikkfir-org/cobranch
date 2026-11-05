@@ -116,7 +116,7 @@ type diffTotals struct {
 func (s *Server) diffFiles(ctx context.Context, dir, from, to string) ([]code.FileDiff, diffTotals, error) {
 	var files []code.FileDiff
 	var limited bool
-	raw := append(append([]string{"diff", "--raw", "-z"}, diffArgs...), from, to)
+	raw := append(append([]string{"diff", "--raw", "--no-abbrev", "-z"}, diffArgs...), from, to)
 	if err := s.stream(ctx, dir, func(r *bufio.Reader) (bool, error) {
 		var err error
 		files, limited, err = readRaw(&nulTokens{r: r}, code.MaxDiffFiles)
@@ -222,7 +222,7 @@ func readRaw(t *nulTokens, limit int) ([]code.FileDiff, bool, error) {
 		if !strings.HasPrefix(record, ":") || len(fields) != 5 || fields[4] == "" {
 			return nil, false, fmt.Errorf("git diff --raw printed %q", record)
 		}
-		f := code.FileDiff{OldMode: mode(fields[0]), Mode: mode(fields[1])}
+		f := code.FileDiff{OldMode: mode(fields[0]), Mode: mode(fields[1]), OldObject: object(fields[2]), Object: object(fields[3])}
 		if f.Path, err = t.must(record); err != nil {
 			return nil, false, err
 		}
@@ -252,6 +252,11 @@ func mode(m string) string {
 		return ""
 	}
 	return m
+}
+
+// object is a raw record's object, "" for the zeros that stand for a side that has no file.
+func object(o string) string {
+	return mode(o)
 }
 
 // addCounts reads git diff --numstat -z's records to their end, one per file in the order --raw lists them, each

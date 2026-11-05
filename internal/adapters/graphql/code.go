@@ -155,7 +155,7 @@ func diff(d code.Diff) *Diff {
 
 func fileDiff(f code.FileDiff) *FileDiff {
 	return &FileDiff{Status: fileStatuses[f.Status], Path: f.Path, OldPath: optional(f.OldPath), OldMode: optional(f.OldMode),
-		Mode: optional(f.Mode), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+		Mode: optional(f.Mode), OldObject: optional(f.OldObject), Object: optional(f.Object), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
 		Hunks: mapAll(f.Hunks, hunk)}
 }
 

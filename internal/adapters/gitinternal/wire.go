@@ -192,6 +192,8 @@ type FileDiff struct {
 	OldPath   string `json:"oldPath,omitempty"`
 	OldMode   string `json:"oldMode,omitempty"`
 	Mode      string `json:"mode,omitempty"`
+	OldObject string `json:"oldObject,omitempty"`
+	Object    string `json:"object,omitempty"`
 	Binary    bool   `json:"binary,omitempty"`
 	Additions int    `json:"additions"`
 	Deletions int    `json:"deletions"`
@@ -222,8 +224,9 @@ func DiffOf(d code.Diff) Diff {
 			}
 			hunks = append(hunks, Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section, Lines: lines})
 		}
-		files = append(files, FileDiff{Status: string(f.Status), Path: f.Path, OldPath: f.OldPath, OldMode: f.OldMode, Mode: f.Mode, Binary: f.Binary,
-			Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated, Hunks: hunks})
+		files = append(files, FileDiff{Status: string(f.Status), Path: f.Path, OldPath: f.OldPath, OldMode: f.OldMode, Mode: f.Mode,
+			OldObject: f.OldObject, Object: f.Object, Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+			Hunks: hunks})
 	}
 	return Diff{Base: d.Base, BaseTip: d.BaseTip, Head: d.Head, Files: files, FilesLeftOut: d.FilesLeftOut, Additions: d.Additions, Deletions: d.Deletions}
 }
@@ -241,7 +244,8 @@ func (d Diff) Domain() code.Diff {
 			hunks = append(hunks, code.Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section, Lines: lines})
 		}
 		files = append(files, code.FileDiff{Status: code.FileStatus(f.Status), Path: f.Path, OldPath: f.OldPath, OldMode: f.OldMode, Mode: f.Mode,
-			Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated, Hunks: hunks})
+			OldObject: f.OldObject, Object: f.Object, Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+			Hunks: hunks})
 	}
 	return code.Diff{Base: d.Base, BaseTip: d.BaseTip, Head: d.Head, Files: files, FilesLeftOut: d.FilesLeftOut, Additions: d.Additions,
 		Deletions: d.Deletions}

@@ -473,7 +473,9 @@ type ComplexityRoot struct {
 		Deletions func(childComplexity int) int
 		Hunks     func(childComplexity int) int
 		Mode      func(childComplexity int) int
+		Object    func(childComplexity int) int
 		OldMode   func(childComplexity int) int
+		OldObject func(childComplexity int) int
 		OldPath   func(childComplexity int) int
 		Path      func(childComplexity int) int
 		Status    func(childComplexity int) int
@@ -3294,12 +3296,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FileDiff.Mode(childComplexity), true
+	case "FileDiff.object":
+		if e.ComplexityRoot.FileDiff.Object == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Object(childComplexity), true
 	case "FileDiff.oldMode":
 		if e.ComplexityRoot.FileDiff.OldMode == nil {
 			break
 		}
 
 		return e.ComplexityRoot.FileDiff.OldMode(childComplexity), true
+	case "FileDiff.oldObject":
+		if e.ComplexityRoot.FileDiff.OldObject == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.OldObject(childComplexity), true
 	case "FileDiff.oldPath":
 		if e.ComplexityRoot.FileDiff.OldPath == nil {
 			break
@@ -8519,6 +8533,10 @@ type FileDiff {
   oldMode: String
   "Its mode after; null for a deleted file."
   mode: String
+  "The object that held its content before; null for an added file."
+  oldObject: String
+  "The object that holds its content after, which a Viewed mark holds on to; null for a deleted file."
+  object: String
   "Whether Git reads it as binary, which shows no lines."
   binary: Boolean!
   additions: Int!
@@ -11154,6 +11172,10 @@ func (ec *executionContext) childFields_FileDiff(ctx context.Context, field grap
 		return ec.fieldContext_FileDiff_oldMode(ctx, field)
 	case "mode":
 		return ec.fieldContext_FileDiff_mode(ctx, field)
+	case "oldObject":
+		return ec.fieldContext_FileDiff_oldObject(ctx, field)
+	case "object":
+		return ec.fieldContext_FileDiff_object(ctx, field)
 	case "binary":
 		return ec.fieldContext_FileDiff_binary(ctx, field)
 	case "additions":
@@ -23651,6 +23673,52 @@ func (ec *executionContext) _FileDiff_mode(ctx context.Context, field graphql.Co
 	)
 }
 func (ec *executionContext) fieldContext_FileDiff_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_oldObject(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_oldObject(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldObject, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_oldObject(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_object(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_object(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Object, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_object(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
 }
 
@@ -46036,6 +46104,16 @@ func (ec *executionContext) _FileDiff(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "mode":
 			out.Values[i] = ec._FileDiff_mode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "oldObject":
+			out.Values[i] = ec._FileDiff_oldObject(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "object":
+			out.Values[i] = ec._FileDiff_object(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}

@@ -741,6 +741,10 @@ type FileDiff struct {
 	OldMode *string `json:"oldMode,omitempty"`
 	// Its mode after; null for a deleted file.
 	Mode *string `json:"mode,omitempty"`
+	// The object that held its content before; null for an added file.
+	OldObject *string `json:"oldObject,omitempty"`
+	// The object that holds its content after, which a Viewed mark holds on to; null for a deleted file.
+	Object *string `json:"object,omitempty"`
 	// Whether Git reads it as binary, which shows no lines.
 	Binary    bool `json:"binary"`
 	Additions int  `json:"additions"`

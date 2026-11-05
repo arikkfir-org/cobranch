@@ -208,6 +208,10 @@ type FileDiff {
   oldMode: String
   "Its mode after; null for a deleted file."
   mode: String
+  "The object that held its content before; null for an added file."
+  oldObject: String
+  "The object that holds its content after, which a Viewed mark holds on to; null for a deleted file."
+  object: String
   "Whether Git reads it as binary, which shows no lines."
   binary: Boolean!
   additions: Int!

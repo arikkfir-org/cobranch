@@ -10193,6 +10193,12 @@ components:
         mode:
           type: string
           description: Its mode after; absent for a deleted file.
+        oldObject:
+          type: string
+          description: The object that held its content before; absent for an added file.
+        object:
+          type: string
+          description: The object that holds its content after, which a Viewed mark holds on to; absent for a deleted file.
         binary:
           type: boolean
           description: Whether Git reads it as binary, which shows no lines.

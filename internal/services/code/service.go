@@ -79,6 +79,7 @@ type Store interface {
 	Activity(ctx context.Context, orgID uuid.UUID, repoIDs []uuid.UUID, before ActivityCursor, limit int) ([]Activity, error)
 	RunStore
 	EnvironmentStore
+	ViewedStore
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
@@ -212,7 +213,7 @@ func failed(span trace.Span, what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrAnnotationTaken),
-		errors.Is(err, ErrAnnotationChanged), errors.Is(err, ErrRunEnded), errors.Is(err, ErrRunNotWaiting), answer(err):
+		errors.Is(err, ErrAnnotationChanged), errors.Is(err, ErrViewedChanged), errors.Is(err, ErrRunEnded), errors.Is(err, ErrRunNotWaiting), answer(err):
 		return err
 	}
 	span.RecordError(err)

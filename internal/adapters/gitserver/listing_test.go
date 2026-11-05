@@ -19,6 +19,7 @@ func TestReadRaw(t *testing.T) {
 	modified := ":100644 100644 aaaaaaa bbbbbbb M\x00a.txt\x00"
 	renamed := ":100644 100644 aaaaaaa aaaaaaa R100\x00old.txt\x00new.txt\x00"
 	added := ":000000 100755 0000000 ccccccc A\x00bin/tool\x00"
+	deleted := ":100644 000000 ddddddd 0000000 D\x00gone.txt\x00"
 	tests := []struct {
 		name        string
 		out         string
@@ -29,13 +30,14 @@ func TestReadRaw(t *testing.T) {
 	}{
 		{name: "nothing", limit: 3},
 		{name: "every record", out: modified + renamed + added, limit: 4,
-			want: []string{"modified a.txt 100644>100644", "renamed old.txt>new.txt 100644>100644", "added bin/tool >100755"}},
+			want: []string{"modified a.txt 100644>100644 aaaaaaa>bbbbbbb", "renamed old.txt>new.txt 100644>100644 aaaaaaa>aaaaaaa", "added bin/tool >100755 >ccccccc"}},
+		{name: "a deleted file has no object after", out: deleted, limit: 3, want: []string{"deleted gone.txt 100644> ddddddd>"}},
 		{name: "as many records as the limit", out: modified + renamed + added, limit: 3, wantStopped: true,
-			want: []string{"modified a.txt 100644>100644", "renamed old.txt>new.txt 100644>100644", "added bin/tool >100755"}},
+			want: []string{"modified a.txt 100644>100644 aaaaaaa>bbbbbbb", "renamed old.txt>new.txt 100644>100644 aaaaaaa>aaaaaaa", "added bin/tool >100755 >ccccccc"}},
 		{name: "up to the limit", out: modified + renamed + added, limit: 2, wantStopped: true,
-			want: []string{"modified a.txt 100644>100644", "renamed old.txt>new.txt 100644>100644"}},
+			want: []string{"modified a.txt 100644>100644 aaaaaaa>bbbbbbb", "renamed old.txt>new.txt 100644>100644 aaaaaaa>aaaaaaa"}},
 		{name: "a path longer than the reader's buffer", out: ":100644 100644 aaaaaaa bbbbbbb M\x00" + strings.Repeat("d/", 40) + "f\x00", limit: 3,
-			want: []string{"modified " + strings.Repeat("d/", 40) + "f 100644>100644"}},
+			want: []string{"modified " + strings.Repeat("d/", 40) + "f 100644>100644 aaaaaaa>bbbbbbb"}},
 		{name: "a record without its path", out: ":100644 100644 aaaaaaa bbbbbbb M\x00", limit: 3, wantErr: "ended inside record"},
 		{name: "a rename without its new path", out: ":100644 100644 aaaaaaa aaaaaaa R100\x00old.txt\x00", limit: 3, wantErr: "ended inside record"},
 		{name: "output cut inside a token", out: modified + ":100644", limit: 3, wantErr: "ended inside a token"},
@@ -111,7 +113,7 @@ func rawSummary(files []code.FileDiff) []string {
 		if f.OldPath != "" {
 			path = f.OldPath + ">" + f.Path
 		}
-		out = append(out, string(f.Status)+" "+path+" "+f.OldMode+">"+f.Mode)
+		out = append(out, string(f.Status)+" "+path+" "+f.OldMode+">"+f.Mode+" "+f.OldObject+">"+f.Object)
 	}
 	return out
 }
