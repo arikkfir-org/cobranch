@@ -69,3 +69,19 @@ func usage(ctx context.Context, in TaskUsageInput) (agents.Usage, error) {
 	}
 	return agents.Usage{ID: id, Model: in.Model, Input: int64(in.InputTokens), Output: int64(in.OutputTokens)}, nil
 }
+
+// organizationSpend is what the agents spent in month, as the API shows it.
+func organizationSpend(month agents.Month, r agents.Report) *OrganizationSpend {
+	return &OrganizationSpend{Month: month.Name, Zone: month.Zone, Since: r.Since.UTC(), Until: r.Until.UTC(),
+		Agents: mapAll(r.Agents, func(s agents.AgentSpend) *AgentSpend {
+			out := &AgentSpend{Agent: agentPrincipal(&s.Agent), Provider: optional(s.Provider), Model: optional(s.Model), Cap: optionalUSD(s.Cap),
+				Tasks: int(s.Tasks), FailedOnCap: int(s.FailedOnCap), Active: int(s.Active), Spent: s.Spent.String()}
+			if s.Costliest != nil {
+				out.Costliest = &TaskCost{Number: int(s.Costliest.Number), Title: s.Costliest.Title, Spent: s.Costliest.Spent.String()}
+			}
+			return out
+		}),
+		Models: mapAll(r.Models, func(m agents.ModelSpend) *ModelSpend {
+			return &ModelSpend{Provider: m.Provider, Model: m.Model, Tasks: int(m.Tasks), InputTokens: m.Input, OutputTokens: m.Output, Spent: m.Spent.String()}
+		})}
+}

@@ -84,6 +84,18 @@ type ComplexityRoot struct {
 		SecretID func(childComplexity int) int
 	}
 
+	AgentSpend struct {
+		Active      func(childComplexity int) int
+		Agent       func(childComplexity int) int
+		Cap         func(childComplexity int) int
+		Costliest   func(childComplexity int) int
+		FailedOnCap func(childComplexity int) int
+		Model       func(childComplexity int) int
+		Provider    func(childComplexity int) int
+		Spent       func(childComplexity int) int
+		Tasks       func(childComplexity int) int
+	}
+
 	Annotation struct {
 		CompletedAt func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
@@ -592,6 +604,15 @@ type ComplexityRoot struct {
 		Version    func(childComplexity int) int
 	}
 
+	ModelSpend struct {
+		InputTokens  func(childComplexity int) int
+		Model        func(childComplexity int) int
+		OutputTokens func(childComplexity int) int
+		Provider     func(childComplexity int) int
+		Spent        func(childComplexity int) int
+		Tasks        func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AcceptInvitation          func(childComplexity int, id string) int
 		AddArtifactVersion        func(childComplexity int, organizationID string, id string, input NewArtifactVersion, expectedVersion *int) int
@@ -732,10 +753,20 @@ type ComplexityRoot struct {
 		Roles                   func(childComplexity int) int
 		Secrets                 func(childComplexity int) int
 		Slug                    func(childComplexity int) int
+		Spend                   func(childComplexity int, month *string, zone *string) int
 		Task                    func(childComplexity int, number int) int
 		Tasks                   func(childComplexity int, agent *string, states []TaskState, repositoryID *string, first int, after *string) int
 		Usage                   func(childComplexity int) int
 		ViewerPermissions       func(childComplexity int) int
+	}
+
+	OrganizationSpend struct {
+		Agents func(childComplexity int) int
+		Models func(childComplexity int) int
+		Month  func(childComplexity int) int
+		Since  func(childComplexity int) int
+		Until  func(childComplexity int) int
+		Zone   func(childComplexity int) int
 	}
 
 	OrganizationUsage struct {
@@ -979,6 +1010,12 @@ type ComplexityRoot struct {
 		Version        func(childComplexity int) int
 	}
 
+	TaskCost struct {
+		Number func(childComplexity int) int
+		Spent  func(childComplexity int) int
+		Title  func(childComplexity int) int
+	}
+
 	TaskPage struct {
 		NextCursor func(childComplexity int) int
 		Tasks      func(childComplexity int) int
@@ -1176,6 +1213,7 @@ type OrganizationResolver interface {
 	ModelProviders(ctx context.Context, obj *Organization) ([]*ModelProvider, error)
 	AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error)
 	Models(ctx context.Context, obj *Organization) ([]*Model, error)
+	Spend(ctx context.Context, obj *Organization, month *string, zone *string) (*OrganizationSpend, error)
 	Artifact(ctx context.Context, obj *Organization, id string) (*Artifact, error)
 	Artifacts(ctx context.Context, obj *Organization, kind *ArtifactKind, repositoryID *string, mine *bool) ([]*Artifact, error)
 	Conversation(ctx context.Context, obj *Organization, first int, after *string) (*ChatPage, error)
@@ -1419,6 +1457,61 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AgentSecret.SecretID(childComplexity), true
+
+	case "AgentSpend.active":
+		if e.ComplexityRoot.AgentSpend.Active == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Active(childComplexity), true
+	case "AgentSpend.agent":
+		if e.ComplexityRoot.AgentSpend.Agent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Agent(childComplexity), true
+	case "AgentSpend.cap":
+		if e.ComplexityRoot.AgentSpend.Cap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Cap(childComplexity), true
+	case "AgentSpend.costliest":
+		if e.ComplexityRoot.AgentSpend.Costliest == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Costliest(childComplexity), true
+	case "AgentSpend.failedOnCap":
+		if e.ComplexityRoot.AgentSpend.FailedOnCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.FailedOnCap(childComplexity), true
+	case "AgentSpend.model":
+		if e.ComplexityRoot.AgentSpend.Model == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Model(childComplexity), true
+	case "AgentSpend.provider":
+		if e.ComplexityRoot.AgentSpend.Provider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Provider(childComplexity), true
+	case "AgentSpend.spent":
+		if e.ComplexityRoot.AgentSpend.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Spent(childComplexity), true
+	case "AgentSpend.tasks":
+		if e.ComplexityRoot.AgentSpend.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentSpend.Tasks(childComplexity), true
 
 	case "Annotation.completedAt":
 		if e.ComplexityRoot.Annotation.CompletedAt == nil {
@@ -3599,6 +3692,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModelProvider.Version(childComplexity), true
 
+	case "ModelSpend.inputTokens":
+		if e.ComplexityRoot.ModelSpend.InputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.InputTokens(childComplexity), true
+	case "ModelSpend.model":
+		if e.ComplexityRoot.ModelSpend.Model == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.Model(childComplexity), true
+	case "ModelSpend.outputTokens":
+		if e.ComplexityRoot.ModelSpend.OutputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.OutputTokens(childComplexity), true
+	case "ModelSpend.provider":
+		if e.ComplexityRoot.ModelSpend.Provider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.Provider(childComplexity), true
+	case "ModelSpend.spent":
+		if e.ComplexityRoot.ModelSpend.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.Spent(childComplexity), true
+	case "ModelSpend.tasks":
+		if e.ComplexityRoot.ModelSpend.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModelSpend.Tasks(childComplexity), true
+
 	case "Mutation.acceptInvitation":
 		if e.ComplexityRoot.Mutation.AcceptInvitation == nil {
 			break
@@ -4887,6 +5017,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Slug(childComplexity), true
+	case "Organization.spend":
+		if e.ComplexityRoot.Organization.Spend == nil {
+			break
+		}
+
+		args, err := ec.field_Organization_spend_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Organization.Spend(childComplexity, args["month"].(*string), args["zone"].(*string)), true
 	case "Organization.task":
 		if e.ComplexityRoot.Organization.Task == nil {
 			break
@@ -4921,6 +5062,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.ViewerPermissions(childComplexity), true
+
+	case "OrganizationSpend.agents":
+		if e.ComplexityRoot.OrganizationSpend.Agents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Agents(childComplexity), true
+	case "OrganizationSpend.models":
+		if e.ComplexityRoot.OrganizationSpend.Models == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Models(childComplexity), true
+	case "OrganizationSpend.month":
+		if e.ComplexityRoot.OrganizationSpend.Month == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Month(childComplexity), true
+	case "OrganizationSpend.since":
+		if e.ComplexityRoot.OrganizationSpend.Since == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Since(childComplexity), true
+	case "OrganizationSpend.until":
+		if e.ComplexityRoot.OrganizationSpend.Until == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Until(childComplexity), true
+	case "OrganizationSpend.zone":
+		if e.ComplexityRoot.OrganizationSpend.Zone == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationSpend.Zone(childComplexity), true
 
 	case "OrganizationUsage.byRepository":
 		if e.ComplexityRoot.OrganizationUsage.ByRepository == nil {
@@ -6092,6 +6270,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Task.Version(childComplexity), true
 
+	case "TaskCost.number":
+		if e.ComplexityRoot.TaskCost.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskCost.Number(childComplexity), true
+	case "TaskCost.spent":
+		if e.ComplexityRoot.TaskCost.Spent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskCost.Spent(childComplexity), true
+	case "TaskCost.title":
+		if e.ComplexityRoot.TaskCost.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskCost.Title(childComplexity), true
+
 	case "TaskPage.nextCursor":
 		if e.ComplexityRoot.TaskPage.NextCursor == nil {
 			break
@@ -6483,6 +6680,60 @@ extend type Organization {
   availableModelProviders: [String!]!
   "The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read."
   models: [Model!]!
+  "What the organization's agents spent in month, such as 2026-11, this month when absent, in zone, an IANA time zone, UTC when absent: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too. A month or zone that isn't one is refused (BAD_USER_INPUT, spend.month_invalid or spend.zone_invalid)."
+  spend(month: String, zone: String): OrganizationSpend!
+}
+
+"What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
+type OrganizationSpend {
+  "The month, such as 2026-11."
+  month: String!
+  "The time zone its days begin and end in."
+  zone: String!
+  since: Time!
+  until: Time!
+  "Every agent of the organization, by name."
+  agents: [AgentSpend!]!
+  "Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name."
+  models: [ModelSpend!]!
+}
+
+"What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now."
+type AgentSpend {
+  agent: CommitPrincipal!
+  "The model provider it runs on; null while it runs on none."
+  provider: String
+  "The model it runs on; null while it runs on none."
+  model: String
+  "The most a task of it may spend; null for none."
+  cap: String
+  "Its tasks queued in the month."
+  tasks: Int!
+  "Those of them that failed having spent its cap."
+  failedOnCap: Int!
+  "Those of them still queued, running or waiting."
+  active: Int!
+  "What its calls in the month cost."
+  spent: String!
+  "The task of its queued in the month that spent most in all, of those the viewer sees; null for none."
+  costliest: TaskCost
+}
+
+"A task and what it spent in all."
+type TaskCost {
+  number: Int!
+  title: String!
+  spent: String!
+}
+
+"What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote."
+type ModelSpend {
+  provider: String!
+  model: String!
+  tasks: Int!
+  inputTokens: Int64!
+  outputTokens: Int64!
+  spent: String!
 }
 
 "A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run."
@@ -8965,6 +9216,30 @@ func (ec *executionContext) childFields_AgentSecret(ctx context.Context, field g
 	return nil, fmt.Errorf("no field named %q was found under type AgentSecret", field.Name)
 }
 
+func (ec *executionContext) childFields_AgentSpend(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "agent":
+		return ec.fieldContext_AgentSpend_agent(ctx, field)
+	case "provider":
+		return ec.fieldContext_AgentSpend_provider(ctx, field)
+	case "model":
+		return ec.fieldContext_AgentSpend_model(ctx, field)
+	case "cap":
+		return ec.fieldContext_AgentSpend_cap(ctx, field)
+	case "tasks":
+		return ec.fieldContext_AgentSpend_tasks(ctx, field)
+	case "failedOnCap":
+		return ec.fieldContext_AgentSpend_failedOnCap(ctx, field)
+	case "active":
+		return ec.fieldContext_AgentSpend_active(ctx, field)
+	case "spent":
+		return ec.fieldContext_AgentSpend_spent(ctx, field)
+	case "costliest":
+		return ec.fieldContext_AgentSpend_costliest(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AgentSpend", field.Name)
+}
+
 func (ec *executionContext) childFields_Annotation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -9981,6 +10256,24 @@ func (ec *executionContext) childFields_ModelProvider(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type ModelProvider", field.Name)
 }
 
+func (ec *executionContext) childFields_ModelSpend(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "provider":
+		return ec.fieldContext_ModelSpend_provider(ctx, field)
+	case "model":
+		return ec.fieldContext_ModelSpend_model(ctx, field)
+	case "tasks":
+		return ec.fieldContext_ModelSpend_tasks(ctx, field)
+	case "inputTokens":
+		return ec.fieldContext_ModelSpend_inputTokens(ctx, field)
+	case "outputTokens":
+		return ec.fieldContext_ModelSpend_outputTokens(ctx, field)
+	case "spent":
+		return ec.fieldContext_ModelSpend_spent(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ModelSpend", field.Name)
+}
+
 func (ec *executionContext) childFields_MyTask(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "organization":
@@ -10053,6 +10346,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_availableModelProviders(ctx, field)
 	case "models":
 		return ec.fieldContext_Organization_models(ctx, field)
+	case "spend":
+		return ec.fieldContext_Organization_spend(ctx, field)
 	case "artifact":
 		return ec.fieldContext_Organization_artifact(ctx, field)
 	case "artifacts":
@@ -10077,6 +10372,24 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_usage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
+}
+
+func (ec *executionContext) childFields_OrganizationSpend(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "month":
+		return ec.fieldContext_OrganizationSpend_month(ctx, field)
+	case "zone":
+		return ec.fieldContext_OrganizationSpend_zone(ctx, field)
+	case "since":
+		return ec.fieldContext_OrganizationSpend_since(ctx, field)
+	case "until":
+		return ec.fieldContext_OrganizationSpend_until(ctx, field)
+	case "agents":
+		return ec.fieldContext_OrganizationSpend_agents(ctx, field)
+	case "models":
+		return ec.fieldContext_OrganizationSpend_models(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OrganizationSpend", field.Name)
 }
 
 func (ec *executionContext) childFields_OrganizationUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10529,6 +10842,18 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_transcript(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Task", field.Name)
+}
+
+func (ec *executionContext) childFields_TaskCost(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "number":
+		return ec.fieldContext_TaskCost_number(ctx, field)
+	case "title":
+		return ec.fieldContext_TaskCost_title(ctx, field)
+	case "spent":
+		return ec.fieldContext_TaskCost_spent(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TaskCost", field.Name)
 }
 
 func (ec *executionContext) childFields_TaskPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -13745,6 +14070,28 @@ func (ec *executionContext) field_Organization_repository_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Organization_spend_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "month",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["month"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "zone",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["zone"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Organization_task_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14949,6 +15296,231 @@ func (ec *executionContext) _AgentSecret_secretId(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_AgentSecret_secretId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AgentSecret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _AgentSpend_agent(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_agent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Agent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalNCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_agent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentSpend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentSpend_provider(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_provider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _AgentSpend_model(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_model(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Model, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _AgentSpend_cap(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_cap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _AgentSpend_tasks(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_tasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _AgentSpend_failedOnCap(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_failedOnCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailedOnCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_failedOnCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _AgentSpend_active(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_active(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Active, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_active(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _AgentSpend_spent(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _AgentSpend_costliest(ctx context.Context, field graphql.CollectedField, obj *AgentSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentSpend_costliest(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Costliest, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TaskCost) graphql.Marshaler {
+			return ec.marshalOTaskCost2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskCost(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentSpend_costliest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentSpend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TaskCost(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Annotation_id(ctx context.Context, field graphql.CollectedField, obj *Annotation) (ret graphql.Marshaler) {
@@ -23695,6 +24267,144 @@ func (ec *executionContext) fieldContext_ModelProvider_version(_ context.Context
 	return graphql.NewScalarFieldContext("ModelProvider", field, false, false, "Int")
 }
 
+func (ec *executionContext) _ModelSpend_provider(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_provider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _ModelSpend_model(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_model(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Model, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _ModelSpend_tasks(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_tasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ModelSpend_inputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_inputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _ModelSpend_outputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_outputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _ModelSpend_spent(ctx context.Context, field graphql.CollectedField, obj *ModelSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ModelSpend_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ModelSpend_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ModelSpend", field, false, false, "String")
+}
+
 func (ec *executionContext) _Mutation_revokeSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28657,6 +29367,50 @@ func (ec *executionContext) fieldContext_Organization_models(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_spend(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_spend(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Organization().Spend(ctx, obj, fc.Args["month"].(*string), fc.Args["zone"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OrganizationSpend) graphql.Marshaler {
+			return ec.marshalNOrganizationSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSpend(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_spend(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OrganizationSpend(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Organization_spend_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_artifact(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29067,6 +29821,162 @@ func (ec *executionContext) fieldContext_Organization_usage(_ context.Context, f
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_OrganizationUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationSpend_month(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_month(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Month, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_month(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _OrganizationSpend_zone(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_zone(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Zone, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_zone(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationSpend", field, false, false, "String")
+}
+
+func (ec *executionContext) _OrganizationSpend_since(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_since(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Since, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_since(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationSpend", field, false, false, "Time")
+}
+
+func (ec *executionContext) _OrganizationSpend_until(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_until(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Until, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_until(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OrganizationSpend", field, false, false, "Time")
+}
+
+func (ec *executionContext) _OrganizationSpend_agents(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_agents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Agents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AgentSpend) graphql.Marshaler {
+			return ec.marshalNAgentSpend2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgentSpendᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_agents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationSpend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AgentSpend(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationSpend_models(ctx context.Context, field graphql.CollectedField, obj *OrganizationSpend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationSpend_models(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Models, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ModelSpend) graphql.Marshaler {
+			return ec.marshalNModelSpend2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelSpendᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationSpend_models(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationSpend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ModelSpend(ctx, field)
 		},
 	}
 	return fc, nil
@@ -33839,6 +34749,75 @@ func (ec *executionContext) fieldContext_Task_transcript(ctx context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _TaskCost_number(ctx context.Context, field graphql.CollectedField, obj *TaskCost) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskCost_number(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskCost_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskCost", field, false, false, "Int")
+}
+
+func (ec *executionContext) _TaskCost_title(ctx context.Context, field graphql.CollectedField, obj *TaskCost) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskCost_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskCost_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskCost", field, false, false, "String")
+}
+
+func (ec *executionContext) _TaskCost_spent(ctx context.Context, field graphql.CollectedField, obj *TaskCost) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskCost_spent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Spent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TaskCost_spent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskCost", field, false, false, "String")
+}
+
 func (ec *executionContext) _TaskPage_tasks(ctx context.Context, field graphql.CollectedField, obj *TaskPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -38232,6 +39211,79 @@ func (ec *executionContext) _AgentSecret(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var agentSpendImplementors = []string{"AgentSpend"}
+
+func (ec *executionContext) _AgentSpend(ctx context.Context, sel ast.SelectionSet, obj *AgentSpend) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentSpendImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentSpend")
+		case "agent":
+			out.Values[i] = ec._AgentSpend_agent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._AgentSpend_provider(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "model":
+			out.Values[i] = ec._AgentSpend_model(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "cap":
+			out.Values[i] = ec._AgentSpend_cap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "tasks":
+			out.Values[i] = ec._AgentSpend_tasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failedOnCap":
+			out.Values[i] = ec._AgentSpend_failedOnCap(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "active":
+			out.Values[i] = ec._AgentSpend_active(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._AgentSpend_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "costliest":
+			out.Values[i] = ec._AgentSpend_costliest(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var annotationImplementors = []string{"Annotation"}
 
 func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSet, obj *Annotation) graphql.Marshaler {
@@ -41457,6 +42509,64 @@ func (ec *executionContext) _ModelProvider(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var modelSpendImplementors = []string{"ModelSpend"}
+
+func (ec *executionContext) _ModelSpend(ctx context.Context, sel ast.SelectionSet, obj *ModelSpend) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelSpendImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelSpend")
+		case "provider":
+			out.Values[i] = ec._ModelSpend_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "model":
+			out.Values[i] = ec._ModelSpend_model(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tasks":
+			out.Values[i] = ec._ModelSpend_tasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inputTokens":
+			out.Values[i] = ec._ModelSpend_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outputTokens":
+			out.Values[i] = ec._ModelSpend_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._ModelSpend_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -42376,6 +43486,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_models(ctx, field, obj)
 				})
+		case "spend":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_spend(ctx, field, obj)
+				})
 		case "artifact":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, false,
@@ -42441,6 +43557,64 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_usage(ctx, field, obj)
 				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var organizationSpendImplementors = []string{"OrganizationSpend"}
+
+func (ec *executionContext) _OrganizationSpend(ctx context.Context, sel ast.SelectionSet, obj *OrganizationSpend) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, organizationSpendImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OrganizationSpend")
+		case "month":
+			out.Values[i] = ec._OrganizationSpend_month(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "zone":
+			out.Values[i] = ec._OrganizationSpend_zone(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "since":
+			out.Values[i] = ec._OrganizationSpend_since(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "until":
+			out.Values[i] = ec._OrganizationSpend_until(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agents":
+			out.Values[i] = ec._OrganizationSpend_agents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "models":
+			out.Values[i] = ec._OrganizationSpend_models(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -43998,6 +45172,49 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var taskCostImplementors = []string{"TaskCost"}
+
+func (ec *executionContext) _TaskCost(ctx context.Context, sel ast.SelectionSet, obj *TaskCost) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, taskCostImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TaskCost")
+		case "number":
+			out.Values[i] = ec._TaskCost_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._TaskCost_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "spent":
+			out.Values[i] = ec._TaskCost_spent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var taskPageImplementors = []string{"TaskPage"}
 
 func (ec *executionContext) _TaskPage(ctx context.Context, sel ast.SelectionSet, obj *TaskPage) graphql.Marshaler {
@@ -44906,6 +46123,30 @@ func (ec *executionContext) unmarshalNAgentSecretInput2ᚕᚖcobranchᚗdevᚋin
 func (ec *executionContext) unmarshalNAgentSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgentSecretInput(ctx context.Context, v any) (*AgentSecretInput, error) {
 	res, err := ec.unmarshalInputAgentSecretInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAgentSpend2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgentSpendᚄ(ctx context.Context, sel ast.SelectionSet, v []*AgentSpend) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAgentSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgentSpend(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAgentSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgentSpend(ctx context.Context, sel ast.SelectionSet, v *AgentSpend) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "AgentSpend!")
+		return graphql.Null
+	}
+	return ec._AgentSpend(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAnnotation2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAnnotationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Annotation) graphql.Marshaler {
@@ -46029,6 +47270,30 @@ func (ec *executionContext) marshalNModelProvider2ᚖcobranchᚗdevᚋinternal�
 	return ec._ModelProvider(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNModelSpend2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelSpendᚄ(ctx context.Context, sel ast.SelectionSet, v []*ModelSpend) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModelSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelSpend(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModelSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐModelSpend(ctx context.Context, sel ast.SelectionSet, v *ModelSpend) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ModelSpend!")
+		return graphql.Null
+	}
+	return ec._ModelSpend(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMyTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMyTask(ctx context.Context, sel ast.SelectionSet, v *MyTask) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "MyTask!")
@@ -46079,6 +47344,14 @@ func (ec *executionContext) marshalNOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSettings(ctx context.Context, v any) (OrganizationSettings, error) {
 	res, err := ec.unmarshalInputOrganizationSettings(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNOrganizationSpend2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSpend(ctx context.Context, sel ast.SelectionSet, v *OrganizationSpend) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OrganizationSpend!")
+		return graphql.Null
+	}
+	return ec._OrganizationSpend(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNOrganizationUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationUsage(ctx context.Context, sel ast.SelectionSet, v *OrganizationUsage) graphql.Marshaler {
@@ -47586,6 +48859,13 @@ func (ec *executionContext) marshalOTask2ᚖcobranchᚗdevᚋinternalᚋadapters
 		return graphql.Null
 	}
 	return ec._Task(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOTaskCost2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskCost(ctx context.Context, sel ast.SelectionSet, v *TaskCost) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._TaskCost(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOTaskState2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskStateᚄ(ctx context.Context, v any) ([]TaskState, error) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -147,14 +148,15 @@ func (s *Store) RecordSpend(_ context.Context, taskID uuid.UUID, u agents.Usage)
 		return agents.Spend{}, agents.ErrEnded
 	}
 	t := s.spending(s.tasks[i])
-	if !slices.Contains(s.calls[taskID], u.ID) {
+	if !slices.ContainsFunc(s.calls[taskID], func(c call) bool { return c.id == u.ID }) {
 		a := s.agents[t.Agent.ID]
 		priced, ok := s.models[modelKey{t.OrgID, a.Provider, u.Model}]
 		if !ok {
 			priced = s.models[modelKey{t.OrgID, a.Provider, a.Model}]
 		}
-		s.calls[taskID] = append(s.calls[taskID], u.ID)
-		t.Spent += priced.Cost(u.Input, u.Output)
+		cost := priced.Cost(u.Input, u.Output)
+		s.calls[taskID] = append(s.calls[taskID], call{id: u.ID, provider: a.Provider, model: u.Model, input: u.Input, output: u.Output, cost: cost, at: s.Now})
+		t.Spent += cost
 		t.InputTokens, t.OutputTokens = t.InputTokens+u.Input, t.OutputTokens+u.Output
 	}
 	out := agents.Spend{Spent: t.Spent, Input: t.InputTokens, Output: t.OutputTokens, Cap: t.Cap}
@@ -166,4 +168,102 @@ func (s *Store) RecordSpend(_ context.Context, taskID uuid.UUID, u agents.Usage)
 	}
 	s.tasks[i] = t
 	return out, nil
+}
+
+// call is a call of a task's model that the store recorded: its ID, its agent's provider and the model it asked, the
+// tokens it read and wrote, what it cost and when.
+type call struct {
+	id              uuid.UUID
+	provider, model string
+	input, output   int64
+	cost            agents.USD
+	at              time.Time
+}
+
+// Spend reports what the organization's agents spent from since until until, as the database's queries do: each
+// agent's tasks queued then and its calls then, the costliest of those tasks that names no repository or one of
+// readable and is of none of the kinds in hidden, and each model's calls then.
+func (s *Store) Spend(_ context.Context, orgID uuid.UUID, since, until time.Time, readable []uuid.UUID, hidden []string) (agents.Report, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in := func(at time.Time) bool { return !at.Before(since) && at.Before(until) }
+	out := agents.Report{Since: since, Until: until, Agents: []agents.AgentSpend{}, Models: s.modelSpend(orgID, in)}
+	for _, a := range s.agents {
+		if a.OrgID == orgID {
+			out.Agents = append(out.Agents, s.agentSpend(a, in, func(t agents.Task) bool {
+				return (t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && !slices.Contains(hidden, t.Kind)
+			}))
+		}
+	}
+	slices.SortFunc(out.Agents, func(a, b agents.AgentSpend) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a.Agent.DisplayName), strings.ToLower(b.Agent.DisplayName)), strings.Compare(a.Agent.ID.String(), b.Agent.ID.String()))
+	})
+	return out, nil
+}
+
+// agentSpend is what agent a spent in a report's span, whose moments in says, its costliest task one that shown keeps,
+// under the lock.
+func (s *Store) agentSpend(a agents.Agent, in func(time.Time) bool, shown func(agents.Task) bool) agents.AgentSpend {
+	out := agents.AgentSpend{Agent: agents.Principal{ID: a.ID, DisplayName: a.Name}, Provider: a.Provider, Model: a.Model, Cap: a.Cap}
+	for _, t := range s.tasks {
+		if t.Agent.ID != a.ID {
+			continue
+		}
+		for _, c := range s.calls[t.ID] {
+			if in(c.at) {
+				out.Spent += c.cost
+			}
+		}
+		if !in(t.CreatedAt) {
+			continue
+		}
+		out.Tasks++
+		switch {
+		case t.State == agents.TaskFailed && a.Cap > 0 && t.Spent >= a.Cap:
+			out.FailedOnCap++
+		case t.State.Active():
+			out.Active++
+		}
+		if shown(t) && (out.Costliest == nil || t.Spent > out.Costliest.Spent || (t.Spent == out.Costliest.Spent && t.Number > out.Costliest.Number)) {
+			out.Costliest = &agents.TaskCost{Number: t.Number, Title: t.Title, Spent: t.Spent}
+		}
+	}
+	return out
+}
+
+// modelSpend is what the calls of each of the organization's models, and of each other model its tasks asked, cost in
+// a report's span, whose moments in says, by provider and name, under the lock.
+func (s *Store) modelSpend(orgID uuid.UUID, in func(time.Time) bool) []agents.ModelSpend {
+	by := map[modelKey]*agents.ModelSpend{}
+	tasks := map[modelKey]map[uuid.UUID]bool{}
+	for k := range s.models {
+		if k.org == orgID {
+			by[k] = &agents.ModelSpend{Provider: k.provider, Model: k.model}
+		}
+	}
+	for _, t := range s.tasks {
+		for _, c := range s.calls[t.ID] {
+			if t.OrgID != orgID || !in(c.at) {
+				continue
+			}
+			k := modelKey{orgID, c.provider, c.model}
+			if by[k] == nil {
+				by[k] = &agents.ModelSpend{Provider: c.provider, Model: c.model}
+			}
+			if tasks[k] == nil {
+				tasks[k] = map[uuid.UUID]bool{}
+			}
+			tasks[k][t.ID] = true
+			m := by[k]
+			m.Tasks, m.Input, m.Output, m.Spent = int64(len(tasks[k])), m.Input+c.input, m.Output+c.output, m.Spent+c.cost
+		}
+	}
+	out := []agents.ModelSpend{}
+	for _, m := range by {
+		out = append(out, *m)
+	}
+	slices.SortFunc(out, func(a, b agents.ModelSpend) int {
+		return cmp.Or(strings.Compare(a.Provider, b.Provider), strings.Compare(a.Model, b.Model))
+	})
+	return out
 }

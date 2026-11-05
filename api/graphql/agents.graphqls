@@ -17,6 +17,60 @@ extend type Organization {
   availableModelProviders: [String!]!
   "The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read."
   models: [Model!]!
+  "What the organization's agents spent in month, such as 2026-11, this month when absent, in zone, an IANA time zone, UTC when absent: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too. A month or zone that isn't one is refused (BAD_USER_INPUT, spend.month_invalid or spend.zone_invalid)."
+  spend(month: String, zone: String): OrganizationSpend!
+}
+
+"What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
+type OrganizationSpend {
+  "The month, such as 2026-11."
+  month: String!
+  "The time zone its days begin and end in."
+  zone: String!
+  since: Time!
+  until: Time!
+  "Every agent of the organization, by name."
+  agents: [AgentSpend!]!
+  "Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name."
+  models: [ModelSpend!]!
+}
+
+"What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now."
+type AgentSpend {
+  agent: CommitPrincipal!
+  "The model provider it runs on; null while it runs on none."
+  provider: String
+  "The model it runs on; null while it runs on none."
+  model: String
+  "The most a task of it may spend; null for none."
+  cap: String
+  "Its tasks queued in the month."
+  tasks: Int!
+  "Those of them that failed having spent its cap."
+  failedOnCap: Int!
+  "Those of them still queued, running or waiting."
+  active: Int!
+  "What its calls in the month cost."
+  spent: String!
+  "The task of its queued in the month that spent most in all, of those the viewer sees; null for none."
+  costliest: TaskCost
+}
+
+"A task and what it spent in all."
+type TaskCost {
+  number: Int!
+  title: String!
+  spent: String!
+}
+
+"What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote."
+type ModelSpend {
+  provider: String!
+  model: String!
+  tasks: Int!
+  inputTokens: Int64!
+  outputTokens: Int64!
+  spent: String!
 }
 
 "A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run."
