@@ -288,11 +288,10 @@ func (s *Service) Environment(ctx context.Context, v Viewer, repoID, id uuid.UUI
 	if err != nil {
 		return Environment{}, failed(span, "reading the environment", err)
 	}
-	list := []Environment{e}
-	if err := s.nameEnvironmentClusters(ctx, v, repoID, list); err != nil {
+	if e, err = s.nameEnvironmentCluster(ctx, v, repoID, e); err != nil {
 		return Environment{}, failed(span, "reading the environment", err)
 	}
-	return list[0], nil
+	return e, nil
 }
 
 // EnvironmentObjects lists what one of the repository's environments holds, in the order its last apply applied it,
@@ -343,6 +342,16 @@ func (s *Service) DeliveryTargets(ctx context.Context, v Viewer, repoID uuid.UUI
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+// nameEnvironmentCluster is e with its cluster's secret named for v, as nameEnvironmentClusters names a list's: the
+// environment a read, a pause or a resume answers reads as the list does.
+func (s *Service) nameEnvironmentCluster(ctx context.Context, v Viewer, repoID uuid.UUID, e Environment) (Environment, error) {
+	list := []Environment{e}
+	if err := s.nameEnvironmentClusters(ctx, v, repoID, list); err != nil {
+		return Environment{}, err
+	}
+	return list[0], nil
 }
 
 // nameEnvironmentClusters sets the ClusterName of each of envs whose cluster's secret v may manage.
@@ -471,6 +480,9 @@ func (s *Service) PauseEnvironment(ctx context.Context, v Viewer, repoID, enviro
 	if err != nil {
 		return Environment{}, failed(span, "pausing the environment", err)
 	}
+	if e, err = s.nameEnvironmentCluster(ctx, v, repoID, e); err != nil {
+		return Environment{}, failed(span, "pausing the environment", err)
+	}
 	return e, nil
 }
 
@@ -485,6 +497,9 @@ func (s *Service) ResumeEnvironment(ctx context.Context, v Viewer, repoID, envir
 	}
 	e, err := s.store.ResumeEnvironment(ctx, v.ID, repoID, environmentID)
 	if err != nil {
+		return Environment{}, failed(span, "resuming the environment", err)
+	}
+	if e, err = s.nameEnvironmentCluster(ctx, v, repoID, e); err != nil {
 		return Environment{}, failed(span, "resuming the environment", err)
 	}
 	return e, nil

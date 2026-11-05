@@ -482,7 +482,7 @@ func TestCodeStoreReadsDeliveries(t *testing.T) {
 }
 
 // plannedFile delivers main to production, at a fixed URL, and each feature/ branch to a preview in the cluster of the
-// secret it names, each at a URL of its own; previews render a kustomization too.
+// secret it names, each at a URL of its own; previews render a kustomization too, of their namespace's overlay.
 const plannedFile = `delivery:
   targets:
     production:
@@ -497,14 +497,14 @@ const plannedFile = `delivery:
   roots:
     - path: deploy/chart
       helm: {}
-    - path: deploy/overlays/${target}
+    - path: deploy/overlays/${target}/${namespace}
       kustomize: {}
       targets: [previews]
 `
 
-// TestCodeStorePlansEnvironments gives each environment its target's URL and the roots its branch's head renders,
-// lists main's targets, finds the secrets they name as their clusters, and lists an environment's deliveries of the
-// kinds asked.
+// TestCodeStorePlansEnvironments gives each environment its target's URL and the roots its branch's head renders, in
+// the namespace the environment keeps, lists main's targets, finds the secrets they name as their clusters, and lists
+// an environment's deliveries of the kinds asked.
 func TestCodeStorePlansEnvironments(t *testing.T) {
 	t.Parallel()
 	f := newJobsFixture(t)
@@ -523,7 +523,7 @@ func TestCodeStorePlansEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"previews https://feature-login.website.acme.example.com [{helm deploy/chart} {kustomize deploy/overlays/previews}]",
+	want := []string{"previews https://feature-login.website.acme.example.com [{helm deploy/chart} {kustomize deploy/overlays/previews/shop-feature-login}]",
 		"production https://shop.example.com [{helm deploy/chart}]"}
 	var got []string
 	for _, e := range envs {
@@ -534,6 +534,13 @@ func TestCodeStorePlansEnvironments(t *testing.T) {
 	}
 	if one, err := f.c.Environment(ctx, repo, envs[0].ID); err != nil || one.URL != envs[0].URL || len(one.Renders) != 2 {
 		t.Errorf("Environment(previews) = %+v, %v, want its URL and renders", one, err)
+	}
+	// An environment keeps the namespace it was made in after main's file names another, as its deliveries render.
+	if _, err := f.pool.Exec(ctx, "UPDATE environments SET namespace = 'shop-kept' WHERE id = $1", envs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if one, err := f.c.Environment(ctx, repo, envs[0].ID); err != nil || len(one.Renders) != 2 || one.Renders[1].Path != "deploy/overlays/previews/shop-kept" {
+		t.Errorf("Environment(previews) in shop-kept = %+v, %v, want its overlay of shop-kept", one, err)
 	}
 	targets, err := f.c.DeliveryTargets(ctx, repo)
 	if err != nil || len(targets) != 2 || targets[1].Cluster == nil || *targets[1].Cluster != secret ||

@@ -52,8 +52,9 @@ func (s *CodeStore) Environment(ctx context.Context, repoID, id uuid.UUID) (code
 }
 
 // withPlans sets each environment's URL, and the roots its branch's head renders for it, as a delivery of that head
-// would plan them: from the default branch's targets and the branch's own /cobranch.yaml. An environment whose target
-// is gone, whose file doesn't parse, or whose roots or URL don't plan, gets none of them.
+// would plan them: from the default branch's targets and the branch's own /cobranch.yaml, in the namespace the
+// environment keeps, which a render is given. An environment whose target is gone, whose file doesn't parse, or whose
+// roots or URL don't plan, gets none of them.
 func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code.Environment) error {
 	if len(envs) == 0 {
 		return nil
@@ -81,6 +82,7 @@ func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code
 		}
 		c := delivery.Context{Branch: e.Branch, Commit: tip.head, Repository: slugs.Repo, Organization: slugs.Org}
 		envs[i].URL, _ = delivery.URLFor(target, c, e.Namespace) // a URL that doesn't expand opens nothing
+		target.Namespace = e.Namespace
 		if plan, err := delivery.PlanFor(tip.roots, target, c); err == nil && tip.broken == "" {
 			for _, r := range plan.Roots {
 				envs[i].Renders = append(envs[i].Renders, code.Render{Kind: string(r.Kind), Path: r.Path})

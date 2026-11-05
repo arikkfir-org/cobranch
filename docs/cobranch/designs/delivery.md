@@ -393,7 +393,7 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 | `POST /deliveries/{n}/manifests` | None | The delivery's own `cbd_…` token, while it renders |
 
 - **`delivery.run`** is a new permission, held by the built-in roles that hold `jobs.run`.
-- **An environment reads as the Console draws it:** its URL, the roots its branch's head renders (`helm deploy/chart`,
+- **An environment reads as the Console draws it:** its URL, the roots its branch's head renders in the namespace it keeps (`helm deploy/chart`,
   `kustomize deploy/overlays/preview`), and its cluster's secret by name for a viewer who holds `secrets.manage` where the
   secret lives, as the list of secrets shows it; others see its ID alone. `/targets` lists `main`'s targets as the file
   declares them, their variables unexpanded, and `/deliveries?kind=deliver&kind=teardown` leaves the resyncs out. A

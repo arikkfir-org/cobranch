@@ -78,8 +78,8 @@ func TestUploadRender(t *testing.T) {
 	}
 }
 
-// TestClusterNames names a target's cluster, on its environments and among the targets, only to a viewer who may
-// manage its secret where it lives: the repository's, or the organization's.
+// TestClusterNames names a target's cluster, on its environments, those a pause or a resume answers, and among the
+// targets, only to a viewer who may manage its secret where it lives: the repository's, or the organization's.
 func TestClusterNames(t *testing.T) {
 	repoSecret, orgSecret := uuid.New(), uuid.New()
 	tests := []struct {
@@ -127,7 +127,25 @@ func TestClusterNames(t *testing.T) {
 			if err != nil || one.ClusterName != tt.want[1] {
 				t.Errorf("Environment() = %q, %v, want %q", one.ClusterName, err, tt.want[1])
 			}
+			checkPausedClusterName(t, f, envs[0].ID, tt.want[0])
 		})
+	}
+}
+
+// checkPausedClusterName pauses and resumes the environment id for f's viewer, which each answer with its cluster
+// named want. A viewer who sees no name is a reader, who may do neither: pausing and resuming take delivery.run.
+func checkPausedClusterName(t *testing.T, f *fixture, id uuid.UUID, want string) {
+	t.Helper()
+	if want == "" {
+		return
+	}
+	paused, err := f.service.PauseEnvironment(context.Background(), f.max, f.repo, id)
+	if err != nil || paused.ClusterName != want {
+		t.Errorf("PauseEnvironment() = %q, %v, want %q", paused.ClusterName, err, want)
+	}
+	resumed, err := f.service.ResumeEnvironment(context.Background(), f.max, f.repo, id)
+	if err != nil || resumed.ClusterName != want {
+		t.Errorf("ResumeEnvironment() = %q, %v, want %q", resumed.ClusterName, err, want)
 	}
 }
 
