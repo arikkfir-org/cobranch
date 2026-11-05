@@ -766,6 +766,7 @@ const (
 	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
 	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
 	PageViewPageOrganizationApiKeys        PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationArtifacts      PageViewPage = "organization.artifacts"
 	PageViewPageOrganizationIssues         PageViewPage = "organization.issues"
 	PageViewPageOrganizationMembers        PageViewPage = "organization.members"
 	PageViewPageOrganizationNewRepository  PageViewPage = "organization.new-repository"
@@ -775,6 +776,7 @@ const (
 	PageViewPageOrganizationTasks          PageViewPage = "organization.tasks"
 	PageViewPageOrganizationUsage          PageViewPage = "organization.usage"
 	PageViewPageRepositoryAccess           PageViewPage = "repository.access"
+	PageViewPageRepositoryArtifacts        PageViewPage = "repository.artifacts"
 	PageViewPageRepositoryBranch           PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches         PageViewPage = "repository.branches"
 	PageViewPageRepositoryChanges          PageViewPage = "repository.changes"
@@ -812,6 +814,8 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageOrganizationApiKeys:
 		return true
+	case PageViewPageOrganizationArtifacts:
+		return true
 	case PageViewPageOrganizationIssues:
 		return true
 	case PageViewPageOrganizationMembers:
@@ -829,6 +833,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganizationUsage:
 		return true
 	case PageViewPageRepositoryAccess:
+		return true
+	case PageViewPageRepositoryArtifacts:
 		return true
 	case PageViewPageRepositoryBranch:
 		return true

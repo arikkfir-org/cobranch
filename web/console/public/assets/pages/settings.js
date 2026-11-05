@@ -52,15 +52,17 @@ function showPreferences(main) {
 }
 
 // showAccount draws the viewer's account: who they are, their personal tokens, which act as them wherever a password
-// or a bearer token goes, and their SSH keys, which act as them over SSH. made is a token just made, whose secret it
-// shows once.
+// or a bearer token goes, their SSH keys, which act as them over SSH, and who lists or reads all their artifacts. made
+// is a token just made, whose secret it shows once.
 async function showAccount(main, made = null) {
   const error = h("div", { class: "banner banner-danger", role: "alert", hidden: true }, icon("circle-x"), h("div", { class: "banner-text" }, h("p", {})));
   const fail = (err) => { error.querySelector("p").textContent = err.message; error.hidden = false; };
   const refresh = (created) => showAccount(main, created || null).catch(fail);
-  const [tokens, keys] = await Promise.all([api("GET", "/me/tokens").then((d) => d.tokens), api("GET", "/me/ssh-keys").then((d) => d.sshKeys)]);
-  main.replaceChildren(pageHeader({ title: "Account", description: "Who you are to Cobranch, the tokens that act as you, and the keys that push as you. Your name and email come from sign-in." }),
-    ...[error, made ? revealToken(made) : null, profile(), tokensCard(tokens, refresh, fail), keysCard(keys, refresh, fail)].filter(Boolean));
+  const [tokens, keys, access] = await Promise.all([api("GET", "/me/tokens").then((d) => d.tokens), api("GET", "/me/ssh-keys").then((d) => d.sshKeys),
+    api("GET", "/me/artifact-access").then((d) => d.grants)]);
+  main.replaceChildren(pageHeader({ title: "Account", description: "Who you are to Cobranch, the tokens that act as you, the keys that push as you, and who sees all your artifacts. Your name and email come from sign-in." }),
+    ...[error, made ? revealToken(made) : null, profile(), tokensCard(tokens, refresh, fail), keysCard(keys, refresh, fail),
+      accessCard(access, refresh, fail)].filter(Boolean));
 }
 
 // profile is who the viewer is: their name and email as sign-in gave them, and the organizations they are in.
@@ -105,6 +107,46 @@ function keysCard(keys, refresh, fail) {
     keys.length ? h("table", { class: "table listing" }, h("thead", {}, h("tr", {}, ["Key", "Fingerprint", "Added"].map((t) => h("th", {}, t)), h("th", { "aria-label": "Actions" }))),
       h("tbody", {}, keys.map(row)))
       : empty("key-round", "No SSH keys", "An SSH key acts as you over SSH, with everything your roles give: Git signs in with it instead of a password."));
+}
+
+// accessRoles are the roles a person gives on themselves, which reach every artifact they own in each organization they
+// share with the grantee.
+const accessRoles = { lister: "Lists your artifacts", viewer: "Reads your artifacts" };
+
+// accessCard lists who lists or reads every artifact the viewer owns, in each organization both belong to, with a button
+// that stops it, and opens the form that shares them with another member or agent.
+function accessCard(grants, refresh, fail) {
+  const unshare = (g) => ask("Stop sharing with " + g.displayName + "?", "They keep what is shared with them one artifact at a time, and what their own roles reach.", "Stop sharing",
+    () => api("DELETE", "/me/artifact-access/" + g.principalId).then(() => refresh()));
+  const row = (g) => h("tr", {}, h("td", {}, h("div", { class: "cell-person" }, avatar(g.displayName, g.kind === "agent"), h("span", {}, g.displayName))),
+    h("td", {}, accessRoles[g.role] || g.role),
+    h("td", {}, h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Stop sharing with " + g.displayName, title: "Stop sharing",
+      onclick: () => unshare(g).catch(fail) }, icon("x"))));
+  return card("Artifact access", grants.length === 1 ? "1 grant" : grants.length + " grants", button("plus", "Share", () => shareArtifacts(refresh, fail)),
+    grants.length ? h("table", { class: "table listing" }, h("thead", {}, h("tr", {}, ["Who", "Access"].map((t) => h("th", {}, t)), h("th", { "aria-label": "Actions" }))),
+      h("tbody", {}, grants.map(row)))
+      : empty("file", "Your artifacts are yours", "What agents write for you stays private until you share it: one artifact from its page, or all of them here, with a member or an agent of your organizations."));
+}
+
+// shareArtifacts opens the form that lets a member or an agent of the viewer's organizations list or read every
+// artifact the viewer owns in the organizations both belong to.
+async function shareArtifacts(refresh, fail) {
+  const people = new Map();
+  await Promise.all(orgs.map((o) => Promise.all([api("GET", "/orgs/" + o.slug + "/members").then((d) => d.members, () => []),
+    api("GET", "/orgs/" + o.slug + "/agents").then((d) => d.agents, () => [])]).then(([members, agents]) => {
+    members.filter((m) => m.userId !== me.id).forEach((m) => people.set(m.userId, m.displayName));
+    agents.forEach((a) => people.set(a.id, a.name + " (agent of " + o.name + ")"));
+  }))).catch(fail);
+  const who = h("select", { id: "access-who" }, [...people].sort((x, y) => x[1].localeCompare(y[1])).map(([id, name]) => h("option", { value: id }, name)));
+  const role = h("select", { id: "access-role" }, Object.entries(accessRoles).map(([r, w]) => h("option", { value: r }, w.replace("your", "all your"))));
+  dialog("Share your artifacts", [
+    h("p", {}, "They reach every artifact you own in each organization you share with them, those agents write for you later included."),
+    field("With", h("div", { class: "select" }, who)),
+    field("Access", h("div", { class: "select" }, role), "Listing shows their titles; reading opens them."),
+  ], "Share", "btn-primary", () => {
+    if (!who.value) throw new Error("Pick a member or an agent to share with.");
+    return api("POST", "/me/artifact-access", { principalId: who.value, role: role.value }).then(() => refresh());
+  });
 }
 
 // empty is B's Empty state in a card: what a list with nothing in it would hold.
