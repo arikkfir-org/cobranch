@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -26,6 +27,7 @@ type Models interface {
 	PutModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (agents.Model, bool, error)
 	RemoveModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, version int64) error
 	RecordSpend(ctx context.Context, v agents.Viewer, u agents.Usage) (agents.Spend, error)
+	Spend(ctx context.Context, v agents.Viewer, orgID uuid.UUID, since, until time.Time) (agents.Report, error)
 }
 
 func modelProvider(p agents.ModelProvider) ModelProvider {

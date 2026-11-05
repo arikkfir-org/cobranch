@@ -2174,6 +2174,50 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/spend:
+    get:
+      operationId: getOrganizationSpend
+      summary: >-
+        What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its
+        calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read,
+        wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on
+        repositories the viewer doesn't read too, as its usage counts every repository.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: month
+          in: query
+          description: The month, such as 2026-11; this month in the zone when absent.
+          schema:
+            type: string
+        - name: zone
+          in: query
+          description: The IANA time zone the month's days begin and end in, such as Asia/Jerusalem; UTC when absent.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: What the agents spent.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSpend"
+        "304":
+          description: The report is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -7131,7 +7175,8 @@ components:
           description: The Console's page.
           enum: [sign-in, welcome, settings, help, help.components, organization, organization.members,
             organization.roles, organization.api-keys, organization.settings, organization.new-repository, organization.issues,
-            organization.agents, organization.tasks, organization.secrets, organization.usage, repository.code, repository.file,
+            organization.agents, organization.agents-activity, organization.agents-quotas, organization.agent, organization.tasks,
+            organization.secrets, organization.usage, repository.code, repository.file,
             repository.commits, repository.commit, repository.branches, repository.branch, repository.changes,
             repository.runs, repository.environments, repository.secrets, repository.access, repository.settings]
         navigation:
@@ -10034,6 +10079,101 @@ components:
         ended:
           type: boolean
           description: Whether it has ended; its token then acts no more.
+    OrganizationSpend:
+      type: object
+      description: >-
+        What an organization's agents spent in a month, from its first moment until the next month's, in a time zone.
+        Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+      required: [month, zone, since, until, agents, models]
+      properties:
+        month:
+          type: string
+          description: The month, such as 2026-11.
+        zone:
+          type: string
+          description: The time zone its days begin and end in.
+        since:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+        agents:
+          type: array
+          description: Every agent of the organization, by name.
+          items:
+            $ref: "#/components/schemas/AgentSpend"
+        models:
+          type: array
+          description: Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+          items:
+            $ref: "#/components/schemas/ModelSpend"
+    AgentSpend:
+      type: object
+      description: What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+      required: [agent, tasks, failedOnCap, active, spent]
+      properties:
+        agent:
+          $ref: "#/components/schemas/Principal"
+        provider:
+          type: string
+          description: The model provider it runs on; absent while it runs on none.
+        model:
+          type: string
+          description: The model it runs on; absent while it runs on none.
+        cap:
+          type: string
+          description: The most a task of it may spend; absent for none.
+        tasks:
+          type: integer
+          format: int64
+          description: Its tasks queued in the month.
+        failedOnCap:
+          type: integer
+          format: int64
+          description: Those of them that failed having spent its cap.
+        active:
+          type: integer
+          format: int64
+          description: Those of them still queued, running or waiting.
+        spent:
+          type: string
+          description: What its calls in the month cost.
+        costliest:
+          $ref: "#/components/schemas/TaskCost"
+    TaskCost:
+      type: object
+      description: The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+      required: [number, title, spent]
+      properties:
+        number:
+          type: integer
+          format: int64
+        title:
+          type: string
+        spent:
+          type: string
+          description: What it spent in all.
+    ModelSpend:
+      type: object
+      description: What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+      required: [provider, model, tasks, inputTokens, outputTokens, spent]
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        tasks:
+          type: integer
+          format: int64
+        inputTokens:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+        spent:
+          type: string
     TranscriptEntryKind:
       type: string
       description: >-

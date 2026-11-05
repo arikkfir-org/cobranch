@@ -142,7 +142,7 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (int64, erro
 }
 
 const taskByID = `-- name: TaskByID :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug, o.issue_key, ag.instructions AS agent_instructions,
     i.number AS issue_number, ti.number AS thread_issue_number, th.conversation_id, cr.slug AS conversation_repo_slug,
     cv.agent_id AS conversation_agent_id, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(ag.cap, 0)::bigint AS cap
@@ -211,6 +211,7 @@ func (q *Queries) TaskByID(ctx context.Context, id uuid.UUID) (TaskByIDRow, erro
 		&i.AgentTask.IssueID,
 		&i.AgentTask.Sha,
 		&i.AgentTask.Private,
+		&i.AgentTask.CapReached,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,

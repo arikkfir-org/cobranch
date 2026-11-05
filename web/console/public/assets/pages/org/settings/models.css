@@ -1,0 +1,6 @@
+/* Settings · Models: the agents on a model, and a model's two prices side by side in its dialog. */
+.settings-models-agents { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-12); }
+.table td a.settings-models-agent { display: inline-flex; align-items: center; gap: var(--space-8); }
+.settings-models-prices { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-16); }
+.settings-models-remove { margin-top: var(--space-4); }
+.settings-models td { padding-block: var(--space-12); }

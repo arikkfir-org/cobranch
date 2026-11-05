@@ -55,6 +55,7 @@ models:
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
       models: { resolver: true }
+      spend: { resolver: true }
       conversation: { resolver: true }
   Issue:
     fields:

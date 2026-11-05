@@ -757,34 +757,37 @@ func (e PageViewNavigation) Valid() bool {
 
 // Defines values for PageViewPage.
 const (
-	PageViewPageHelp                      PageViewPage = "help"
-	PageViewPageHelpComponents            PageViewPage = "help.components"
-	PageViewPageOrganization              PageViewPage = "organization"
-	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
-	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
-	PageViewPageOrganizationIssues        PageViewPage = "organization.issues"
-	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
-	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
-	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
-	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
-	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
-	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
-	PageViewPageOrganizationUsage         PageViewPage = "organization.usage"
-	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
-	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
-	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
-	PageViewPageRepositoryChanges         PageViewPage = "repository.changes"
-	PageViewPageRepositoryCode            PageViewPage = "repository.code"
-	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
-	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
-	PageViewPageRepositoryEnvironments    PageViewPage = "repository.environments"
-	PageViewPageRepositoryFile            PageViewPage = "repository.file"
-	PageViewPageRepositoryRuns            PageViewPage = "repository.runs"
-	PageViewPageRepositorySecrets         PageViewPage = "repository.secrets"
-	PageViewPageRepositorySettings        PageViewPage = "repository.settings"
-	PageViewPageSettings                  PageViewPage = "settings"
-	PageViewPageSignIn                    PageViewPage = "sign-in"
-	PageViewPageWelcome                   PageViewPage = "welcome"
+	PageViewPageHelp                       PageViewPage = "help"
+	PageViewPageHelpComponents             PageViewPage = "help.components"
+	PageViewPageOrganization               PageViewPage = "organization"
+	PageViewPageOrganizationAgent          PageViewPage = "organization.agent"
+	PageViewPageOrganizationAgents         PageViewPage = "organization.agents"
+	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
+	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
+	PageViewPageOrganizationApiKeys        PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationIssues         PageViewPage = "organization.issues"
+	PageViewPageOrganizationMembers        PageViewPage = "organization.members"
+	PageViewPageOrganizationNewRepository  PageViewPage = "organization.new-repository"
+	PageViewPageOrganizationRoles          PageViewPage = "organization.roles"
+	PageViewPageOrganizationSecrets        PageViewPage = "organization.secrets"
+	PageViewPageOrganizationSettings       PageViewPage = "organization.settings"
+	PageViewPageOrganizationTasks          PageViewPage = "organization.tasks"
+	PageViewPageOrganizationUsage          PageViewPage = "organization.usage"
+	PageViewPageRepositoryAccess           PageViewPage = "repository.access"
+	PageViewPageRepositoryBranch           PageViewPage = "repository.branch"
+	PageViewPageRepositoryBranches         PageViewPage = "repository.branches"
+	PageViewPageRepositoryChanges          PageViewPage = "repository.changes"
+	PageViewPageRepositoryCode             PageViewPage = "repository.code"
+	PageViewPageRepositoryCommit           PageViewPage = "repository.commit"
+	PageViewPageRepositoryCommits          PageViewPage = "repository.commits"
+	PageViewPageRepositoryEnvironments     PageViewPage = "repository.environments"
+	PageViewPageRepositoryFile             PageViewPage = "repository.file"
+	PageViewPageRepositoryRuns             PageViewPage = "repository.runs"
+	PageViewPageRepositorySecrets          PageViewPage = "repository.secrets"
+	PageViewPageRepositorySettings         PageViewPage = "repository.settings"
+	PageViewPageSettings                   PageViewPage = "settings"
+	PageViewPageSignIn                     PageViewPage = "sign-in"
+	PageViewPageWelcome                    PageViewPage = "welcome"
 )
 
 // Valid indicates whether the value is a known member of the PageViewPage enum.
@@ -796,7 +799,13 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageOrganization:
 		return true
+	case PageViewPageOrganizationAgent:
+		return true
 	case PageViewPageOrganizationAgents:
+		return true
+	case PageViewPageOrganizationAgentsActivity:
+		return true
+	case PageViewPageOrganizationAgentsQuotas:
 		return true
 	case PageViewPageOrganizationApiKeys:
 		return true
@@ -1268,6 +1277,36 @@ type AgentPatch struct {
 type AgentSecrets struct {
 	// Secrets At most 50, each the name of the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and the secret's ID.
 	Secrets map[string]openapi_types.UUID `json:"secrets"`
+}
+
+// AgentSpend What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+type AgentSpend struct {
+	// Active Those of them still queued, running or waiting.
+	Active int64 `json:"active"`
+
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent Principal `json:"agent"`
+
+	// Cap The most a task of it may spend; absent for none.
+	Cap *string `json:"cap,omitempty"`
+
+	// Costliest The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+	Costliest *TaskCost `json:"costliest,omitempty"`
+
+	// FailedOnCap Those of them that failed having spent its cap.
+	FailedOnCap int64 `json:"failedOnCap"`
+
+	// Model The model it runs on; absent while it runs on none.
+	Model *string `json:"model,omitempty"`
+
+	// Provider The model provider it runs on; absent while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+
+	// Spent What its calls in the month cost.
+	Spent string `json:"spent"`
+
+	// Tasks Its tasks queued in the month.
+	Tasks int64 `json:"tasks"`
 }
 
 // Annotation A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -2521,6 +2560,16 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
+// ModelSpend What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+type ModelSpend struct {
+	InputTokens  int64  `json:"inputTokens"`
+	Model        string `json:"model"`
+	OutputTokens int64  `json:"outputTokens"`
+	Provider     string `json:"provider"`
+	Spent        string `json:"spent"`
+	Tasks        int64  `json:"tasks"`
+}
+
 // MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in.
 type MyTask struct {
 	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
@@ -2641,6 +2690,23 @@ type OrganizationSettings struct {
 	// Providers The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
 	Providers *[]string `json:"providers,omitempty"`
 	Slug      *string   `json:"slug,omitempty"`
+}
+
+// OrganizationSpend What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type OrganizationSpend struct {
+	// Agents Every agent of the organization, by name.
+	Agents []AgentSpend `json:"agents"`
+
+	// Models Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+	Models []ModelSpend `json:"models"`
+
+	// Month The month, such as 2026-11.
+	Month string    `json:"month"`
+	Since time.Time `json:"since"`
+	Until time.Time `json:"until"`
+
+	// Zone The time zone its days begin and end in.
+	Zone string `json:"zone"`
 }
 
 // OrganizationUsage What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
@@ -3211,6 +3277,15 @@ type Task struct {
 
 	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its people's, its agent's and its repository's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
 	Version int64 `json:"version"`
+}
+
+// TaskCost The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+type TaskCost struct {
+	Number int64 `json:"number"`
+
+	// Spent What it spent in all.
+	Spent string `json:"spent"`
+	Title string `json:"title"`
 }
 
 // TaskInput A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
@@ -4156,6 +4231,18 @@ type GrantSecretJSONBody struct {
 	PrincipalId openapi_types.UUID `json:"principalId"`
 }
 
+// GetOrganizationSpendParams defines parameters for GetOrganizationSpend.
+type GetOrganizationSpendParams struct {
+	// Month The month, such as 2026-11; this month in the zone when absent.
+	Month *string `form:"month,omitempty" json:"month,omitempty"`
+
+	// Zone The IANA time zone the month's days begin and end in, such as Asia/Jerusalem; UTC when absent.
+	Zone *string `form:"zone,omitempty" json:"zone,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	// AgentID Only this agent's tasks, by its ID.
@@ -4993,6 +5080,9 @@ type ServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
+	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
+	// (GET /orgs/{org}/spend)
+	GetOrganizationSpend(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationSpendParams)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
@@ -14332,6 +14422,82 @@ func (siw *ServerInterfaceWrapper) RevokeSecret(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetOrganizationSpend operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationSpend(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationSpendParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "zone" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "zone", r.URL.Query(), &params.Zone, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "zone"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationSpend(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -15080,6 +15246,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.RemoveModel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.GetModel)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/models/{provider}/{model}", wrapper.SetModel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/spend", wrapper.GetOrganizationSpend)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
@@ -34885,6 +35052,112 @@ func (response RevokeSecretdefaultApplicationProblemPlusJSONResponse) VisitRevok
 	return err
 }
 
+type GetOrganizationSpendRequestObject struct {
+	Org    Org `json:"org"`
+	Params GetOrganizationSpendParams
+}
+
+type GetOrganizationSpendResponseObject interface {
+	VisitGetOrganizationSpendResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationSpend200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationSpend200JSONResponse struct {
+	Body    OrganizationSpend
+	Headers GetOrganizationSpend200ResponseHeaders
+}
+
+func (response GetOrganizationSpend200JSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationSpend304Response struct {
+	Headers GetOrganizationSpend304ResponseHeaders
+}
+
+func (response GetOrganizationSpend304Response) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationSpend400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationSpend400ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationSpend401ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpend404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationSpend404ApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationSpenddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationSpenddefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationSpendResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTasksRequestObject struct {
 	Org    Org `json:"org"`
 	Params ListTasksParams
@@ -36551,6 +36824,9 @@ type StrictServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(ctx context.Context, request RevokeSecretRequestObject) (RevokeSecretResponseObject, error)
+	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
+	// (GET /orgs/{org}/spend)
+	GetOrganizationSpend(ctx context.Context, request GetOrganizationSpendRequestObject) (GetOrganizationSpendResponseObject, error)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
@@ -42321,6 +42597,33 @@ func (sh *strictHandler) RevokeSecret(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeSecretResponseObject); ok {
 		if err := validResponse.VisitRevokeSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationSpend operation middleware
+func (sh *strictHandler) GetOrganizationSpend(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationSpendParams) {
+	var request GetOrganizationSpendRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationSpend(ctx, request.(GetOrganizationSpendRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationSpend")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationSpendResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationSpendResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

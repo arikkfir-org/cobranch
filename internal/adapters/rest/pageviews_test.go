@@ -88,6 +88,7 @@ func TestPageViewsNameEveryConsolePage(t *testing.T) {
 	for _, dir := range []struct{ glob, prefix string }{
 		{glob: "../../../web/console/public/assets/pages/*.js", prefix: ""},
 		{glob: "../../../web/console/public/assets/pages/org/*.js", prefix: "organization."},
+		{glob: "../../../web/console/public/assets/pages/org/agents/*.js", prefix: "organization.agents."},
 		{glob: "../../../web/console/public/assets/pages/org/settings/*.js", prefix: "organization.settings."},
 		{glob: "../../../web/console/public/assets/pages/repo/*.js", prefix: "repository."},
 	} {

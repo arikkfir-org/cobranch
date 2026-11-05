@@ -101,6 +101,27 @@ type AgentSecretInput struct {
 	SecretID string `json:"secretId"`
 }
 
+// What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+type AgentSpend struct {
+	Agent *CommitPrincipal `json:"agent"`
+	// The model provider it runs on; null while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+	// The model it runs on; null while it runs on none.
+	Model *string `json:"model,omitempty"`
+	// The most a task of it may spend; null for none.
+	Cap *string `json:"cap,omitempty"`
+	// Its tasks queued in the month.
+	Tasks int `json:"tasks"`
+	// Those of them that failed having spent its cap.
+	FailedOnCap int `json:"failedOnCap"`
+	// Those of them still queued, running or waiting.
+	Active int `json:"active"`
+	// What its calls in the month cost.
+	Spent string `json:"spent"`
+	// The task of its queued in the month that spent most in all, of those the viewer sees; null for none.
+	Costliest *TaskCost `json:"costliest,omitempty"`
+}
+
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
 type Annotation struct {
 	ID string `json:"id"`
@@ -1000,6 +1021,16 @@ type ModelProvider struct {
 	Version int `json:"version"`
 }
 
+// What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+type ModelSpend struct {
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	Tasks        int    `json:"tasks"`
+	InputTokens  int64  `json:"inputTokens"`
+	OutputTokens int64  `json:"outputTokens"`
+	Spent        string `json:"spent"`
+}
+
 type Mutation struct {
 }
 
@@ -1106,6 +1137,8 @@ type Organization struct {
 	AvailableModelProviders []string `json:"availableModelProviders"`
 	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	Models []*Model `json:"models"`
+	// What the organization's agents spent in month, such as 2026-11, this month when absent, in zone, an IANA time zone, UTC when absent: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too. A month or zone that isn't one is refused (BAD_USER_INPUT, spend.month_invalid or spend.zone_invalid).
+	Spend *OrganizationSpend `json:"spend"`
 	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`
 	// The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
@@ -1139,6 +1172,20 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 	// 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before.
 	IssueKey *string `json:"issueKey,omitempty"`
+}
+
+// What an organization's agents spent in a month, from its first moment until the next month's, in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type OrganizationSpend struct {
+	// The month, such as 2026-11.
+	Month string `json:"month"`
+	// The time zone its days begin and end in.
+	Zone  string    `json:"zone"`
+	Since time.Time `json:"since"`
+	Until time.Time `json:"until"`
+	// Every agent of the organization, by name.
+	Agents []*AgentSpend `json:"agents"`
+	// Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+	Models []*ModelSpend `json:"models"`
 }
 
 // What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
@@ -1537,6 +1584,13 @@ type Task struct {
 	Cap *string `json:"cap,omitempty"`
 	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
 	Transcript []*TranscriptEntry `json:"transcript"`
+}
+
+// A task and what it spent in all.
+type TaskCost struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Spent  string `json:"spent"`
 }
 
 // A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.

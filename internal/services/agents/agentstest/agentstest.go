@@ -49,7 +49,8 @@ type Store struct {
 	secrets   map[uuid.UUID]Secret
 	entries   map[uuid.UUID][]agents.Entry
 	models    map[modelKey]agents.Model
-	calls     map[uuid.UUID][]uuid.UUID
+	calls     map[uuid.UUID][]call
+	capped    map[uuid.UUID]bool
 	// OrgSlugs are the organizations' slugs, by ID.
 	OrgSlugs map[uuid.UUID]string
 	// IssueOf answers the key and number that name an issue a task works on, by its ID; nil names none.
@@ -68,7 +69,7 @@ func NewStore() *Store {
 		Repos:     map[uuid.UUID]Repository{}, Branches: map[uuid.UUID]Branch{}, Threads: map[uuid.UUID]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{},
 		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}, models: map[modelKey]agents.Model{},
-		calls: map[uuid.UUID][]uuid.UUID{}}
+		calls: map[uuid.UUID][]call{}, capped: map[uuid.UUID]bool{}}
 }
 
 // AddAgent records a, as CreateAgent would without checking its name, and answers it as the store keeps it.
