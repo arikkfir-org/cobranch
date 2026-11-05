@@ -24,6 +24,7 @@ type Objects struct {
 	Files     map[string]map[string]string
 	Refs      map[string]string
 	Logs      map[string][]code.LogEntry
+	Last      map[string]code.LastCommits
 	Fail      error
 	Merges    []code.MergeRequest
 	Deletions []code.DeleteRequest
@@ -39,7 +40,13 @@ const (
 
 // NewObjects returns an Objects without commits.
 func NewObjects() *Objects {
-	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}, Logs: map[string][]code.LogEntry{}}
+	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}, Logs: map[string][]code.LogEntry{},
+		Last: map[string]code.LastCommits{}}
+}
+
+// at is the key of what Objects holds for path at the commit named sha, beside the commit's own.
+func at(sha, path string) string {
+	return sha + "\x00" + path
 }
 
 // Commit records the files of the commit named sha, by path, and makes refs name it.
@@ -56,6 +63,16 @@ func (o *Objects) History(sha string, log []code.LogEntry, refs ...string) {
 	for _, ref := range refs {
 		o.Refs[ref] = sha
 	}
+}
+
+// PathHistory records the walk of the history of path from the commit named sha, newest first.
+func (o *Objects) PathHistory(sha, path string, log []code.LogEntry) {
+	o.Logs[at(sha, path)] = log
+}
+
+// LastChanged records what last changed the directory at last.Path in the commit last.Commit names.
+func (o *Objects) LastChanged(last code.LastCommits) {
+	o.Last[at(last.Commit, last.Path)] = last
 }
 
 // resolve finds the commit ref names: a commit's full name, or a branch or a tag.
@@ -131,15 +148,32 @@ func (o *Objects) Raw(_ context.Context, _ uuid.UUID, ref, path string) (code.Ra
 	return code.Raw{Commit: commit, Path: path, SHA: name(content), Size: int64(len(content)), Body: io.NopCloser(strings.NewReader(content))}, nil
 }
 
-// Log lists at most limit of the walk of history from the commit ref names, after the first skip.
-func (o *Objects) Log(_ context.Context, _ uuid.UUID, ref string, skip, limit int) (code.Log, error) {
+// Log lists at most limit of the walk of history from the commit ref names, after the first skip: of path's, as
+// PathHistory recorded it, when it names one.
+func (o *Objects) Log(_ context.Context, _ uuid.UUID, ref, path string, skip, limit int) (code.Log, error) {
 	commit, _, err := o.resolve(ref)
 	if err != nil {
 		return code.Log{}, err
 	}
 	log := o.Logs[commit]
+	if path != "" {
+		log = o.Logs[at(commit, path)]
+	}
 	log = log[min(skip, len(log)):]
 	return code.Log{Commit: commit, Entries: slices.Clone(log[:min(limit, len(log))])}, nil
+}
+
+// LastCommits answers what LastChanged recorded for the directory at path in the commit ref names, or nothing changed
+// it.
+func (o *Objects) LastCommits(ctx context.Context, repoID uuid.UUID, ref, path string) (code.LastCommits, error) {
+	tree, err := o.Tree(ctx, repoID, ref, path)
+	if err != nil {
+		return code.LastCommits{}, err
+	}
+	if last, ok := o.Last[at(tree.Commit, path)]; ok {
+		return last, nil
+	}
+	return code.LastCommits{Commit: tree.Commit, Path: path, Entries: map[string]string{}}, nil
 }
 
 // file finds the file at path of the commit ref names.

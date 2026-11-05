@@ -151,14 +151,20 @@ func (r *repositoryResolver) DeletedBranch(ctx context.Context, obj *Repository,
 }
 
 // History is the resolver for the history field.
-func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error) {
+func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) (*CommitPage, error) {
 	v, repoID, err := repoOf(ctx, obj)
 	if err != nil {
 		return nil, err
 	}
-	q := code.HistoryQuery{Branch: branch, Parents: historyParents[parents], Limit: first}
+	q := code.HistoryQuery{Branch: branch, Limit: first}
 	if ref != nil {
 		q.Ref = *ref
+	}
+	if path != nil {
+		q.Path = *path
+	}
+	if parents != nil {
+		q.Parents = historyParents[*parents]
 	}
 	if after != nil {
 		q.Cursor = *after
@@ -239,6 +245,19 @@ func (r *repositoryResolver) Tree(ctx context.Context, obj *Repository, ref stri
 		out.Readme = file(*t.README)
 	}
 	return out, nil
+}
+
+// TreeCommits is the resolver for the treeCommits field.
+func (r *repositoryResolver) TreeCommits(ctx context.Context, obj *Repository, ref string, path string) (*TreeCommits, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	last, err := r.Code.TreeCommits(ctx, v, repoID, ref, path)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the tree's last commits")
+	}
+	return treeCommits(last), nil
 }
 
 // Blob is the resolver for the blob field.

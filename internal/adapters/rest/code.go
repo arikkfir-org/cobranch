@@ -34,6 +34,7 @@ type Code interface {
 	RequestReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.AIReview, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
+	TreeCommits(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.TreeCommits, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
@@ -361,6 +362,9 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 		if q.Ref != "" {
 			next.Set("ref", q.Ref)
 		}
+		if q.Path != "" {
+			next.Set("path", q.Path)
+		}
 		if q.Parents != "" {
 			next.Set("parents", string(q.Parents))
 		}
@@ -389,6 +393,9 @@ func historyQuery(p ListCommitsParams) code.HistoryQuery {
 	}
 	if p.Ref != nil {
 		q.Ref = *p.Ref
+	}
+	if p.Path != nil {
+		q.Path = *p.Path
 	}
 	if p.Parents != nil {
 		q.Parents = code.Parents(*p.Parents)
