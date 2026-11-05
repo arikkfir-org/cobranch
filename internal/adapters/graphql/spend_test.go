@@ -19,7 +19,7 @@ func TestModelQueries(t *testing.T) {
 		{name: "none", viewer: maxim, document: models, want: []string{`"models":[]`}},
 		{name: "an agent's caps and a task's spend", viewer: maxim,
 			document: onProvider(true, withScout(`{ organization(slug: "acme") { agent(id: "SCOUT") { cap modelCap effectiveCap } task(number: 1) { spent inputTokens outputTokens cap } } }`)),
-			want: []string{`"agent":{"cap":null,"modelCap":"8.00","effectiveCap":"8.00"}`, `"task":{"spent":"0.00","inputTokens":0,"outputTokens":0,"cap":"8.00"}`}},
+			want:     []string{`"agent":{"cap":null,"modelCap":"8.00","effectiveCap":"8.00"}`, `"task":{"spent":"0.00","inputTokens":0,"outputTokens":0,"cap":"8.00"}`}},
 	})
 }
 
@@ -53,8 +53,8 @@ func TestModelMutations(t *testing.T) {
 }
 
 func TestAgentCapMutations(t *testing.T) {
-	update := func(cap string) func(*orgFixture) string {
-		return onProvider(true, withScout(`mutation { updateAgent(organizationId: "ACME", id: "SCOUT", input: {`+cap+`}) { cap modelCap effectiveCap } }`))
+	update := func(input string) func(*orgFixture) string {
+		return onProvider(true, withScout(`mutation { updateAgent(organizationId: "ACME", id: "SCOUT", input: {`+input+`}) { cap modelCap effectiveCap } }`))
 	}
 	runOrgCases(t, []orgCase{
 		{name: "set a lower one", viewer: olivia, document: update(`cap: "2"`), want: []string{`"updateAgent":{"cap":"2.00","modelCap":"8.00","effectiveCap":"2.00"}`}},

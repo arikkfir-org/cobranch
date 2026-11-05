@@ -93,13 +93,14 @@ bin/cobranch render --target preview --branch feature/login --commit "$(git rev-
   --kube-version v1.33.4    # .Capabilities for charts; --api-versions adds the cluster's API groups
 ```
 
-`agent` works one task of an agent and exits once it ends: the controller runs it in the task's pod, beside `model-proxy`, which holds the provider's key and adds it to the harness's model calls ([the design](docs/cobranch/designs/agents.md#the-agents-pod)). Run by hand, it takes a running task's token in a file, the agent's provider, model and key, and a directory to work in; `COBRANCH_MODEL_URL` points it at another address that speaks the provider's protocol, such as a model proxy, which then needs no key, and `COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT` and `COBRANCH_MODEL_MAX_TOKENS` bound it:
+`agent` works one task of an agent and exits once it ends: the controller runs it in the task's pod, beside `model-proxy`, which holds the provider's key, adds it to the harness's model calls and reports what each one spent as the task, which stops it at its cap ([the design](docs/cobranch/designs/agents.md#the-agents-pod), [spend and caps](docs/cobranch/designs/agents.md#spend-and-caps)). Run by hand, it takes a running task's token in a file, the agent's provider, model and key, and a directory to work in; `COBRANCH_MODEL_URL` points it at another address that speaks the provider's protocol, such as a model proxy, which then needs no key, and `COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT` and `COBRANCH_MODEL_MAX_TOKENS` bound it:
 
 ```bash
 COBRANCH_REST_URL=http://localhost:8080 COBRANCH_TOKEN_FILE=/tmp/task-token \
 COBRANCH_MODEL_PROVIDER=anthropic COBRANCH_MODEL=… COBRANCH_MODEL_KEY_FILE=/tmp/model-key \
 COBRANCH_WORKSPACE=/tmp/workspace bin/cobranch agent
-COBRANCH_MODEL_PROVIDER=anthropic COBRANCH_MODEL_KEY_FILE=/tmp/model-key bin/cobranch model-proxy   # on 127.0.0.1:8090
+COBRANCH_MODEL_PROVIDER=anthropic COBRANCH_MODEL=… COBRANCH_MODEL_KEY_FILE=/tmp/model-key \
+COBRANCH_REST_URL=http://localhost:8080 COBRANCH_TOKEN_FILE=/tmp/task-token bin/cobranch model-proxy   # on 127.0.0.1:8090
 ```
 
 CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes the images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for a preview installation of its own, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the Cobranch repository](docs/cobranch/designs/repository.md).

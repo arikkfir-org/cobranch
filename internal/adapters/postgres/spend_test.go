@@ -65,6 +65,14 @@ func TestModelStore(t *testing.T) {
 		list[1].Name != "b-model" || !list[1].Default || len(list[1].Agents) != 1 || list[1].Agents[0].ID != finder.ID {
 		t.Fatalf("Models() = %+v, %v; want a-model, and b-model the default with Finder on it", list, err)
 	}
+	checkRemoveModel(t, f)
+}
+
+// checkRemoveModel checks the removal of Acme's models: b-model, which Finder runs on, stays, and a-model, at version
+// 4, goes, with an event and an audit of each change of the models in Olivia's name.
+func checkRemoveModel(t *testing.T, f *agentFixture) {
+	t.Helper()
+	ctx := context.Background()
 	if err := f.a.RemoveModel(ctx, f.olivia, f.acme.ID, "anthropic", "b-model", agents.AnyVersion); !errors.Is(err, agents.ErrModelInUse) {
 		t.Errorf("RemoveModel() while Finder runs on it = %v, want %v", err, agents.ErrModelInUse)
 	}

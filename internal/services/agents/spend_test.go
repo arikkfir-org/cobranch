@@ -260,7 +260,6 @@ func TestAgentCap(t *testing.T) {
 	ctx := context.Background()
 	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 1, Cap: 8_000_000, Default: true})
 	scout := f.agent(t, f.olive, "Scout")
-	cap := func(u agents.USD) *agents.USD { return &u }
 	tests := []struct {
 		name          string
 		cap           *agents.USD
@@ -269,11 +268,11 @@ func TestAgentCap(t *testing.T) {
 		wantEffective agents.USD
 	}{
 		{name: "the model's alone", cap: nil, wantEffective: 8_000_000},
-		{name: "a lower one of its own", cap: cap(2_000_000), wantCap: 2_000_000, wantEffective: 2_000_000},
-		{name: "a higher one leaves the model's", cap: cap(9_000_000), wantCap: 9_000_000, wantEffective: 8_000_000},
-		{name: "none of its own", cap: cap(0), wantEffective: 8_000_000},
-		{name: "below 0", cap: cap(-1), want: invalid("agent.cap_invalid")},
-		{name: "past the most", cap: cap(agents.MaxCap + 1), want: invalid("agent.cap_invalid")},
+		{name: "a lower one of its own", cap: new(agents.USD(2_000_000)), wantCap: 2_000_000, wantEffective: 2_000_000},
+		{name: "a higher one leaves the model's", cap: new(agents.USD(9_000_000)), wantCap: 9_000_000, wantEffective: 8_000_000},
+		{name: "none of its own", cap: new(agents.USD(0)), wantEffective: 8_000_000},
+		{name: "below 0", cap: new(agents.USD(-1)), want: invalid("agent.cap_invalid")},
+		{name: "past the most", cap: new(agents.USD(agents.MaxCap + 1)), want: invalid("agent.cap_invalid")},
 	}
 	for _, tt := range tests {
 		a, err := f.service.UpdateAgent(ctx, f.olive, f.org, scout.ID, agents.AnyVersion, agents.Change{Cap: tt.cap})
