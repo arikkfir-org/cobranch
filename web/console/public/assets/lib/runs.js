@@ -1,6 +1,7 @@
+import { annotationStatuses } from "./annotations.js";
 import { api, apiPage } from "./api.js";
 import { h } from "./dom.js";
-import { capitalized, shortSha, since, whenExactly } from "./format.js";
+import { capitalized, plural, shortSha, since, whenExactly } from "./format.js";
 import { actorAvatar, icon, machineAvatar } from "./icons.js";
 import { go, render } from "./router.js";
 
@@ -74,15 +75,85 @@ export function runsTable(path, at, fail) {
   return { table, more, load };
 }
 
-// runsAt is the runs at commit sha, as a branch's Jobs tab shows them at its head until it draws its pushes: the Jobs
-// table, or an Empty state when none ran there.
-export async function runsAt(path, at, fail, sha) {
-  const list = runsTable(path, at, fail);
-  const page = await list.load(path + "/runs?" + new URLSearchParams({ sha }), false);
-  if (page && !page.data.runs.length) {
-    return noRuns("play", "No runs at " + shortSha(sha), ["The jobs ", h("code", {}, "/cobranch.yaml"), " declares at this commit run when what they name under ", h("code", {}, "on"), " happens, such as a push."]);
+// branchJobs is b's Jobs tab: its pushes, newest first by when their first run was queued, each a card of the runs
+// of its jobs at that commit as Annotation rows, the latest attempt of each, with what its annotation found. The head's
+// card leads even before any job ran there, with the jobs it starts by hand and, once each of its runs ended, Re-run
+// all; the two newest pushes show, and N earlier pushes opens the rest of those its latest hundred runs name.
+export async function branchJobs(path, at, b, can, fail) {
+  const page = await api("GET", path + "/runs?" + new URLSearchParams({ branch: b.name, limit: "100" }));
+  const latest = new Map([[b.head, []]]);
+  const pushed = new Map();
+  for (const r of page.runs) {
+    const runs = latest.get(r.sha) || latest.set(r.sha, []).get(r.sha);
+    if (!runs.some((o) => o.job.id === r.job.id)) runs.push(r);
+    if (!pushed.has(r.sha) || r.queuedAt < pushed.get(r.sha)) pushed.set(r.sha, r.queuedAt);
   }
-  return h("div", { class: "runs-list" }, list.table, h("div", {}, list.more));
+  const pushes = new Map([...latest].sort(([x], [y]) => (x === b.head ? -1 : y === b.head ? 1 : pushed.get(y).localeCompare(pushed.get(x)))));
+  if (pushes.size === 1 && !pushes.get(b.head).length && !(b.manualJobs || []).length) {
+    return [noRuns("play", "No runs on this branch", ["The jobs ", h("code", {}, "/cobranch.yaml"), " declares run when what they name under ", h("code", {}, "on"), " happens, such as a push."])];
+  }
+  const cards = await Promise.all([...pushes].map(([sha, runs], i) => i < 2 ? pushCard(path, at, b, sha, runs, pushed.get(sha), can, fail) : null));
+  const earlier = [...pushes].slice(2);
+  if (!earlier.length) return cards.filter(Boolean);
+  const open = h("a", { class: "earlier-pushes", href: "#", role: "button" }, earlier.length + " earlier push" + (earlier.length === 1 ? "" : "es"));
+  open.addEventListener("click", async (e) => {
+    e.preventDefault();
+    open.replaceWith(...await Promise.all(earlier.map(([sha, runs]) => pushCard(path, at, b, sha, runs, pushed.get(sha), can, fail))));
+  });
+  return [...cards.filter(Boolean), h("p", {}, open)];
+}
+
+// pushCard is one push's card on a branch's Jobs tab: when its first run was queued, the runs at sha, by their jobs'
+// names, each with its job's annotation there, and, at b's head, the jobs it starts by hand and Re-run all.
+async function pushCard(path, at, b, sha, runs, queuedAt, can, fail) {
+  const head = sha === b.head;
+  // A commit that can't be read leaves its rows without what their annotations found.
+  const found = await api("GET", path + "/commits/" + sha).then((c) => new Map(c.annotations.map((a) => [a.name, a.summary])), () => new Map());
+  runs.sort((x, y) => x.job.displayName.localeCompare(y.job.displayName));
+  const manual = head && can("jobs.run") ? (b.manualJobs || []).filter((job) => !runs.some((r) => r.job.displayName === job)) : [];
+  const ended = runs.length && runs.every((r) => !["waiting", "queued", "running"].includes(r.state));
+  const rerun = head && ended && can("jobs.run") ? h("button", { class: "btn btn-sm", type: "button", title: "Run each job again at " + shortSha(sha) }, "Re-run all") : null;
+  rerun?.addEventListener("click", async () => {
+    rerun.disabled = true;
+    try {
+      for (const r of runs) await api("POST", path + "/runs/" + r.number + "/rerun");
+      render();
+    } catch (err) {
+      rerun.disabled = false;
+      fail(err);
+    }
+  });
+  const rows = [...runs.map((r) => jobRow(at, r, found.get(r.job.displayName))), ...manual.map((job) => manualRow(path, at, b, job, fail))];
+  return h("section", { class: "card push-card" },
+    h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "On " + shortSha(sha)),
+      runs.length ? h("span", { class: "card-meta", title: whenExactly(queuedAt) }, since(queuedAt) + " · " + plural(runs.length, "job")) : null, rerun),
+    rows.length ? h("ul", { class: "list" }, rows) : h("p", { class: "card-body card-note" }, "No jobs ran on this push."));
+}
+
+// jobRow is a run in a push's card (Annotation row): its status, as its job's annotation says it; its job; what the
+// annotation found, or that it waits for a member; its job's avatar; how long it ran; and its page.
+function jobRow(at, r, found) {
+  const status = Object.entries(runStatuses).find(([, v]) => v.states.includes(r.state))[0];
+  const s = annotationStatuses[status];
+  const why = r.state === "waiting" ? "Waiting for a member to start it" : found || (r.reason ? capitalized(r.reason) : "");
+  return h("li", { class: "annotation-row" },
+    h("span", { class: "tone-" + s.tone }, icon(s.icon, runStates[r.state].word + (r.reason ? ": " + capitalized(r.reason) : ""))),
+    h("span", { class: "row-title" }, r.job.displayName), h("span", { class: "row-description", title: why || null }, why),
+    machineAvatar(r.job.displayName), h("span", { class: "row-aside", title: r.startedAt ? "Started " + whenExactly(r.startedAt) : null }, duration(r)),
+    h("a", { href: at.run(r.number), "data-nav": "", title: r.job.displayName + " #" + r.number }, "Details"));
+}
+
+// manualRow is a job b's head starts by hand, in its card: its name, and Run, which starts it at the head and opens
+// its run.
+function manualRow(path, at, b, job, fail) {
+  const run = h("button", { class: "btn btn-sm", type: "button", title: "Run " + job + " at " + shortSha(b.head) }, "Run");
+  run.addEventListener("click", () => {
+    run.disabled = true;
+    api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/jobs/" + encodeURIComponent(job) + "/runs")
+      .then((r) => go(at.run(r.number))).catch((err) => { run.disabled = false; fail(err); });
+  });
+  return h("li", { class: "annotation-row" }, h("span", { class: "tone-neutral" }, icon("circle", "Not run")),
+    h("span", { class: "row-title" }, job), h("span", { class: "row-description" }, "Runs when a member starts it"), machineAvatar(job), run);
 }
 
 // noRuns is the card a list of runs shows when it has none: an Empty state saying why, and action under it, if any.
@@ -128,21 +199,6 @@ export function runActions(path, at, r, can, fail) {
   return [start, start && cancel ? " " : null, cancel, rerun];
 }
 
-// manualJobs lists the jobs b's head declares with a manual trigger, each with Run, which starts it at the head and
-// opens its run, for a viewer holding jobs.run.
-export function manualJobs(path, at, b, can, fail) {
-  if (!b.manualJobs || !b.manualJobs.length || !can("jobs.run")) return null;
-  const run = (job, button) => {
-    button.disabled = true;
-    api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/jobs/" + encodeURIComponent(job) + "/runs")
-      .then((r) => go(at.run(r.number))).catch((err) => { button.disabled = false; fail(err); });
-  };
-  return h("section", { class: "panel" }, h("h3", {}, "Jobs to run by hand"),
-    h("p", {}, "Its ", h("code", {}, "/cobranch.yaml"), " lets members start these at ", h("code", {}, shortSha(b.head)), "."),
-    h("table", { class: "runs" }, h("tbody", {}, b.manualJobs.map((job) => h("tr", {}, h("td", {}, h("code", {}, job)),
-      h("td", { class: "actions" }, h("button", { class: "button small primary", type: "button", title: "Run " + job + " at " + shortSha(b.head),
-        onclick: (e) => run(job, e.currentTarget) }, "Run")))))));
-}
 // refName is a ref by the name its kind gives it: a branch's or a tag's.
 export const refName = (ref) => ref.startsWith("refs/heads/") ? ["branch ", h("code", {}, ref.slice(11))] : ref.startsWith("refs/tags/") ? ["tag ", h("code", {}, ref.slice(10))] : h("code", {}, ref);
 // triggered says what queued a run.
