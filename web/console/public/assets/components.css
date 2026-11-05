@@ -326,15 +326,16 @@
   padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
 }
 
-/* Swatch: one colour to pick for a label, drawn as the Tag it gives, in a wrapping row; the chosen one is ringed in
-   border/focus and its Tag shows the check. Its radio stays out of sight but takes the keyboard. Unchosen, 1px of
-   border keeps the ring's room. */
+/* Swatch: one colour to pick for a label, drawn as the Tag it gives, in a wrapping row, padded inside 1px of
+   transparent border; State=Chosen (.is-chosen) rings it 2px in border/focus, 1px over that border and 1px outside it,
+   and its Tag shows the check. Its radio stays out of sight but takes the keyboard. */
 .swatches { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .swatch { position: relative; display: inline-flex; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); cursor: pointer; }
 .swatch > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.swatch:has(> input:checked) { padding: 1px; border: 2px solid var(--color-border-focus); }
+.swatch.is-chosen { border-color: var(--color-border-focus); box-shadow: 0 0 0 1px var(--color-border-focus); }
 .swatch:has(> input:focus-visible) { box-shadow: var(--shadow-focus-ring); }
-.swatch > input:not(:checked) + .tag > .icon { display: none; }
+.swatch.is-chosen:has(> input:focus-visible) { box-shadow: 0 0 0 1px var(--color-border-focus), var(--shadow-focus-ring); }
+.swatch:not(.is-chosen) > .tag > .icon { display: none; }
 
 /* Fact row: one property of an object, in a card of them (an issue's, beside it): its label in Body/Small muted in a
    104px column, then its value, which wraps. Kind=Text is the value as text; Kind=Editable, for whoever may change

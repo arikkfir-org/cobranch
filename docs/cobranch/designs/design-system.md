@@ -23,7 +23,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
+| Components | 51 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
 | Screens | 47 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
@@ -229,7 +229,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 41 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 51 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
@@ -272,7 +272,7 @@ plan.
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
 | Fact row | Kind: Text, Editable | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`) |
 | Activity/Event | None | Who did what, and when | `.event-row` |
-| Swatch | Chosen | A label's colour as the Tag it gives; the chosen one ringed in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`) |
+| Swatch | State: Default, Chosen | A label's colour as the Tag it gives, padded inside 1px of transparent border; Chosen ringed 2px in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`), `.is-chosen` |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never

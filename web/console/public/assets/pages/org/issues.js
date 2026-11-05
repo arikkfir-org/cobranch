@@ -508,8 +508,12 @@ function labelDialog(path, l, refresh) {
   const swatches = h("div", { class: "swatches" }, Object.keys(labelTones).map((c) => {
     const tag = h("span", { class: "tag tone-" + labelTones[c] }, icon("check"), h("span", {}, name.value || "label"));
     tags.push(tag);
-    return h("label", { class: "swatch", title: labelColors[c] }, h("input", { type: "radio", name: "color", value: c, checked: c === (l ? l.color : "blue"), "aria-label": labelColors[c] }), tag);
+    const chosen = c === (l ? l.color : "blue");
+    return h("label", { class: "swatch" + (chosen ? " is-chosen" : ""), title: labelColors[c] }, h("input", { type: "radio", name: "color", value: c, checked: chosen, "aria-label": labelColors[c] }), tag);
   }));
+  swatches.addEventListener("change", () => {
+    for (const s of swatches.children) s.classList.toggle("is-chosen", s.firstChild.checked);
+  });
   name.addEventListener("input", () => {
     const at = name.selectionStart;
     name.value = name.value.toLowerCase();

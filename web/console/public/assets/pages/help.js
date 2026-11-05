@@ -199,7 +199,8 @@ function patterns() {
       ["Section header", ".section-header .section-header-title .section-header-description"], ["Filters", ".filters .filters-count"], ["Card/Row", ".card-row .card-row-text .card-row-title .card-row-meta .card-row-actions .card-row-label"],
       ["Card/Footer", ".card-footer"], ["Card Tone", ".card-success .card-danger"], ["Meter", ".meter .meter-share .meter-bar .meter-warning .meter-danger"],
       ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"], ["Table/Cell Issue, Person, Unassigned", ".cell-issue .cell-person .cell-unassigned"],
-      ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"], ["Fact row", ".facts .fact-row .fact-label .fact-value"], ["Activity/Event", ".event-row"]],
+      ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"], ["Fact row", ".facts .fact-row .fact-label .fact-value"], ["Activity/Event", ".event-row"],
+      ["Swatch", ".swatches .swatch .is-chosen"]],
     h("ul", { class: "list" },
       h("li", { class: "commit-row" }, h("span", { class: "avatar avatar-24" }, "NL"), text("Hand pushes to the push worker before returning", "Noa Levi committed 12 minutes ago"),
         h("span", { class: "row-icons" }, [annotationStatuses.successful, annotationStatuses.successful, annotationStatuses.in_progress].map((s) => h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)))),
@@ -253,5 +254,7 @@ function patterns() {
       h("div", { class: "fact-row" }, h("span", { class: "fact-label" }, "Status"), h("div", { class: "fact-value" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "In progress", icon("chevron-down")))),
       h("div", { class: "fact-row" }, h("span", { class: "fact-label" }, "Created"), h("div", { class: "fact-value" }, "Oct 27, 2026 by Arik Kfir")))),
     h("ol", { class: "list" }, h("li", { class: "event-row" }, h("span", {}, "Arik Kfir assigned Builder · moved it to In progress"), h("time", {}, "yesterday"))),
+    h("div", { class: "swatches" }, ["info", "success", "warning", "danger"].map((tone, i) =>
+      h("span", { class: "swatch" + (i === 0 ? " is-chosen" : "") }, h("span", { class: "tag tone-" + tone }, icon("check"), h("span", {}, "bug"))))),
     copyField("Your new key", "cbk_live_3f9a2c7e1b4d8e60f1a2b3c4d5e6f7a8", "Shown once. Copy it now; Cobranch keeps only its hash."));
 }
