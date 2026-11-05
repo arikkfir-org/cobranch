@@ -357,6 +357,8 @@
 .fact-person { display: flex; flex-direction: column; min-width: 0; }
 .fact-person-name { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
 .fact-person-email { color: var(--color-fg-muted); font: var(--text-body-small); overflow-wrap: anywhere; }
+/* Kind=Who (.fact-row-who) is a principal as the value: their 20px avatar, then their name (an artifact's writer). */
+.fact-row-who .fact-value { gap: var(--space-4) var(--space-8); }
 
 /* Activity/Event: a line of an object's activity (an issue's): who did what, in Caption muted, and when, at its end. */
 .event-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-16); color: var(--color-fg-muted); font: var(--text-caption); }
