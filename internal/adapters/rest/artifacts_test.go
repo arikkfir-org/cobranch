@@ -42,8 +42,8 @@ func (f *orgFixture) withArtifacts(t *testing.T) {
 		{id: chartID, title: "Q1 / Q2 chart", media: artifacts.MediaSVG, body: "<svg/>", kind: artifacts.KindDiagram, reach: artifacts.ReachView},
 	} {
 		if _, err := f.artifactStore.Create(t.Context(), f.olivia.User.ID, artifacts.New{
-			Artifact: artifacts.Artifact{ID: a.id, OrgID: f.acme.ID, RepoID: f.website.ID, Title: a.title, Kind: a.kind, RepositoryAccess: a.reach,
-				OrganizationAccess: artifacts.ReachNone},
+			Artifact: artifacts.Artifact{ID: a.id, OrgID: f.acme.ID, RepoID: f.website.ID, Owner: artifacts.Principal{ID: f.olivia.User.ID}, Title: a.title,
+				Kind: a.kind, RepositoryAccess: a.reach, OrganizationAccess: artifacts.ReachNone},
 			First:  artifacts.VersionInput{ID: a.id, MediaType: a.media, Body: a.body},
 			Owners: []artifacts.NewGrant{{PrincipalID: f.olivia.User.ID, RoleID: auth.RoleArtifactOwner}},
 		}); err != nil {
@@ -81,8 +81,9 @@ func TestArtifactsAPI(t *testing.T) {
 			wantHeader: http.Header{"Etag": []string{`"1"`}, "Location": []string{"/v1/orgs/acme/artifacts/" + notesID.String()}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Id != notesID || got.Repository.Slug != "website" || got.Audience != ArtifactAudienceRepository || got.Head != 1 ||
-					got.CreatedBy == nil || got.CreatedBy.DisplayName != "Max" || got.Agent != nil || got.Permissions != nil {
+				if got.Id != notesID || got.Repository == nil || got.Repository.Slug != "website" || got.Audience != ArtifactAudienceRepository || got.Head != 1 ||
+					got.CreatedBy == nil || got.CreatedBy.DisplayName != "Max" || got.Owner == nil || got.Owner.DisplayName != "Max" || got.Agent != nil ||
+					got.Permissions != nil {
 					t.Errorf("made %s", body)
 				}
 			}},
@@ -125,7 +126,8 @@ func TestArtifactsAPI(t *testing.T) {
 			}
 		}},
 		{name: "list what a Developer reads", viewer: maxim, method: "GET", path: repoArtifacts(t, ""), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
-			if got := decode[ArtifactList](t, body).Artifacts; len(got) != 1 || got[0].Id != chartID {
+			if got := decode[ArtifactList](t, body).Artifacts; len(got) != 1 || got[0].Id != chartID || got[0].Permissions == nil ||
+				strings.Join(*got[0].Permissions, ",") != "artifacts.read" {
 				t.Errorf("listed %s", body)
 			}
 		}},
@@ -137,7 +139,8 @@ func TestArtifactAPI(t *testing.T) {
 		{name: "get one", viewer: olivia, method: "GET", path: artifactPath(t, planID, ""), wantStatus: 200, wantHeader: http.Header{"Etag": []string{`"1"`}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Audience != ArtifactAudiencePrivate || got.Permissions == nil || len(*got.Permissions) != 3 || got.MediaType != Textmarkdown {
+				if got.Audience != ArtifactAudiencePrivate || got.Permissions == nil || len(*got.Permissions) != 4 || got.MediaType != Textmarkdown ||
+					got.Owner == nil || got.Owner.DisplayName != "Olivia" {
 					t.Errorf("got %s", body)
 				}
 			}},
@@ -248,4 +251,103 @@ func TestFileName(t *testing.T) {
 			t.Errorf("fileName(%q) = %q, want %q", tt.title, got, tt.want)
 		}
 	}
+}
+
+// orgArtifacts is the URL of Acme's artifacts, with query after it.
+func orgArtifacts(t *testing.T, query string) func(f *orgFixture) string {
+	return func(f *orgFixture) string {
+		f.withArtifacts(t)
+		return "/v1/orgs/acme/artifacts" + query
+	}
+}
+
+func TestOrganizationArtifactsAPI(t *testing.T) {
+	notes := `{"id":"` + notesID.String() + `","title":"Notes","kind":"report","mediaType":"text/markdown","body":"# Notes\n"}`
+	runOrgCases(t, []orgCase{
+		{name: "make one attached to no repository", viewer: maxim, method: "POST", path: orgArtifacts(t, ""), body: notes, wantStatus: 201,
+			wantHeader: http.Header{"Etag": []string{`"1"`}, "Location": []string{"/v1/orgs/acme/artifacts/" + notesID.String()}},
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[Artifact](t, body)
+				if got.Id != notesID || got.Repository != nil || got.Owner == nil || got.Owner.DisplayName != "Max" || got.Audience != ArtifactAudiencePrivate {
+					t.Errorf("made %s", body)
+				}
+			}},
+		{name: "make the same one again", viewer: maxim, method: "POST", body: notes, wantStatus: 200,
+			path: func(f *orgFixture) string {
+				p := orgArtifacts(t, "")(f)
+				if rec := f.call(&f.max, "POST", p, notes); rec.Code != 201 {
+					t.Fatalf("first call: %d %s", rec.Code, rec.Body)
+				}
+				return p
+			}},
+		{name: "make one with a repository audience", viewer: maxim, method: "POST", path: orgArtifacts(t, ""), wantStatus: 400, wantCode: "artifact.access_invalid",
+			body: strings.Replace(notes, `"kind"`, `"repositoryAccess":"view","kind"`, 1)},
+		{name: "make one from outside", viewer: nia, method: "POST", path: orgArtifacts(t, ""), body: notes, wantStatus: 404, wantCode: "organization.not_found"},
+		{name: "list", viewer: olivia, method: "GET", path: orgArtifacts(t, ""), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			if got := decode[ArtifactList](t, body).Artifacts; len(got) != 2 || got[0].Permissions == nil || len(*got[0].Permissions) != 2 {
+				t.Errorf("listed %s", body)
+			}
+		}},
+		{name: "list the caller's own", viewer: maxim, method: "GET", path: orgArtifacts(t, "?mine=true"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[ArtifactList](t, body).Artifacts; len(got) != 0 {
+					t.Errorf("listed %s", body)
+				}
+			}},
+		{name: "list a repository's of a kind", viewer: olivia, method: "GET", wantStatus: 200,
+			path: func(f *orgFixture) string {
+				return orgArtifacts(t, "?kind=diagram&repositoryId="+f.website.ID.String())(f)
+			},
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[ArtifactList](t, body).Artifacts; len(got) != 1 || got[0].Id != chartID {
+					t.Errorf("listed %s", body)
+				}
+			}},
+		{name: "list from outside", viewer: nia, method: "GET", path: orgArtifacts(t, ""), wantStatus: 404, wantCode: "organization.not_found"},
+	})
+}
+
+// withSession is viewer signed in with a session.
+func withSession(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		a := *viewer(f)
+		a.Session = auth.Session{ID: uuid.New()}
+		return &a
+	}
+}
+
+func TestMyArtifactAccessAPI(t *testing.T) {
+	share := func(role string) func(f *orgFixture) string {
+		return func(f *orgFixture) string {
+			return `{"principalId":"` + f.max.User.ID.String() + `","role":"` + role + `"}`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "let a member list one's artifacts", viewer: withSession(olivia), method: "POST", path: fixed("/v1/me/artifact-access"),
+			bodyOf: share("lister"), wantStatus: 204, check: func(t *testing.T, f *orgFixture, _ []byte) {
+				if rec := f.call(&f.olivia, "GET", "/v1/me/artifact-access", ""); rec.Code != 200 ||
+					!strings.Contains(rec.Body.String(), `"displayName":"Max"`) || !strings.Contains(rec.Body.String(), `"role":"lister"`) {
+					t.Errorf("listed %d %s", rec.Code, rec.Body)
+				}
+			}},
+		{name: "a role a person doesn't grant", viewer: withSession(olivia), method: "POST", path: fixed("/v1/me/artifact-access"), bodyOf: share("owner"),
+			wantStatus: 400, wantCode: "artifact.role_invalid"},
+		{name: "through a token", viewer: olivia, method: "POST", path: fixed("/v1/me/artifact-access"), bodyOf: share("viewer"), wantStatus: 403,
+			wantCode: "auth.forbidden"},
+		{name: "someone of no shared organization", viewer: withSession(nia), method: "POST", path: fixed("/v1/me/artifact-access"), bodyOf: share("viewer"),
+			wantStatus: 404, wantCode: "principal.not_found"},
+		{name: "take back what one never gave", viewer: withSession(olivia), method: "DELETE", wantStatus: 404, wantCode: "grant.not_found",
+			path: func(f *orgFixture) string { return "/v1/me/artifact-access/" + f.max.User.ID.String() }},
+		{name: "take it back", viewer: withSession(olivia), method: "DELETE", wantStatus: 204,
+			path: func(f *orgFixture) string {
+				f.store.Grant(f.max.User.ID, auth.RoleArtifactViewer, auth.ScopeUser, f.olivia.User.ID)
+				return "/v1/me/artifact-access/" + f.max.User.ID.String()
+			}},
+		{name: "nobody yet", viewer: olivia, method: "GET", path: fixed("/v1/me/artifact-access"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if strings.TrimSpace(string(body)) != `{"grants":[]}` {
+					t.Errorf("listed %s", body)
+				}
+			}},
+	})
 }

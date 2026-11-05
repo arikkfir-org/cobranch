@@ -29,6 +29,7 @@ models:
       organizations: { resolver: true }
       invitations: { resolver: true }
       joinRequests: { resolver: true }
+      artifactAccess: { resolver: true }
   Organization:
     fields:
       viewerPermissions: { resolver: true }
@@ -49,6 +50,7 @@ models:
       labels: { resolver: true }
       secrets: { resolver: true }
       artifact: { resolver: true }
+      artifacts: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
       conversation: { resolver: true }

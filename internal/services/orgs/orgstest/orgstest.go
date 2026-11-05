@@ -33,6 +33,8 @@ var (
 	ArtifactViewer = orgs.Role{ID: auth.RoleArtifactViewer, Name: "Artifact viewer", BuiltIn: true, Permissions: []string{"artifacts.read"}}
 	ArtifactEditor = orgs.Role{ID: auth.RoleArtifactEditor, Name: "Artifact editor", BuiltIn: true, Permissions: []string{"artifacts.read", "artifacts.write"}}
 	ArtifactOwner  = orgs.Role{ID: auth.RoleArtifactOwner, Name: "Artifact owner", BuiltIn: true, Permissions: []string{"artifacts.manage", "artifacts.read", "artifacts.write"}}
+	// ArtifactLister is the built-in role migration 55 writes.
+	ArtifactLister = orgs.Role{ID: auth.RoleArtifactLister, Name: "Artifact lister", BuiltIn: true, Permissions: []string{"artifacts.list"}}
 	// The installation's roles, which the authorizer reads too.
 	installationAdmin = orgs.Role{ID: auth.RoleInstallationAdmin, Name: "Installation admin", BuiltIn: true, Permissions: auth.InstallationPermissions}
 	installationUser  = orgs.Role{ID: auth.RoleInstallationUser, Name: "Installation user", BuiltIn: true, Permissions: []string{"orgs.create"}}
@@ -66,8 +68,9 @@ type Store struct {
 	// Secrets maps each secret to its organization and its repository (uuid.Nil for the organization's own), so the
 	// authorizer's reads at a secret see the grants on both.
 	Secrets map[uuid.UUID][2]uuid.UUID
-	// Artifacts maps each artifact to where it lives and its audiences, so the authorizer's reads at an artifact see the
-	// grants on it, on its repository and at its organization, and what its audiences give.
+	// Artifacts maps each artifact to where it lives, whose it is and its audiences, so the authorizer's reads at an
+	// artifact see the grants on it, on its owner, on its repository and at its organization, and what its audiences
+	// give.
 	Artifacts map[uuid.UUID]ArtifactScope
 	// Keys are the API keys by ID; Hashes the hash of each secret, by secret ID, so a test can tell what was kept.
 	Keys   map[uuid.UUID]orgs.APIKey
@@ -87,9 +90,10 @@ type Store struct {
 	Fail      error
 }
 
-// ArtifactScope is where an artifact lives and how far its audiences reach it: "none", "view" or "edit".
+// ArtifactScope is where an artifact lives, the repository it is attached to (uuid.Nil for none), whose it is, and how
+// far its audiences reach it: "none", "view" or "edit".
 type ArtifactScope struct {
-	OrgID, RepoID                        uuid.UUID
+	OrgID, RepoID, OwnerID               uuid.UUID
 	RepositoryAccess, OrganizationAccess string
 }
 
@@ -106,7 +110,7 @@ func NewStore() *Store {
 		Names: map[uuid.UUID]string{}, Emails: map[uuid.UUID][]string{}, Invites: map[uuid.UUID]orgs.Invitation{},
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
 		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation, SecretReader,
-			ArtifactViewer, ArtifactEditor, ArtifactOwner},
+			ArtifactViewer, ArtifactEditor, ArtifactOwner, ArtifactLister},
 		Repos: map[uuid.UUID]uuid.UUID{}, Secrets: map[uuid.UUID][2]uuid.UUID{}, Artifacts: map[uuid.UUID]ArtifactScope{},
 		Keys: map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: admin.StoredSettings{InstallationSettings: auth.InstallationSettings{Version: 1}},
@@ -168,27 +172,42 @@ func (s *Store) Permissions(_ context.Context, principal uuid.UUID, scope auth.S
 	return slices.Compact(out), nil
 }
 
-// artifactHeld lists what principal holds on an artifact at a through its repository and its organization: their
-// grants' permissions, and what the audiences give a principal reading the repository or the organization.
+// artifactHeld lists what principal holds on an artifact at a besides its grants on it: those of its grants on the
+// repository it is attached to and at its organization, and what the audiences give a principal reading the repository
+// or the organization; and, for a principal reading the organization, artifacts.list and artifacts.read when it owns
+// the artifact or holds them on its owner.
 func (s *Store) artifactHeld(principal uuid.UUID, at ArtifactScope) []string {
-	atRepo, atOrg := s.held(principal, auth.ScopeRepository, at.RepoID), s.held(principal, auth.ScopeOrganization, at.OrgID)
-	out := slices.Concat(atRepo, atOrg)
-	reaches := func(access string) []string {
-		switch access {
-		case "edit":
-			return []string{"artifacts.read", "artifacts.write"}
-		case "view":
-			return []string{"artifacts.read"}
+	atOrg := s.held(principal, auth.ScopeOrganization, at.OrgID)
+	var out []string
+	if at.RepoID != uuid.Nil {
+		out = slices.Concat(s.held(principal, auth.ScopeRepository, at.RepoID), atOrg)
+		if slices.Contains(out, "repo.read") {
+			out = append(out, reaches(at.RepositoryAccess)...)
 		}
-		return nil
 	}
-	if slices.Contains(out, "repo.read") {
-		out = append(out, reaches(at.RepositoryAccess)...)
+	if !slices.Contains(atOrg, "org.read") {
+		return out
 	}
-	if slices.Contains(atOrg, "org.read") {
-		out = append(out, reaches(at.OrganizationAccess)...)
+	out = append(out, reaches(at.OrganizationAccess)...)
+	if at.OwnerID == uuid.Nil {
+		return out
 	}
-	return out
+	own := s.held(principal, auth.ScopeUser, at.OwnerID)
+	if at.OwnerID == principal {
+		own = append(own, auth.PersonPermissions...)
+	}
+	return append(out, slices.DeleteFunc(own, func(p string) bool { return !slices.Contains(auth.PersonPermissions, p) })...)
+}
+
+// reaches is what an audience that reaches access gives.
+func reaches(access string) []string {
+	switch access {
+	case "edit":
+		return []string{"artifacts.read", "artifacts.write"}
+	case "view":
+		return []string{"artifacts.read"}
+	}
+	return nil
 }
 
 // held lists the permissions of principal's grants at exactly the scope.

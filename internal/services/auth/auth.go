@@ -53,6 +53,9 @@ var (
 	RoleArtifactViewer = uuid.MustParse("00000000-0000-7000-8000-000000000306")
 	RoleArtifactEditor = uuid.MustParse("00000000-0000-7000-8000-000000000307")
 	RoleArtifactOwner  = uuid.MustParse("00000000-0000-7000-8000-000000000308")
+	// RoleArtifactLister holds artifacts.list alone: migration 55 adds it, the role that lists artifacts without
+	// opening them, granted on a repository or on a person.
+	RoleArtifactLister = uuid.MustParse("00000000-0000-7000-8000-000000000309")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.

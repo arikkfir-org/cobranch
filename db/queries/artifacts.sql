@@ -1,58 +1,26 @@
--- ArtifactPermissions lists the permissions the principal holds on an artifact: those of the roles its grants give
--- on the artifact, on its repository and at its organization, and those its audiences give a principal that reads its
--- repository, or its organization, view artifacts.read and edit artifacts.write besides; each kept to the artifact
--- permissions, which permissions lists.
+-- ArtifactPermissions lists the permissions the principal holds on an artifact, as artifact_permissions answers them
+-- (db/migrations/00055_artifact_owners.sql), kept to the artifact permissions, which permissions lists.
 -- name: ArtifactPermissions :many
-SELECT DISTINCT p.permission::text AS permission FROM (
-    SELECT unnest(r.permissions) AS permission FROM grants g JOIN roles r ON r.id = g.role_id
-    WHERE g.principal_id = @principal_id AND g.scope = 'artifact' AND g.scope_id = @artifact_id::uuid
-    UNION ALL
-    SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN artifacts a ON a.repo_id = g.scope_id
-    WHERE g.principal_id = @principal_id AND g.scope = 'repository' AND a.id = @artifact_id::uuid
-    UNION ALL
-    SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN artifacts a ON a.org_id = g.scope_id
-    WHERE g.principal_id = @principal_id AND g.scope = 'organization' AND a.id = @artifact_id::uuid
-    UNION ALL
-    SELECT unnest(CASE x.access WHEN 'edit' THEN '{artifacts.read,artifacts.write}'::text[] ELSE '{artifacts.read}'::text[] END)
-    FROM (
-        SELECT a.repository_access AS access FROM artifacts a
-        WHERE a.id = @artifact_id::uuid AND a.repository_access <> 'none' AND EXISTS (
-            SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = @principal_id AND 'repo.read' = ANY (r.permissions)
-              AND ((g.scope = 'repository' AND g.scope_id = a.repo_id) OR (g.scope = 'organization' AND g.scope_id = a.org_id)))
-        UNION ALL
-        SELECT a.organization_access FROM artifacts a
-        WHERE a.id = @artifact_id::uuid AND a.organization_access <> 'none' AND EXISTS (
-            SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = @principal_id AND 'org.read' = ANY (r.permissions) AND g.scope = 'organization' AND g.scope_id = a.org_id)
-    ) x
-) p WHERE p.permission = ANY (@permissions::text[])
+SELECT DISTINCT ap.permission::text AS permission FROM artifact_permissions(@principal_id::uuid, @artifact_id::uuid) ap
+WHERE ap.permission = ANY (@permissions::text[])
 ORDER BY 1;
 
--- ArtifactsWith lists the IDs of the repository's artifacts where the principal holds the permission, as
--- ArtifactPermissions answers it, artifacts.read or artifacts.write.
+-- ArtifactsWith lists the IDs of the organization's artifacts, or those attached to the repository when repo_id names
+-- one, where the principal holds the permission, as ArtifactPermissions answers it.
 -- name: ArtifactsWith :many
-SELECT a.id FROM artifacts a WHERE a.repo_id = @repo_id AND (
-    EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = @principal_id AND @permission::text = ANY (r.permissions)
-              AND ((g.scope = 'artifact' AND g.scope_id = a.id) OR (g.scope = 'repository' AND g.scope_id = a.repo_id)
-                OR (g.scope = 'organization' AND g.scope_id = a.org_id)))
-    OR ((a.repository_access = 'edit' OR (a.repository_access = 'view' AND @permission::text = 'artifacts.read'))
-        AND EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-                    WHERE g.principal_id = @principal_id AND 'repo.read' = ANY (r.permissions)
-                      AND ((g.scope = 'repository' AND g.scope_id = a.repo_id) OR (g.scope = 'organization' AND g.scope_id = a.org_id))))
-    OR ((a.organization_access = 'edit' OR (a.organization_access = 'view' AND @permission::text = 'artifacts.read'))
-        AND EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-                    WHERE g.principal_id = @principal_id AND 'org.read' = ANY (r.permissions)
-                      AND g.scope = 'organization' AND g.scope_id = a.org_id)))
+SELECT a.id FROM artifacts a
+WHERE a.org_id = @org_id::uuid AND (sqlc.narg(repo_id)::uuid IS NULL OR a.repo_id = sqlc.narg(repo_id)::uuid)
+  AND EXISTS (SELECT 1 FROM artifact_permissions(@principal_id::uuid, a.id) ap WHERE ap.permission = @permission::text)
 ORDER BY a.id;
 
 -- name: Artifact :one
-SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.title, a.summary, a.kind, a.repository_access, a.organization_access,
-       a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head, v.media_type,
-       a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name, a.updated_at
-FROM artifacts a JOIN organizations o ON o.id = a.org_id JOIN repositories rp ON rp.id = a.repo_id
+SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.owner_id, ow.display_name AS owner_name, a.title, a.summary, a.kind,
+       a.repository_access, a.organization_access, a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head,
+       v.media_type, a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name,
+       a.updated_at
+FROM artifacts a JOIN organizations o ON o.id = a.org_id LEFT JOIN repositories rp ON rp.id = a.repo_id
 JOIN artifact_versions v ON v.artifact_id = a.id AND v.number = a.head
+LEFT JOIN principals ow ON ow.id = a.owner_id
 LEFT JOIN principals ag ON ag.id = a.agent_id
 LEFT JOIN agent_tasks t ON t.id = a.task_id
 LEFT JOIN principals cb ON cb.id = a.created_by
@@ -61,11 +29,13 @@ WHERE a.id = $1;
 
 -- Artifacts reads the artifacts ids names, newest change first.
 -- name: Artifacts :many
-SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.title, a.summary, a.kind, a.repository_access, a.organization_access,
-       a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head, v.media_type,
-       a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name, a.updated_at
-FROM artifacts a JOIN organizations o ON o.id = a.org_id JOIN repositories rp ON rp.id = a.repo_id
+SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.owner_id, ow.display_name AS owner_name, a.title, a.summary, a.kind,
+       a.repository_access, a.organization_access, a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head,
+       v.media_type, a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name,
+       a.updated_at
+FROM artifacts a JOIN organizations o ON o.id = a.org_id LEFT JOIN repositories rp ON rp.id = a.repo_id
 JOIN artifact_versions v ON v.artifact_id = a.id AND v.number = a.head
+LEFT JOIN principals ow ON ow.id = a.owner_id
 LEFT JOIN principals ag ON ag.id = a.agent_id
 LEFT JOIN agent_tasks t ON t.id = a.task_id
 LEFT JOIN principals cb ON cb.id = a.created_by
@@ -73,16 +43,17 @@ LEFT JOIN principals ub ON ub.id = a.updated_by
 WHERE a.id = ANY (@ids::uuid[])
 ORDER BY a.updated_at DESC, a.id DESC;
 
--- InsertArtifact writes an artifact in a repository of its organization, with its branch, or the branch of its task
--- when it names none: no row when the repository is another organization's.
+-- InsertArtifact writes an artifact of its organization, attached to one of its repositories or to none, with its
+-- branch, or the branch of its task when it names none: no row when the repository is another organization's.
 -- name: InsertArtifact :execrows
-INSERT INTO artifacts (id, org_id, repo_id, title, summary, kind, repository_access, organization_access, agent_id, task_id, branch, created_by, updated_by)
-SELECT @id, @org_id, @repo_id, @title, @summary, @kind, @repository_access, @organization_access, sqlc.narg(agent_id)::uuid,
-       sqlc.narg(task_id)::uuid,
+INSERT INTO artifacts (id, org_id, repo_id, owner_id, title, summary, kind, repository_access, organization_access, agent_id, task_id, branch,
+                       created_by, updated_by)
+SELECT @id, @org_id, sqlc.narg(repo_id)::uuid, sqlc.narg(owner_id)::uuid, @title, @summary, @kind, @repository_access, @organization_access,
+       sqlc.narg(agent_id)::uuid, sqlc.narg(task_id)::uuid,
        coalesce(nullif(@branch::text, ''), (SELECT b.name FROM agent_tasks t JOIN branches b ON b.id = t.branch_id
                                             WHERE t.id = sqlc.narg(task_id)::uuid), ''),
        @actor::uuid, @actor::uuid
-WHERE EXISTS (SELECT 1 FROM repositories WHERE id = @repo_id AND org_id = @org_id);
+WHERE sqlc.narg(repo_id)::uuid IS NULL OR EXISTS (SELECT 1 FROM repositories WHERE id = sqlc.narg(repo_id)::uuid AND org_id = @org_id);
 
 -- name: InsertArtifactVersion :exec
 INSERT INTO artifact_versions (artifact_id, number, id, media_type, body, author_id, task_id, note)
@@ -136,3 +107,22 @@ DELETE FROM grants WHERE principal_id = @principal_id AND scope = 'artifact' AND
 -- name: DeleteArtifactGrantsAt :execrows
 DELETE FROM grants g USING artifacts a
 WHERE g.principal_id = @principal_id AND g.scope = 'artifact' AND g.scope_id = a.id AND a.org_id = @org_id::uuid;
+
+-- PersonGrantees lists the roles principals hold on the person, by display name: those that reach the artifacts the
+-- person owns.
+-- name: PersonGrantees :many
+SELECT p.id, p.kind, p.display_name, g.role_id FROM grants g JOIN principals p ON p.id = g.principal_id
+WHERE g.scope = 'user' AND g.scope_id = @user_id::uuid ORDER BY p.display_name, p.id, g.role_id;
+
+-- DeletePersonGrants takes every role the principal holds on the person.
+-- name: DeletePersonGrants :execrows
+DELETE FROM grants WHERE principal_id = @principal_id AND scope = 'user' AND scope_id = @user_id::uuid;
+
+-- Colleague finds a user who is a member of an organization the person is, or an agent of one: those the person may
+-- grant a role on themselves.
+-- name: Colleague :one
+SELECT p.id, p.kind, p.display_name FROM principals p
+WHERE p.id = @principal_id AND p.id <> @user_id::uuid AND (
+    (p.kind = 'user' AND EXISTS (SELECT 1 FROM memberships m JOIN memberships theirs ON theirs.org_id = m.org_id
+                                 WHERE m.user_id = @user_id::uuid AND theirs.user_id = p.id))
+    OR (p.kind = 'agent' AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = @user_id::uuid AND m.org_id = p.org_id)));

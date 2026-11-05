@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/services/artifacts"
 	"cobranch.dev/internal/services/auth"
 )
@@ -32,8 +33,8 @@ func newArtifactFixture(t *testing.T) *artifactFixture {
 func (f *artifactFixture) create(t *testing.T, actor uuid.UUID, title string, reach artifacts.Reach, task uuid.UUID) artifacts.Artifact {
 	t.Helper()
 	id := v7()
-	a := artifacts.Artifact{ID: id, OrgID: f.acme.ID, RepoID: f.website.ID, Title: title, Kind: artifacts.KindDocument, RepositoryAccess: reach,
-		OrganizationAccess: artifacts.ReachNone, TaskID: task}
+	a := artifacts.Artifact{ID: id, OrgID: f.acme.ID, RepoID: f.website.ID, Owner: artifacts.Principal{ID: actor}, Title: title,
+		Kind: artifacts.KindDocument, RepositoryAccess: reach, OrganizationAccess: artifacts.ReachNone, TaskID: task}
 	if task != uuid.Nil {
 		a.Agent.ID = actor
 	}
@@ -78,8 +79,9 @@ func TestArtifactStoreWrites(t *testing.T) {
 func (f *artifactFixture) checkCreated(t *testing.T, plan artifacts.Artifact) {
 	t.Helper()
 	ctx := context.Background()
-	if plan.Head != 1 || plan.Version != 1 || plan.OrgSlug != f.acme.Slug || plan.RepoSlug != "website" || plan.MediaType != artifacts.MediaMarkdown ||
-		plan.CreatedBy.ID != f.olivia || plan.CreatedBy.DisplayName == "" || plan.Agent.ID != uuid.Nil || plan.Branch != "" {
+	if plan.Head != 1 || plan.Version != 1 || plan.OrgSlug != f.acme.Slug || plan.RepoID != f.website.ID || plan.RepoSlug != "website" ||
+		plan.MediaType != artifacts.MediaMarkdown || plan.CreatedBy.ID != f.olivia || plan.CreatedBy.DisplayName == "" || plan.Owner.ID != f.olivia ||
+		plan.Owner.DisplayName == "" || plan.Agent.ID != uuid.Nil || plan.Branch != "" {
 		t.Errorf("Create() = %+v", plan)
 	}
 	dup := artifacts.New{Artifact: plan, First: artifacts.VersionInput{ID: v7(), MediaType: artifacts.MediaMarkdown, Body: "x"}}
@@ -206,7 +208,7 @@ func TestArtifactPermissions(t *testing.T) {
 	f := newArtifactFixture(t)
 	ctx := context.Background()
 	plan := f.create(t, f.olivia, "Plan", artifacts.ReachNone, uuid.Nil)
-	all := []string{"artifacts.manage", "artifacts.read", "artifacts.write"}
+	all := []string{"artifacts.list", "artifacts.manage", "artifacts.read", "artifacts.write"}
 	f.holds(t, "the Owner", f.olivia, plan.ID, all...)
 	f.holds(t, "a Member who reads no repository", f.max, plan.ID)
 	f.holds(t, "a Developer of website, Scout", f.scout.ID, plan.ID)
@@ -218,11 +220,11 @@ func TestArtifactPermissions(t *testing.T) {
 	f.holds(t, "a Member, when Acme's readers view it", f.max, plan.ID, "artifacts.read")
 	f.holds(t, "Scout, when website's readers edit it", f.scout.ID, plan.ID, "artifacts.read", "artifacts.write")
 	for permission, want := range map[string][]uuid.UUID{"artifacts.read": {plan.ID}, "artifacts.write": nil} {
-		if got, err := f.store.With(ctx, f.max, f.website.ID, permission); err != nil || !slices.Equal(got, want) {
+		if got, err := f.store.With(ctx, f.max, f.acme.ID, f.website.ID, permission); err != nil || !slices.Equal(got, want) {
 			t.Errorf("With(Max, %s) = %v, %v, want %v", permission, got, err, want)
 		}
 	}
-	if got, err := f.store.With(ctx, f.scout.ID, f.website.ID, "artifacts.write"); err != nil || !slices.Equal(got, []uuid.UUID{plan.ID}) {
+	if got, err := f.store.With(ctx, f.scout.ID, f.acme.ID, f.website.ID, "artifacts.write"); err != nil || !slices.Equal(got, []uuid.UUID{plan.ID}) {
 		t.Errorf("With(Scout, artifacts.write) = %v, %v", got, err)
 	}
 	f.audiences(t, plan, artifacts.ReachNone, artifacts.ReachNone)
@@ -272,4 +274,150 @@ func TestArtifactGrantsGoWithTheMembership(t *testing.T) {
 		t.Errorf("%d grants on artifacts remain to the member removed", n)
 	}
 	f.holds(t, "the agent", f.scout.ID, plan.ID, "artifacts.read")
+}
+
+// unattached writes a Markdown note titled title that actor makes and owns, attached to no repository.
+func (f *artifactFixture) unattached(t *testing.T, actor uuid.UUID, title string) artifacts.Artifact {
+	t.Helper()
+	id := v7()
+	a := artifacts.Artifact{ID: id, OrgID: f.acme.ID, Owner: artifacts.Principal{ID: actor}, Title: title, Kind: artifacts.KindDocument,
+		RepositoryAccess: artifacts.ReachNone, OrganizationAccess: artifacts.ReachNone}
+	got, err := f.store.Create(context.Background(), actor, artifacts.New{Artifact: a,
+		First:  artifacts.VersionInput{ID: id, MediaType: artifacts.MediaMarkdown, Body: "# " + title + "\n"},
+		Owners: []artifacts.NewGrant{{PrincipalID: actor, RoleID: auth.RoleArtifactOwner}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// with fails t, naming what, unless the organization's artifacts where principal holds permission are want.
+func (f *artifactFixture) with(t *testing.T, what string, principal uuid.UUID, permission string, want ...uuid.UUID) {
+	t.Helper()
+	got, err := f.store.With(context.Background(), principal, f.acme.ID, uuid.Nil, permission)
+	slices.SortFunc(want, func(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) })
+	if err != nil || !slices.Equal(got, want) {
+		t.Errorf("%s: With(%s) = %v (%v), want %v", what, permission, got, err, want)
+	}
+}
+
+func TestArtifactsOfNoRepository(t *testing.T) {
+	t.Parallel()
+	f := newArtifactFixture(t)
+	ctx := context.Background()
+	notes := f.unattached(t, f.max, "Notes")
+	if notes.RepoID != uuid.Nil || notes.RepoSlug != "" || notes.Owner.ID != f.max {
+		t.Errorf("Create() of no repository = %+v", notes)
+	}
+	plan := f.create(t, f.olivia, "Plan", artifacts.ReachNone, uuid.Nil)
+	f.holds(t, "its owner", f.max, notes.ID, "artifacts.list", "artifacts.manage", "artifacts.read", "artifacts.write")
+	f.holds(t, "the organization's Owner, whose role reaches only attached ones", f.olivia, notes.ID)
+	f.holds(t, "an agent", f.scout.ID, notes.ID)
+	f.with(t, "its owner", f.max, "artifacts.list", notes.ID)
+	f.with(t, "the organization's Owner", f.olivia, "artifacts.list", plan.ID)
+	f.with(t, "the organization's Owner", f.olivia, "artifacts.read", plan.ID)
+	if got, err := f.store.With(ctx, f.olivia, f.acme.ID, f.secret.ID, "artifacts.read"); err != nil || len(got) != 0 {
+		t.Errorf("With(another repository) = %v, %v", got, err)
+	}
+
+	f.audiences(t, notes, artifacts.ReachNone, artifacts.ReachView)
+	f.holds(t, "a member, when the organization's readers view it", f.olivia, notes.ID, "artifacts.read")
+	f.holds(t, "an agent reading the organization", f.scout.ID, notes.ID, "artifacts.read")
+	if _, err := f.store.Update(ctx, f.max, notes.ID, artifacts.AnyVersion, artifacts.Changes{Title: "Notes", RepositoryAccess: artifacts.ReachView,
+		OrganizationAccess: artifacts.ReachNone}); err == nil {
+		t.Error("Update() gave one of no repository a repository audience")
+	}
+}
+
+func TestArtifactGrantsOnPeople(t *testing.T) {
+	t.Parallel()
+	f := newArtifactFixture(t)
+	ctx := context.Background()
+	notes := f.unattached(t, f.max, "Notes")
+	plan := f.create(t, f.max, "Plan", artifacts.ReachNone, uuid.Nil)
+	for _, tt := range []struct {
+		principal uuid.UUID
+		want      artifacts.Principal
+	}{
+		{principal: f.olivia, want: artifacts.Principal{ID: f.olivia, Kind: auth.KindUser}},
+		{principal: f.scout.ID, want: artifacts.Principal{ID: f.scout.ID, Kind: auth.KindAgent, DisplayName: "Scout"}},
+	} {
+		if got, err := f.store.Colleague(ctx, f.max, tt.principal); err != nil || got.ID != tt.want.ID || got.Kind != tt.want.Kind {
+			t.Errorf("Colleague(%s) = %+v, %v, want %+v", tt.principal, got, err, tt.want)
+		}
+	}
+	for _, stranger := range []uuid.UUID{f.nia, f.max, uuid.New()} {
+		if _, err := f.store.Colleague(ctx, f.max, stranger); !errors.Is(err, artifacts.ErrNotFound) {
+			t.Errorf("Colleague(%s) = %v, want %v", stranger, err, artifacts.ErrNotFound)
+		}
+	}
+
+	if err := f.store.SharePerson(ctx, f.max, f.scout.ID, auth.RoleArtifactLister); err != nil {
+		t.Fatal(err)
+	}
+	f.holds(t, "an agent listing Max's", f.scout.ID, notes.ID, "artifacts.list")
+	f.holds(t, "an agent listing Max's, attached ones too", f.scout.ID, plan.ID, "artifacts.list")
+	f.with(t, "an agent listing Max's", f.scout.ID, "artifacts.list", notes.ID, plan.ID)
+	if err := f.store.SharePerson(ctx, f.max, f.scout.ID, auth.RoleArtifactViewer); err != nil {
+		t.Fatal(err)
+	}
+	f.holds(t, "an agent viewing Max's, in place of listing them", f.scout.ID, notes.ID, "artifacts.read")
+	if err := f.store.SharePerson(ctx, f.max, f.nia, auth.RoleArtifactViewer); err != nil {
+		t.Fatal(err)
+	}
+	f.holds(t, "someone reading no organization of Max's", f.nia, notes.ID)
+	grants, err := f.store.PersonGrants(ctx, f.max)
+	if err != nil || len(grants) != 2 || !slices.ContainsFunc(grants, func(g artifacts.Grant) bool {
+		return g.Principal.ID == f.scout.ID && g.Principal.Kind == auth.KindAgent && g.Role == artifacts.RoleViewer
+	}) {
+		t.Errorf("PersonGrants() = %+v, %v", grants, err)
+	}
+	if err := f.store.UnsharePerson(ctx, f.max, f.scout.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.UnsharePerson(ctx, f.max, f.scout.ID); !errors.Is(err, artifacts.ErrNotFound) {
+		t.Errorf("a second UnsharePerson() = %v, want %v", err, artifacts.ErrNotFound)
+	}
+	f.holds(t, "an agent unshared", f.scout.ID, notes.ID)
+	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'grants' AND principal_id = $1 AND after->>'scope' = 'user'", f.max); n != 3 {
+		t.Errorf("%d audit rows of grants on Max name Max, want 3", n)
+	}
+}
+
+// TestArtifactOwnersMigration checks that migration 00055 gives each artifact already there the owner its first
+// Artifact owner grant names, or its maker when none does.
+func TestArtifactOwnersMigration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	if err := newSchema(t, pool, migrationsBefore(t, "00055")).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo := insertRepositories(ctx, t, pool, map[string][]string{"website": {"website"}})["website"]
+	olivia, maxim, granted, made := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO principals (id, kind, display_name) VALUES ($1, 'user', 'Olivia'), ($2, 'user', 'Max')", []any{olivia, maxim}},
+		{"INSERT INTO artifacts (id, org_id, repo_id, title, kind, created_by) SELECT $1, org_id, id, 'Plan', 'document', $2 FROM repositories WHERE id = $3",
+			[]any{granted, olivia, repo}},
+		{"INSERT INTO artifacts (id, org_id, repo_id, title, kind, created_by) SELECT $1, org_id, id, 'Notes', 'document', $2 FROM repositories WHERE id = $3",
+			[]any{made, olivia, repo}},
+		{"INSERT INTO grants (principal_id, role_id, scope, scope_id, source) VALUES ($1, $2, 'artifact', $3, 'grant')",
+			[]any{maxim, auth.RoleArtifactOwner, granted}},
+	} {
+		if _, err := pool.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := newSchema(t, pool, migrations.FS, migrations.Go...).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[uuid.UUID]uuid.UUID{granted: maxim, made: olivia} {
+		var owner uuid.UUID
+		if err := pool.QueryRow(ctx, "SELECT owner_id FROM artifacts WHERE id = $1", id).Scan(&owner); err != nil || owner != want {
+			t.Errorf("artifact %s's owner = %s, %v; want %s", id, owner, err, want)
+		}
+	}
 }

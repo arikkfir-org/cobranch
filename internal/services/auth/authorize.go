@@ -10,7 +10,7 @@ import (
 )
 
 // Scope is where a grant applies: the installation, an organization, a repository, or one secret or one artifact, for
-// its own permissions only.
+// its own permissions only, or a person, for the artifacts they own.
 type Scope string
 
 // The scopes.
@@ -20,6 +20,7 @@ const (
 	ScopeRepository   Scope = "repository"
 	ScopeSecret       Scope = "secret"
 	ScopeArtifact     Scope = "artifact"
+	ScopeUser         Scope = "user"
 )
 
 // ErrForbidden is a principal that lacks a permission it needs.
@@ -29,7 +30,8 @@ var ErrForbidden = errors.New("forbidden")
 // has there. scopeID is uuid.Nil at the installation. A grant reaches its scope and everything inside it: at a
 // repository, Permissions answers the permissions of the grants on it and the repository permissions of the roles at
 // its organization; at a secret, the secret permissions of the grants on it, on its repository and at its
-// organization; at an artifact, the artifact permissions of those grants and of its audiences.
+// organization; at an artifact, the artifact permissions of those grants, of the grants on its owner and of its
+// audiences.
 type Grants interface {
 	Permissions(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error)
 	// Repositories lists the IDs of the organization's repositories where the principal holds permission, through a

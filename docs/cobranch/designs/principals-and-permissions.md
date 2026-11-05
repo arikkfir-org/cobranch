@@ -9,8 +9,8 @@
 [architecture](architecture.md#authentication) · Built by [ENG-197](https://linear.app/arikkfir/issue/ENG-197)
 
 Every actor in Cobranch is a principal, and a principal can do something only because a grant says so: a role given at
-the installation, an organization, a repository, one secret or one artifact. Nothing is ambient, not even for jobs,
-agents or administrators.
+the installation, an organization, a repository, one secret, one artifact or a person’s artifacts. Nothing is ambient,
+not even for jobs, agents or administrators.
 
 ## Scope
 
@@ -185,16 +185,20 @@ A grant is one principal, one role and one scope, and it applies at its scope an
 ![A grant reaches its scope and everything inside it](principals-and-permissions/scopes.svg)
 
 There is no branch scope: merge requirements and `repo.bypass` decide who changes a branch. A secret, in an organization
-or a repository, is a scope for `secrets.manage` and `secrets.read` only; an artifact, in a repository, for its artifact
-permissions only ([artifacts](artifacts.md#access)).
+or a repository, is a scope for `secrets.manage` and `secrets.read` only; an artifact, attached to a repository or to
+none, for its artifact permissions only; and a person for `artifacts.list` and `artifacts.read` on the artifacts they
+own ([artifacts](artifacts.md#access)).
 
 - **Who may receive one.** At the installation, users only. At an organization or repository, its members and its own
   principals, and [Anonymous](#visibility) too. Jobs receive only `secrets.read`; their declarations and the ceiling
   decide the rest.
 - **Permissions apply where they fit.** A role granted on a repository gives only its repository permissions.
-- **An artifact is a scope too.** **Proposed** (2026-11-04, [ENG-259](https://linear.app/arikkfir/issue/ENG-259)): a
-  grant on one artifact gives only its artifact permissions, and an artifact's audience lets its repository's or
-  organization's readers view or edit it as a whole ([artifacts](artifacts.md#access)).
+- **An artifact, and a person, are scopes too.** **Agreed** (2026-11-05,
+  [ENG-259](https://linear.app/arikkfir/issue/ENG-259)): a grant on one artifact gives only its artifact permissions; a
+  grant on a person gives `artifacts.list` or `artifacts.read` on every artifact they own, and everyone holds both on
+  themselves; a grant on a repository or at an organization reaches only the artifacts attached to them. An artifact's
+  audience lets its repository's or organization's readers view or edit it as a whole
+  ([artifacts](artifacts.md#access)).
 - **Additive only.** **Agreed:** no deny rules. To give someone less on one repository, give less at the organization
   and more where needed.
 - **Nobody grants more than they hold.** Granting a role takes `org.grants.manage` and every permission of the role, at
@@ -253,7 +257,8 @@ No API returns a value: only a job run or an agent task receives it.
 Names are `<object>.<action>`. A release may add permissions but never renames one; later designs add theirs to the
 catalog, at the organization: issues add `issues.read`, `issues.write` and `issues.manage`
 ([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs. Artifacts add
-`artifacts.create` at the repository and the rest at an artifact or its repository ([artifacts](artifacts.md#access)).
+`artifacts.create` at the repository and the rest on an artifact, a person, a repository or the organization
+([artifacts](artifacts.md#access)).
 
 | Permission | Allows |
 | --- | --- |
@@ -282,16 +287,17 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 | `jobs.run` | Start manual jobs; re-run and cancel runs |
 | `secrets.manage` | Add, replace and delete secrets in the organization's or a repository's settings |
 | `secrets.read` | Receive a secret's value in one's job runs and agent tasks; no API returns a value |
-| `artifacts.create` | Create artifacts in a repository ([artifacts](artifacts.md#access), proposed) |
+| `artifacts.create` | Attach new artifacts to a repository ([artifacts](artifacts.md#access)) |
+| `artifacts.list` | See artifacts in lists without opening them; on a person, a repository or an organization |
 | `artifacts.read` | View an artifact, its versions and who reaches it |
 | `artifacts.write` | Add a version to an artifact; change its title and summary |
 | `artifacts.manage` | Change an artifact's audience; share, unshare and delete it |
 
 ## Roles
 
-**Fourteen built-in roles; each repository role includes the one before**
+**Fifteen built-in roles; each repository role includes the one before**
 
-![Fourteen built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
+![Fifteen built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
 
 Whoever creates a repository becomes its Maintainer, with every repository permission; nobody else but the
 organization’s Owners can reach it until someone grants more. Built-in roles are fixed; an organization defines custom
@@ -303,8 +309,9 @@ roles from the same permissions.
 - **Built-in roles are fixed**, and the installation has no custom roles.
 - **Jobs add Secret reader,** a repository role holding `secrets.read` alone, granted to a job on its repository or on
   one secret ([jobs](jobs.md#secrets)).
-- **Artifacts add Artifact viewer, editor and owner,** repository roles granted on a repository or on one artifact; an
-  artifact's creator, or its task's assigner, holds Artifact owner on it ([artifacts](artifacts.md#access), proposed).
+- **Artifacts add Artifact lister, viewer, editor and owner,** repository roles granted on a repository, on one artifact
+  (all but lister) or on a person (lister and viewer); an artifact's owner, who asked for it, holds Artifact owner on it
+  ([artifacts](artifacts.md#access)).
 - **The AI reviewer adds Automation at an organization,** an organization role holding `org.read` and the repositories'
   Automation, which reaches every repository of the organization: the role of its built-in reviewer, since a role has
   one scope ([AI review](reviews.md#the-ai-reviewer)).
@@ -366,7 +373,7 @@ and their consents add tables in their own slice.
 | Job runs can get Cobranch-signed OpenID Connect tokens | Jobs reach clouds without stored secrets | Agreed |
 | Grants only add; there are no deny rules | One rule to reason about; checks never conflict | Agreed |
 | Three scopes and no branch scope; a secret is a scope for secret permissions only | Merge requirements already govern branches; a grant can name one secret | Changed |
-| An artifact is a scope for artifact permissions only, with a repository and an organization audience | [ENG-259](https://linear.app/arikkfir/issue/ENG-259): artifacts are shared with one person, a repository's readers or everyone, as grants | Proposed |
+| An artifact and a person are scopes for artifact permissions only, with a repository and an organization audience | [ENG-259](https://linear.app/arikkfir/issue/ENG-259), the owner's answer 22 (2026-11-05): artifacts are shared with one person, a repository's readers or everyone, and one person's artifacts all at once, as grants | Agreed |
 | Grants never cross organizations; outside people join as Guests | An organization sees everyone who can reach it | Agreed |
 | Groups hold users and agents and do not nest | A check never walks a tree | Agreed |
 | Installation admins see no organization content; entering one makes them Owner, audited | Operators run the installation, not the organizations | Agreed |
@@ -388,8 +395,8 @@ and their consents add tables in their own slice.
 | How phase 2's pinned job security meets the job ceiling | Belongs to phase 2's jobs design | Deferred |
 
 The core's eleven built-in roles and 25 permissions are agreed too; the review added the two secret permissions, and the
-AI reviewer Automation at an organization. The three artifact roles and four artifact permissions are proposed
-([artifacts](artifacts.md#access)).
+AI reviewer Automation at an organization. The four artifact roles and five artifact permissions were agreed on
+2026-11-05 ([artifacts](artifacts.md#access)).
 
 ## Open questions
 
