@@ -1,7 +1,7 @@
 import { api } from "../../../lib/api.js";
 import { openDialog } from "../../../lib/dialog.js";
 import { h } from "../../../lib/dom.js";
-import { banner, checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
+import { checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, plural, when } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
 import { roles } from "../../../lib/state.js";
@@ -75,15 +75,19 @@ async function showApiKeys(org, main, can, actions, made = null) {
         h("p", { class: "empty-description" }, "Make a key for a script that calls " + org.name + "'s API as itself.")))]));
 }
 
-// reveal shows a secret just made, which the API never shows again, with a button that copies it; done hides it.
+// reveal announces a key just made or rotated in a Card (Tone=Success) with its secret, which the API never shows
+// again, and a button that copies it; done hides it.
 function reveal(made, done) {
-  const code = h("code", {}, made.secret);
+  const secret = h("input", { readonly: true, value: made.secret, "aria-label": "The key's secret" });
   const copy = h("button", { class: "btn btn-sm", type: "button", onclick: () => navigator.clipboard.writeText(made.secret)
-    .then(() => { copy.textContent = "Copied"; }).catch(() => getSelection().selectAllChildren(code)) }, icon("copy"), "Copy");
-  const roleNames = made.apiKey.roles.map((r) => r.name).join(", ") || "no role";
-  return banner("success", "Key \"" + made.apiKey.name + "\" made. Copy its secret now: it is shown this once.",
-    h("span", {}, code, " · Roles: " + roleNames + ". Scripts send it as ", h("code", {}, "Authorization: Bearer …"), "; a lost secret can't be recovered, so rotate the key instead."),
-    copy, h("button", { class: "btn btn-primary btn-sm", type: "button", onclick: done }, "I copied it"));
+    .then(() => { copy.textContent = "Copied"; }).catch(() => secret.select()) }, icon("copy"), "Copy");
+  const roleNames = made.apiKey.roles.map((r) => r.name);
+  return h("section", { class: "card card-success" },
+    h("header", { class: "card-header" }, icon("circle-check"), h("h2", { class: "card-title" }, "Key \"" + made.apiKey.name + "\" made. Copy its secret now: it is shown this once.")),
+    h("div", { class: "card-body" }, h("div", { class: "input" }, secret, copy),
+      h("p", { class: "card-meta" }, (roleNames.length ? (roleNames.length > 1 ? "Roles " : "Role ") + roleNames.join(", ") : "No role") +
+        " · scripts send it as a Bearer token; a lost secret can't be recovered, so rotate the key instead.")),
+    h("footer", { class: "card-footer" }, h("button", { class: "btn btn-primary", type: "button", onclick: done }, "I copied it")));
 }
 
 // makeKey asks for a key's name, its roles and when its first secret expires, and makes it.

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -133,20 +134,11 @@ func TestOrgStoreMembers(t *testing.T) {
 	if err != nil || len(members) != 2 {
 		t.Fatalf("Members() = %+v, %v", members, err)
 	}
-	var names []string
-	for _, m := range members {
-		for _, r := range m.Roles {
-			names = append(names, r.Name)
-		}
-	}
-	slices.Sort(names)
-	if !slices.Equal(names, []string{"Member", "Owner"}) {
+	if names := roleNames(members); !slices.Equal(names, []string{"Member", "Owner"}) {
 		t.Errorf("roles held = %v, want a Member and an Owner", names)
 	}
-	for _, m := range members {
-		if want := map[uuid.UUID]string{f.olivia: "olivia@example.com", f.max: "max@example.com"}[m.UserID]; m.Email != want {
-			t.Errorf("%s's email = %q, want %q", m.DisplayName, m.Email, want)
-		}
+	if emails, want := memberEmails(members), map[uuid.UUID]string{f.olivia: "olivia@example.com", f.max: "max@example.com"}; !maps.Equal(emails, want) {
+		t.Errorf("members' emails = %v, want %v", emails, want)
 	}
 	m, err := f.s.Member(ctx, f.acme.ID, f.max)
 	if err != nil || len(m.Roles) != 1 || m.Roles[0].ID != auth.RoleMember || m.JoinedAt.IsZero() {
@@ -177,6 +169,27 @@ func TestOrgStoreMembers(t *testing.T) {
 	if kinds := eventKinds(t, f.pool); kinds[len(kinds)-1] != "member.removed" {
 		t.Errorf("last event = %s, want member.removed", kinds[len(kinds)-1])
 	}
+}
+
+// roleNames is the names of the roles members hold, sorted.
+func roleNames(members []orgs.Member) []string {
+	var names []string
+	for _, m := range members {
+		for _, r := range m.Roles {
+			names = append(names, r.Name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// memberEmails is each member's email, by their ID.
+func memberEmails(members []orgs.Member) map[uuid.UUID]string {
+	emails := make(map[uuid.UUID]string, len(members))
+	for _, m := range members {
+		emails[m.UserID] = m.Email
+	}
+	return emails
 }
 
 func TestOrgStoreInvitations(t *testing.T) {

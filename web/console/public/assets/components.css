@@ -10,9 +10,9 @@
    colours from the tone class on it or around it. */
 .tone-neutral { --tone-fg: var(--color-status-neutral-fg); --tone-bg: var(--color-status-neutral-bg); --tone-border: var(--color-status-neutral-border); --tone-solid: var(--color-status-neutral-solid); }
 .tone-info, .banner-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); --tone-solid: var(--color-status-info-solid); }
-.tone-success, .banner-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
-.tone-warning, .banner-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
-.tone-danger, .banner-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
+.tone-success, .banner-success, .card-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
+.tone-warning, .banner-warning, .meter-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
+.tone-danger, .banner-danger, .card-danger, .meter-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
 .tone-ai { --tone-fg: var(--color-status-ai-fg); --tone-bg: var(--color-status-ai-bg); --tone-border: var(--color-status-ai-border); --tone-solid: var(--color-status-ai-solid); }
 .tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); --tone-solid: var(--color-bg-inverse); }
 
@@ -246,6 +246,8 @@
 .table td.cell-actions { width: 1%; text-align: right; white-space: nowrap; }
 .table td.cell-actions > * + * { margin-left: var(--space-8); }
 .table td.cell-two-lines { padding-block: var(--space-12); }
+.table td a { color: inherit; text-decoration: none; }
+.table td a:hover { text-decoration: underline; }
 .cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
 .cell-two-lines > :first-child { color: var(--color-fg-default); font: var(--text-body-medium); }
 .cell-two-lines > * + * { margin-top: var(--space-2); }
@@ -259,6 +261,11 @@
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
+/* Card, Tone=Success for a card that announces a thing done and shown once, Tone=Danger for a danger zone: the border
+   takes the tone's colour, and the header its tint, with the title in the tone. */
+.card:is(.card-success, .card-danger) { border-color: var(--tone-border); }
+.card:is(.card-success, .card-danger) > .card-header { border-bottom-color: var(--tone-border); background: var(--tone-bg); }
+.card:is(.card-success, .card-danger) > .card-header :is(.card-title, .icon) { color: var(--tone-fg); }
 /* Card/Row: one object in a card: a 16px icon, its title over its meta, and trailing small ghost buttons; Hover and
    Selected tint it. A row may lead with a 200px label column (a group of permissions) instead of the icon. Rows divide
    with border/subtle. */
@@ -282,6 +289,19 @@
   display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8);
   padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
 }
+
+/* Meter: a share of a quota or a cap. Kind=Full is its label and value over a 6px track; Kind=Share (.meter-share) the
+   4px track alone, for a table cell that says the value. The bar's width is the share, set by the page; Tone=Warning
+   from 80%, Tone=Danger at or over the cap, when the value turns the tone's colour too. */
+.meter { display: grid; flex: 1; gap: var(--space-6); min-width: 0; }
+.meter-head { display: flex; align-items: center; gap: var(--space-8); }
+.meter-label { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.meter-value { margin-left: auto; color: var(--color-fg-muted); font: var(--text-body-small); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meter-danger .meter-value { color: var(--tone-fg); }
+.meter-track, .meter-share { overflow: hidden; height: var(--space-6); border-radius: var(--radius-full); background: var(--color-bg-sunken); }
+.meter-share { height: var(--space-4); }
+.meter-bar { display: block; height: 100%; border-radius: var(--radius-full); background: var(--color-action-primary-bg); }
+:is(.meter-warning, .meter-danger) .meter-bar { background: var(--tone-solid); }
 
 /* Dialog: a modal dialog over the scrim, 480px wide: a title with a close button, the body, and a sunken footer with
    the actions on the right, primary last. Esc closes it, and so does a click on the scrim, which the page wires. */

@@ -15,20 +15,22 @@ const bytes = (n) => size(n).replace(".0 ", " ");
 const sectionHeader = (title, description) => h("header", { class: "section-header" },
   h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, title), h("p", { class: "section-header-description" }, description)));
 
-// meter is a share of a whole as a bar, which warns at 90% and turns to danger at the whole, when tones is set.
-function meter(label, share, tones) {
-  const tone = !tones ? "" : share >= 1 ? "danger" : share >= 0.9 ? "warning" : "";
-  return h("div", { class: "meter", role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(share * 100)), "data-tone": tone },
-    h("span", { style: "width: " + Math.min(100, share * 100).toFixed(1) + "%" }));
-}
+// tone is the Meter's tone for a share of a limit: Warning from 80%, Danger at or over it.
+const tone = (share) => share >= 1 ? " meter-danger" : share >= 0.8 ? " meter-warning" : "";
 
-// gauge is one limit's row: what is used against the limit, on a meter; a limit of 0 caps nothing, and shows no meter.
+// bar is a Meter's bar, as wide as share.
+const bar = (share) => h("span", { class: "meter-bar", style: "width: " + Math.min(100, share * 100).toFixed(1) + "%" });
+
+// meterAria is what a screen reader hears of a meter: its label and the share it shows, in percent.
+const meterAria = (label, share) => ({ role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(share * 100)) });
+
+// gauge is one limit's row: a Meter of what is used against the limit; a limit of 0 caps nothing, and draws no track.
 function gauge(label, usage, format) {
-  const head = h("div", { class: "gauge-head" }, h("span", { class: "gauge-label" }, label),
-    h("span", { class: "gauge-value" }, usage.limit ? format(usage.used) + " of " + format(usage.limit) : format(usage.used) + " · no limit"));
   const share = usage.limit ? usage.used / usage.limit : 0;
-  const note = !usage.limit ? null : share >= 1 ? "At its limit: what would add more is refused. An administrator can raise it." : share >= 0.9 ? "Near its limit." : null;
-  return h("div", { class: "card-row" }, h("div", { class: "gauge" }, head, usage.limit ? meter(label, share, true) : null, note ? h("span", { class: "gauge-note" }, note) : null));
+  return h("div", { class: "card-row" }, h("div", { class: "meter" + tone(share) },
+    h("div", { class: "meter-head" }, h("span", { class: "meter-label" }, label),
+      h("span", { class: "meter-value" }, usage.limit ? format(usage.used) + " of " + format(usage.limit) : format(usage.used) + " · no limit")),
+    usage.limit ? h("div", { class: "meter-track", ...meterAria(label, share) }, bar(share)) : null));
 }
 
 // showUsage is what the organization takes of what its limits cap, for anyone who reads it, and the Git data of each
@@ -43,7 +45,8 @@ async function showUsage(org, main) {
     return h("tr", {},
       h("td", {}, h("a", { class: "cell-person cell-mono", href: base + org.slug + "/" + r.slug, "data-nav": "" }, icon("folder-git-2"), r.slug)),
       h("td", { class: "cell-number" }, bytes(r.gitData)),
-      h("td", {}, h("div", { class: "share" }, meter("Share of " + r.slug, share, false), h("span", { class: "share-value" }, Math.round(share * 100) + "%"))));
+      h("td", {}, h("div", { class: "share" }, h("div", { class: "meter-share", ...meterAria("Share of " + r.slug, share) }, bar(share)),
+        h("span", { class: "cell-muted" }, Math.round(share * 100) + "%"))));
   };
   main.replaceChildren(
     sectionHeader("Limits", "What the organization uses against the limits this installation sets."),

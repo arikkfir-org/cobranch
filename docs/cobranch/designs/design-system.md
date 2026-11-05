@@ -256,7 +256,7 @@ plan.
 | Badge/Quiet | Tone: Neutral, Info, Success, Warning, Danger, AI | Label: a dot and a word, for lists | `.badge-quiet` with a `.tone-*` class |
 | Tag | Tone: Neutral, Info, Success, Warning, Danger, AI | Label, icon | `.tag` with a `.tone-*` class |
 | Avatar | Kind: User, Unclaimed, Agent, Machine × Size: 20, 24, 32, 40 | Initials (people), glyph (machines) | `.avatar`, `.avatar-unclaimed`, `.avatar-agent`, `.avatar-machine`, `.avatar-24`, `.avatar-32`, `.avatar-40` |
-| Card, Page header | None | Title, meta, action, body; description, actions | `.card`, `.page-header` |
+| Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action, body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
 | Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`; `.tooltip`, or `data-tooltip` on what it labels |
@@ -269,6 +269,7 @@ plan.
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
 | Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
+| Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
 place a node inside an instance (Figma refuses it; compose rows beside it).

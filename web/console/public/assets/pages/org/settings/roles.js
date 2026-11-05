@@ -17,6 +17,9 @@ const sectionHeader = (title, description, action) => h("header", { class: "sect
 // held is how many hold a role at the organization, as its row says it.
 const held = (r) => r.holders ? plural(r.holders, "holder") : "Nobody yet";
 
+// byWeight orders the built-in roles first, those that hold most first, then the organization's own by name.
+const byWeight = (a, b) => b.builtIn - a.builtIn || (a.builtIn ? b.permissions.length - a.permissions.length : 0) || a.name.localeCompare(b.name);
+
 // showRoles lists what each role holds, built in or the organization's own, and the permissions of the one picked, by
 // area, as ticks; a viewer with org.grants.manage defines, renames, changes and deletes the organization's own. open is
 // the ID of the role picked.
@@ -54,7 +57,7 @@ async function showRoles(org, main, can, actions, open = null) {
   const picked = roles.find((r) => r.id === open);
   main.replaceChildren(error.el,
     sectionHeader("Roles", "A role is a set of permissions. Built-in roles cannot change; a custom role can be edited, and deleted while nobody holds it."),
-    h("section", { class: "card" }, roles.map(row)),
+    h("section", { class: "card" }, [...roles].sort(byWeight).map(row)),
     ...(picked ? editor(org, picked, labels, editable(picked), error, redraw) : []));
 }
 
