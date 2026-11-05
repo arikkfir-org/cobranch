@@ -1,0 +1,10 @@
+/* Repositories on a phone, as Repositories · Phone draws them: the repository and its status stay, its description
+   wraps under its name, and the status lines up with the name; the rest is on the repository's own page. Layout only;
+   the table is components.css's. */
+@media (max-width: 768px) {
+  .repositories-table :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(4), :nth-child(6)) { display: none; }
+  .repositories-table :is(th, td):nth-child(5) { width: 96px; }
+  .repositories-table td { vertical-align: top; }
+  .repositories-table td:nth-child(5) { padding-top: var(--space-12); }
+  .repositories-table .cell-two-lines > :not(.icon) { white-space: normal; }
+}

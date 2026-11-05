@@ -383,6 +383,103 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 	return items, nil
 }
 
+const openBranchesIn = `-- name: OpenBranchesIn :many
+SELECT b.repo_id, rp.slug AS repo_slug, b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    coalesce(f.error, '')::text AS settings_error,
+    (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
+     WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
+    coalesce(rt.number, 0)::bigint AS review_task, coalesce(rt.state, '')::text AS review_state,
+    coalesce(rt.reason, '')::text AS review_reason
+FROM branches b JOIN repositories rp ON rp.id = b.repo_id
+LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+LEFT JOIN principals m ON m.id = b.merged_by
+LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+LEFT JOIN LATERAL (SELECT t.number, t.state, t.reason FROM agent_tasks t
+    WHERE t.branch_id = b.id AND t.sha = b.head AND t.kind = 'review' ORDER BY t.number DESC LIMIT 1) rt ON true
+WHERE b.repo_id = ANY ($1::uuid[]) AND b.deleted_at IS NULL AND b.name <> 'main'
+  AND (b.status IS NULL OR b.status IN ('blocked', 'ready', 'processing'))
+ORDER BY b.updated_at DESC, b.id
+LIMIT $2
+`
+
+type OpenBranchesInRow struct {
+	RepoID              uuid.UUID
+	RepoSlug            string
+	Name                string
+	Head                string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Base                *string
+	Ahead               *int32
+	Behind              *int32
+	Merges              *int32
+	Status              *string
+	Checks              []byte
+	RequiredAnnotations []string
+	LinearHistory       *bool
+	RequiredApprovals   *int32
+	RequiredAi          *bool
+	MergedHead          *string
+	MergedBy            *uuid.UUID
+	MergedByName        *string
+	MergedAt            *time.Time
+	SettingsError       string
+	ManualJobs          []string
+	ReviewTask          int64
+	ReviewState         string
+	ReviewReason        string
+}
+
+// OpenBranchesIn lists, latest moved first, at most lim of the live branches of the repositories of ids that stand
+// Blocked, Ready or Processing as requests to merge into main, each as LiveBranches reads it, with its repository's
+// slug: what may need someone across an organization.
+func (q *Queries) OpenBranchesIn(ctx context.Context, repoIds []uuid.UUID, lim int32) ([]OpenBranchesInRow, error) {
+	rows, err := q.db.Query(ctx, openBranchesIn, repoIds, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OpenBranchesInRow
+	for rows.Next() {
+		var i OpenBranchesInRow
+		if err := rows.Scan(
+			&i.RepoID,
+			&i.RepoSlug,
+			&i.Name,
+			&i.Head,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Base,
+			&i.Ahead,
+			&i.Behind,
+			&i.Merges,
+			&i.Status,
+			&i.Checks,
+			&i.RequiredAnnotations,
+			&i.LinearHistory,
+			&i.RequiredApprovals,
+			&i.RequiredAi,
+			&i.MergedHead,
+			&i.MergedBy,
+			&i.MergedByName,
+			&i.MergedAt,
+			&i.SettingsError,
+			&i.ManualJobs,
+			&i.ReviewTask,
+			&i.ReviewState,
+			&i.ReviewReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pushOf = `-- name: PushOf :one
 SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at,
     ARRAY(

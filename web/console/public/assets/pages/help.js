@@ -168,12 +168,14 @@ function surfaces() {
       h("div", { class: "banner-text" }, h("span", { class: "banner-title" }, "Banner title"), h("p", {}, "What happened and what to do about it, in a sentence.")),
       tone === "warning" ? h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Action") : null, close()));
   return section("Surfaces", "Containers and overlays: the card every list and table sits in, the dialog, banners for inline messages, the empty state, the tooltip and the page header. Spacing, radius and colour are tokens; a page composes these and writes no surface CSS of its own.",
-    [["Card", ".card .card-header .card-title .card-meta .card-body"], ["Dialog", ".dialog .dialog-header .dialog-title .dialog-body .dialog-footer"], ["Banner", ".banner .banner-info .banner-success .banner-warning .banner-danger"],
+    [["Card", ".card .card-header .card-title .card-meta .card-body, a link in .card-header"], ["Dialog", ".dialog .dialog-header .dialog-title .dialog-body .dialog-footer"], ["Banner", ".banner .banner-info .banner-success .banner-warning .banner-danger"],
       ["Empty state", ".empty .empty-icon .empty-title .empty-description .empty-centred"], ["Tooltip", ".tooltip [data-tooltip]"], ["Page header", ".page-header .page-header-title .page-header-description .page-header-actions"]],
     h("div", { class: "specimens-row" },
       h("div", { class: "card specimens-card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Card title"), h("span", { class: "card-meta" }, "12 items"),
         h("button", { class: "btn btn-sm", type: "button" }, "Action")),
         h("div", { class: "card-body" }, "The card holds a table, a list of rows or a form. When the card holds only a table, the table is the card: no header, no padding.")),
+      h("div", { class: "card specimens-card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Repositories"), h("a", { href: "#" }, "View all")),
+        h("div", { class: "card-body" }, "A header's action may be a link, to the whole of what the card shows part of.")),
       dialog("Dialog title", "What the dialog asks or shows. Keep it to a sentence or two; a form goes here as fields with labels above them.",
         h("button", { class: "btn btn-primary", type: "button" }, "Save"), { open: true })),
     h("div", { class: "specimens-row" }, h("button", { class: "btn", type: "button", onclick: () => modal.showModal() }, "Open a dialog over the scrim"), modal),
@@ -200,7 +202,7 @@ function patterns() {
       ["Card/Footer", ".card-footer"], ["Card Tone", ".card-success .card-danger"], ["Meter", ".meter .meter-share .meter-bar .meter-warning .meter-danger"],
       ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"], ["Table/Cell Issue, Person, Unassigned", ".cell-issue .cell-person .cell-unassigned"],
       ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"], ["Fact row", ".facts .fact-row .fact-label .fact-value"], ["Activity/Event", ".event-row"],
-      ["Swatch", ".swatches .swatch .is-chosen"]],
+      ["Swatch", ".swatches .swatch .is-chosen"], ["Pattern/Agent row", ".agent-row"], ["Activity/Item", ".activity-list .activity-item"]],
     h("ul", { class: "list" },
       h("li", { class: "commit-row" }, h("span", { class: "avatar avatar-24" }, "NL"), text("Hand pushes to the push worker before returning", "Noa Levi committed 12 minutes ago"),
         h("span", { class: "row-icons" }, [annotationStatuses.successful, annotationStatuses.successful, annotationStatuses.in_progress].map((s) => h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)))),
@@ -256,5 +258,11 @@ function patterns() {
     h("ol", { class: "list" }, h("li", { class: "event-row" }, h("span", {}, "Arik Kfir assigned Builder · moved it to In progress"), h("time", {}, "yesterday"))),
     h("div", { class: "swatches" }, ["info", "success", "warning", "danger"].map((tone, i) =>
       h("span", { class: "swatch" + (i === 0 ? " is-chosen" : "") }, h("span", { class: "tag tone-" + tone }, icon("check"), h("span", {}, "bug"))))),
-    copyField("Your new key", "cbk_live_3f9a2c7e1b4d8e60f1a2b3c4d5e6f7a8", "Shown once. Copy it now; Cobranch keeps only its hash."));
+    copyField("Your new key", "cbk_live_3f9a2c7e1b4d8e60f1a2b3c4d5e6f7a8", "Shown once. Copy it now; Cobranch keeps only its hash."),
+    h("ul", { class: "list" }, [["Builder", "Implementing KF-57 on agent/kf-57-annotation-api", "Working", "info"], ["Reviewer", "Reviews every push", "Watching", "ai"],
+      ["Researcher", "Waiting for a task", "Idle", "neutral"]].map(([name, does, word, tone]) => h("li", { class: "agent-row" }, h("span", { class: "avatar avatar-agent avatar-24" }, icon("sparkles")),
+      text(name, does), h("span", { class: "tag tone-" + tone }, word)))),
+    h("section", { class: "card" }, h("ol", { class: "activity-list" },
+      h("li", { class: "activity-item" }, h("span", { class: "avatar" }, "NL"), h("span", {}, "Noa Levi approved 3c9d0e2 on fix/sign-in-redirect"), h("time", {}, "4 min")),
+      h("li", { class: "activity-item" }, h("span", { class: "avatar avatar-machine" }, icon("cog")), h("span", {}, "Job deliver synced environment main to 9f3c2e1"), h("time", {}, "1 h")))));
 }

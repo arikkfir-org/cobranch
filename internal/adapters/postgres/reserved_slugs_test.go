@@ -109,6 +109,42 @@ func TestArtifactsPageMigrationMovesReservedSlugs(t *testing.T) {
 	}
 }
 
+// TestActivityMigrationMovesReservedSlugs checks that migration 00052, which gives the Console the page activity, moves
+// the repositories that had that slug to free ones, and keeps their old slugs leading to them.
+func TestActivityMigrationMovesReservedSlugs(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	if err := newSchema(t, pool, migrationsBefore(t, "00052")).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Each repository's slugs before the migration, its current one first.
+	ids := insertRepositories(ctx, t, pool, map[string][]string{"activity": {"activity", "feed"}, "taken": {"activity-repository"},
+		"website": {"website"}})
+	if err := newSchema(t, pool, migrations.FS, migrations.Go...).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		repo      string
+		wantSlug  string
+		wantSlugs []string
+	}{
+		{repo: "activity", wantSlug: "activity-repository-2", wantSlugs: []string{"activity", "activity-repository-2", "feed"}},
+		{repo: "taken", wantSlug: "activity-repository", wantSlugs: []string{"activity-repository"}},
+		{repo: "website", wantSlug: "website", wantSlugs: []string{"website"}},
+	} {
+		t.Run(tt.repo, func(t *testing.T) {
+			var slug string
+			if err := pool.QueryRow(ctx, "SELECT slug FROM repositories WHERE id = $1", ids[tt.repo]).Scan(&slug); err != nil || slug != tt.wantSlug {
+				t.Errorf("slug = %q, %v; want %q", slug, err, tt.wantSlug)
+			}
+			if all := repositorySlugs(ctx, t, pool, ids[tt.repo]); !slices.Equal(all, tt.wantSlugs) {
+				t.Errorf("slugs = %v, want %v", all, tt.wantSlugs)
+			}
+		})
+	}
+}
+
 // TestSecretsMigrationMovesReservedSlugs checks that migration 00030, which gives the Console the page secrets, moves the
 // repositories that had that slug, or issues, which the Issues page took before it, to free ones, and keeps their old
 // slugs leading to them.

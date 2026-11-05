@@ -101,6 +101,33 @@ func (e AIReviewState) Valid() bool {
 	}
 }
 
+// Defines values for ActivityKind.
+const (
+	ActivityCreated   ActivityKind = "created"
+	ActivityDelivered ActivityKind = "delivered"
+	ActivityMerged    ActivityKind = "merged"
+	ActivityPushed    ActivityKind = "pushed"
+	ActivityReviewed  ActivityKind = "reviewed"
+)
+
+// Valid indicates whether the value is a known member of the ActivityKind enum.
+func (e ActivityKind) Valid() bool {
+	switch e {
+	case ActivityCreated:
+		return true
+	case ActivityDelivered:
+		return true
+	case ActivityMerged:
+		return true
+	case ActivityPushed:
+		return true
+	case ActivityReviewed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AnnotationStatus.
 const (
 	AnnotationStatusFailed     AnnotationStatus = "failed"
@@ -254,6 +281,30 @@ func (e ArtifactRole) Valid() bool {
 	case Owner:
 		return true
 	case Viewer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttentionBranchNeed.
+const (
+	NeedFix    AttentionBranchNeed = "fix"
+	NeedMerge  AttentionBranchNeed = "merge"
+	NeedReview AttentionBranchNeed = "review"
+	NeedWatch  AttentionBranchNeed = "watch"
+)
+
+// Valid indicates whether the value is a known member of the AttentionBranchNeed enum.
+func (e AttentionBranchNeed) Valid() bool {
+	switch e {
+	case NeedFix:
+		return true
+	case NeedMerge:
+		return true
+	case NeedReview:
+		return true
+	case NeedWatch:
 		return true
 	default:
 		return false
@@ -1223,6 +1274,64 @@ type AIReview struct {
 // AIReviewState waiting, for a member to ask for it, when the head was pushed from outside the organization; queued; running; succeeded, with its review submitted; failed, without one, for its reason; cancelled, superseded by a newer push, the branch's deletion or a request for another review.
 type AIReviewState string
 
+// Activity One thing that happened in one of an organization's repositories: who did it, when and what. A push names the refs it moved and how many commits it brought; a merge the branches whose heads it brought into main; a review its commit, verdict and the live branch at it; a delivery its commit and itself.
+type Activity struct {
+	// Actor Who did something, by its principal; a principal deleted since keeps only its ID.
+	Actor Actor     `json:"actor"`
+	At    time.Time `json:"at"`
+
+	// Branch The live branch whose head a review is of, if any.
+	Branch *string `json:"branch,omitempty"`
+
+	// Commits How many commits a push brought.
+	Commits *int `json:"commits,omitempty"`
+
+	// Delivery A delivery that ended, by its number, what it did, the branch of its environment and how it ended, succeeded or failed.
+	Delivery *ActivityDelivery  `json:"delivery,omitempty"`
+	Id       openapi_types.UUID `json:"id"`
+	Kind     ActivityKind       `json:"kind"`
+
+	// Merged The branches a merge brought into main, each at the head it brought.
+	Merged *[]MergedHead `json:"merged,omitempty"`
+
+	// Refs A push's refs, each with the object it was at and the one it is at; all zeros for none.
+	Refs *[]RefUpdate `json:"refs,omitempty"`
+
+	// Repository The repository's slug.
+	Repository string `json:"repository"`
+
+	// Review A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+	Review *ReviewState `json:"review,omitempty"`
+
+	// Sha The commit a review is of, or a delivery delivered; none for a teardown.
+	Sha *string `json:"sha,omitempty"`
+}
+
+// ActivityKind defines model for Activity.Kind.
+type ActivityKind string
+
+// ActivityDelivery A delivery that ended, by its number, what it did, the branch of its environment and how it ended, succeeded or failed.
+type ActivityDelivery struct {
+	// Environment The branch of the environment it delivered to.
+	Environment string `json:"environment"`
+
+	// Kind What it did, deliver or teardown, as a Delivery's kind says.
+	Kind   string `json:"kind"`
+	Number int64  `json:"number"`
+
+	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
+	State DeliveryState `json:"state"`
+}
+
+// Actor Who did something, by its principal; a principal deleted since keeps only its ID.
+type Actor struct {
+	DisplayName string             `json:"displayName"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Kind The principal's kind, such as user, agent, job, api_key or target; empty once it is gone.
+	Kind string `json:"kind"`
+}
+
 // Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
@@ -1585,6 +1694,21 @@ type ArtifactVersion struct {
 type ArtifactVersionList struct {
 	Versions []ArtifactVersion `json:"versions"`
 }
+
+// AttentionBranch A branch that needs the viewer, the repository it is of, and why.
+type AttentionBranch struct {
+	// Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
+	Branch Branch `json:"branch"`
+
+	// Need Why it needs the viewer: fix, a Blocked head they wrote; review, an approval they may give; merge, Ready and theirs to merge; watch, a Processing head they wrote.
+	Need AttentionBranchNeed `json:"need"`
+
+	// Repository The repository's slug.
+	Repository string `json:"repository"`
+}
+
+// AttentionBranchNeed Why it needs the viewer: fix, a Blocked head they wrote; review, an approval they may give; merge, Ready and theirs to merge; watch, a Processing head they wrote.
+type AttentionBranchNeed string
 
 // Blame Which commit last changed each line of a file at a commit. A run whose commit no push recorded keeps its name, with no commit of commits to show.
 type Blame struct {
@@ -2567,6 +2691,12 @@ type MergeResult struct {
 	Head string `json:"head"`
 }
 
+// MergedHead defines model for MergedHead.
+type MergedHead struct {
+	Branch string `json:"branch"`
+	Sha    string `json:"sha"`
+}
+
 // Model One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
 type Model struct {
 	// Agents The agents that run on it, by name.
@@ -2980,6 +3110,14 @@ type PushTransport string
 type RefPatterns struct {
 	Branches *[]string `json:"branches,omitempty"`
 	Tags     *[]string `json:"tags,omitempty"`
+}
+
+// RefUpdate defines model for RefUpdate.
+type RefUpdate struct {
+	// Name The ref, such as refs/heads/main.
+	Name string `json:"name"`
+	New  string `json:"new"`
+	Old  string `json:"old"`
 }
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -3735,6 +3873,15 @@ type CreateOrganizationJSONBody struct {
 
 	// Slug 2 to 39 lowercase letters, digits and single hyphens, unique among organizations and their old slugs.
 	Slug string `json:"slug"`
+}
+
+// ListOrganizationActivityParams defines parameters for ListOrganizationActivity.
+type ListOrganizationActivityParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest activity when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many entries the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteAgentParams defines parameters for DeleteAgent.
@@ -4768,6 +4915,9 @@ type ServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org)
+	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
+	// (GET /orgs/{org}/activity)
+	ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams)
 	// ListAgents The organization's agents by name, each with its grants; takes org.read.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org)
@@ -4867,6 +5017,9 @@ type ServerInterface interface {
 	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
 	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
 	GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams)
+	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read.
+	// (GET /orgs/{org}/attention)
+	ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org)
 	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 	// (GET /orgs/{org}/conversation)
 	ListOrganizationConversationThreads(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationThreadsParams)
@@ -5845,6 +5998,61 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOrganization(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationActivity operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationActivityParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationActivity(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7560,6 +7768,32 @@ func (siw *ServerInterfaceWrapper) GetArtifactVersionRaw(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetArtifactVersionRaw(w, r, org, id, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationAttention operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationAttention(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationAttention(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15660,6 +15894,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrganization)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/usage", wrapper.GetOrganizationUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/attention", wrapper.ListOrganizationAttention)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/activity", wrapper.ListOrganizationActivity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/leave", wrapper.LeaveOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListMembers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/members/{user}", wrapper.RemoveMember)
@@ -17706,6 +17942,102 @@ type UpdateOrganizationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateOrganizationdefaultApplicationProblemPlusJSONResponse) VisitUpdateOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationActivityRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListOrganizationActivityParams
+}
+
+type ListOrganizationActivityResponseObject interface {
+	VisitListOrganizationActivityResponse(w http.ResponseWriter) error
+}
+
+type ListOrganizationActivity200ResponseHeaders struct {
+	Link *string
+}
+
+type ListOrganizationActivity200JSONResponse struct {
+	Body struct {
+		Activity []Activity `json:"activity"`
+	}
+	Headers ListOrganizationActivity200ResponseHeaders
+}
+
+func (response ListOrganizationActivity200JSONResponse) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationActivity400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrganizationActivity400ApplicationProblemPlusJSONResponse) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationActivity401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationActivity401ApplicationProblemPlusJSONResponse) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationActivity404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationActivity404ApplicationProblemPlusJSONResponse) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationActivitydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOrganizationActivitydefaultApplicationProblemPlusJSONResponse) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -21327,6 +21659,77 @@ type GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse) VisitGetArtifactVersionRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationAttentionRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListOrganizationAttentionResponseObject interface {
+	VisitListOrganizationAttentionResponse(w http.ResponseWriter) error
+}
+
+type ListOrganizationAttention200JSONResponse struct {
+	Branches []AttentionBranch `json:"branches"`
+}
+
+func (response ListOrganizationAttention200JSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationAttention401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrganizationAttention401ApplicationProblemPlusJSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationAttention404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationAttention404ApplicationProblemPlusJSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationAttentiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOrganizationAttentiondefaultApplicationProblemPlusJSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -37160,6 +37563,9 @@ type StrictServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
+	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
+	// (GET /orgs/{org}/activity)
+	ListOrganizationActivity(ctx context.Context, request ListOrganizationActivityRequestObject) (ListOrganizationActivityResponseObject, error)
 	// ListAgents The organization's agents by name, each with its grants; takes org.read.
 	// (GET /orgs/{org}/agents)
 	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
@@ -37259,6 +37665,9 @@ type StrictServerInterface interface {
 	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
 	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
 	GetArtifactVersionRaw(ctx context.Context, request GetArtifactVersionRawRequestObject) (GetArtifactVersionRawResponseObject, error)
+	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read.
+	// (GET /orgs/{org}/attention)
+	ListOrganizationAttention(ctx context.Context, request ListOrganizationAttentionRequestObject) (ListOrganizationAttentionResponseObject, error)
 	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 	// (GET /orgs/{org}/conversation)
 	ListOrganizationConversationThreads(ctx context.Context, request ListOrganizationConversationThreadsRequestObject) (ListOrganizationConversationThreadsResponseObject, error)
@@ -38420,6 +38829,33 @@ func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListOrganizationActivity operation middleware
+func (sh *strictHandler) ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams) {
+	var request ListOrganizationActivityRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrganizationActivity(ctx, request.(ListOrganizationActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrganizationActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrganizationActivityResponseObject); ok {
+		if err := validResponse.VisitListOrganizationActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListAgents operation middleware
 func (sh *strictHandler) ListAgents(w http.ResponseWriter, r *http.Request, org Org) {
 	var request ListAgentsRequestObject
@@ -39431,6 +39867,32 @@ func (sh *strictHandler) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetArtifactVersionRawResponseObject); ok {
 		if err := validResponse.VisitGetArtifactVersionRawResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrganizationAttention operation middleware
+func (sh *strictHandler) ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListOrganizationAttentionRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrganizationAttention(ctx, request.(ListOrganizationAttentionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrganizationAttention")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrganizationAttentionResponseObject); ok {
+		if err := validResponse.VisitListOrganizationAttentionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -127,6 +127,7 @@ func newOrgFixture() *orgFixture {
 	})
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.codeStore.ActivityList[f.acme.ID] = websiteActivity(f)
 	f.addChats()
 	f.addAgents()
 	f.commitObjects()
