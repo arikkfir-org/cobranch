@@ -1,5 +1,5 @@
 # Usage: what users and organizations take of what the installation's limits cap
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console", "An organization's figures").
 
 "An integer that may pass GraphQL's 32-bit Int, such as a number of bytes: a JSON number."
 scalar Int64
@@ -43,4 +43,80 @@ extend type User {
 extend type Organization {
   "What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too."
   usage: OrganizationUsage!
+}
+
+extend type Organization {
+  "How the organization's work stands, and what it did over the days from from to to, both included, written as 2026-11-01, in the IANA time zone zone: to is today there when absent, from the first day of to's month, and zone UTC. At most 92 days; takes org.read. Branches and repositories are those the viewer reads, issues show only to a viewer holding issues.read, and the days count every task and job run of the organization, as its usage counts every repository."
+  overview(from: String, to: String, zone: String): OrganizationOverview!
+}
+
+"How an organization's work stands, and what it did over a period of days in a time zone. Amounts are US dollars, as decimals such as 42.18."
+type OrganizationOverview {
+  "The period's first day, such as 2026-11-01."
+  from: String!
+  "The period's last day."
+  to: String!
+  "The time zone its days begin and end in."
+  zone: String!
+  "The organization's members."
+  members: Int64!
+  "The repositories the viewer reads."
+  repositories: Int64!
+  "The organization's agents."
+  agents: Int64!
+  "Its open issues, and those opened in the period; null for a viewer who may not read its issues."
+  issues: OverviewIssues
+  "The live branches, but main, of the repositories the viewer reads that are Ready."
+  readyBranches: Int64!
+  "Those that are Blocked."
+  blockedBranches: Int64!
+  "The agents with a task running."
+  workingAgents: Int64!
+  "The tasks waiting for their agent."
+  queuedTasks: Int64!
+  "The period's totals."
+  totals: OverviewFigures!
+  "Every day of the period, first to last."
+  days: [OverviewDay!]!
+  "The repositories the viewer reads that saw anything in the period, costliest first."
+  byRepository: [OverviewRepository!]!
+}
+
+"An organization's open issues, and those opened in a period."
+type OverviewIssues {
+  open: Int64!
+  opened: Int64!
+}
+
+"What an organization did over a span: the tasks queued, what its tasks' calls of their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute."
+type OverviewFigures {
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
+}
+
+"One day of a period and what the organization did then."
+type OverviewDay {
+  "The day, such as 2026-11-05."
+  date: String!
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
+}
+
+"One repository's share of a period's figures, with the commits first pushed to it and the branches merged into its main."
+type OverviewRepository {
+  "The repository's slug."
+  repository: String!
+  commits: Int64!
+  merged: Int64!
+  tasks: Int64!
+  "In US dollars, such as 1.92."
+  spent: String!
+  jobMinutes: Int64!
+  jobs: Int64!
 }

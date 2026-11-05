@@ -721,6 +721,56 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/overview:
+    get:
+      operationId: getOrganizationOverview
+      summary: >-
+        How the organization's work stands, and what it did over a period of days in a time zone: its members,
+        repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its
+        agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes
+        org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding
+        issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: from
+          in: query
+          description: The period's first day, such as 2026-11-01; the first day of to's month when absent.
+          schema:
+            type: string
+        - name: to
+          in: query
+          description: The period's last day, such as 2026-11-30, at most 92 days from from; today in the zone when absent.
+          schema:
+            type: string
+        - name: zone
+          in: query
+          description: The IANA time zone the days begin and end in, such as Asia/Jerusalem; UTC when absent.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The organization's figures.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationOverview"
+        "304":
+          description: The figures are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/attention:
     get:
       operationId: listOrganizationAttention
@@ -7728,6 +7778,120 @@ components:
           description: The roles it holds on the repository, each with the permissions it gives there.
           items:
             $ref: "#/components/schemas/Role"
+    OrganizationOverview:
+      type: object
+      description: >-
+        How an organization's work stands, and what it did over a period of days in a time zone. Amounts are US
+        dollars, as decimals with at most six digits after the point, such as 42.18.
+      required: [from, to, zone, members, repositories, agents, readyBranches, blockedBranches, workingAgents, queuedTasks, totals, days, byRepository]
+      properties:
+        from:
+          type: string
+          description: The period's first day, such as 2026-11-01.
+        to:
+          type: string
+          description: The period's last day.
+        zone:
+          type: string
+          description: The time zone its days begin and end in.
+        members:
+          type: integer
+          format: int64
+          description: The organization's members.
+        repositories:
+          type: integer
+          format: int64
+          description: The repositories the viewer reads.
+        agents:
+          type: integer
+          format: int64
+          description: The organization's agents.
+        issues:
+          $ref: "#/components/schemas/OverviewIssues"
+        readyBranches:
+          type: integer
+          format: int64
+          description: The live branches, but main, of the repositories the viewer reads that are Ready.
+        blockedBranches:
+          type: integer
+          format: int64
+          description: Those that are Blocked.
+        workingAgents:
+          type: integer
+          format: int64
+          description: The agents with a task running.
+        queuedTasks:
+          type: integer
+          format: int64
+          description: The tasks waiting for their agent.
+        totals:
+          $ref: "#/components/schemas/OverviewFigures"
+        days:
+          type: array
+          description: Every day of the period, first to last.
+          items:
+            $ref: "#/components/schemas/OverviewDay"
+        byRepository:
+          type: array
+          description: The repositories the viewer reads that saw anything in the period, costliest first.
+          items:
+            $ref: "#/components/schemas/OverviewRepository"
+    OverviewIssues:
+      type: object
+      description: The organization's open issues, and those opened in the period; absent for a viewer who may not read its issues.
+      required: [open, opened]
+      properties:
+        open:
+          type: integer
+          format: int64
+        opened:
+          type: integer
+          format: int64
+    OverviewFigures:
+      type: object
+      description: >-
+        What an organization, or one of its repositories, did over a span: the tasks queued, what its tasks' calls of
+        their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute.
+      required: [tasks, spent, jobMinutes, jobs]
+      properties:
+        tasks:
+          type: integer
+          format: int64
+        spent:
+          type: string
+          description: In US dollars, such as 1.92.
+        jobMinutes:
+          type: integer
+          format: int64
+        jobs:
+          type: integer
+          format: int64
+    OverviewDay:
+      description: One day of the period and its figures.
+      allOf:
+        - $ref: "#/components/schemas/OverviewFigures"
+        - type: object
+          required: [date]
+          properties:
+            date:
+              type: string
+              description: The day, such as 2026-11-05.
+    OverviewRepository:
+      description: One repository's share of the period's figures, with the commits first pushed to it and the branches merged into its main.
+      allOf:
+        - $ref: "#/components/schemas/OverviewFigures"
+        - type: object
+          required: [repository, commits, merged]
+          properties:
+            repository:
+              type: string
+              description: The repository's slug.
+            commits:
+              type: integer
+              format: int64
+            merged:
+              type: integer
+              format: int64
     AttentionBranch:
       type: object
       description: A branch that needs the viewer, the repository it is of, and why.

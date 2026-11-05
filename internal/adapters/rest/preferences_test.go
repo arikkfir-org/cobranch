@@ -92,7 +92,7 @@ func runPreferencesCase(t *testing.T, tt preferencesCase) {
 	for k, v := range tt.header {
 		req.Header[k] = v
 	}
-	as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil, nil, nil, nil, nil, nil)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil, nil, nil, nil, nil, nil, nil)).ServeHTTP(rec, req)
 	if rec.Code != tt.wantStatus {
 		t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 	}

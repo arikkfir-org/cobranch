@@ -27,6 +27,8 @@ import (
 	"cobranch.dev/internal/services/issues/issuestest"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
+	"cobranch.dev/internal/services/overview"
+	"cobranch.dev/internal/services/overview/overviewtest"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/repos/repostest"
 	"cobranch.dev/internal/services/secrets"
@@ -43,8 +45,8 @@ func emptyOrgs(t *testing.T) *orgs.Service {
 // orgFixture is Acme, with Olivia its Owner and Max a Member, Nia outside it with a pending invitation and
 // permission to create organizations, over the organizations' service; website is Acme's repository, which Olivia
 // created, over the repositories', with main at c after a ← b ← c and feature at d on a, all pushed by Olivia, over the
-// code's; their secrets are over the secrets' service, which seals with authtest.Sealer, and their artifacts over the
-// artifacts'.
+// code's; their secrets are over the secrets' service, which seals with authtest.Sealer, their artifacts over the
+// artifacts', and their figures over the overview's.
 type orgFixture struct {
 	store            *orgstest.Store
 	service          *orgs.Service
@@ -70,6 +72,8 @@ type orgFixture struct {
 	secrets          *secrets.Service
 	artifactStore    *artifactstest.Store
 	artifacts        *artifacts.Service
+	overviewStore    *overviewtest.Store
+	overview         *overview.Service
 	// providerKey and deployKey are Acme's own secret and website's, as the agents' store knows them.
 	providerKey, deployKey uuid.UUID
 }
@@ -110,6 +114,8 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.artifactStore = artifactstest.NewStore(store)
 	f.artifactStore.Now, f.artifactStore.RepoSlugs[f.website.ID] = now, "website"
 	f.artifacts = artifacts.NewService(f.artifactStore, auth.NewAuthorizer(store), markdown.New(nil, nil))
+	f.overviewStore = overviewtest.NewStore()
+	f.overview = overview.NewService(f.overviewStore, auth.NewAuthorizer(store))
 	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
@@ -211,7 +217,7 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets, f.artifacts)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets, f.artifacts, f.overview)).ServeHTTP(rec, req)
 	return rec
 }
 

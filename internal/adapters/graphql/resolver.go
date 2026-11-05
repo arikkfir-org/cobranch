@@ -46,4 +46,6 @@ type Resolver struct {
 	Secrets Secrets
 	// Artifacts is the service of the repositories' artifacts.
 	Artifacts Artifacts
+	// Overview is the service of the organizations' figures.
+	Overview Overview
 }
