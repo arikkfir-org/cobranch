@@ -71,8 +71,8 @@ func (f *fixture) seed(t *testing.T, owner uuid.UUID, title string, reach artifa
 	t.Helper()
 	id := uuid.New()
 	a, err := f.store.Create(t.Context(), owner, artifacts.New{
-		Artifact: artifacts.Artifact{ID: id, OrgID: f.acme, RepoID: f.website, Title: title, Kind: artifacts.KindDocument,
-			RepositoryAccess: reach, OrganizationAccess: artifacts.ReachNone},
+		Artifact: artifacts.Artifact{ID: id, OrgID: f.acme, RepoID: f.website, Owner: artifacts.Principal{ID: owner}, Title: title,
+			Kind: artifacts.KindDocument, RepositoryAccess: reach, OrganizationAccess: artifacts.ReachNone},
 		First:  artifacts.VersionInput{ID: id, MediaType: artifacts.MediaMarkdown, Body: "# " + title + "\n"},
 		Owners: []artifacts.NewGrant{{PrincipalID: owner, RoleID: auth.RoleArtifactOwner}},
 	})
@@ -156,7 +156,7 @@ func TestCreate(t *testing.T) {
 			}
 			v, _ := f.store.Version(ctx, a.ID, 1)
 			if !created || a.Title != "Notes" || a.Head != 1 || a.Version != 1 || a.OrganizationAccess != artifacts.ReachNone || a.RepoSlug != "website" ||
-				a.Agent.ID != uuid.Nil || v.ID != a.ID || v.Body != "<p>Notes</p>" || v.Note != "first" || v.Author.ID != f.max.ID {
+				a.Owner.ID != f.max.ID || a.Agent.ID != uuid.Nil || v.ID != a.ID || v.Body != "<p>Notes</p>" || v.Note != "first" || v.Author.ID != f.max.ID {
 				t.Errorf("made %+v, %v, first version %+v", a, created, v)
 			}
 			if got := f.roles(ctx, t, a.ID); len(got) != 1 || got["Max"] != artifacts.RoleOwner {
@@ -203,6 +203,48 @@ func TestCreate(t *testing.T) {
 	})
 }
 
+func TestCreateOfNoRepository(t *testing.T) {
+	runCases(t, []serviceCase{
+		{name: "a member makes one attached to no repository and owns it", run: func(ctx context.Context, t *testing.T, f *fixture) error {
+			a, created, err := f.service.Create(ctx, f.gwen, f.acme, uuid.Nil, input("Notes"))
+			if err != nil {
+				return passed(err)
+			}
+			if !created || a.RepoID != uuid.Nil || a.RepoSlug != "" || a.Owner.ID != f.gwen.ID || a.RepositoryAccess != artifacts.ReachNone {
+				t.Errorf("made %+v, %v", a, created)
+			}
+			if got := f.roles(ctx, t, a.ID); len(got) != 1 || got["Gwen"] != artifacts.RoleOwner {
+				t.Errorf("roles = %v", got)
+			}
+			return nil
+		}},
+		{name: "one attached to no repository has no repository audience", wantCode: "artifact.access_invalid",
+			run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+				in := input("Notes")
+				in.RepositoryAccess = artifacts.ReachView
+				_, _, err := f.service.Create(ctx, f.max, f.acme, uuid.Nil, in)
+				return passed(err)
+			}},
+		{name: "a stranger finds no organization", wantErr: artifacts.ErrNotFound, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			_, _, err := f.service.Create(ctx, f.nia, f.acme, uuid.Nil, input("Notes"))
+			return passed(err)
+		}},
+		{name: "a run's token makes none", wantErr: auth.ErrForbidden, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			build := principal("build", auth.KindJob)
+			ctx = as(ctx, build, auth.Credential{ID: uuid.New(), Kind: auth.CredentialRunToken, PrincipalID: build.ID, OrgID: f.acme, RepoID: f.website})
+			_, _, err := f.service.Create(ctx, build, f.acme, uuid.Nil, input("Notes"))
+			return passed(err)
+		}},
+		{name: "a delivery's token makes none", wantErr: auth.ErrForbidden, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			production := principal("production", auth.KindTarget)
+			ctx = as(ctx, production, auth.Credential{ID: uuid.New(), Kind: auth.CredentialDeliveryToken, PrincipalID: production.ID, OrgID: f.acme,
+				RepoID: f.website})
+			_, _, err := f.service.Create(ctx, production, f.acme, uuid.Nil, input("Notes"))
+			return passed(err)
+		}},
+	})
+}
+
 func TestCreateAgain(t *testing.T) {
 	runCases(t, []serviceCase{
 		{name: "the same call run again makes nothing more", run: func(ctx context.Context, t *testing.T, f *fixture) error {
@@ -241,7 +283,8 @@ func TestCreateOnTask(t *testing.T) {
 				return passed(err)
 			}
 			v, _ := f.store.Version(ctx, a.ID, 1)
-			if a.Agent.ID != f.scout.ID || a.TaskID != f.task || a.TaskNumber != 12 || a.Branch != "scout/report" || v.TaskID != f.task {
+			if a.Owner.ID != f.max.ID || a.Agent.ID != f.scout.ID || a.TaskID != f.task || a.TaskNumber != 12 || a.Branch != "scout/report" ||
+				v.TaskID != f.task {
 				t.Errorf("made %+v, first version %+v", a, v)
 			}
 			if got := f.roles(ctx, t, a.ID); len(got) != 2 || got["Max"] != artifacts.RoleOwner || got["Scout"] != artifacts.RoleEditor {
@@ -261,8 +304,8 @@ func TestCreateOnTask(t *testing.T) {
 		{name: "a task Cobranch started makes the agent the owner", run: func(ctx context.Context, t *testing.T, f *fixture) error {
 			a, _, err := f.service.Create(f.onTask(ctx, f.scout.ID), f.scout, f.acme, f.website, input("Findings"))
 			if err == nil {
-				if got := f.roles(ctx, t, a.ID); len(got) != 1 || got["Scout"] != artifacts.RoleOwner {
-					t.Errorf("roles = %v", got)
+				if got := f.roles(ctx, t, a.ID); len(got) != 1 || got["Scout"] != artifacts.RoleOwner || a.Owner.ID != f.scout.ID {
+					t.Errorf("owner %+v, roles = %v", a.Owner, got)
 				}
 			}
 			return passed(err)
@@ -343,7 +386,7 @@ func TestRead(t *testing.T) {
 	runCases(t, []serviceCase{
 		{name: "an Owner holds every permission", run: func(ctx context.Context, t *testing.T, f *fixture) error {
 			a, err := f.service.Get(ctx, f.olivia, f.acme, f.report.ID)
-			if err == nil && !slices.Equal(a.Permissions, []string{"artifacts.manage", "artifacts.read", "artifacts.write"}) {
+			if err == nil && !slices.Equal(a.Permissions, []string{"artifacts.list", "artifacts.manage", "artifacts.read", "artifacts.write"}) {
 				t.Errorf("permissions = %v", a.Permissions)
 			}
 			return passed(err)
@@ -426,6 +469,15 @@ func TestChange(t *testing.T) {
 			}
 			return passed(err)
 		}},
+		{name: "one attached to no repository gets no repository audience", wantCode: "artifact.access_invalid",
+			run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+				a, _, err := f.service.Create(ctx, f.rita, f.acme, uuid.Nil, input("Notes"))
+				if err != nil {
+					return passed(err)
+				}
+				_, err = f.service.Update(ctx, f.rita, f.acme, a.ID, artifacts.AnyVersion, artifacts.Patch{RepositoryAccess: reach(artifacts.ReachView)})
+				return passed(err)
+			}},
 		{name: "an editor may not change who it reaches", wantErr: auth.ErrForbidden, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
 			f.orgs.Grant(f.rita.ID, auth.RoleArtifactEditor, auth.ScopeArtifact, f.plan.ID)
 			_, err := f.service.Update(ctx, f.rita, f.acme, f.plan.ID, 1, artifacts.Patch{RepositoryAccess: reach(artifacts.ReachView)})
@@ -563,6 +615,9 @@ func TestAddVersionOnTask(t *testing.T) {
 
 func TestShare(t *testing.T) {
 	runCases(t, []serviceCase{
+		{name: "an artifact grants no lister", wantCode: "artifact.role_invalid", run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			return passed(f.service.Share(ctx, f.olivia, f.acme, f.plan.ID, f.rita.ID, artifacts.RoleLister))
+		}},
 		{name: "the owner shares it with a Member, who then views it", run: func(ctx context.Context, t *testing.T, f *fixture) error {
 			if err := f.service.Share(ctx, f.olivia, f.acme, f.plan.ID, f.rita.ID, artifacts.RoleViewer); err != nil {
 				return passed(err)

@@ -21,8 +21,9 @@ type Task struct {
 	Branch string
 }
 
-// Store is an artifacts.Store in memory. Its grants are Orgs', so one authorizer over Orgs reads both; the
-// repositories it writes in are those Orgs maps to their organizations. Fail, when set, fails every write.
+// Store is an artifacts.Store in memory. Its grants are Orgs', the grants on people too, so one authorizer over Orgs
+// reads both; the repositories it attaches artifacts to are those Orgs maps to their organizations. Fail, when set,
+// fails every write.
 type Store struct {
 	Orgs      *orgstest.Store
 	Artifacts map[uuid.UUID]artifacts.Artifact
@@ -31,7 +32,8 @@ type Store struct {
 	// RepoSlugs names the repositories, and Tasks the agents' tasks artifacts are written in.
 	RepoSlugs map[uuid.UUID]string
 	Tasks     map[uuid.UUID]Task
-	// Others are principals of an organization besides its members, by ID: its API keys, jobs and agents.
+	// Others are principals of an organization besides its members, by ID: its API keys, jobs and agents. Colleague
+	// finds its agents.
 	Others map[uuid.UUID]Other
 	Events []string
 	Fail   error
@@ -65,17 +67,18 @@ func (s *Store) named(id uuid.UUID) artifacts.Principal {
 	return artifacts.Principal{ID: id, Kind: auth.KindUser, DisplayName: s.Orgs.Names[id]}
 }
 
-// sync tells Orgs where a lives and how far its audiences reach it, which the authorizer reads.
+// sync tells Orgs where a lives, whose it is and how far its audiences reach it, which the authorizer reads.
 func (s *Store) sync(a artifacts.Artifact) {
-	s.Orgs.Artifacts[a.ID] = orgstest.ArtifactScope{OrgID: a.OrgID, RepoID: a.RepoID, RepositoryAccess: string(a.RepositoryAccess),
-		OrganizationAccess: string(a.OrganizationAccess)}
+	s.Orgs.Artifacts[a.ID] = orgstest.ArtifactScope{OrgID: a.OrgID, RepoID: a.RepoID, OwnerID: a.Owner.ID,
+		RepositoryAccess: string(a.RepositoryAccess), OrganizationAccess: string(a.OrganizationAccess)}
 }
 
-// With lists the IDs of the repository's artifacts where the principal holds permission, by ID.
-func (s *Store) With(ctx context.Context, principalID, repoID uuid.UUID, permission string) ([]uuid.UUID, error) {
+// With lists the IDs of the organization's artifacts, or the repository's for a repoID, where the principal holds
+// permission, by ID.
+func (s *Store) With(ctx context.Context, principalID, orgID, repoID uuid.UUID, permission string) ([]uuid.UUID, error) {
 	var out []uuid.UUID
 	for id, a := range s.Artifacts {
-		if a.RepoID != repoID {
+		if a.OrgID != orgID || (repoID != uuid.Nil && a.RepoID != repoID) {
 			continue
 		}
 		if held, _ := s.Orgs.Permissions(ctx, principalID, auth.ScopeArtifact, id); slices.Contains(held, permission) {
@@ -130,7 +133,7 @@ func (s *Store) Create(_ context.Context, actor uuid.UUID, n artifacts.New) (art
 		return artifacts.Artifact{}, s.Fail
 	}
 	a := n.Artifact
-	if s.Orgs.Repos[a.RepoID] != a.OrgID {
+	if a.RepoID != uuid.Nil && s.Orgs.Repos[a.RepoID] != a.OrgID {
 		return artifacts.Artifact{}, artifacts.ErrNotFound
 	}
 	if _, ok := s.Artifacts[a.ID]; ok || s.versionTaken(n.First.ID) {
@@ -141,7 +144,7 @@ func (s *Store) Create(_ context.Context, actor uuid.UUID, n artifacts.New) (art
 		a.Branch = task.Branch
 	}
 	a.OrgSlug, a.RepoSlug, a.Head, a.MediaType, a.Version = s.Orgs.Orgs[a.OrgID].Slug, s.RepoSlugs[a.RepoID], 1, n.First.MediaType, 1
-	a.Agent, a.TaskNumber = s.named(a.Agent.ID), task.Number
+	a.Owner, a.Agent, a.TaskNumber = s.named(a.Owner.ID), s.named(a.Agent.ID), task.Number
 	a.CreatedBy, a.UpdatedBy, a.CreatedAt, a.UpdatedAt = s.named(actor), s.named(actor), s.Now, s.Now
 	a.Permissions = nil
 	s.Artifacts[a.ID] = a
@@ -253,9 +256,19 @@ func (s *Store) VersionByID(_ context.Context, versionID uuid.UUID) (artifacts.V
 
 // Grants lists the roles principals hold on the artifact itself, by display name.
 func (s *Store) Grants(_ context.Context, id uuid.UUID) ([]artifacts.Grant, error) {
-	var out []artifacts.Grant
+	return s.grants(auth.ScopeArtifact, id), nil
+}
+
+// PersonGrants lists the roles principals hold on the user, by display name.
+func (s *Store) PersonGrants(_ context.Context, userID uuid.UUID) ([]artifacts.Grant, error) {
+	return s.grants(auth.ScopeUser, userID), nil
+}
+
+// grants lists the artifact roles principals hold at the scope, by display name.
+func (s *Store) grants(scope auth.Scope, id uuid.UUID) []artifacts.Grant {
+	out := []artifacts.Grant{}
 	for _, g := range s.Orgs.Grants {
-		if g.Scope != auth.ScopeArtifact || g.ScopeID != id {
+		if g.Scope != scope || g.ScopeID != id {
 			continue
 		}
 		if role, ok := artifacts.RoleOf(g.Role); ok {
@@ -271,7 +284,7 @@ func (s *Store) Grants(_ context.Context, id uuid.UUID) ([]artifacts.Grant, erro
 		}
 		return bytes.Compare(a.Principal.ID[:], b.Principal.ID[:])
 	})
-	return out, nil
+	return out
 }
 
 // Principal finds one of the organization's members, or one of its own principals.
@@ -285,11 +298,27 @@ func (s *Store) Principal(_ context.Context, orgID, principalID uuid.UUID) (arti
 	return artifacts.Principal{}, artifacts.ErrNotFound
 }
 
-// dropGrants takes every role principalID holds on the artifact, and answers how many it took.
-func (s *Store) dropGrants(id, principalID uuid.UUID) int {
+// Colleague finds a member of one of the user's organizations, or an agent of one.
+func (s *Store) Colleague(_ context.Context, userID, principalID uuid.UUID) (artifacts.Principal, error) {
+	for org, members := range s.Orgs.Memberships {
+		if principalID == userID || !slices.Contains(members, userID) {
+			continue
+		}
+		if o, ok := s.Others[principalID]; ok && o.OrgID == org && o.Principal.Kind == auth.KindAgent {
+			return o.Principal, nil
+		}
+		if slices.Contains(members, principalID) {
+			return s.named(principalID), nil
+		}
+	}
+	return artifacts.Principal{}, artifacts.ErrNotFound
+}
+
+// dropGrants takes every role principalID holds at the scope, and answers how many it took.
+func (s *Store) dropGrants(scope auth.Scope, id, principalID uuid.UUID) int {
 	before := len(s.Orgs.Grants)
 	s.Orgs.Grants = slices.DeleteFunc(s.Orgs.Grants, func(g orgstest.Grant) bool {
-		return g.Principal == principalID && g.Scope == auth.ScopeArtifact && g.ScopeID == id
+		return g.Principal == principalID && g.Scope == scope && g.ScopeID == id
 	})
 	return before - len(s.Orgs.Grants)
 }
@@ -299,7 +328,7 @@ func (s *Store) Share(_ context.Context, _ uuid.UUID, a artifacts.Artifact, prin
 	if _, err := s.at(a.ID, artifacts.AnyVersion); err != nil {
 		return err
 	}
-	s.dropGrants(a.ID, principalID)
+	s.dropGrants(auth.ScopeArtifact, a.ID, principalID)
 	s.Orgs.Grant(principalID, roleID, auth.ScopeArtifact, a.ID)
 	s.Events = append(s.Events, "artifact.shared")
 	return nil
@@ -310,9 +339,30 @@ func (s *Store) Unshare(_ context.Context, _ uuid.UUID, a artifacts.Artifact, pr
 	if s.Fail != nil {
 		return s.Fail
 	}
-	if s.dropGrants(a.ID, principalID) == 0 {
+	if s.dropGrants(auth.ScopeArtifact, a.ID, principalID) == 0 {
 		return artifacts.ErrNotFound
 	}
 	s.Events = append(s.Events, "artifact.unshared")
+	return nil
+}
+
+// SharePerson gives the principal the role on actor in place of any role it held there.
+func (s *Store) SharePerson(_ context.Context, actor, principalID, roleID uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	s.dropGrants(auth.ScopeUser, actor, principalID)
+	s.Orgs.Grant(principalID, roleID, auth.ScopeUser, actor)
+	return nil
+}
+
+// UnsharePerson takes every role the principal holds on actor.
+func (s *Store) UnsharePerson(_ context.Context, actor, principalID uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	if s.dropGrants(auth.ScopeUser, actor, principalID) == 0 {
+		return artifacts.ErrNotFound
+	}
 	return nil
 }

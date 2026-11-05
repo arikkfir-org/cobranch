@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -134,6 +135,37 @@ func (c *API) Tasks(ctx context.Context, org string, agent uuid.UUID, states []a
 		out = append(out, task(t))
 	}
 	return out, nil
+}
+
+// Queue answers the head of the queue of one of the organization's agents: its oldest queued tasks, at most limit,
+// oldest first as it takes them, and how many tasks the queue holds in all (harness.Cobranch). The list pages newest
+// first, so Queue reads the queue to its end, keeping the oldest it saw.
+func (c *API) Queue(ctx context.Context, org string, agent uuid.UUID, limit int) ([]agents.Task, int, error) {
+	queued, page := []TaskState{TaskState(agents.TaskQueued)}, agents.MaxPage
+	params := &ListTasksParams{AgentID: &agent, State: &queued, Limit: &page}
+	var head []agents.Task
+	total := 0
+	for {
+		resp, err := c.api.ListTasksWithResponse(ctx, org, params)
+		if err != nil {
+			return nil, 0, fmt.Errorf("listing the agent's queue: %w", err)
+		}
+		if resp.JSON200 == nil {
+			return nil, 0, refused("listing the agent's queue", resp.StatusCode(), resp.Body)
+		}
+		for _, t := range resp.JSON200.Tasks {
+			head = append(head, task(t))
+		}
+		total += len(resp.JSON200.Tasks)
+		head = head[max(0, len(head)-limit):]
+		next := nextCursor(resp.HTTPResponse.Header.Get("Link"))
+		if next == "" {
+			break
+		}
+		params.Cursor = &next
+	}
+	slices.Reverse(head)
+	return head, total, nil
 }
 
 // refused is the failure of a call the API answered with status and a problem: harness.ErrRefused when it refused the

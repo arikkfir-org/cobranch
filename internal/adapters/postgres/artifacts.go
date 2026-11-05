@@ -14,8 +14,8 @@ import (
 	"cobranch.dev/internal/services/auth"
 )
 
-// ArtifactStore keeps the repositories' artifacts and their versions (db/migrations/00049_artifacts.sql):
-// artifacts.Store on PostgreSQL.
+// ArtifactStore keeps the organizations' artifacts, their versions and the grants on them and on their owners
+// (db/migrations/00049_artifacts.sql, 00055_artifact_owners.sql): artifacts.Store on PostgreSQL.
 type ArtifactStore struct {
 	pool *pgxpool.Pool
 	q    *queries.Queries
@@ -60,11 +60,14 @@ func artifactPrincipal(id *uuid.UUID, name *string) artifacts.Principal {
 
 // artifactOf is the domain's view of an artifacts row, which every query reading one answers in the same columns.
 func artifactOf(r queries.ArtifactRow) artifacts.Artifact {
-	a := artifacts.Artifact{ID: r.ID, OrgID: r.OrgID, OrgSlug: r.OrgSlug, RepoID: r.RepoID, RepoSlug: r.RepoSlug, Title: r.Title,
+	a := artifacts.Artifact{ID: r.ID, OrgID: r.OrgID, OrgSlug: r.OrgSlug, Owner: artifactPrincipal(r.OwnerID, r.OwnerName), Title: r.Title,
 		Summary: r.Summary, Kind: artifacts.Kind(r.Kind), RepositoryAccess: artifacts.Reach(r.RepositoryAccess),
 		OrganizationAccess: artifacts.Reach(r.OrganizationAccess), Agent: artifactPrincipal(r.AgentID, r.AgentName), Branch: r.Branch,
 		Head: r.Head, MediaType: r.MediaType, Version: r.Version, CreatedBy: artifactPrincipal(r.CreatedBy, r.CreatedByName),
 		CreatedAt: r.CreatedAt, UpdatedBy: artifactPrincipal(r.UpdatedBy, r.UpdatedByName), UpdatedAt: r.UpdatedAt}
+	if r.RepoID != nil && r.RepoSlug != nil {
+		a.RepoID, a.RepoSlug = *r.RepoID, *r.RepoSlug
+	}
 	if r.TaskID != nil {
 		a.TaskID = *r.TaskID
 	}
@@ -87,9 +90,11 @@ func versionOf(r queries.ArtifactVersionRow) artifacts.Version {
 	return v
 }
 
-// With lists the IDs of the repository's artifacts where the principal holds permission.
-func (s *ArtifactStore) With(ctx context.Context, principalID, repoID uuid.UUID, permission string) ([]uuid.UUID, error) {
-	ids, err := s.q.ArtifactsWith(ctx, repoID, principalID, permission)
+// With lists the IDs of the organization's artifacts, or the repository's for a repoID, where the principal holds
+// permission.
+func (s *ArtifactStore) With(ctx context.Context, principalID, orgID, repoID uuid.UUID, permission string) ([]uuid.UUID, error) {
+	ids, err := s.q.ArtifactsWith(ctx, queries.ArtifactsWithParams{OrgID: orgID, RepoID: nullable(repoID), PrincipalID: principalID,
+		Permission: permission})
 	if err != nil {
 		return nil, fmt.Errorf("listing the artifacts with %s: %w", permission, err)
 	}
@@ -127,7 +132,8 @@ func (s *ArtifactStore) Create(ctx context.Context, actor uuid.UUID, n artifacts
 	var out artifacts.Artifact
 	a := n.Artifact
 	err := s.transact(ctx, "creating the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
-		inserted, err := q.InsertArtifact(ctx, queries.InsertArtifactParams{ID: a.ID, OrgID: a.OrgID, RepoID: a.RepoID, Title: a.Title,
+		inserted, err := q.InsertArtifact(ctx, queries.InsertArtifactParams{ID: a.ID, OrgID: a.OrgID, RepoID: nullable(a.RepoID),
+			OwnerID: nullable(a.Owner.ID), Title: a.Title,
 			Summary: a.Summary, Kind: string(a.Kind), RepositoryAccess: string(a.RepositoryAccess), OrganizationAccess: string(a.OrganizationAccess),
 			AgentID: nullable(a.Agent.ID), TaskID: nullable(a.TaskID), Branch: a.Branch, Actor: actor})
 		if err != nil {
@@ -149,8 +155,8 @@ func (s *ArtifactStore) Create(ctx context.Context, actor uuid.UUID, n artifacts
 		if out, err = get(ctx, q, a.ID); err != nil {
 			return err
 		}
-		return orgEvent(ctx, q, &a.OrgID, actor, "artifact.created", a.ID, map[string]any{"title": a.Title, "repo": a.RepoID,
-			"kind": a.Kind, "task": nullable(a.TaskID)})
+		return orgEvent(ctx, q, &a.OrgID, actor, "artifact.created", a.ID, map[string]any{"title": a.Title, "repo": nullable(a.RepoID),
+			"owner": nullable(a.Owner.ID), "kind": a.Kind, "task": nullable(a.TaskID)})
 	})
 	return out, err
 }
@@ -267,20 +273,45 @@ func (s *ArtifactStore) Grants(ctx context.Context, id uuid.UUID) ([]artifacts.G
 	if err != nil {
 		return nil, fmt.Errorf("listing the artifact's grants: %w", err)
 	}
+	return artifactGrants(rows), nil
+}
+
+// PersonGrants lists the roles principals hold on the user, by display name.
+func (s *ArtifactStore) PersonGrants(ctx context.Context, userID uuid.UUID) ([]artifacts.Grant, error) {
+	rows, err := s.q.PersonGrantees(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("listing the grants on the person: %w", err)
+	}
+	grantees := make([]queries.ArtifactGranteesRow, 0, len(rows))
+	for _, r := range rows {
+		grantees = append(grantees, queries.ArtifactGranteesRow(r))
+	}
+	return artifactGrants(grantees), nil
+}
+
+// artifactGrants is the domain's view of grantees' rows, leaving out a role that is none of the artifact roles.
+func artifactGrants(rows []queries.ArtifactGranteesRow) []artifacts.Grant {
 	out := make([]artifacts.Grant, 0, len(rows))
 	for _, r := range rows {
-		role, ok := artifacts.RoleOf(r.RoleID)
-		if !ok {
-			continue
+		if role, ok := artifacts.RoleOf(r.RoleID); ok {
+			out = append(out, artifacts.Grant{Principal: artifacts.Principal{ID: r.ID, Kind: auth.Kind(r.Kind), DisplayName: r.DisplayName}, Role: role})
 		}
-		out = append(out, artifacts.Grant{Principal: artifacts.Principal{ID: r.ID, Kind: auth.Kind(r.Kind), DisplayName: r.DisplayName}, Role: role})
 	}
-	return out, nil
+	return out
 }
 
 // Principal finds one of the organization's members, or a principal of its own: an API key, a job or an agent.
 func (s *ArtifactStore) Principal(ctx context.Context, orgID, principalID uuid.UUID) (artifacts.Principal, error) {
 	r, err := s.q.Grantee(ctx, principalID, orgID)
+	if err != nil {
+		return artifacts.Principal{}, wrapArtifact("finding the principal", err)
+	}
+	return artifacts.Principal{ID: r.ID, Kind: auth.Kind(r.Kind), DisplayName: r.DisplayName}, nil
+}
+
+// Colleague finds a member of one of the user's organizations, or an agent of one.
+func (s *ArtifactStore) Colleague(ctx context.Context, userID, principalID uuid.UUID) (artifacts.Principal, error) {
+	r, err := s.q.Colleague(ctx, principalID, userID)
 	if err != nil {
 		return artifacts.Principal{}, wrapArtifact("finding the principal", err)
 	}
@@ -318,5 +349,34 @@ func (s *ArtifactStore) Unshare(ctx context.Context, actor uuid.UUID, a artifact
 			return artifacts.ErrNotFound
 		}
 		return orgEvent(ctx, q, &a.OrgID, actor, "artifact.unshared", principalID, map[string]any{"artifact": a.ID})
+	})
+}
+
+// SharePerson gives the principal the role on actor in place of any role it held there, and records it as an event of
+// the installation's, since a person's artifacts span their organizations.
+func (s *ArtifactStore) SharePerson(ctx context.Context, actor, principalID, roleID uuid.UUID) error {
+	return s.transact(ctx, "sharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.DeletePersonGrants(ctx, principalID, actor); err != nil {
+			return fmt.Errorf("deleting the roles it held: %w", err)
+		}
+		if _, err := q.InsertGrant(ctx, queries.InsertGrantParams{PrincipalID: principalID, RoleID: roleID,
+			Scope: string(auth.ScopeUser), ScopeID: &actor, Source: string(auth.SourceGrant)}); err != nil {
+			return fmt.Errorf("inserting the grant: %w", err)
+		}
+		return orgEvent(ctx, q, nil, actor, "artifacts.person_shared", principalID, map[string]any{"role": roleID})
+	})
+}
+
+// UnsharePerson takes every role the principal holds on actor, and records it as SharePerson does.
+func (s *ArtifactStore) UnsharePerson(ctx context.Context, actor, principalID uuid.UUID) error {
+	return s.transact(ctx, "unsharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
+		n, err := q.DeletePersonGrants(ctx, principalID, actor)
+		if err != nil {
+			return fmt.Errorf("deleting the grants: %w", err)
+		}
+		if n == 0 {
+			return artifacts.ErrNotFound
+		}
+		return orgEvent(ctx, q, nil, actor, "artifacts.person_unshared", principalID, nil)
 	})
 }

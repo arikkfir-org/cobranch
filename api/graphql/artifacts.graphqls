@@ -1,20 +1,28 @@
-# The documents, diagrams, reports and pages that agents write when asked: each a repository's, kept in versions that
-# never change, and reached through grants on it, on its repository and at its organization, and through its two
-# audiences (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
+# The documents, diagrams, reports and pages that agents write when asked: each the person's who asked for it, attached
+# to a repository or to none, kept in versions that never change, and reached through grants on it, on its owner, on
+# its repository and at its organization, and through its two audiences
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
 
 extend type Organization {
-  "One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read."
+  "One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read."
   artifact(id: ID!): Artifact
+  "The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it."
+  artifacts(kind: ArtifactKind, repositoryId: ID, mine: Boolean): [Artifact!]!
 }
 
 extend type Repository {
-  "The repository's artifacts the viewer reads, of kind when it is given, newest change first; takes repo.read, and leaves out the artifacts the viewer may not read."
+  "The artifacts attached to the repository that the viewer may list or read, of kind when it is given, newest change first; takes repo.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it."
   artifacts(kind: ArtifactKind): [Artifact!]!
 }
 
+extend type User {
+  "Who lists or reads every artifact the user owns, in each organization both belong to: the roles they hold on the user, by name."
+  artifactAccess: [ArtifactGrant!]!
+}
+
 extend type Mutation {
-  "Makes an artifact in one of the organization's repositories with its first version; takes artifacts.create on the repository. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An input whose id the viewer made in the repository answers that artifact as it is; one another principal or another repository took is refused (CONFLICT, artifact.exists)."
-  createArtifact(organizationId: ID!, repositoryId: ID!, input: NewArtifact!): Artifact!
+  "Makes an artifact of the organization with its first version, attached to one of its repositories, or to none without repositoryId; attaching it takes artifacts.create on the repository, and one attached to none takes org.read and has no repository audience. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An input whose id the viewer made attached to the same repository, or to none, answers that artifact as it is; one another principal or another repository took is refused (CONFLICT, artifact.exists)."
+  createArtifact(organizationId: ID!, repositoryId: ID, input: NewArtifact!): Artifact!
   "Changes the fields the input gives of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. With expectedVersion, an artifact at another version is refused (CONFLICT, precondition.failed)."
   updateArtifact(organizationId: ID!, id: ID!, input: ArtifactPatch!, expectedVersion: Int): Artifact!
   "Adds an artifact's next version, which becomes the one it shows, and answers it without its body; takes artifacts.write on it. Earlier versions stay as they are. An input whose id the viewer added to the artifact answers that version; one another principal or artifact took is refused (CONFLICT, artifact.exists). With expectedVersion, an artifact at another version is refused (CONFLICT, precondition.failed)."
@@ -25,6 +33,10 @@ extend type Mutation {
   shareArtifact(organizationId: ID!, id: ID!, principalId: ID!, role: ArtifactRole!): Boolean!
   "Takes every role a principal holds on an artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository and at its organization, and its audiences, still reach it."
   unshareArtifact(organizationId: ID!, id: ID!, principalId: ID!): Boolean!
+  "Gives a member of one of the viewer's organizations, or an agent of one, LISTER or VIEWER on the viewer, in place of any role it held there: it then lists, or reads, every artifact the viewer owns in each organization both belong to. Only from a session, never from a token or an API key."
+  shareMyArtifacts(principalId: ID!, role: ArtifactRole!): Boolean!
+  "Takes every role a principal holds on the viewer; only from a session, never from a token or an API key."
+  unshareMyArtifacts(principalId: ID!): Boolean!
 }
 
 "What an artifact is for, which picks its icon and its filter, never its format."
@@ -49,59 +61,62 @@ enum ArtifactReach {
   EDIT
 }
 
-"A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it."
+"A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it. A person grants lister or viewer on themselves, which lists or reads every artifact they own."
 enum ArtifactRole {
   VIEWER
   EDITOR
   OWNER
+  LISTER
 }
 
-"A document, a diagram, a report or a page that a repository owns, as its readers see it."
+"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null."
 type Artifact {
   id: ID!
   organizationId: ID!
-  "The repository that owns it."
-  repository: ArtifactRepository!
+  "The repository it is attached to; null for none."
+  repository: ArtifactRepository
+  "Whose it is: the person who asked for it, or the agent of a task Cobranch started; null once they are gone."
+  owner: ArtifactPrincipal
   "1 to 200 characters."
   title: String!
   "At most 500 characters."
-  summary: String!
+  summary: String
   kind: ArtifactKind!
   "How far the principals reading its repository reach it."
-  repositoryAccess: ArtifactReach!
+  repositoryAccess: ArtifactReach
   "How far the principals reading its organization reach it."
-  organizationAccess: ArtifactReach!
+  organizationAccess: ArtifactReach
   "Its widest audience, as the list's badge names it."
-  audience: ArtifactAudience!
+  audience: ArtifactAudience
   "The agent that wrote it; null when a person or a script wrote it, or once the agent is gone."
   agent: ArtifactPrincipal
   "The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone."
   taskNumber: Int64
   "The branch it came from; empty for none."
-  branch: String!
+  branch: String
   "Its newest version's number, the one it shows."
-  head: Int!
+  head: Int
   "The format of its newest version: text/markdown, image/svg+xml or text/html."
-  mediaType: String!
+  mediaType: String
   "Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile."
-  version: Int!
+  version: Int
   "Who made it; null once they are gone."
   createdBy: ArtifactPrincipal
-  createdAt: Time!
+  createdAt: Time
   "Who last changed it or added a version; null once they are gone."
   updatedBy: ArtifactPrincipal
-  updatedAt: Time!
-  "What the viewer holds on it, sorted; Organization.artifact answers it, a list doesn't."
+  updatedAt: Time
+  "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
-  "Its versions, newest first, without their bodies."
-  versions: [ArtifactVersion!]!
+  "Its versions, newest first, without their bodies; null for a viewer who may only list it."
+  versions: [ArtifactVersion!]
   "One of its versions with its body, 0 for its newest; null unless it is there."
   versionByNumber(number: Int!): ArtifactVersion
-  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too."
-  access: ArtifactAccess!
+  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it."
+  access: ArtifactAccess
 }
 
-"The repository that owns an artifact."
+"The repository an artifact is attached to."
 type ArtifactRepository {
   id: ID!
   slug: String!
@@ -143,7 +158,7 @@ type ArtifactAccess {
   grants: [ArtifactGrant!]!
 }
 
-"A role a principal holds on an artifact itself."
+"A role a principal holds on an artifact itself, or on a person."
 type ArtifactGrant {
   principalId: ID!
   "user, api_key or agent."
@@ -161,7 +176,7 @@ input NewArtifact {
   "At most 500 characters."
   summary: String
   kind: ArtifactKind!
-  "NONE when absent."
+  "NONE when absent; an artifact attached to no repository has none."
   repositoryAccess: ArtifactReach
   "NONE when absent."
   organizationAccess: ArtifactReach

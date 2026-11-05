@@ -58,6 +58,9 @@ type Cobranch interface {
 	// Tasks lists the tasks of one of the organization's agents in the states named, newest first, at most limit of
 	// them: those private to another than the task's assigner redacted (agents.Task.Redacted).
 	Tasks(ctx context.Context, org string, agent uuid.UUID, states []agents.TaskState, limit int) ([]agents.Task, error)
+	// Queue answers the head of the queue of one of the organization's agents: its oldest queued tasks, at most limit,
+	// oldest first as it takes them, redacted as Tasks does, and how many tasks the queue holds in all.
+	Queue(ctx context.Context, org string, agent uuid.UUID, limit int) ([]agents.Task, int, error)
 }
 
 // Chat names one of an organization's chats: a branch's, by its repository and name; an issue's, by its number; or,

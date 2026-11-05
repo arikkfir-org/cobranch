@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { repoPages } from "./assets.js";
+import { privateSubject } from "./chat.js";
 import { cloneMenu } from "./code.js";
 import { h } from "./dom.js";
 import { icon } from "./icons.js";
@@ -14,8 +15,8 @@ import { base, carried, config, setCarried } from "./state.js";
 export const repoSlugInput = (value) => h("input", { name: "slug", required: true, value, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100 });
 
 // repoSubject is a repository's conversation, which every page of the repository that names no other has: each
-// viewer's own, private to them, which no page has yet.
-const repoSubject = (org, repo) => ({ key: "repo:" + org.slug + "/" + repo.slug, title: repo.slug, code: true, scope: "Nothing to follow on this page", chat: null });
+// viewer's own, private to them, where the agents they ask work in the repository.
+const repoSubject = (org, repo, orgCan) => privateSubject("repo:" + org.slug + "/" + repo.slug, repo.slug, true, "/orgs/" + org.slug + "/repos/" + repo.slug + "/conversation", orgCan);
 
 // A repository's pages, each a module of pages/repo/ (its branches index.js), in the app shell, under the
 // repository's heading and its tabs. A page's module answers the sections it shows from its default export, given the
@@ -64,7 +65,7 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   const head = headed ? pageHeading({ title: repo.name, tag: h("span", { class: "tag tone-neutral", title: visibility.title }, visibility.name),
     description: repo.description, actions: clone, tabs: tabs.map(tab) }) : null;
   const main = frame({ org, can: orgCan, part: "repos", crumbs: [orgCrumb, { label: repo.slug, href: root }, ...crumbsOf(shown, ctx)],
-    subject: subjectOf(shown, ctx, repoSubject(org, repo)), head });
+    subject: subjectOf(shown, ctx, repoSubject(org, repo, orgCan)), head });
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
   if (carried) {

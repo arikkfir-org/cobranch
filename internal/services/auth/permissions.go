@@ -12,12 +12,16 @@ var (
 		"repo.read", "repo.push", "repo.merge", "repo.bypass", "repo.manage",
 		"annotations.write", "annotations.delete_any", "reviews.submit", "messages.post", "messages.moderate", "jobs.run",
 		"secrets.manage", "secrets.read", "delivery.run",
-		"artifacts.create", "artifacts.read", "artifacts.write", "artifacts.manage",
+		"artifacts.create", "artifacts.list", "artifacts.read", "artifacts.write", "artifacts.manage",
 	}
 	// SecretPermissions are the repository permissions a grant on one secret may give.
 	SecretPermissions = []string{"secrets.manage", "secrets.read"}
-	// ArtifactPermissions are the repository permissions a grant on one artifact may give.
-	ArtifactPermissions = []string{"artifacts.read", "artifacts.write", "artifacts.manage"}
+	// ArtifactPermissions are the repository permissions held on one artifact: through a grant on it, on its owner, on its
+	// repository or at its organization, and through its audiences.
+	ArtifactPermissions = []string{"artifacts.list", "artifacts.read", "artifacts.write", "artifacts.manage"}
+	// PersonPermissions are the artifact permissions a grant on a person gives on the artifacts they own, and that
+	// everyone holds on their own.
+	PersonPermissions = []string{"artifacts.list", "artifacts.read"}
 )
 
 // Permissions is every permission of the catalog.

@@ -25,6 +25,7 @@ type chatCase struct {
 	conversation *agents.Conversation
 	tasks        []agents.Task
 	tasksErr     error
+	queueErr     error
 	thread       uuid.UUID
 	threads      map[uuid.UUID]*thread
 	entries      []agents.Entry
@@ -58,7 +59,7 @@ func keyed(c harness.Call, key uuid.UUID) harness.Call {
 }
 
 func TestChat(t *testing.T) {
-	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases(), conversationCases()) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases(), conversationCases(), queueCases()) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			runChat(t, tc)
@@ -257,7 +258,7 @@ func prompts(t *testing.T, m *model, want, not []string) {
 func runChat(t *testing.T, tc chatCase) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel, tasks: tc.tasks, tasksErr: tc.tasksErr,
+	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel, tasks: tc.tasks, tasksErr: tc.tasksErr, queueErr: tc.queueErr,
 		work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue, AgentEmail: "agent@agents.example", Conversation: tc.conversation,
 			Task: agents.Task{Number: 7, Title: "Sweep", State: cmp.Or(tc.state, agents.TaskRunning), Agent: agents.Principal{ID: scout, DisplayName: "Scout"},
 				RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}

@@ -3,7 +3,9 @@ package restclient
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,12 +20,89 @@ import (
 // and one redacted, private to someone else.
 func (a *api) tasks(w http.ResponseWriter, r *http.Request) {
 	a.chats = append(a.chats, r.Method+" "+r.URL.Path+"?"+r.URL.RawQuery)
+	if q := r.URL.Query(); a.queued > 0 && slices.Equal(q["state"], []string{"queued"}) {
+		a.queuePage(w, q)
+		return
+	}
 	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 	answer(w, http.StatusOK, map[string][]Task{"tasks": {
 		{Id: uuid.New(), Number: 9, Kind: "chat", Private: ptr(true), State: "queued", Agent: Principal{Id: agentID, DisplayName: "Scout"}, CreatedAt: at},
 		{Id: uuid.New(), Number: 8, Kind: "chat", Private: ptr(true), Title: "Which tasks wait?", State: "running", Agent: Principal{Id: agentID, DisplayName: "Scout"},
 			AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, CreatedAt: at, StartedAt: ptr(at.Add(time.Minute))},
 	}})
+}
+
+// queuePage answers a page of Scout's queue, newest first: from the newest, or below the cursor, at most limit tasks,
+// linking the next page while older ones remain.
+func (a *api) queuePage(w http.ResponseWriter, q url.Values) {
+	before, limit := int64(a.queued+1), 100
+	if c, err := strconv.ParseInt(q.Get("cursor"), 10, 64); err == nil {
+		before = c
+	}
+	if l, err := strconv.Atoi(q.Get("limit")); err == nil {
+		limit = l
+	}
+	var page []Task
+	for n := before - 1; n >= 1 && len(page) < limit; n-- {
+		page = append(page, Task{Id: uuid.New(), Number: n, Kind: "chat", Title: "Task " + strconv.FormatInt(n, 10), State: "queued",
+			Agent: Principal{Id: agentID, DisplayName: "Scout"}, CreatedAt: time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)})
+	}
+	if last := page[len(page)-1].Number; last > 1 {
+		w.Header().Set("Link", `<?`+url.Values{"cursor": {strconv.FormatInt(last, 10)}, "limit": {strconv.Itoa(limit)}, "state": {"queued"}}.Encode()+`>; rel="next"`)
+	}
+	answer(w, http.StatusOK, map[string][]Task{"tasks": page})
+}
+
+// TestQueue reads the head of Scout's queue, oldest first, however many pages the queue takes, and how many it holds.
+func TestQueue(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		queued, limit int
+		want          []int64
+		pages         int
+	}{
+		{name: "a queue on one page", queued: 3, limit: 50, want: []int64{1, 2, 3}, pages: 1},
+		{name: "a queue longer than the head asked for", queued: 7, limit: 3, want: []int64{1, 2, 3}, pages: 1},
+		{name: "a queue over several pages", queued: 250, limit: 50, want: numbers(1, 50), pages: 3},
+		{name: "a queue that ends on a page's last task", queued: 200, limit: 2, want: []int64{1, 2}, pages: 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := &api{queued: tc.queued}
+			c, _ := client(t, a)
+			head, total, err := c.Queue(context.Background(), "acme", agentID, tc.limit)
+			if err != nil {
+				t.Fatalf("Queue() = %v", err)
+			}
+			got := make([]int64, 0, len(head))
+			for _, task := range head {
+				got = append(got, task.Number)
+			}
+			if !slices.Equal(got, tc.want) || total != tc.queued {
+				t.Errorf("Queue() = %v, %d; want %v, %d", got, total, tc.want, tc.queued)
+			}
+			if len(a.chats) != tc.pages || !strings.Contains(a.chats[0], "state=queued") || !strings.Contains(a.chats[0], "limit=100") {
+				t.Errorf("the API took %q; want %d pages of the queued tasks", a.chats, tc.pages)
+			}
+		})
+	}
+	if _, _, err := (func() ([]agents.Task, int, error) {
+		c, _ := client(t, &api{})
+		return c.Queue(context.Background(), "nowhere", agentID, 10)
+	})(); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Errorf("Queue(another organization) = %v; want the API's 404", err)
+	}
+}
+
+// numbers are the numbers from first to last, in order.
+func numbers(first, last int64) []int64 {
+	var out []int64
+	for n := first; n <= last; n++ {
+		out = append(out, n)
+	}
+	return out
 }
 
 // TestConversations follows each of the assigner's private conversations as the harness does: its thread, a post, a
