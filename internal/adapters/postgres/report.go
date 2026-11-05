@@ -12,9 +12,10 @@ import (
 )
 
 // Spend reports what the organization's agents spent from since until until, naming as an agent's costliest task only
-// one that names no repository or one of readable, and is of none of the kinds in hidden (agents.Store).
-func (s *AgentStore) Spend(ctx context.Context, orgID uuid.UUID, since, until time.Time, readable []uuid.UUID, hidden []string) (agents.Report, error) {
-	rows, err := s.q.AgentSpend(ctx, queries.AgentSpendParams{OrgID: orgID, Readable: readable, Hidden: hidden, Since: since, Until: until})
+// one the viewer v describes sees (agents.Store).
+func (s *AgentStore) Spend(ctx context.Context, orgID uuid.UUID, since, until time.Time, v agents.Shown) (agents.Report, error) {
+	rows, err := s.q.AgentSpend(ctx, queries.AgentSpendParams{OrgID: orgID, Readable: v.Readable, Hidden: v.Hidden, PrivateFor: v.PrivateFor,
+		Since: since, Until: until})
 	if err != nil {
 		return agents.Report{}, fmt.Errorf("summing the agents' spend: %w", err)
 	}

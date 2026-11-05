@@ -182,9 +182,9 @@ type call struct {
 }
 
 // Spend reports what the organization's agents spent from since until until, as the database's queries do: each
-// agent's tasks queued then and its calls then, the costliest of those tasks that names no repository or one of
-// readable and is of none of the kinds in hidden, and each model's calls then.
-func (s *Store) Spend(_ context.Context, orgID uuid.UUID, since, until time.Time, readable []uuid.UUID, hidden []string) (agents.Report, error) {
+// agent's tasks queued then and its calls then, the costliest of those tasks the viewer v describes sees, and each
+// model's calls then.
+func (s *Store) Spend(_ context.Context, orgID uuid.UUID, since, until time.Time, v agents.Shown) (agents.Report, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	in := func(at time.Time) bool { return !at.Before(since) && at.Before(until) }
@@ -192,7 +192,7 @@ func (s *Store) Spend(_ context.Context, orgID uuid.UUID, since, until time.Time
 	for _, a := range s.agents {
 		if a.OrgID == orgID {
 			out.Agents = append(out.Agents, s.agentSpend(a, in, func(t agents.Task) bool {
-				return (t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && !slices.Contains(hidden, t.Kind)
+				return (t.RepoID == uuid.Nil || slices.Contains(v.Readable, t.RepoID)) && !slices.Contains(v.Hidden, t.Kind) && !t.HiddenFrom(v.PrivateFor)
 			}))
 		}
 	}

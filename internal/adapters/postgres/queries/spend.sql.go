@@ -16,13 +16,14 @@ const agentSpend = `-- name: AgentSpend :many
 WITH queued AS (
     SELECT t.agent_id, t.number, t.title, t.state, t.cap_reached,
         (SELECT coalesce(sum(s.cost), 0) FROM task_spend s WHERE s.task_id = t.id)::bigint AS spent,
-        ((t.repo_id IS NULL OR t.repo_id = ANY ($2::uuid[])) AND NOT (t.kind = ANY ($3::text[])))::boolean AS shown
+        ((t.repo_id IS NULL OR t.repo_id = ANY ($2::uuid[])) AND NOT (t.kind = ANY ($3::text[]))
+            AND (NOT t.private OR coalesce(t.assigned_by = $4::uuid, false)))::boolean AS shown
     FROM agent_tasks t
-    WHERE t.org_id = $1 AND t.created_at >= $4 AND t.created_at < $5
+    WHERE t.org_id = $1 AND t.created_at >= $5 AND t.created_at < $6
 ), calls AS (
     SELECT s.agent_id, sum(s.cost)::bigint AS spent
     FROM task_spend s
-    WHERE s.org_id = $1 AND s.created_at >= $4 AND s.created_at < $5
+    WHERE s.org_id = $1 AND s.created_at >= $5 AND s.created_at < $6
     GROUP BY s.agent_id
 ), costliest AS (
     SELECT DISTINCT ON (q.agent_id) q.agent_id, q.number, q.title, q.spent
@@ -46,11 +47,12 @@ ORDER BY lower(ag.name), ag.principal_id
 `
 
 type AgentSpendParams struct {
-	OrgID    uuid.UUID
-	Readable []uuid.UUID
-	Hidden   []string
-	Since    time.Time
-	Until    time.Time
+	OrgID      uuid.UUID
+	Readable   []uuid.UUID
+	Hidden     []string
+	PrivateFor uuid.UUID
+	Since      time.Time
+	Until      time.Time
 }
 
 type AgentSpendRow struct {
@@ -70,14 +72,15 @@ type AgentSpendRow struct {
 
 // AgentSpend answers each of an organization's agents, by name, with its model and cap and what it spent in
 // [since, until): its tasks queued then, of every repository and kind, counted by how they stand, what its calls then
-// cost, and the costliest of those tasks that names no repository or one of readable, and is of none of the kinds in
-// hidden, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
+// cost, and the costliest of those tasks that names no repository or one of readable, is of none of the kinds in
+// hidden, and isn't private to another than private_for, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
 // whatever the cap is now.
 func (q *Queries) AgentSpend(ctx context.Context, arg AgentSpendParams) ([]AgentSpendRow, error) {
 	rows, err := q.db.Query(ctx, agentSpend,
 		arg.OrgID,
 		arg.Readable,
 		arg.Hidden,
+		arg.PrivateFor,
 		arg.Since,
 		arg.Until,
 	)

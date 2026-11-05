@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -91,8 +92,18 @@ type ModelSpend struct {
 	Spent    USD
 }
 
+// Shown says which tasks a report may name to its viewer: those that name no repository or one of Readable, are of none
+// of the kinds in Hidden, whose guards the viewer lacks, and aren't private to another than PrivateFor, whose private
+// records the request reads (auth.PrivateFor), as Task.HiddenFrom says.
+type Shown struct {
+	Readable   []uuid.UUID
+	Hidden     []string
+	PrivateFor uuid.UUID
+}
+
 // Spend reports what the organization's agents spent from since until until, as Report says; it takes org.read. An
-// agent's costliest task is one the viewer sees: it names no repository or one they read, and its kind's guard passes.
+// agent's costliest task is one the viewer sees: it names no repository or one they read, its kind's guard passes, and
+// it isn't another's private task.
 // A span that doesn't end after it starts, or that runs past MaxSpan, is refused.
 func (s *Service) Spend(ctx context.Context, v Viewer, orgID uuid.UUID, since, until time.Time) (Report, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Spend", onOrg(orgID,
@@ -110,6 +121,6 @@ func (s *Service) Spend(ctx context.Context, v Viewer, orgID uuid.UUID, since, u
 	if err != nil {
 		return Report{}, failed(span, "listing the repositories the viewer reads", err)
 	}
-	r, err := s.store.Spend(ctx, orgID, since, until, readable, s.hidden(held))
+	r, err := s.store.Spend(ctx, orgID, since, until, Shown{Readable: readable, Hidden: s.hidden(held), PrivateFor: auth.PrivateFor(ctx, v.ID)})
 	return r, failed(span, "reporting the spend", err)
 }

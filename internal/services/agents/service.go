@@ -91,8 +91,8 @@ type Store interface {
 	// ended, orgs.ErrNotFound for none.
 	RecordSpend(ctx context.Context, taskID uuid.UUID, u Usage) (Spend, error)
 	// Spend reports what the organization's agents spent from since until until, as Report says, naming as an agent's
-	// costliest task only one that names no repository or one of readable, and is of none of the kinds in hidden.
-	Spend(ctx context.Context, orgID uuid.UUID, since, until time.Time, readable []uuid.UUID, hidden []string) (Report, error)
+	// costliest task only one the viewer v describes sees.
+	Spend(ctx context.Context, orgID uuid.UUID, since, until time.Time, v Shown) (Report, error)
 	// Entries lists at most limit of a task's transcript entries numbered above after, in order.
 	Entries(ctx context.Context, taskID uuid.UUID, after, limit int) ([]Entry, error)
 	// Append records entry e of a task for actor, the next of its transcript, and, given change, moves the task to

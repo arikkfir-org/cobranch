@@ -36,16 +36,18 @@ func spendTasks(t *testing.T, f *taskPodFixture) (around, again, later agents.Ta
 	return around, again, later, f.created(t, "Finder")
 }
 
-// spendStep is a report TestSpendStore asks for: its span, the repositories the viewer reads and the kinds hidden from
-// them, whether the calls and the task of moveBack move back and Scout's cap is raised to $5.00 first, and what Scout
-// and the models should have spent.
+// spendStep is a report TestSpendStore asks for: its span, the repositories the viewer reads, the kinds hidden from
+// them and whose private records they read, whether the calls and the task of moveBack move back, Scout's cap is
+// raised to $5.00 and Look again becomes private first, and what Scout and the models should have spent.
 type spendStep struct {
 	name         string
 	since, until time.Time
 	readable     []uuid.UUID
 	hidden       []string
+	privateFor   uuid.UUID
 	moved        bool
 	raised       bool
+	private      bool
 	wantScout    agents.AgentSpend
 	wantModels   []agents.ModelSpend
 }
@@ -64,6 +66,9 @@ func spendSteps(f *taskPodFixture, around, again, later agents.Task) []spendStep
 		Spent: 1_500_000, Costliest: scout.Costliest}
 	raised := stayed
 	raised.Cap = 5_000_000
+	private := raised
+	private.Costliest = &agents.TaskCost{Number: around.Number, Title: "Look around", Spent: 600_000}
+	after := []agents.ModelSpend{{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}
 	return []spendStep{
 		{name: "every task the viewer reads", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, wantScout: scout, wantModels: models},
 		{name: "the costliest on a repository the viewer doesn't read isn't named", since: hour, until: now.Add(time.Hour), wantScout: unread, wantModels: models},
@@ -79,8 +84,11 @@ func spendSteps(f *taskPodFixture, around, again, later agents.Task) []spendStep
 		{name: "and no longer here", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, moved: true, wantScout: stayed,
 			wantModels: []agents.ModelSpend{{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}},
 		{name: "a raised cap still counts the task that reached the old one", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID},
-			raised: true, wantScout: raised,
-			wantModels: []agents.ModelSpend{{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}},
+			raised: true, wantScout: raised, wantModels: after},
+		{name: "another's private task counts but isn't named", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID},
+			privateFor: uuid.New(), private: true, wantScout: private, wantModels: after},
+		{name: "its assigner sees it named", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, privateFor: f.max,
+			wantScout: raised, wantModels: after},
 	}
 }
 
@@ -90,15 +98,8 @@ func TestSpendStore(t *testing.T) {
 	ctx := context.Background()
 	around, again, later, finder := spendTasks(t, f)
 	for _, s := range spendSteps(f, around, again, later) {
-		if s.moved {
-			moveBack(t, f, around.ID, later.ID)
-		}
-		if s.raised {
-			if _, err := f.pool.Exec(ctx, "UPDATE agents SET cap = 5000000 WHERE principal_id = $1", f.scout.ID); err != nil {
-				t.Fatal(err)
-			}
-		}
-		got, err := f.a.Spend(ctx, f.acme.ID, s.since, s.until, s.readable, append([]string{}, s.hidden...))
+		s.prepare(t, f, around, again, later)
+		got, err := f.a.Spend(ctx, f.acme.ID, s.since, s.until, agents.Shown{Readable: s.readable, Hidden: append([]string{}, s.hidden...), PrivateFor: s.privateFor})
 		if err != nil {
 			t.Fatalf("%s: Spend() = %v", s.name, err)
 		}
@@ -114,6 +115,25 @@ func TestSpendStore(t *testing.T) {
 			if got.Agents[i-1].Agent.DisplayName > got.Agents[i].Agent.DisplayName {
 				t.Errorf("%s: Spend() lists %s before %s, want them by name", s.name, got.Agents[i-1].Agent.DisplayName, got.Agents[i].Agent.DisplayName)
 			}
+		}
+	}
+}
+
+// prepare changes the tasks of spendTasks as step s says, before its report: once done, each change stays.
+func (s spendStep) prepare(t *testing.T, f *taskPodFixture, around, again, later agents.Task) {
+	t.Helper()
+	ctx := context.Background()
+	if s.moved {
+		moveBack(t, f, around.ID, later.ID)
+	}
+	if s.raised {
+		if _, err := f.pool.Exec(ctx, "UPDATE agents SET cap = 5000000 WHERE principal_id = $1", f.scout.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s.private {
+		if _, err := f.pool.Exec(ctx, "UPDATE agent_tasks SET private = true WHERE id = $1", again.ID); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

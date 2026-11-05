@@ -142,3 +142,43 @@ func TestSpend(t *testing.T) {
 		}
 	}
 }
+
+// TestSpendHidesPrivateTasks has Mel ask Scout for a private task that spends $0.60 and Olive assign it Look, which
+// spends $0.30: the report counts both for everyone, names the private one Scout's costliest to Mel, who asked for it,
+// and names Look to Olive, who owns the organization but may not see Mel's private task.
+func TestSpendHidesPrivateTasks(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 3_000_000, OutputPrice: 15_000_000})
+	scout := f.store.AddAgent(agents.Agent{OrgID: f.org, Name: "Scout", Provider: "anthropic", Model: "a-model"})
+	spend := func(task agents.Task, input int64) {
+		f.store.SetState(f.org, task.Number, agents.TaskRunning)
+		if _, err := f.service.RecordSpend(working(context.Background(), task), agentViewer(task), agents.Usage{ID: uuid.New(), Model: "a-model", Input: input}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	asked, err := f.store.Assign(context.Background(), f.mel.ID, agents.Task{OrgID: f.org, Agent: agents.Principal{ID: scout.ID, DisplayName: "Scout"}, Kind: "chat",
+		AssignedBy: &agents.Principal{ID: f.mel.ID}, Title: "Mel's own question", Private: true, State: agents.TaskQueued})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spend(asked, 200_000)
+	look := f.assign(t, f.olive, scout, "Look", uuid.Nil)
+	spend(look, 100_000)
+	for _, tt := range []struct {
+		name   string
+		viewer agents.Viewer
+		want   *agents.TaskCost
+	}{
+		{name: "its asker sees it named", viewer: f.mel, want: &agents.TaskCost{Number: asked.Number, Title: "Mel's own question", Spent: 600_000}},
+		{name: "an owner sees the costliest of the rest", viewer: f.olive, want: &agents.TaskCost{Number: look.Number, Title: "Look", Spent: 300_000}},
+	} {
+		got, err := f.service.Spend(context.Background(), tt.viewer, f.org, now.AddDate(0, 0, -1), now.AddDate(0, 0, 1))
+		if err != nil {
+			t.Fatalf("%s: Spend() = %v", tt.name, err)
+		}
+		if len(got.Agents) != 1 || got.Agents[0].Tasks != 2 || got.Agents[0].Spent != 900_000 || !reflect.DeepEqual(got.Agents[0].Costliest, tt.want) {
+			t.Errorf("%s: Spend() agents = %+v, want Scout's 2 tasks, $0.90 and costliest %+v", tt.name, got.Agents, tt.want)
+		}
+	}
+}

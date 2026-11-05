@@ -30,14 +30,15 @@ UPDATE agent_tasks SET cap_reached = true WHERE id = @id;
 
 -- AgentSpend answers each of an organization's agents, by name, with its model and cap and what it spent in
 -- [since, until): its tasks queued then, of every repository and kind, counted by how they stand, what its calls then
--- cost, and the costliest of those tasks that names no repository or one of readable, and is of none of the kinds in
--- hidden, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
+-- cost, and the costliest of those tasks that names no repository or one of readable, is of none of the kinds in
+-- hidden, and isn't private to another than private_for, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
 -- whatever the cap is now.
 -- name: AgentSpend :many
 WITH queued AS (
     SELECT t.agent_id, t.number, t.title, t.state, t.cap_reached,
         (SELECT coalesce(sum(s.cost), 0) FROM task_spend s WHERE s.task_id = t.id)::bigint AS spent,
-        ((t.repo_id IS NULL OR t.repo_id = ANY (@readable::uuid[])) AND NOT (t.kind = ANY (@hidden::text[])))::boolean AS shown
+        ((t.repo_id IS NULL OR t.repo_id = ANY (@readable::uuid[])) AND NOT (t.kind = ANY (@hidden::text[]))
+            AND (NOT t.private OR coalesce(t.assigned_by = @private_for::uuid, false)))::boolean AS shown
     FROM agent_tasks t
     WHERE t.org_id = @org_id AND t.created_at >= @since AND t.created_at < @until
 ), calls AS (
