@@ -353,12 +353,34 @@ export async function conversation(s, signal) {
     fold(shown.get(u.thread.id));
     keepDown(was);
   };
+  let next = null; // the page of older threads, while there is one
   const show = (p) => {
     const height = messages.scrollHeight;
     p.data.threads.forEach((t) => place(t, true));
     messages.scrollTop += messages.scrollHeight - height;
-    more.hidden = !p.next;
-    more.onclick = () => { more.disabled = true; apiPage(p.next).then(show).catch(fail).finally(() => { more.disabled = false; }); };
+    next = p.next;
+    more.hidden = !next;
+    more.onclick = () => { more.disabled = true; apiPage(next).then(show).catch(fail).finally(() => { more.disabled = false; }); };
+  };
+  // reveal opens thread id and scrolls to it, reading older pages until it shows, as a link to it from a page does
+  // (lib/pane.js openThread); a thread the conversation doesn't have leaves it where it was.
+  const reveal = async (id) => {
+    while (!shown.has(id) && next) {
+      more.disabled = true;
+      try {
+        show(await apiPage(next));
+      } catch (err) {
+        fail(err);
+        return;
+      } finally {
+        more.disabled = false;
+      }
+    }
+    const v = shown.get(id);
+    if (!v) return;
+    v.open = true;
+    fold(v);
+    v.el.scrollIntoView({ block: "start" });
   };
   show(page);
   empty.hidden = shown.size > 0;
@@ -373,12 +395,12 @@ export async function conversation(s, signal) {
       api("POST", chat + "/threads", { body: text.value, ...asking(picker) }).then((t) => { place(t); keepDown(true); }).finally(done));
   }
   const el = h("div", { class: "app-pane-conversation" }, error, gone && shown.size ? goneBanner(s) : null, gone ? null : live, messages, composer);
+  el.reveal = reveal;
   if (!gone) followChat(chat, page.data.after, apply, live, signal);
   // The newest messages show first, or the thread a link names.
   setTimeout(() => {
-    const linked = location.hash.startsWith("#thread-") && document.getElementById(location.hash.slice(1));
-    if (linked && el.contains(linked)) linked.scrollIntoView({ block: "start" });
-    else messages.scrollTop = messages.scrollHeight;
+    messages.scrollTop = messages.scrollHeight;
+    if (location.hash.startsWith("#thread-")) reveal(location.hash.slice("#thread-".length));
   }, 0);
   return el;
 }

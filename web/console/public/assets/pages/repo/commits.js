@@ -92,9 +92,9 @@ async function repositoryHistory(path, at, ref, fail) {
   };
   older.onclick = () => load(next).catch(fail);
 
-  // show draws the history from its first page, saying why when there is none.
+  // show draws the history from its first page, saying why when there is none, unless it was drawn afresh meanwhile.
   const show = async () => {
-    generation++;
+    const drawing = ++generation;
     reset();
     count.textContent = "";
     // The switch shows over a history it changes: not a path's or a filtered one, nor one without a Git server.
@@ -102,6 +102,7 @@ async function repositoryHistory(path, at, ref, fail) {
     try {
       await load(start());
     } catch (err) {
+      if (drawing !== generation) return;
       if (err.code === "git.unavailable" && !first && !file) {
         first = true;
         gitless = true;
@@ -119,7 +120,7 @@ async function repositoryHistory(path, at, ref, fail) {
       else throw err;
       return;
     }
-    if (shown || next) return;
+    if (drawing !== generation || shown || next) return;
     if (query) days.append(none("search", "No commit matches “" + query + "”", "Nothing on " + named + " says that in its message. Try fewer words, or clear the filter.",
       h("button", { class: "btn", type: "button", onclick: () => { input.value = ""; input.dispatchEvent(new Event("input")); } }, "Clear filter")));
     else if (file) days.append(none("folder", "No commit changed " + file, "Nothing on " + named + " touched this path. Pick another ref, or a directory above it."));

@@ -1,12 +1,23 @@
-/* A diff (lib/diff.js): its counts and layout switch, and each file's Diff card, its lines unified or split, with
-   draft comments between them. */
+/* A diff (lib/diff.js): its counts and layout switch, a branch's card of its files, and each file's Diff card, its
+   lines unified or split, with threads and draft comments between them (lib/diffthreads.js). */
 .diff-stats { display: flex; align-items: center; gap: var(--space-8); min-height: 30px; color: var(--color-fg-default); font: var(--text-body-medium); }
-.diff-stats .spacer, .diff-card-header .spacer, .draft-comment-header .spacer { flex: 1; }
+.diff-stats .spacer, .diff-card-header .spacer, .draft-comment-header .spacer, .diff-files-row .spacer, .diff-thread-resolved .spacer { flex: 1; }
 .diff-layout { flex: none; width: 240px; }
 .diff-added { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
 .diff-removed { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
 .diff-cards { display: grid; gap: var(--space-24); }
 .diff-left-out { color: var(--color-fg-muted); font: var(--text-body-small); }
+
+/* Files: a row a file, its file-code icon in fg/muted, its path a link in Code/Small, what it adds and removes at the
+   row's end. */
+.diff-files-list { margin: 0; padding: 0; list-style: none; }
+.diff-files-row { display: flex; align-items: center; gap: var(--space-12); min-width: 0; padding: var(--space-8) var(--space-16); }
+.diff-files-row > .icon { color: var(--color-fg-muted); }
+.diff-files-path { min-width: 0; overflow: hidden; color: var(--color-fg-link); font: var(--text-code-small); text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.diff-files-path:hover { text-decoration: underline; }
+.diff-files-row :is(.diff-added, .diff-removed) { flex: none; font: var(--text-code-small); }
+.diff-files-binary { flex: none; color: var(--color-fg-muted); font: var(--text-caption); }
+.diff-card { scroll-margin-top: var(--space-16); }
 
 .diff-card-header { display: flex; align-items: center; gap: var(--space-8); min-width: 0; padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
 .diff-card-header > .icon { color: var(--color-fg-muted); }
@@ -56,3 +67,15 @@
 .draft-comment-header { display: flex; align-items: center; gap: var(--space-8); font: var(--text-body-small); }
 .draft-comment-text { margin: 0; color: var(--color-fg-default); white-space: pre-wrap; overflow-wrap: anywhere; }
 .draft-comment-actions { display: flex; justify-content: flex-end; gap: var(--space-8); }
+
+/* A thread under its line (Comment): a 560px box on bg/sunken, its messages with 24px avatars, then its actions as
+   small ghost buttons; resolved here, one row. */
+.diff-thread { padding: var(--space-12) var(--space-16); border-block: 1px solid var(--color-border-subtle); background: var(--color-bg-surface); font: var(--text-body-medium); white-space: normal; }
+.diff-thread-comment { display: flex; flex-direction: column; gap: var(--space-8); width: 560px; max-width: 100%; padding: var(--space-12); border-radius: var(--radius-lg); background: var(--color-bg-sunken); }
+.diff-thread-message { display: flex; align-items: flex-start; gap: var(--space-8); min-width: 0; }
+.diff-thread-text { display: flex; flex: 1; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.diff-thread-actions { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.diff-thread-reply { display: grid; gap: var(--space-8); }
+.diff-thread-resolved { flex-direction: row; align-items: center; padding: var(--space-8) var(--space-12); color: var(--color-fg-muted); font: var(--text-body-small); }
+.diff-thread-resolved > .icon { color: var(--color-status-success-fg); }
+.diff-thread > .alert { margin-top: var(--space-8); }

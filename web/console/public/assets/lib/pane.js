@@ -122,6 +122,24 @@ export function compose(text, pick) {
   else fill();
 }
 
+// openThread opens the pane at one of the page's conversation's threads, as a page's "Open in conversation" does: the
+// address names it, the pane leaves a subject it is pinned to for the page's, and the conversation reads older pages
+// until it shows the thread.
+export function openThread(id) {
+  history.replaceState(history.state, "", location.pathname + location.search + "#thread-" + id);
+  if (page && shown !== page) {
+    pinned = false;
+    shown = page;
+    const head = pane.hidden ? null : pane.querySelector(".app-pane-header");
+    if (head) head.replaceWith(header(shown));
+  }
+  if (pane.hidden) return setOpen(true);
+  const open = drawn && shown && drawn.key === shown.key ? pane.querySelector(".app-pane-conversation") : null;
+  // A conversation still loading, or drawn anew, opens the thread the address names itself.
+  if (open) open.reveal(id);
+  else draw();
+}
+
 // fill puts the text compose left in the composer that starts a thread, once the pane shows one.
 function fill() {
   const box = drafted === null ? null : pane.querySelector(".app-pane-conversation > .app-pane-composer textarea:not(:disabled)");
