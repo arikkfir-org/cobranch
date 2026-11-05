@@ -5,9 +5,10 @@ SELECT @token_hash::bytea, t.id, @expires_at::timestamptz FROM agent_tasks t
 WHERE t.id = @task_id AND t.state IN ('queued', 'running', 'waiting');
 
 -- TaskToken finds a token of a task that hasn't ended, with the task's organization, its assigner and whether they
--- are suspended, and its agent.
+-- are suspended, whether it is private and the thread it talks in, and its agent.
 -- name: TaskToken :one
-SELECT k.task_id, k.created_at, k.expires_at, t.org_id, t.assigned_by, a.suspended AS assigner_suspended, sqlc.embed(p)
+SELECT k.task_id, k.created_at, k.expires_at, t.org_id, t.assigned_by, a.suspended AS assigner_suspended, t.private, t.thread_id,
+    sqlc.embed(p)
 FROM agent_task_tokens k JOIN agent_tasks t ON t.id = k.task_id JOIN principals p ON p.id = t.agent_id
 LEFT JOIN principals a ON a.id = t.assigned_by
 WHERE k.token_hash = @token_hash AND t.state IN ('queued', 'running', 'waiting');

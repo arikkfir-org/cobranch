@@ -133,10 +133,20 @@ type Work struct {
 	AgentInstructions string
 	// AgentEmail is the email the harness commits with.
 	AgentEmail string
-	// IssueKey and IssueNumber name the issue the task works on, such as ACME-42: its organization's issue key and its
-	// number; empty and 0 for none.
+	// IssueKey and IssueNumber name the issue the task works on, such as ACME-42, or whose chat it talks in: its
+	// organization's issue key and its number; empty and 0 for none.
 	IssueKey    string
 	IssueNumber int64
+	// Conversation is the private conversation the task talks in, for a task its assigner asked for there; nil
+	// otherwise.
+	Conversation *Conversation
+}
+
+// Conversation names the private conversation a task talks in, its assigner's: about the task's organization, about
+// the repository RepoSlug names, or with the agent AgentID names, the other empty.
+type Conversation struct {
+	RepoSlug string
+	AgentID  uuid.UUID
 }
 
 // Branch is the branch the task's work goes to: the branch the task names, or, for a task in a repository that names

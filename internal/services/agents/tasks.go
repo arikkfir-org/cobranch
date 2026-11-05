@@ -14,10 +14,13 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// visible answers orgs.ErrNotFound for a task that names a repository v doesn't read, or of a kind whose guard held
-// lacks, as for a task that isn't there.
+// visible answers orgs.ErrNotFound for a task that names a repository v doesn't read, of a kind whose guard held
+// lacks, or private to another than v, as for a task that isn't there.
 func (s *Service) visible(ctx context.Context, v Viewer, held []string, t Task) error {
 	if permission, ok := s.guards[t.Kind]; ok && !slices.Contains(held, permission) {
+		return orgs.ErrNotFound
+	}
+	if t.HiddenFrom(auth.PrivateFor(ctx, v.ID)) {
 		return orgs.ErrNotFound
 	}
 	if t.RepoID == uuid.Nil {
@@ -34,7 +37,9 @@ func (s *Service) visible(ctx context.Context, v Viewer, held []string, t Task) 
 }
 
 // Tasks lists a page of at most limit, 1 to MaxPage, of the organization's tasks that match the filter, newest first,
-// leaving out those on repositories v doesn't read and those of kinds whose guard v lacks; it takes org.read.
+// leaving out those on repositories v doesn't read and those of kinds whose guard v lacks; it takes org.read. A task
+// private to another than v comes Redacted, holding its place in its agent's queue, unless the filter names a
+// repository, which would tell where it works.
 func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFilter, limit int) (TaskPage, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Tasks", onOrg(orgID))
 	defer span.End()
@@ -63,7 +68,22 @@ func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFi
 		page.Tasks = tasks[:limit]
 		page.Next = page.Tasks[limit-1].Number
 	}
+	page.Tasks = redact(page.Tasks, auth.PrivateFor(ctx, v.ID), f.RepoID != uuid.Nil)
 	return page, nil
+}
+
+// redact redacts the tasks private to another than viewer, or leaves them out with drop.
+func redact(tasks []Task, viewer uuid.UUID, drop bool) []Task {
+	out := tasks[:0]
+	for _, t := range tasks {
+		switch {
+		case !t.HiddenFrom(viewer):
+			out = append(out, t)
+		case !drop:
+			out = append(out, t.Redacted())
+		}
+	}
+	return out
 }
 
 // Task finds one of the organization's tasks by its number; it takes org.read, repo.read on the repository it names,

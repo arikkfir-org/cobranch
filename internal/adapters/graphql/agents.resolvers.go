@@ -326,6 +326,9 @@ func (r *queryResolver) MyTask(ctx context.Context) (*MyTask, error) {
 		number := int(w.IssueNumber)
 		my.IssueNumber, my.IssueKey = &number, &w.IssueKey
 	}
+	if c := w.Conversation; c != nil {
+		my.Conversation = &MyTaskConversation{RepositorySlug: text(c.RepoSlug), AgentID: idOf(c.AgentID)}
+	}
 	return my, nil
 }
 

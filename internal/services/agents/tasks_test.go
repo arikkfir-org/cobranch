@@ -243,3 +243,70 @@ func findsOnly(t *testing.T, f *fixture, v agents.Viewer, last int64, want []int
 		}
 	}
 }
+
+// TestPrivateTasks has Mel ask Scout for two private tasks, one on website: Mel finds them whole, Olive, who owns acme,
+// lists them redacted, holding their places in Scout's queue, and finds neither; a listing of website's tasks leaves
+// out the one there, which would tell where it works. Bot, an agent, under the token of a private task of Mel's,
+// works for Mel and finds both; under a token of a task that isn't private, it works for itself and finds neither.
+func TestPrivateTasks(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.grants.Grant(f.bot.ID, auth.RoleReader, auth.ScopeRepository, f.website)
+	scout := f.agent(t, f.olive, "Scout")
+	f.assign(t, f.mel, scout, "Public", uuid.Nil)
+	for _, repo := range []uuid.UUID{uuid.Nil, f.website} {
+		task := agents.Task{OrgID: f.org, Agent: agents.Principal{ID: scout.ID, DisplayName: "Scout"}, Kind: "chat", AssignedBy: &agents.Principal{ID: f.mel.ID},
+			Title: "Mel's own question", Instructions: "Only Mel reads this", Summary: "", RepoID: repo, Private: true, State: agents.TaskQueued}
+		if _, err := f.store.Assign(context.Background(), f.mel.ID, task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	token := func(private bool) context.Context {
+		g := auth.TaskGrant{ID: uuid.New(), OrgID: f.org, AssignerID: f.mel.ID, Private: private}
+		return auth.WithViewer(context.Background(), auth.Authenticated{User: f.bot, Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: f.bot.ID, Task: g}})
+	}
+	tests := []struct {
+		name   string
+		ctx    context.Context
+		viewer agents.Viewer
+		whole  []int64
+		filter agents.TaskFilter
+		listed []int64
+	}{
+		{name: "the assigner", ctx: context.Background(), viewer: f.mel, whole: []int64{3, 2, 1}, listed: []int64{3, 2, 1}},
+		{name: "an owner", ctx: context.Background(), viewer: f.olive, whole: []int64{1}, listed: []int64{3, 2, 1}},
+		{name: "an owner listing the repository's", ctx: context.Background(), viewer: f.olive, whole: []int64{1}, filter: agents.TaskFilter{RepoID: f.website}},
+		{name: "a private task's token", ctx: token(true), viewer: f.bot, whole: []int64{3, 2, 1}, listed: []int64{3, 2, 1}},
+		{name: "another task's token", ctx: token(false), viewer: f.bot, whole: []int64{1}, listed: []int64{3, 2, 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := f.service.Tasks(tt.ctx, tt.viewer, f.org, tt.filter, 10)
+			if err != nil || !slices.Equal(numbers(page.Tasks), tt.listed) {
+				t.Fatalf("Tasks() = %v, %v; want %v", numbers(page.Tasks), err, tt.listed)
+			}
+			wholeOrRedacted(t, page.Tasks, tt.whole, scout.ID)
+			for number := int64(1); number <= 3; number++ {
+				_, err := f.service.Task(tt.ctx, tt.viewer, f.org, number)
+				if found := slices.Contains(tt.whole, number); found != (err == nil) || (err != nil && !errors.Is(err, orgs.ErrNotFound)) {
+					t.Errorf("Task(%d) = %v, want found %t", number, err, found)
+				}
+			}
+		})
+	}
+}
+
+// wholeOrRedacted checks that each of Scout's queued tasks listed is whole when whole numbers it, and redacted
+// otherwise.
+func wholeOrRedacted(t *testing.T, tasks []agents.Task, whole []int64, scout uuid.UUID) {
+	t.Helper()
+	for _, task := range tasks {
+		wanted := slices.Contains(whole, task.Number)
+		if redacted := task.Private && task.Title == "" && task.Instructions == "" && task.AssignedBy == nil && task.RepoID == uuid.Nil; redacted == wanted {
+			t.Errorf("task %d = %+v; want whole %t", task.Number, task, wanted)
+		}
+		if task.Agent.ID != scout || task.State != agents.TaskQueued {
+			t.Errorf("task %d = %+v; want Scout's, queued, in either case", task.Number, task)
+		}
+	}
+}

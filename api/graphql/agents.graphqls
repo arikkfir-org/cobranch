@@ -101,8 +101,10 @@ type Task {
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
-  "What it is for: assigned for a task a principal assigned."
+  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's."
   kind: String!
+  "Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works."
+  private: Boolean!
   "Its assigner, whose permissions cap it; null once they are gone, when it may do nothing."
   assignedBy: CommitPrincipal
   title: String!
@@ -114,7 +116,7 @@ type Task {
   "The branch of that repository it works on; null for none."
   branchId: ID
   branch: String
-  "The thread of that branch's chat it talks in; null for none."
+  "The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none."
   threadId: ID
   "The commit it works at, such as the head a review task reviews; null for none."
   sha: String
@@ -135,7 +137,7 @@ type Task {
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in."
+"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in."
 type MyTask {
   organization: String!
   task: Task!
@@ -147,6 +149,14 @@ type MyTask {
   issueNumber: Int
   "The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none."
   issueKey: String
+  "The private conversation the task talks in, its assigner's; null for none."
+  conversation: MyTaskConversation
+}
+
+"The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names."
+type MyTaskConversation {
+  repositorySlug: String
+  agentId: ID
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."

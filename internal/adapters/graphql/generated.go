@@ -234,18 +234,21 @@ type ComplexityRoot struct {
 	}
 
 	ChatMessage struct {
-		Author     func(childComplexity int) int
-		Body       func(childComplexity int) int
-		CreatedAt  func(childComplexity int) int
-		DeletedAt  func(childComplexity int) int
-		DeletedBy  func(childComplexity int) int
-		EditedAt   func(childComplexity int) int
-		HTML       func(childComplexity int) int
-		ID         func(childComplexity int) int
-		TaskID     func(childComplexity int) int
-		TaskNumber func(childComplexity int) int
-		ThreadID   func(childComplexity int) int
-		Version    func(childComplexity int) int
+		AskedAgent      func(childComplexity int) int
+		AskedTaskID     func(childComplexity int) int
+		AskedTaskNumber func(childComplexity int) int
+		Author          func(childComplexity int) int
+		Body            func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		DeletedAt       func(childComplexity int) int
+		DeletedBy       func(childComplexity int) int
+		EditedAt        func(childComplexity int) int
+		HTML            func(childComplexity int) int
+		ID              func(childComplexity int) int
+		TaskID          func(childComplexity int) int
+		TaskNumber      func(childComplexity int) int
+		ThreadID        func(childComplexity int) int
+		Version         func(childComplexity int) int
 	}
 
 	ChatPage struct {
@@ -668,10 +671,16 @@ type ComplexityRoot struct {
 	MyTask struct {
 		AgentEmail        func(childComplexity int) int
 		AgentInstructions func(childComplexity int) int
+		Conversation      func(childComplexity int) int
 		IssueKey          func(childComplexity int) int
 		IssueNumber       func(childComplexity int) int
 		Organization      func(childComplexity int) int
 		Task              func(childComplexity int) int
+	}
+
+	MyTaskConversation struct {
+		AgentID        func(childComplexity int) int
+		RepositorySlug func(childComplexity int) int
 	}
 
 	Organization struct {
@@ -924,6 +933,7 @@ type ComplexityRoot struct {
 		Kind           func(childComplexity int) int
 		Number         func(childComplexity int) int
 		OrganizationID func(childComplexity int) int
+		Private        func(childComplexity int) int
 		Reason         func(childComplexity int) int
 		RepositoryID   func(childComplexity int) int
 		RepositorySlug func(childComplexity int) int
@@ -2002,6 +2012,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ChatAnchor.StartLine(childComplexity), true
 
+	case "ChatMessage.askedAgent":
+		if e.ComplexityRoot.ChatMessage.AskedAgent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.AskedAgent(childComplexity), true
+	case "ChatMessage.askedTaskId":
+		if e.ComplexityRoot.ChatMessage.AskedTaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.AskedTaskID(childComplexity), true
+	case "ChatMessage.askedTaskNumber":
+		if e.ComplexityRoot.ChatMessage.AskedTaskNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.AskedTaskNumber(childComplexity), true
 	case "ChatMessage.author":
 		if e.ComplexityRoot.ChatMessage.Author == nil {
 			break
@@ -4427,6 +4455,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MyTask.AgentInstructions(childComplexity), true
+	case "MyTask.conversation":
+		if e.ComplexityRoot.MyTask.Conversation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTask.Conversation(childComplexity), true
 	case "MyTask.issueKey":
 		if e.ComplexityRoot.MyTask.IssueKey == nil {
 			break
@@ -4451,6 +4485,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MyTask.Task(childComplexity), true
+
+	case "MyTaskConversation.agentId":
+		if e.ComplexityRoot.MyTaskConversation.AgentID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTaskConversation.AgentID(childComplexity), true
+	case "MyTaskConversation.repositorySlug":
+		if e.ComplexityRoot.MyTaskConversation.RepositorySlug == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTaskConversation.RepositorySlug(childComplexity), true
 
 	case "Organization.apiKeys":
 		if e.ComplexityRoot.Organization.APIKeys == nil {
@@ -5722,6 +5769,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.OrganizationID(childComplexity), true
+	case "Task.private":
+		if e.ComplexityRoot.Task.Private == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Private(childComplexity), true
 	case "Task.reason":
 		if e.ComplexityRoot.Task.Reason == nil {
 			break
@@ -6223,8 +6276,10 @@ type Task {
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
-  "What it is for: assigned for a task a principal assigned."
+  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's."
   kind: String!
+  "Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works."
+  private: Boolean!
   "Its assigner, whose permissions cap it; null once they are gone, when it may do nothing."
   assignedBy: CommitPrincipal
   title: String!
@@ -6236,7 +6291,7 @@ type Task {
   "The branch of that repository it works on; null for none."
   branchId: ID
   branch: String
-  "The thread of that branch's chat it talks in; null for none."
+  "The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none."
   threadId: ID
   "The commit it works at, such as the head a review task reviews; null for none."
   sha: String
@@ -6257,7 +6312,7 @@ type Task {
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in."
+"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in."
 type MyTask {
   organization: String!
   task: Task!
@@ -6269,6 +6324,14 @@ type MyTask {
   issueNumber: Int
   "The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none."
   issueKey: String
+  "The private conversation the task talks in, its assigner's; null for none."
+  conversation: MyTaskConversation
+}
+
+"The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names."
+type MyTaskConversation {
+  repositorySlug: String
+  agentId: ID
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
@@ -6639,6 +6702,12 @@ type ChatMessage {
   taskId: ID
   "That task's number in its organization."
   taskNumber: Int
+  "The task it asked an agent for; null for a message that asked nobody, and once the task is deleted."
+  askedTaskId: ID
+  "That task's number in its organization."
+  askedTaskNumber: Int
+  "The agent it asked."
+  askedAgent: CommitPrincipal
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
 }
@@ -6683,6 +6752,8 @@ input ChatThreadInput {
   anchor: ChatAnchorInput
   "Its first message's Markdown, at most 20,000 characters."
   body: String!
+  "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent."
+  ask: ID
 }
 
 "A message to post."
@@ -6691,6 +6762,8 @@ input ChatMessageInput {
   id: ID
   "Its Markdown, at most 20,000 characters."
   body: String!
+  "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there."
+  ask: ID
 }
 
 extend type Mutation {
@@ -8810,6 +8883,12 @@ func (ec *executionContext) childFields_ChatMessage(ctx context.Context, field g
 		return ec.fieldContext_ChatMessage_taskId(ctx, field)
 	case "taskNumber":
 		return ec.fieldContext_ChatMessage_taskNumber(ctx, field)
+	case "askedTaskId":
+		return ec.fieldContext_ChatMessage_askedTaskId(ctx, field)
+	case "askedTaskNumber":
+		return ec.fieldContext_ChatMessage_askedTaskNumber(ctx, field)
+	case "askedAgent":
+		return ec.fieldContext_ChatMessage_askedAgent(ctx, field)
 	case "version":
 		return ec.fieldContext_ChatMessage_version(ctx, field)
 	}
@@ -9482,8 +9561,20 @@ func (ec *executionContext) childFields_MyTask(ctx context.Context, field graphq
 		return ec.fieldContext_MyTask_issueNumber(ctx, field)
 	case "issueKey":
 		return ec.fieldContext_MyTask_issueKey(ctx, field)
+	case "conversation":
+		return ec.fieldContext_MyTask_conversation(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MyTask", field.Name)
+}
+
+func (ec *executionContext) childFields_MyTaskConversation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repositorySlug":
+		return ec.fieldContext_MyTaskConversation_repositorySlug(ctx, field)
+	case "agentId":
+		return ec.fieldContext_MyTaskConversation_agentId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MyTaskConversation", field.Name)
 }
 
 func (ec *executionContext) childFields_Organization(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9942,6 +10033,8 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_agent(ctx, field)
 	case "kind":
 		return ec.fieldContext_Task_kind(ctx, field)
+	case "private":
+		return ec.fieldContext_Task_private(ctx, field)
 	case "assignedBy":
 		return ec.fieldContext_Task_assignedBy(ctx, field)
 	case "title":
@@ -17067,6 +17160,84 @@ func (ec *executionContext) _ChatMessage_taskNumber(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_ChatMessage_taskNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ChatMessage_askedTaskId(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_askedTaskId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AskedTaskID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_askedTaskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ChatMessage_askedTaskNumber(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_askedTaskNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AskedTaskNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_askedTaskNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, "Int")
+}
+
+func (ec *executionContext) _ChatMessage_askedAgent(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_askedAgent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AskedAgent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_askedAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _ChatMessage_version(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
@@ -26584,6 +26755,84 @@ func (ec *executionContext) fieldContext_MyTask_issueKey(_ context.Context, fiel
 	return graphql.NewScalarFieldContext("MyTask", field, false, false, "String")
 }
 
+func (ec *executionContext) _MyTask_conversation(ctx context.Context, field graphql.CollectedField, obj *MyTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTask_conversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Conversation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MyTaskConversation) graphql.Marshaler {
+			return ec.marshalOMyTaskConversation2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMyTaskConversation(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MyTask_conversation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MyTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MyTaskConversation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MyTaskConversation_repositorySlug(ctx context.Context, field graphql.CollectedField, obj *MyTaskConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTaskConversation_repositorySlug(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RepositorySlug, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MyTaskConversation_repositorySlug(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MyTaskConversation", field, false, false, "String")
+}
+
+func (ec *executionContext) _MyTaskConversation_agentId(ctx context.Context, field graphql.CollectedField, obj *MyTaskConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTaskConversation_agentId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AgentID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MyTaskConversation_agentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MyTaskConversation", field, false, false, "ID")
+}
+
 func (ec *executionContext) _Organization_id(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31671,6 +31920,29 @@ func (ec *executionContext) fieldContext_Task_kind(_ context.Context, field grap
 	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
 }
 
+func (ec *executionContext) _Task_private(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_private(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Private, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_private(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _Task_assignedBy(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34498,7 +34770,7 @@ func (ec *executionContext) unmarshalInputChatMessageInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "body"}
+	fieldsInOrder := [...]string{"id", "body", "ask"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -34519,6 +34791,13 @@ func (ec *executionContext) unmarshalInputChatMessageInput(ctx context.Context, 
 				return it, err
 			}
 			it.Body = data
+		case "ask":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ask"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Ask = data
 		}
 	}
 	return it, nil
@@ -34547,7 +34826,7 @@ func (ec *executionContext) unmarshalInputChatThreadInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "anchor", "body"}
+	fieldsInOrder := [...]string{"id", "anchor", "body", "ask"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -34575,6 +34854,13 @@ func (ec *executionContext) unmarshalInputChatThreadInput(ctx context.Context, o
 				return it, err
 			}
 			it.Body = data
+		case "ask":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ask"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Ask = data
 		}
 	}
 	return it, nil
@@ -37164,6 +37450,21 @@ func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionS
 			}
 		case "taskNumber":
 			out.Values[i] = ec._ChatMessage_taskNumber(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "askedTaskId":
+			out.Values[i] = ec._ChatMessage_askedTaskId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "askedTaskNumber":
+			out.Values[i] = ec._ChatMessage_askedTaskNumber(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "askedAgent":
+			out.Values[i] = ec._ChatMessage_askedAgent(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -39971,6 +40272,49 @@ func (ec *executionContext) _MyTask(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "conversation":
+			out.Values[i] = ec._MyTask_conversation(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var myTaskConversationImplementors = []string{"MyTaskConversation"}
+
+func (ec *executionContext) _MyTaskConversation(ctx context.Context, sel ast.SelectionSet, obj *MyTaskConversation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, myTaskConversationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MyTaskConversation")
+		case "repositorySlug":
+			out.Values[i] = ec._MyTaskConversation_repositorySlug(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "agentId":
+			out.Values[i] = ec._MyTaskConversation_agentId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -41548,6 +41892,11 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "kind":
 			out.Values[i] = ec._Task_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "private":
+			out.Values[i] = ec._Task_private(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
@@ -44977,6 +45326,13 @@ func (ec *executionContext) marshalOMergeRequirements2ᚖcobranchᚗdevᚋintern
 		return graphql.Null
 	}
 	return ec._MergeRequirements(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOMyTaskConversation2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMyTaskConversation(ctx context.Context, sel ast.SelectionSet, v *MyTaskConversation) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MyTaskConversation(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganization(ctx context.Context, sel ast.SelectionSet, v *Organization) graphql.Marshaler {

@@ -58,6 +58,10 @@ func chatMessage(m chats.Message) *ChatMessage {
 		id, number := m.Task.ID.String(), int(m.Task.Number)
 		out.TaskID, out.TaskNumber = &id, &number
 	}
+	if m.Asked != nil {
+		id, number := m.Asked.ID.String(), int(m.Asked.Number)
+		out.AskedTaskID, out.AskedTaskNumber, out.AskedAgent = &id, &number, commitPrincipal(&m.Asked.Agent)
+	}
 	return out
 }
 
@@ -156,6 +160,9 @@ func (r *Resolver) postMessage(ctx context.Context, v chats.Viewer, subj chats.S
 			return nil, err
 		}
 	}
+	if in.Ask, err = inputID(ctx, input.Ask, "ask.invalid"); err != nil {
+		return nil, err
+	}
 	m, err := r.Chats.Post(ctx, v, subj, threadID, in)
 	if err != nil {
 		return nil, fail(ctx, err, "thread", "posting the message")
@@ -231,6 +238,11 @@ func chatInput(ctx context.Context, in ChatThreadInput) (chats.ThreadInput, erro
 	if a := in.Anchor; a != nil {
 		out.Anchor = anchorOf(a)
 	}
+	ask, err := inputID(ctx, in.Ask, "ask.invalid")
+	if err != nil {
+		return chats.ThreadInput{}, err
+	}
+	out.Ask = ask
 	return out, nil
 }
 
