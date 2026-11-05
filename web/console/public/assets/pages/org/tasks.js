@@ -10,7 +10,6 @@ import { base, me } from "../../lib/state.js";
 import { taskBadge, taskStates } from "../../lib/tasks.js";
 import { agentItem } from "./agents.js";
 
-export const nav = { label: "Tasks", order: 60, under: "agents" };
 export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agents" }, { label: "Tasks", href: root + "/tasks" }, ...(sub ? [{ label: "#" + sub }] : [])];
 export default ({ org, main, can, sub }) => sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
 // subject is the viewer's conversation with the agent whose tasks the list shows, as its page does.

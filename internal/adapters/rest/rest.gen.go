@@ -757,34 +757,37 @@ func (e PageViewNavigation) Valid() bool {
 
 // Defines values for PageViewPage.
 const (
-	PageViewPageHelp                      PageViewPage = "help"
-	PageViewPageHelpComponents            PageViewPage = "help.components"
-	PageViewPageOrganization              PageViewPage = "organization"
-	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
-	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
-	PageViewPageOrganizationIssues        PageViewPage = "organization.issues"
-	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
-	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
-	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
-	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
-	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
-	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
-	PageViewPageOrganizationUsage         PageViewPage = "organization.usage"
-	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
-	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
-	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
-	PageViewPageRepositoryChanges         PageViewPage = "repository.changes"
-	PageViewPageRepositoryCode            PageViewPage = "repository.code"
-	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
-	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
-	PageViewPageRepositoryEnvironments    PageViewPage = "repository.environments"
-	PageViewPageRepositoryFile            PageViewPage = "repository.file"
-	PageViewPageRepositoryRuns            PageViewPage = "repository.runs"
-	PageViewPageRepositorySecrets         PageViewPage = "repository.secrets"
-	PageViewPageRepositorySettings        PageViewPage = "repository.settings"
-	PageViewPageSettings                  PageViewPage = "settings"
-	PageViewPageSignIn                    PageViewPage = "sign-in"
-	PageViewPageWelcome                   PageViewPage = "welcome"
+	PageViewPageHelp                       PageViewPage = "help"
+	PageViewPageHelpComponents             PageViewPage = "help.components"
+	PageViewPageOrganization               PageViewPage = "organization"
+	PageViewPageOrganizationAgent          PageViewPage = "organization.agent"
+	PageViewPageOrganizationAgents         PageViewPage = "organization.agents"
+	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
+	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
+	PageViewPageOrganizationApiKeys        PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationIssues         PageViewPage = "organization.issues"
+	PageViewPageOrganizationMembers        PageViewPage = "organization.members"
+	PageViewPageOrganizationNewRepository  PageViewPage = "organization.new-repository"
+	PageViewPageOrganizationRoles          PageViewPage = "organization.roles"
+	PageViewPageOrganizationSecrets        PageViewPage = "organization.secrets"
+	PageViewPageOrganizationSettings       PageViewPage = "organization.settings"
+	PageViewPageOrganizationTasks          PageViewPage = "organization.tasks"
+	PageViewPageOrganizationUsage          PageViewPage = "organization.usage"
+	PageViewPageRepositoryAccess           PageViewPage = "repository.access"
+	PageViewPageRepositoryBranch           PageViewPage = "repository.branch"
+	PageViewPageRepositoryBranches         PageViewPage = "repository.branches"
+	PageViewPageRepositoryChanges          PageViewPage = "repository.changes"
+	PageViewPageRepositoryCode             PageViewPage = "repository.code"
+	PageViewPageRepositoryCommit           PageViewPage = "repository.commit"
+	PageViewPageRepositoryCommits          PageViewPage = "repository.commits"
+	PageViewPageRepositoryEnvironments     PageViewPage = "repository.environments"
+	PageViewPageRepositoryFile             PageViewPage = "repository.file"
+	PageViewPageRepositoryRuns             PageViewPage = "repository.runs"
+	PageViewPageRepositorySecrets          PageViewPage = "repository.secrets"
+	PageViewPageRepositorySettings         PageViewPage = "repository.settings"
+	PageViewPageSettings                   PageViewPage = "settings"
+	PageViewPageSignIn                     PageViewPage = "sign-in"
+	PageViewPageWelcome                    PageViewPage = "welcome"
 )
 
 // Valid indicates whether the value is a known member of the PageViewPage enum.
@@ -796,7 +799,13 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageOrganization:
 		return true
+	case PageViewPageOrganizationAgent:
+		return true
 	case PageViewPageOrganizationAgents:
+		return true
+	case PageViewPageOrganizationAgentsActivity:
+		return true
+	case PageViewPageOrganizationAgentsQuotas:
 		return true
 	case PageViewPageOrganizationApiKeys:
 		return true

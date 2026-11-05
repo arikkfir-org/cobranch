@@ -375,9 +375,17 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
   answers. A turn whose report fails is answered 503 and its answer held back; the harness asks it again, as it does
   any 503, and gets the answer once the report lands, so it never acts on a turn Cobranch hasn't recorded.
 - **Tasks live on their agent's page** (**Agreed**, 2026-11-04): a task is work given to an agent, explicitly or by
-  being asked, so the agent's page shows what it is working on, its queue and its history, each task with what it spent
-  against its cap, and the agent's facts show what it spent this month; the Agents page gains Activity and Quotas tabs,
-  and the old Tasks page gives way, its addresses opening the task on its agent's page.
+  being asked, so the agent's page (`/acme/agents/<id>`) shows what it is working on, its queue and its history, each
+  task with what it spent and, while it runs, its cap, and the agent's facts show what it spent this month; the Agents
+  page gains Activity and Quotas tabs, and the old Tasks page gives way, its addresses opening the task on its agent's
+  page. Settings gains Agents, where a person sets each agent's model, cap, secrets and grants, and Models, where an
+  admin connects providers and prices their models.
+- **What a month cost** (`GET /spend?month=2026-11&zone=Asia/Jerusalem`, `Organization.spend`): for each agent, its
+  tasks queued in the month, by how they stand, what its calls in the month cost, and its costliest task; for each
+  model, the tasks that called it, the tokens it read and wrote, and what its calls cost. The month is the viewer's, in
+  their time zone, this month in UTC by default. The counts and sums are the organization's money, so they count every
+  task, those the viewer may not see included; the costliest task is named only when the viewer sees it. A task that
+  failed on its cap is marked so when it fails, so it still counts as one once the cap is raised, as it usually is next.
 
 ## Agents act as principals
 
@@ -443,6 +451,7 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 | `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`, and its kind's guard; `agents.assign`; its assigner or `org.principals.manage` |
 | `GET`, `POST /tasks/{n}/transcript`; `GET /tasks/{n}/transcript/{seq}` | `Task.transcript`, `appendTranscriptEntry` | Who reads the task; the task's own token appends |
 | `GET /models`; `GET`, `PUT`, `DELETE /models/{provider}/{model}` | `models`, `setModel`, `removeModel` | `org.read`; `org.manage` |
+| `GET /spend`, a month's spend by agent and by model | `Organization.spend` | `org.read` |
 | `GET /v1/me/task`, outside `/orgs` | `myTask` | A task token, for the task it works |
 | `POST /v1/me/task/spend`, outside `/orgs` | `recordTaskSpend` | A task token, for the task it works; its pod's model proxy reports each turn |
 
@@ -462,8 +471,8 @@ the task’s own record and don’t, and task tokens, which Cobranch alone makes
 carries `org_id`, except a task's transcript entries, its tokens and its pods' record, which reach their organization
 through `task_id`. A message’s `task_id` names the task an agent posted it from.
 [ENG-257](https://linear.app/arikkfir/issue/ENG-257) adds `models`, audited, which `agents` names by provider and model,
-`agents.cap`, and `task_spend`, a row per call a task paid for, keyed by its task and the call's ID, which Cobranch alone
-writes and so doesn't audit.
+`agents.cap`, `agent_tasks.cap_reached`, set when a task fails on its cap, and `task_spend`, a row per call a task paid
+for, keyed by its task and the call's ID, which Cobranch alone writes and so doesn't audit.
 
 ## Rollout
 
