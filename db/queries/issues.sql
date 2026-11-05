@@ -11,15 +11,18 @@ VALUES (@id, @org_id, @number, @title, @description, @state, @priority, sqlc.nar
         @created_at, @created_at, sqlc.narg(closed_at));
 
 -- IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
--- is assigned to, who created it and the repository it is about, and its labels by name, and its assignee's newest
--- task on it when its assignee is an agent.
+-- is assigned to, who created it and the repository it is about, and its labels by name, its assignee's newest task on
+-- it when its assignee is an agent, and the live branch linked to it last.
 -- name: IssueByNumber :one
 SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
        c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
         FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
        (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
-        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task,
+       (SELECT jsonb_build_object('repo', b.repo_id, 'slug', br.slug, 'name', b.name) FROM branch_issues bl
+        JOIN branches b ON b.id = bl.branch_id JOIN repositories br ON br.id = b.repo_id
+        WHERE bl.issue_id = i.id AND b.deleted_at IS NULL ORDER BY bl.linked_at DESC, b.name LIMIT 1)::jsonb AS branch
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -37,7 +40,10 @@ SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assigne
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
         FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
        (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
-        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task,
+       (SELECT jsonb_build_object('repo', b.repo_id, 'slug', br.slug, 'name', b.name) FROM branch_issues bl
+        JOIN branches b ON b.id = bl.branch_id JOIN repositories br ON br.id = b.repo_id
+        WHERE bl.issue_id = i.id AND b.deleted_at IS NULL ORDER BY bl.linked_at DESC, b.name LIMIT 1)::jsonb AS branch
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -54,6 +60,20 @@ WHERE i.org_id = @org_id
   AND (@below::integer = 0 OR i.number < @below::integer)
 ORDER BY i.number DESC
 LIMIT @lim::integer;
+
+-- IssueCounts counts an organization's issues that ListIssues' filters but its states and page match: those open and
+-- those closed.
+-- name: IssueCounts :one
+SELECT count(*) FILTER (WHERE i.state = ANY (@open::text[]))::integer AS open,
+       count(*) FILTER (WHERE NOT i.state = ANY (@open::text[]))::integer AS closed
+FROM issues i
+WHERE i.org_id = @org_id
+  AND (sqlc.narg(assignee_id)::uuid IS NULL
+       OR i.assignee_id IS NOT DISTINCT FROM nullif(sqlc.narg(assignee_id)::uuid, '00000000-0000-0000-0000-000000000000'))
+  AND (sqlc.narg(repo_id)::uuid IS NULL
+       OR i.repo_id IS NOT DISTINCT FROM nullif(sqlc.narg(repo_id)::uuid, '00000000-0000-0000-0000-000000000000'))
+  AND (SELECT count(*) FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id = ANY (@label_ids::uuid[])) = cardinality(@label_ids::uuid[])
+  AND (@pattern::text = '' OR i.title ILIKE @pattern OR i.description ILIKE @pattern OR i.number = @number::integer);
 
 -- UpdateIssue writes an issue's fields over the version it was read at: no row when it is at another now.
 -- name: UpdateIssue :one
@@ -76,6 +96,16 @@ SELECT e.id, e.kind, e.at, e.details, e.actor_id, p.display_name AS actor_name
 FROM events e LEFT JOIN principals p ON p.id = e.actor_id
 WHERE e.subject_id = @issue_id AND e.kind LIKE 'issue.%'
 ORDER BY e.seq;
+
+-- IssueTaskStarts lists the tasks an issue's assignments gave agents that have started, oldest first: each with its
+-- number, its agent and the agent's display name, when it started, the repository it works in and its branch's name.
+-- name: IssueTaskStarts :many
+SELECT t.id, t.number, t.started_at::timestamptz AS started_at, t.agent_id, p.display_name AS agent_name, t.repo_id, b.name AS branch_name
+FROM agent_tasks t
+JOIN principals p ON p.id = t.agent_id
+LEFT JOIN branches b ON b.id = t.branch_id
+WHERE t.issue_id = @issue_id AND t.kind = 'issue' AND t.started_at IS NOT NULL
+ORDER BY t.started_at, t.id;
 
 -- IssueAssignee finds whom an organization's issue may be assigned to, by their principal, with their display name and
 -- kind: one of its members, or one of its agents.

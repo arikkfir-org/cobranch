@@ -143,15 +143,14 @@ The shell names no page: a new page that exports `nav` takes its place in the si
 at a phone’s width the sidebar goes off-canvas.
 
 - **Everything in the shell comes from the page modules.** The sidebar lists the organization's pages whose `nav` places
-  them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Tasks under
-  Agents), and Settings draws its tabs from its own directory; `place: "foot"` puts Settings at the sidebar's foot. A page
+  them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page, and Settings draws its tabs from its own directory; `place: "foot"` puts Settings at the sidebar's foot. A page
   with `nav.items` is a section, which shows five sub items: those the viewer opened last in this browser, as the
-  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent's
-  tasks) puts it first.
+  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent)
+  puts it first.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and
-  environments; an issue's comments on the issue; beside an agent's tasks, the viewer's conversation with the agent;
+  environments; an issue's comments on the issue; on an agent's page and its tasks' pages, the viewer's conversation with the agent;
   otherwise the viewer's own conversation about the repository or the organization, private to them. A
   thread on lines of a file shows them above its messages, with Resolved or Outdated beside them; a resolved thread
   folds into one row until Show opens it; a deleted branch's conversation stays, read-only; and while the pane can't

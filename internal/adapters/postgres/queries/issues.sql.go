@@ -102,7 +102,10 @@ SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
         FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
        (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
-        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task,
+       (SELECT jsonb_build_object('repo', b.repo_id, 'slug', br.slug, 'name', b.name) FROM branch_issues bl
+        JOIN branches b ON b.id = bl.branch_id JOIN repositories br ON br.id = b.repo_id
+        WHERE bl.issue_id = i.id AND b.deleted_at IS NULL ORDER BY bl.linked_at DESC, b.name LIMIT 1)::jsonb AS branch
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -122,11 +125,12 @@ type IssueByNumberRow struct {
 	RepoName     *string
 	Labels       []byte
 	Task         []byte
+	Branch       []byte
 }
 
 // IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
-// is assigned to, who created it and the repository it is about, and its labels by name, and its assignee's newest
-// task on it when its assignee is an agent.
+// is assigned to, who created it and the repository it is about, and its labels by name, its assignee's newest task on
+// it when its assignee is an agent, and the live branch linked to it last.
 func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int32) (IssueByNumberRow, error) {
 	row := q.db.QueryRow(ctx, issueByNumber, orgID, number)
 	var i IssueByNumberRow
@@ -154,7 +158,53 @@ func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int
 		&i.RepoName,
 		&i.Labels,
 		&i.Task,
+		&i.Branch,
 	)
+	return i, err
+}
+
+const issueCounts = `-- name: IssueCounts :one
+SELECT count(*) FILTER (WHERE i.state = ANY ($1::text[]))::integer AS open,
+       count(*) FILTER (WHERE NOT i.state = ANY ($1::text[]))::integer AS closed
+FROM issues i
+WHERE i.org_id = $2
+  AND ($3::uuid IS NULL
+       OR i.assignee_id IS NOT DISTINCT FROM nullif($3::uuid, '00000000-0000-0000-0000-000000000000'))
+  AND ($4::uuid IS NULL
+       OR i.repo_id IS NOT DISTINCT FROM nullif($4::uuid, '00000000-0000-0000-0000-000000000000'))
+  AND (SELECT count(*) FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id = ANY ($5::uuid[])) = cardinality($5::uuid[])
+  AND ($6::text = '' OR i.title ILIKE $6 OR i.description ILIKE $6 OR i.number = $7::integer)
+`
+
+type IssueCountsParams struct {
+	Open       []string
+	OrgID      uuid.UUID
+	AssigneeID *uuid.UUID
+	RepoID     *uuid.UUID
+	LabelIds   []uuid.UUID
+	Pattern    string
+	Number     int32
+}
+
+type IssueCountsRow struct {
+	Open   int32
+	Closed int32
+}
+
+// IssueCounts counts an organization's issues that ListIssues' filters but its states and page match: those open and
+// those closed.
+func (q *Queries) IssueCounts(ctx context.Context, arg IssueCountsParams) (IssueCountsRow, error) {
+	row := q.db.QueryRow(ctx, issueCounts,
+		arg.Open,
+		arg.OrgID,
+		arg.AssigneeID,
+		arg.RepoID,
+		arg.LabelIds,
+		arg.Pattern,
+		arg.Number,
+	)
+	var i IssueCountsRow
+	err := row.Scan(&i.Open, &i.Closed)
 	return i, err
 }
 
@@ -202,13 +252,65 @@ func (q *Queries) IssueEvents(ctx context.Context, issueID *uuid.UUID) ([]IssueE
 	return items, nil
 }
 
+const issueTaskStarts = `-- name: IssueTaskStarts :many
+SELECT t.id, t.number, t.started_at::timestamptz AS started_at, t.agent_id, p.display_name AS agent_name, t.repo_id, b.name AS branch_name
+FROM agent_tasks t
+JOIN principals p ON p.id = t.agent_id
+LEFT JOIN branches b ON b.id = t.branch_id
+WHERE t.issue_id = $1 AND t.kind = 'issue' AND t.started_at IS NOT NULL
+ORDER BY t.started_at, t.id
+`
+
+type IssueTaskStartsRow struct {
+	ID         uuid.UUID
+	Number     int64
+	StartedAt  time.Time
+	AgentID    uuid.UUID
+	AgentName  string
+	RepoID     *uuid.UUID
+	BranchName *string
+}
+
+// IssueTaskStarts lists the tasks an issue's assignments gave agents that have started, oldest first: each with its
+// number, its agent and the agent's display name, when it started, the repository it works in and its branch's name.
+func (q *Queries) IssueTaskStarts(ctx context.Context, issueID *uuid.UUID) ([]IssueTaskStartsRow, error) {
+	rows, err := q.db.Query(ctx, issueTaskStarts, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IssueTaskStartsRow
+	for rows.Next() {
+		var i IssueTaskStartsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.StartedAt,
+			&i.AgentID,
+			&i.AgentName,
+			&i.RepoID,
+			&i.BranchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIssues = `-- name: ListIssues :many
 SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
        c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
         FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
        (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
-        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task,
+       (SELECT jsonb_build_object('repo', b.repo_id, 'slug', br.slug, 'name', b.name) FROM branch_issues bl
+        JOIN branches b ON b.id = bl.branch_id JOIN repositories br ON br.id = b.repo_id
+        WHERE bl.issue_id = i.id AND b.deleted_at IS NULL ORDER BY bl.linked_at DESC, b.name LIMIT 1)::jsonb AS branch
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -250,6 +352,7 @@ type ListIssuesRow struct {
 	RepoName     *string
 	Labels       []byte
 	Task         []byte
+	Branch       []byte
 }
 
 // ListIssues lists a page of an organization's issues, newest first, as IssueByNumber answers each: those in the
@@ -299,6 +402,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.RepoName,
 			&i.Labels,
 			&i.Task,
+			&i.Branch,
 		); err != nil {
 			return nil, err
 		}

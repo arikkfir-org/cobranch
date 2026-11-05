@@ -23,8 +23,8 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
-| Screens | 32 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Components | 51 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
+| Screens | 51 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -136,14 +136,14 @@ Weights stop at Semi Bold: hierarchy comes from size and colour (`fg/default` ag
 ## Spacing, radii and elevation
 
 Spacing follows a 4 px grid with a 2 px half-step, and every padding, gap and radius in the file is bound to a token, so
-a change to a token moves every screen. The density is comfortable: rows are 36 px, single-line table rows 32 px.
+a change to a token moves every screen. The density is comfortable: rows are 36 px, table rows included.
 
 | Group | Tokens (px) | Use |
 | --- | --- | --- |
 | `space/*` | 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 | 8 to 12 inside controls, 16 inside cards, 24 between page sections, 32 page margins |
 | `size/control-*` | sm 28, md 32, lg 40 | Button and input heights |
 | `size/icon-*` | sm 16, md 20 | Icons |
-| `size/row`, `size/row-sm` | 36, 32 | Rows, single-line table rows |
+| `size/row`, `size/row-sm` | 36, 32 | Rows and table rows; `row-sm` is no longer used |
 | `size/topbar`, `size/sidebar`, `size/pane` | 48, 240, 320 | App shell |
 | `radius/*` | none 0, sm 4, md 6, lg 8, xl 12, full 999 | sm for tags and code chips; md for buttons, inputs and menu items; lg for cards, menus and machine avatars; xl for dialogs; full for people, status badges and counts |
 
@@ -229,7 +229,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 41 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 51 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
@@ -250,7 +250,7 @@ plan.
 | Tab | State: Default, Selected | Label, icon, count | `.tab-bar`, `.tab`, `.tab-count` |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked | `.menu`, `.menu-item`, `.menu-item-danger`, `.menu-shortcut`, `.menu-divider` |
 | Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | `.nav-item`, `.nav-sub-item` (`lib/shell.css`) |
-| Table/Header cell, Table/Cell, Table/Row | Cell kind: Text, Muted, Mono, Number, Actions, Two lines; Row state: Default, Muted, Selected | Text; Actions a small Ghost button; Two lines a title over its meta | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines`; `.row-muted`, `.row-selected` on a `tr` |
+| Table/Header cell, Table/Cell, Table/Row | Cell kind: Text, Muted, Mono, Number, Actions, Two lines, Issue, Person, Unassigned; Row state: Default, Muted, Selected | Text; Actions a small Ghost button; Two lines a title over its meta, after a 20px icon in a column that fills the row (a repository's); Issue its state icon, key, title and tags, filling the row; Person an avatar and a name; Unassigned a subtle word or dash | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines`, `.cell-issue`, `.cell-person`, `.cell-unassigned`; `.row-muted`, `.row-selected` on a `tr` |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone | `.badge` with a `.tone-*` class |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None | `.badge` with a `.tone-*` class |
 | Badge/Review | Approved, Changes requested, Neutral | None | `.badge` with a `.tone-*` class |
@@ -270,6 +270,9 @@ plan.
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
 | Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
+| Fact row | Kind: Text, Editable | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`) |
+| Activity/Event | None | Who did what, and when | `.event-row` |
+| Swatch | State: Default, Chosen | A label's colour as the Tag it gives, padded inside 1px of transparent border; Chosen ringed 2px in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`), `.is-chosen` |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
@@ -326,7 +329,7 @@ only cue.
 
 ## Screens
 
-Thirty-two screens on the Screens page, at 1440 wide and built only from library instances. They follow one
+Fifty-one screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -336,6 +339,7 @@ Researcher waits for a task.
 | [Sign up: organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=12-79) | Step 2 of 2: create an organization or ask to join one |
 | [Overview](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-60) | Branches that need you, repositories, agents at work, recent activity |
 | [Repositories](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=69-3127) | Every repository as a table: visibility, default branch, open branches, status, last push |
+| [New repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12992) | A card of a repository's name and description; Create repository opens it |
 | [Repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-646) | Branches by status (no pull requests), merge requirements, environments |
 | [Files](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=117-9579) | A directory at a ref: its latest commit, each entry beside the commit that last changed it, the README; Go to file |
 | [File](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=117-10012) | A file as numbered lines with Raw, Blame and History; its Markdown, binary, image, symlink, threads, empty and unreadable states beside it |
@@ -343,8 +347,26 @@ Researcher waits for a task.
 | [Commit](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-13670) | One commit: its message, who wrote and pushed it, its annotations and jobs, its diff Unified or Split |
 | [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
-| [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's issues as a table |
-| [Issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-1127) | Description, linked branch, activity with people and agents, "Assign to an agent" |
+| [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
+| [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
+| [Issues · Filter set](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-17300) | A filter picked from its menu, which the button then names |
+| [Issues · Assignee menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20377) | The Assignee filter: anyone, you, nobody, then members, then agents |
+| [Issues · Label menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20839) | The Label filter: each label as its tag, and the way to the labels |
+| [Issues · No issues yet](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12658) | The organization before its first issue |
+| [Issues · No open issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-20779) | Every issue closed; New issue opens the next |
+| [Issues · No closed issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21055) | The Closed tab before any issue closes |
+| [Issues · No issue matches](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21330) | Filters that match nothing, said back, with Clear filters |
+| [Issues · 1024](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22273) | Below 1100 wide the Branch column goes |
+| [Issues · Phone](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22902) | At 390: filters wrap, the table keeps Issue and Assignee |
+| [Issues · Labels](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-19483) | The organization's labels: each as its tag, what it is for, how many issues carry it |
+| [Issues · Labels · New label](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20183) | Making a label, in a dialog: its name, its colour picked from swatches of its tag, its description |
+| [New issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-13409) | A card of an issue's repository, title, description, assignee and labels |
+| [Issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-1127) | Description, linked branches, a read-only activity timeline, properties changed from their menus, "Assign to an agent"; its comments live in the conversation pane |
+| [Issue · Agent working](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21606) | The task its agent works on it in, and its start in the activity |
+| [Issue · More menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21914) | Copy branch name, Copy link, and Delete issue |
+| [Issue · New](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-22186) | An issue just opened: no description, no branch, one event |
+| [Issue · 1024](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22671) | Below 1100 wide the properties go under the activity |
+| [Issue · Phone](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-23300) | At 390, stacked the same way |
 | [Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=68-2926) | Tabs Agents, Activity and Quotas; each agent's model, status and cap |
 | [Agents · Activity](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5230) | What the organization's agents did, newest first |
 | [Agents · Quotas](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5627) | Spend this month, by agent against its cap and by model |
@@ -501,7 +523,7 @@ preference unless `data-theme="light"`.
 | What colour is the primary action? | Blue; ink stays for text and the mark (2026-11-04) |
 | Light, dark, or both? | Both, equal: the system decides, and a person may override it (2026-11-04) |
 | What is the shell? | A sidebar and a top bar, both fixed (2026-11-04) |
-| How dense? | Comfortable: 36 px rows, 32 px single-line table rows (2026-11-04) |
+| How dense? | Comfortable: 36 px rows (2026-11-04), table rows too (2026-11-05) |
 | What is the mark? | A person and an agent on one trunk, in an ink square, from 24 px; the branch graph at 16 px and as the favicon (2026-11-04) |
 | Where does the system live in code? | `tokens.css` and a component stylesheet in the Console; Figma stays the source (2026-11-04) |
 | How are settings laid out? | Tabs, scoped to the organization (2026-11-04) |

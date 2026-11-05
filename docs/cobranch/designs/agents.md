@@ -378,7 +378,9 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
   being asked, so the agent's page (`/acme/agents/<id>`) shows what it is working on, its queue and its history, each
   task with what it spent and, while it runs, its cap, and the agent's facts show what it spent this month; the Agents
   page gains Activity and Quotas tabs, and the old Tasks page gives way, its addresses opening the task on its agent's
-  page. Settings gains Agents, where a person sets each agent's model, cap, secrets and grants, and Models, where an
+  page. A task's own page (`/acme/agents/<id>/tasks/<n>`) shows its transcript step by step, each tool's call opening to
+  what it answered, its facts and what it spent against the cap, with how it ended, and follows it until it ends;
+  `/acme/tasks/<n>`, which a branch's AI review and older links name, opens it there. Settings gains Agents, where a person sets each agent's model, cap, secrets and grants, and Models, where an
   admin connects providers and prices their models.
 - **What a month cost** (`GET /spend?month=2026-11&zone=Asia/Jerusalem`, `Organization.spend`): for each agent, its
   tasks queued in the month, by how they stand, what its calls in the month cost, and its costliest task; for each

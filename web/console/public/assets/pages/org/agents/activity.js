@@ -1,5 +1,5 @@
 import { apiPage } from "../../../lib/api.js";
-import { agentPage, dollars, emptyState, eventIcon, eventText, events, micros, since, taskPage, taskTitle, usd, whoAvatar } from "../../../lib/agent.js";
+import { agentPage, dollars, emptyState, eventIcon, eventText, events, micros, since, taskLink, taskTitle, usd, whoAvatar } from "../../../lib/agent.js";
 import { h } from "../../../lib/dom.js";
 import { plural } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
@@ -38,7 +38,7 @@ async function showActivity(org, main) {
     h("td", { class: "cell-muted" }, since(e.at)),
     h("td", {}, h("a", { class: "activity-agent", href: agentPage(org, e.task.agent.id), "data-nav": "" }, whoAvatar(e.task.agent), e.task.agent.displayName)),
     h("td", {}, h("span", { class: "activity-event", title: eventText(e) }, eventIcon(e), h("span", {}, eventText(e)))),
-    h("td", {}, h("a", { class: "activity-task", href: taskPage(org, e.task), "data-nav": "" }, "#" + e.task.number + " " + taskTitle(e.task))),
+    h("td", {}, taskLink(org, e.task, "activity-task", "#" + e.task.number + " " + taskTitle(e.task))),
     h("td", { class: "cell-number cell-mono" }, ended(e) ? dollars(e.task.spent) : "–"));
   const rows = all.map(row);
   const table = h("table", { class: "table activity-table" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Agent"), h("th", {}, "Event"),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,6 +51,10 @@ func issueOf(i issues.Issue) Issue {
 	if r := i.Repository; r != nil {
 		out.Repository = &IssueRepository{Id: r.ID, Slug: r.Slug, Name: r.Name}
 	}
+	if b := i.Branch; b != nil {
+		out.Branch = &IssueLiveBranch{Name: b.Name}
+		out.Branch.Repository.Id, out.Branch.Repository.Slug = b.Repository.ID, b.Repository.Slug
+	}
 	out.Labels = mapAll(i.Labels, issueLabel)
 	if i.ClosedAt != nil {
 		at := i.ClosedAt.UTC()
@@ -59,12 +64,18 @@ func issueOf(i issues.Issue) Issue {
 }
 
 // issueTag is an issue's ETag: its version, then its organization's issue key, then the number and state of the task
-// it shows, quoted. The key is in it because a changed key renames the issue without changing its version, and a
-// client holding the old name must read the new; the task, because it moves on without changing the issue.
+// it shows and a digest of the branch it shows, quoted. The key is in it because a changed key renames the issue
+// without changing its version, and a client holding the old name must read the new; the task and the branch, because
+// they move on without changing the issue.
 func issueTag(i issues.Issue) string {
 	tag := strconv.FormatInt(i.Version, 10) + "-" + i.Key
 	if i.Task != nil {
 		tag += "-" + strconv.FormatInt(i.Task.Number, 10) + "-" + string(i.Task.State)
+	}
+	if b := i.Branch; b != nil {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(b.Repository.ID.String() + "/" + b.Name)) // a hash's Write never fails
+		tag += "-b" + strconv.FormatUint(uint64(h.Sum32()), 36)
 	}
 	return `"` + tag + `"`
 }
@@ -121,6 +132,7 @@ func (a api) ListIssues(ctx context.Context, req ListIssuesRequestObject) (ListI
 	}
 	out := ListIssues200JSONResponse{}
 	out.Body.Issues = mapAll(page.Issues, issueOf)
+	out.Body.Counts = IssueCounts{Open: page.Open, Closed: page.Closed}
 	if page.Next != "" {
 		link := `<?` + nextIssues(req.Params, page.Next).Encode() + `>; rel="next"`
 		out.Headers.Link = &link
@@ -363,6 +375,12 @@ func issueEvent(e issues.Event) IssueEvent {
 		out.Branch = &IssueEventBranch{LinkedBy: LinkedBy(b.LinkedBy)}
 		if b.Name != "" {
 			out.Branch.Repository, out.Branch.Name = &b.Repository, &b.Name
+		}
+	}
+	if t := e.Task; t != nil {
+		out.Task = &IssueEventTask{Number: t.Number}
+		if t.Branch != "" {
+			out.Task.Branch = &t.Branch
 		}
 	}
 	return out

@@ -180,13 +180,16 @@ func TestList(t *testing.T) {
 	if err != nil || len(rest.Issues) != 1 || rest.Issues[0].Number != 1 || rest.Next != "" {
 		t.Errorf("List(next) = %+v, %v; want ACME-1 alone", rest, err)
 	}
+	if page.Open != 3 || page.Closed != 1 || rest.Open != 3 || rest.Closed != 1 {
+		t.Errorf("List()'s counts = %d open and %d closed, then %d and %d; want 3 and 1 on every page", page.Open, page.Closed, rest.Open, rest.Closed)
+	}
 	all, err := f.service.List(ctx, f.max, f.acme.ID, issues.Filter{States: issues.States})
 	if err != nil || len(all.Issues) != 4 {
 		t.Errorf("List(every state) = %d, %v; want 4", len(all.Issues), err)
 	}
 	byID, err := f.service.List(ctx, f.max, f.acme.ID, issues.Filter{States: issues.States, Text: "acme-4"})
-	if err != nil || len(byID.Issues) != 1 || byID.Issues[0].Number != 4 {
-		t.Errorf("List(acme-4) = %+v, %v; want ACME-4", byID, err)
+	if err != nil || len(byID.Issues) != 1 || byID.Issues[0].Number != 4 || byID.Open != 0 || byID.Closed != 1 {
+		t.Errorf("List(acme-4) = %+v, %v; want ACME-4, closed", byID, err)
 	}
 	for name, filter := range map[string]issues.Filter{
 		"a cursor that isn't": {Cursor: "nope"}, "a state that isn't": {States: []issues.State{"doing"}}, "too many": {Limit: 101},
@@ -257,9 +260,21 @@ func TestActivityHidesRepositories(t *testing.T) {
 	if _, err := f.service.Update(ctx, f.olivia, f.acme.ID, 1, issues.Patch{RepositoryID: &website}); err != nil {
 		t.Fatal(err)
 	}
+	issue, err := f.service.Get(ctx, f.olivia, f.acme.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tasks' starts in a repository Max doesn't read are left out; those in one he reads, or in none, stay.
+	for _, task := range []issues.EventTask{{Number: 1, RepoID: f.secret.ID}, {Number: 2, RepoID: f.website.ID, Branch: "feature/x"}, {Number: 3}} {
+		f.store.Events[issue.ID] = append(f.store.Events[issue.ID], issues.Event{ID: uuid.New(), Kind: "issue.task_started", At: time.Now(), Task: &task})
+	}
 	activity, err := f.service.Activity(ctx, f.max, f.acme.ID, 1)
-	if err != nil || len(activity) != 2 || activity[1].Changes[0].From != "" || activity[1].Changes[0].To != "website" {
-		t.Errorf("Max's Activity() = %+v, %v; want the move from a repository he doesn't read to website", activity, err)
+	if err != nil || len(activity) != 4 || activity[1].Changes[0].From != "" || activity[1].Changes[0].To != "website" ||
+		activity[2].Task.Number != 2 || activity[3].Task.Number != 3 {
+		t.Errorf("Max's Activity() = %+v, %v; want the move from a repository he doesn't read to website, then tasks 2 and 3", activity, err)
+	}
+	if activity, err := f.service.Activity(ctx, f.olivia, f.acme.ID, 1); err != nil || len(activity) != 5 {
+		t.Errorf("Olivia's Activity() = %+v, %v; want every task's start", activity, err)
 	}
 }
 

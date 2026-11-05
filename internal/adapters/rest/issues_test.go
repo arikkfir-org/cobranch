@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
@@ -62,10 +65,17 @@ func TestListIssuesAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "the open ones, newest first", viewer: withIssues(maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				list := decode[struct{ Issues []Issue }](t, body).Issues
+				got := decode[struct {
+					Issues []Issue
+					Counts IssueCounts
+				}](t, body)
+				list := got.Issues
 				if len(list) != 2 || list[0].Identifier != "ACME-3" || list[1].Identifier != "ACME-1" || list[1].Repository == nil ||
-					list[1].Repository.Slug != "website" || list[0].DescriptionHtml != nil {
+					list[1].Repository.Slug != "website" || list[0].DescriptionHtml != nil || list[0].Branch != nil {
 					t.Errorf("issues = %s", body)
+				}
+				if got.Counts != (IssueCounts{Open: 2, Closed: 1}) {
+					t.Errorf("counts = %+v, want 2 open and 1 closed", got.Counts)
 				}
 			}},
 		{name: "a page, and a link to the next", viewer: withIssues(maxim), method: http.MethodGet,
@@ -85,6 +95,16 @@ func TestListIssuesAPI(t *testing.T) {
 		{name: "nobody's", viewer: withIssues(maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues?assignee=none&q=docs"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if list := decode[struct{ Issues []Issue }](t, body).Issues; len(list) != 1 || list[0].Identifier != "ACME-3" {
+					t.Errorf("issues = %s", body)
+				}
+			}},
+		{name: "the closed ones, counted with the open", viewer: withIssues(maxim), method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/issues?state=done&state=canceled&q=o"), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[struct {
+					Issues []Issue
+					Counts IssueCounts
+				}](t, body)
+				if len(got.Issues) != 1 || got.Issues[0].Identifier != "ACME-2" || got.Counts != (IssueCounts{Open: 2, Closed: 1}) {
 					t.Errorf("issues = %s", body)
 				}
 			}},
@@ -162,7 +182,27 @@ func TestIssueActivityAPI(t *testing.T) {
 					t.Errorf("events = %s", body)
 				}
 			}},
+		{name: "a task's start", viewer: withTaskStart(withIssues(maxim)), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues/1/activity"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				events := decode[struct{ Events []IssueEvent }](t, body).Events
+				if len(events) != 2 || events[1].Kind != "issue.task_started" || events[1].Task == nil || events[1].Task.Number != 318 ||
+					events[1].Task.Branch == nil || *events[1].Task.Branch != "feature/push-worker" {
+					t.Errorf("events = %s", body)
+				}
+			}},
 	})
+}
+
+// withTaskStart is viewer's fixture with an agent's start of task 318 on ACME-1, on website's feature/push-worker.
+func withTaskStart(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		v := viewer(f)
+		for id := range f.issueStore.Events {
+			f.issueStore.Events[id] = append(f.issueStore.Events[id], issues.Event{ID: uuid.New(), Kind: "issue.task_started", At: time.Now(),
+				Task: &issues.EventTask{Number: 318, RepoID: f.website.ID, Branch: "feature/push-worker"}})
+		}
+		return v
+	}
 }
 
 func TestIssueKeyAPI(t *testing.T) {
@@ -226,6 +266,12 @@ func TestBranchLinksAPI(t *testing.T) {
 				got := decode[struct{ Branches []IssueBranch }](t, body).Branches
 				if len(got) != 1 || got[0].Name != "feature" || got[0].Repository.Slug != "website" || got[0].LinkedBy != "hand" || got[0].Deleted {
 					t.Errorf("branches = %s", body)
+				}
+			}},
+		{name: "an issue shows the live branch linked to it last", viewer: withLinks(maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues/1"),
+			wantStatus: 200, wantTag: `"2-ACME-b`, check: func(t *testing.T, f *orgFixture, body []byte) {
+				if b := decode[Issue](t, body).Branch; b == nil || b.Name != "feature" || b.Repository.Slug != "website" || b.Repository.Id != f.website.ID {
+					t.Errorf("ACME-1 = %s, want website's feature", body)
 				}
 			}},
 		{name: "a branch shows its issue", viewer: withLinks(olivia), method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/branches/feature"),

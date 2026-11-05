@@ -5,7 +5,10 @@ SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assigne
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
         FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
        (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
-        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task,
+       (SELECT jsonb_build_object('repo', b.repo_id, 'slug', br.slug, 'name', b.name) FROM branch_issues bl
+        JOIN branches b ON b.id = bl.branch_id JOIN repositories br ON br.id = b.repo_id
+        WHERE bl.issue_id = i.id AND b.deleted_at IS NULL ORDER BY bl.linked_at DESC, b.name LIMIT 1)::jsonb AS branch
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id

@@ -761,6 +761,7 @@ const (
 	PageViewPageHelpComponents             PageViewPage = "help.components"
 	PageViewPageOrganization               PageViewPage = "organization"
 	PageViewPageOrganizationAgent          PageViewPage = "organization.agent"
+	PageViewPageOrganizationAgentTask      PageViewPage = "organization.agent-task"
 	PageViewPageOrganizationAgents         PageViewPage = "organization.agents"
 	PageViewPageOrganizationAgentsActivity PageViewPage = "organization.agents-activity"
 	PageViewPageOrganizationAgentsQuotas   PageViewPage = "organization.agents-quotas"
@@ -802,6 +803,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganization:
 		return true
 	case PageViewPageOrganizationAgent:
+		return true
+	case PageViewPageOrganizationAgentTask:
 		return true
 	case PageViewPageOrganizationAgents:
 		return true
@@ -941,6 +944,30 @@ func (e RepositoryAccessKind) Valid() bool {
 	case RepositoryAccessKindJob:
 		return true
 	case RepositoryAccessKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositorySummaryMain.
+const (
+	RepositorySummaryMainFailing RepositorySummaryMain = "failing"
+	RepositorySummaryMainNone    RepositorySummaryMain = "none"
+	RepositorySummaryMainPassing RepositorySummaryMain = "passing"
+	RepositorySummaryMainRunning RepositorySummaryMain = "running"
+)
+
+// Valid indicates whether the value is a known member of the RepositorySummaryMain enum.
+func (e RepositorySummaryMain) Valid() bool {
+	switch e {
+	case RepositorySummaryMainFailing:
+		return true
+	case RepositorySummaryMainNone:
+		return true
+	case RepositorySummaryMainPassing:
+		return true
+	case RepositorySummaryMainRunning:
 		return true
 	default:
 		return false
@@ -2165,6 +2192,9 @@ type Issue struct {
 	// Assignee Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Assignee *Principal `json:"assignee,omitempty"`
 
+	// Branch The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+	Branch *IssueLiveBranch `json:"branch,omitempty"`
+
 	// ClosedAt When it was last done or canceled; absent while it is open.
 	ClosedAt  *time.Time `json:"closedAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
@@ -2235,6 +2265,12 @@ type IssueChange struct {
 // IssueChangeField defines model for IssueChange.Field.
 type IssueChangeField string
 
+// IssueCounts How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+type IssueCounts struct {
+	Closed int `json:"closed"`
+	Open   int `json:"open"`
+}
+
 // IssueEvent Something that happened to an issue.
 type IssueEvent struct {
 	// Actor Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
@@ -2248,8 +2284,11 @@ type IssueEvent struct {
 	Changes []IssueChange      `json:"changes"`
 	Id      openapi_types.UUID `json:"id"`
 
-	// Kind issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+	// Kind issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
 	Kind string `json:"kind"`
+
+	// Task The task an issue.task_started names, which its agent assignee started on it; the event is left out for a viewer who doesn't read the task's repository.
+	Task *IssueEventTask `json:"task,omitempty"`
 }
 
 // IssueEventBranch The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out for a viewer who doesn't read the repository.
@@ -2262,6 +2301,15 @@ type IssueEventBranch struct {
 
 	// Repository Its repository's slug.
 	Repository *string `json:"repository,omitempty"`
+}
+
+// IssueEventTask The task an issue.task_started names, which its agent assignee started on it; the event is left out for a viewer who doesn't read the task's repository.
+type IssueEventTask struct {
+	// Branch The name of the branch it works on, without refs/heads/, once it has one.
+	Branch *string `json:"branch,omitempty"`
+
+	// Number Its number in the organization's tasks.
+	Number int64 `json:"number"`
 }
 
 // IssueInput What creates an issue.
@@ -2294,6 +2342,15 @@ type IssueLabel struct {
 	Color LabelColor         `json:"color"`
 	Id    openapi_types.UUID `json:"id"`
 	Name  string             `json:"name"`
+}
+
+// IssueLiveBranch The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+type IssueLiveBranch struct {
+	Name       string `json:"name"`
+	Repository struct {
+		Id   openapi_types.UUID `json:"id"`
+		Slug string             `json:"slug"`
+	} `json:"repository"`
 }
 
 // IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
@@ -2942,6 +2999,9 @@ type Repository struct {
 	// Slug The current slug; a request by an old one gets the repository with this one.
 	Slug string `json:"slug"`
 
+	// Summary A repository summed up for its organization's list, which alone answers it.
+	Summary *RepositorySummary `json:"summary,omitempty"`
+
 	// ViewerPermissions The permissions the viewer holds on the repository.
 	ViewerPermissions []string `json:"viewerPermissions"`
 
@@ -2985,6 +3045,24 @@ type RepositorySettings struct {
 	Name        *string `json:"name,omitempty"`
 	Slug        *string `json:"slug,omitempty"`
 }
+
+// RepositorySummary A repository summed up for its organization's list, which alone answers it.
+type RepositorySummary struct {
+	// LastPushAt When its last push was recorded; absent before its first.
+	LastPushAt *time.Time `json:"lastPushAt,omitempty"`
+
+	// Main How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
+	Main RepositorySummaryMain `json:"main"`
+
+	// OpenBranches Its live branches but main and those merged already.
+	OpenBranches int `json:"openBranches"`
+
+	// ReadyBranches Those of its open branches that are Ready.
+	ReadyBranches int `json:"readyBranches"`
+}
+
+// RepositorySummaryMain How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
+type RepositorySummaryMain string
 
 // RepositoryUsage One repository's share of its organization's Git data.
 type RepositoryUsage struct {
@@ -4825,7 +4903,7 @@ type ServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(w http.ResponseWriter, r *http.Request, org Org, id Id)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
 	// (GET /orgs/{org}/issues)
 	ListIssues(w http.ResponseWriter, r *http.Request, org Org, params ListIssuesParams)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
@@ -4939,7 +5017,7 @@ type ServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
-	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
@@ -22619,7 +22697,9 @@ type ListIssues200ResponseHeaders struct {
 
 type ListIssues200JSONResponse struct {
 	Body struct {
-		Issues []Issue `json:"issues"`
+		// Counts How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+		Counts IssueCounts `json:"counts"`
+		Issues []Issue     `json:"issues"`
 	}
 	Headers ListIssues200ResponseHeaders
 }
@@ -37215,7 +37295,7 @@ type StrictServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(ctx context.Context, request CancelInvitationRequestObject) (CancelInvitationResponseObject, error)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
 	// (GET /orgs/{org}/issues)
 	ListIssues(ctx context.Context, request ListIssuesRequestObject) (ListIssuesResponseObject, error)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
@@ -37329,7 +37409,7 @@ type StrictServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
-	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.

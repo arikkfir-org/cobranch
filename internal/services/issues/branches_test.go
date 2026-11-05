@@ -236,6 +236,79 @@ func TestBranches(t *testing.T) {
 	}
 }
 
+func TestIssueBranch(t *testing.T) {
+	f, issue := shipFixture(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		viewer func(f *fixture) issues.Viewer
+		want   string
+	}{
+		{"the owner sees the branch linked last", func(f *fixture) issues.Viewer { return f.olivia }, "secret/ship"},
+		{"a member who doesn't read its repository sees none", func(f *fixture) issues.Viewer { return f.max }, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := f.service.Get(ctx, tc.viewer(f), f.acme.ID, issue.Number)
+			if err != nil {
+				t.Fatal(err)
+			}
+			page, err := f.service.List(ctx, tc.viewer(f), f.acme.ID, issues.Filter{})
+			if err != nil || len(page.Issues) != 1 {
+				t.Fatalf("List() = %+v, %v", page, err)
+			}
+			for how, i := range map[string]issues.Issue{"Get": got, "List": page.Issues[0]} {
+				if branch := branchOf(i); branch != tc.want {
+					t.Errorf("%s: the issue's branch = %q, want %q", how, branch, tc.want)
+				}
+			}
+		})
+	}
+	// Once secret's branch is unlinked, website's is the newest left.
+	if err := f.service.Unlink(ctx, f.olivia, f.acme.ID, f.secret.ID, "ship"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.service.Get(ctx, f.max, f.acme.ID, issue.Number); err != nil || branchOf(got) != "website/ship" || got.Branch.Repository.ID != f.website.ID {
+		t.Errorf("Get() once secret's branch is unlinked = %+v, %v; want website/ship", got.Branch, err)
+	}
+}
+
+// TestCreateHidesBranches checks that the issue Create answers with shows the branch its name linked only to those who
+// read the branch's repository.
+func TestCreateHidesBranches(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		viewer func(f *fixture) issues.Viewer
+		want   string
+	}{
+		{"the owner sees the branch named after it", func(f *fixture) issues.Viewer { return f.olivia }, "secret/acme-1-ship"},
+		{"a member who doesn't read its repository sees none", func(f *fixture) issues.Viewer { return f.max }, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.store.AddBranch(f.secret.ID, "acme-1-ship")
+			created, err := f.service.Create(ctx, tc.viewer(f), f.acme.ID, issues.Input{Title: "Ship it"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if branch := branchOf(created); branch != tc.want {
+				t.Errorf("Create() = branch %q, want %q", branch, tc.want)
+			}
+			if got, err := f.service.Get(ctx, f.olivia, f.acme.ID, created.Number); err != nil || branchOf(got) != "secret/acme-1-ship" {
+				t.Errorf("Olivia's Get() = branch %q, %v; want secret/acme-1-ship, linked", branchOf(got), err)
+			}
+		})
+	}
+}
+
+// branchOf is the issue's live branch as "repository/name", or "" for none.
+func branchOf(i issues.Issue) string {
+	if i.Branch == nil {
+		return ""
+	}
+	return i.Branch.Repository.Slug + "/" + i.Branch.Name
+}
+
 func TestLinkEventsHideRepositories(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)

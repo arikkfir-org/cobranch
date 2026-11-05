@@ -1,12 +1,15 @@
 package rest
 
 import (
+	"encoding/json"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/repos"
 )
 
 func TestRepositoriesAPI(t *testing.T) {
@@ -123,4 +126,34 @@ func TestRepositoryAccessAPI(t *testing.T) {
 				return "/v1/orgs/acme/repos/website/access/" + f.max.User.ID.String() + "/roles/" + auth.RoleReader.String()
 			}, wantStatus: 404, wantCode: "grant.not_found"},
 	})
+}
+
+func TestListRepositoriesSummary(t *testing.T) {
+	pushed := now.Add(-time.Hour)
+	for _, tt := range []struct {
+		name    string
+		summary *repos.Summary
+		want    string
+	}{
+		{name: "a repository summed up", summary: &repos.Summary{OpenBranches: 4, ReadyBranches: 2, LastPushAt: pushed, Main: repos.MainFailing},
+			want: `{"lastPushAt":"` + pushed.Format(time.RFC3339) + `","main":"failing","openBranches":4,"readyBranches":2}`},
+		{name: "one never pushed", want: `{"main":"none","openBranches":0,"readyBranches":0}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newOrgFixture(t)
+			if tt.summary != nil {
+				f.repoStore.RepoSummaries[f.website.ID] = *tt.summary
+			}
+			rec := f.callWith(&f.olivia, "GET", "/v1/orgs/acme/repos", "", nil)
+			if rec.Code != 200 {
+				t.Fatalf("status = %d: %s", rec.Code, rec.Body)
+			}
+			got := decode[struct {
+				Repositories []struct{ Summary json.RawMessage }
+			}](t, rec.Body.Bytes())
+			if len(got.Repositories) != 1 || string(got.Repositories[0].Summary) != tt.want {
+				t.Errorf("repositories = %s, want website summed up as %s", rec.Body, tt.want)
+			}
+		})
+	}
 }

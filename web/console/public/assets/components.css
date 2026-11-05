@@ -35,6 +35,8 @@
 .btn-primary:hover { background: var(--color-action-primary-bg-hover); }
 .btn-ghost { border: 0; background: none; color: var(--color-fg-default); }
 .btn-ghost:hover { background: var(--color-bg-hover); }
+/* A Ghost button that deletes, in a row (a label's Delete), reads in the danger tone. */
+.btn-ghost.tone-danger { color: var(--tone-fg); }
 .btn-danger { border: 0; background: var(--color-action-danger-bg); color: var(--color-action-danger-fg); }
 .btn-danger:hover { background: var(--color-action-danger-bg-hover); }
 .btn-sm { height: var(--size-control-sm); padding: 0 var(--space-8); }
@@ -202,10 +204,10 @@
   height: var(--size-control-md); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md);
   background: none; color: var(--color-fg-default); font: var(--text-body-small); text-align: left; text-decoration: none; white-space: nowrap; cursor: pointer;
 }
-.menu-item .icon { color: var(--color-fg-muted); }
+.menu-item > .icon { color: var(--color-fg-muted); }
 .menu-item:hover { background: var(--color-bg-hover); }
-.menu-item:hover .icon { color: var(--color-fg-default); }
-.menu-item-danger, .menu-item-danger .icon, .menu-item-danger:hover .icon { color: var(--color-status-danger-fg); }
+.menu-item:hover > .icon { color: var(--color-fg-default); }
+.menu-item-danger, .menu-item-danger > .icon, .menu-item-danger:hover > .icon { color: var(--color-status-danger-fg); }
 .menu-item-danger:hover { background: var(--color-status-danger-bg); }
 .menu-shortcut { margin-left: auto; color: var(--color-fg-subtle); font: var(--text-caption); }
 .menu-item[aria-checked="true"]::after {
@@ -231,7 +233,7 @@
 }
 
 /* Table/Header cell and Table/Cell: objects of one kind, in a table that is its own card. Header cells are 36px on the
-   sunken background in Label/Small; body cells are at least 32px, a second line grows them; body rows are divided by
+   sunken background in Label/Small; body cells are at least 36px, a second line grows them; body rows are divided by
    border/subtle and hovered; a cell holds text, Muted metadata, Mono names (SHAs, paths, branches), or a badge, an
    avatar or a button. */
 .table {
@@ -242,7 +244,7 @@
   height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-sunken); color: var(--color-fg-muted); font: var(--text-label-small); text-align: left; white-space: nowrap;
 }
-.table td { height: var(--size-row-sm); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
+.table td { height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
 /* Table/Row: State=Muted for a row that no longer counts (a revoked key, an archived repository), its cells muted;
@@ -260,11 +262,30 @@
 .table td.cell-actions > * + * { margin-left: var(--space-8); }
 .table td.cell-two-lines { padding-block: var(--space-12); }
 .table td a { color: inherit; text-decoration: none; }
+.table td.cell-number a { color: var(--color-fg-link); }
 .table td a:hover { text-decoration: underline; }
 .cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
-.cell-two-lines > :first-child { color: var(--color-fg-default); font: var(--text-body-medium); }
+.cell-two-lines > :is(:first-child, .icon + *) { margin-top: 0; color: var(--color-fg-default); font: var(--text-body-medium); }
 .cell-two-lines > * + * { margin-top: var(--space-2); }
-.cell-two-lines > code, .cell-two-lines > code:first-child { font: var(--text-code-medium); }
+.cell-two-lines > code, .cell-two-lines > code:is(:first-child, .icon + *) { font: var(--text-code-medium); }
+/* A two-line cell that leads with a 20px icon (a repository's) fills the row's width the other columns leave, and
+   truncates its lines beside the icon; the cells after it keep to one line. */
+.table td.cell-two-lines:has(> .icon) { width: 100%; max-width: 0; }
+.table td.cell-two-lines:has(> .icon) ~ td { white-space: nowrap; }
+.cell-two-lines > .icon { float: left; margin-right: var(--space-12); }
+.cell-two-lines > .icon svg { width: var(--size-icon-md); height: var(--size-icon-md); }
+.cell-two-lines:has(> .icon) > :not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Table/Cell Kind=Issue: an issue as the Issues table leads its row with it: its 16px state icon in its tone's solid
+   colour, its key in Code/Small muted, its title in Body/Medium, which fills the width the other columns leave and
+   truncates, then its tags; the cells after it keep to one line. Kind=Person (.cell-person) is an avatar beside a
+   name, and Kind=Unassigned what stands for nobody, or nothing (a dash), in fg/subtle. */
+.table td:has(> .cell-issue) { width: 100%; max-width: 0; padding-block: var(--space-8); }
+.table td:has(> .cell-issue) ~ td { white-space: nowrap; }
+.cell-issue { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.cell-issue > .icon { color: var(--tone-solid); }
+.cell-issue > code { flex: none; color: var(--color-fg-muted); font: var(--text-code-small); }
+.cell-issue > a { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-body-medium); text-overflow: ellipsis; white-space: nowrap; }
+.cell-unassigned { color: var(--color-fg-subtle); }
 
 /* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
    or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
@@ -274,6 +295,8 @@
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
+/* A card's note: the muted Body/Small line a card shows in place of what it lists while it has none. */
+.card-body.card-note { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
 /* Card, Tone=Success for a card that announces a thing done and shown once, Tone=Danger for a danger zone: the border
    takes the tone's colour, and the header its tint, with the title in the tone. */
 .card:is(.card-success, .card-danger) { border-color: var(--tone-border); }
@@ -303,6 +326,34 @@
   padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
 }
 
+/* Swatch: one colour to pick for a label, drawn as the Tag it gives, in a wrapping row, padded inside 1px of
+   transparent border; State=Chosen (.is-chosen) rings it 2px in border/focus, 1px over that border and 1px outside it,
+   and its Tag shows the check. Its radio stays out of sight but takes the keyboard. */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.swatch { position: relative; display: inline-flex; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); cursor: pointer; }
+.swatch > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.swatch.is-chosen { border-color: var(--color-border-focus); box-shadow: 0 0 0 1px var(--color-border-focus); }
+.swatch:has(> input:focus-visible) { box-shadow: var(--shadow-focus-ring); }
+.swatch.is-chosen:has(> input:focus-visible) { box-shadow: 0 0 0 1px var(--color-border-focus), var(--shadow-focus-ring); }
+.swatch:not(.is-chosen) > .tag > .icon { display: none; }
+
+/* Fact row: one property of an object, in a card of them (an issue's, beside it): its label in Body/Small muted in a
+   104px column, then its value, which wraps. Kind=Text is the value as text; Kind=Editable, for whoever may change
+   it, a Small Ghost button holding the value as text and a chevron, which opens a menu. The card pads its rows by 8px
+   above and below. */
+.facts { display: flex; flex-direction: column; padding: var(--space-8) 0; }
+.fact-row { display: flex; align-items: center; gap: var(--space-12); min-width: 0; padding: var(--space-8) var(--space-16); }
+.fact-label { flex: none; width: 104px; color: var(--color-fg-muted); font: var(--text-body-small); }
+.fact-value { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); flex: 1; min-width: 0; color: var(--color-fg-default); font: var(--text-body-small); }
+.fact-value > a { color: var(--color-fg-link); text-decoration: none; }
+.fact-value > a:hover { text-decoration: underline; }
+.fact-value > .btn-ghost { flex-wrap: wrap; justify-content: flex-start; height: auto; min-height: var(--size-control-sm); text-align: left; }
+
+/* Activity/Event: a line of an object's activity (an issue's): who did what, in Caption muted, and when, at its end. */
+.event-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-16); color: var(--color-fg-muted); font: var(--text-caption); }
+.event-row > :first-child { flex: 1; min-width: 0; }
+.event-row > time { flex: none; white-space: nowrap; }
+
 /* Meter: a share of a quota or a cap. Kind=Full is its label and value over a 6px track; Kind=Share (.meter-share) the
    4px track alone, for a table cell that says the value. The bar's width is the share, set by the page; Tone=Warning
    from 80%, Tone=Danger at or over the cap, when the value turns the tone's colour too. */
@@ -327,7 +378,7 @@
 .dialog::backdrop { background: var(--color-bg-overlay); }
 .dialog-header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-16) var(--space-20); }
 .dialog-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); }
-.dialog-body { display: grid; gap: var(--space-12); padding: 0 var(--space-20) var(--space-20); color: var(--color-fg-default); font: var(--text-body-medium); }
+.dialog-body { display: grid; gap: var(--space-16); padding: 0 var(--space-20) var(--space-20); color: var(--color-fg-default); font: var(--text-body-medium); }
 .dialog-body p { color: inherit; }
 .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-20); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
 
@@ -380,11 +431,11 @@
 .section-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
 .section-header-description { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
 
-/* Filters: the row over a list or table: a 320px search Input on the left, then its controls, and its count in Caption on
-   the right. */
+/* Filters: the row over a list or table: a 320px search Input on the left, and its controls, then its count in Caption,
+   on the right. */
 .filters { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
-.filters > .input { flex: 0 1 320px; }
-.filters-count { margin-left: auto; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.filters > .input { flex: 0 1 320px; margin-right: auto; }
+.filters-count { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 @media (max-width: 768px) {
   .filters { flex-wrap: wrap; }
   .filters > .input { flex-basis: 100%; }
@@ -403,6 +454,8 @@
 .row-meta { overflow: hidden; color: var(--color-fg-muted); font: var(--text-caption); text-overflow: ellipsis; white-space: nowrap; }
 .row-mono { color: var(--color-fg-muted); font: var(--text-code-small); white-space: nowrap; }
 .row-aside { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+a.row-title { text-decoration: none; }
+a.row-title:hover { text-decoration: underline; }
 /* Commit row: author, message over who and when, its annotations as icons, the short SHA and a copy button. */
 .commit-row .row-icons { display: inline-flex; gap: var(--space-4); }
 /* Annotation row: status icon, name, what it found, who made it, how long it took and a link to its details. */
