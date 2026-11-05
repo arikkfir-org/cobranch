@@ -48,13 +48,25 @@
 .file-line-link { display: inline-flex; padding: 0; border: 0; background: none; color: var(--color-fg-link); cursor: pointer; }
 .file-image { display: grid; place-items: center; padding: var(--space-48); background: var(--color-bg-sunken); }
 .file-image img { max-width: 100%; max-height: 60vh; }
+.file-symlink { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-16); color: var(--color-fg-muted); }
+.file-symlink-target { color: var(--color-fg-link); font: var(--text-code-medium); text-decoration: none; overflow-wrap: anywhere; }
+.file-symlink-target:hover { text-decoration: underline; }
+.file-symlink-hint { color: var(--color-fg-muted); font: var(--text-body-small); }
+.files-empty .files-clone { align-self: stretch; margin-top: var(--space-24); text-align: left; }
+.files-clone .clone-url { padding: var(--space-6) var(--space-8) var(--space-6) var(--space-12); border: 1px solid var(--color-border-default); }
+.files-clone .clone-url code { font: var(--text-code-medium); }
 
-.file-thread { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.file-threads { margin: 0; padding: 0; list-style: none; }
+.file-thread { display: flex; align-items: center; gap: var(--space-12); min-height: 40px; padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
 .file-thread:last-child { border-bottom: 0; }
-.file-thread a.row-mono { color: var(--color-fg-link); text-decoration: none; }
+.file-thread-lines { flex: none; width: 72px; color: var(--color-fg-link); font: var(--text-code-small); text-decoration: none; }
+.file-thread-lines:hover { text-decoration: underline; }
+.file-thread-title { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-body-medium); text-overflow: ellipsis; white-space: nowrap; }
+.file-thread-by { display: inline-flex; align-items: center; gap: var(--space-6); color: var(--color-fg-default); font: var(--text-body-small); white-space: nowrap; }
+.file-thread-when { flex: none; min-width: 72px; color: var(--color-fg-muted); font: var(--text-body-small); text-align: right; white-space: nowrap; }
 .file-thread-form { display: grid; grid-template-columns: 120px 120px minmax(0, 1fr); align-items: end; gap: var(--space-12); padding: var(--space-16); border-top: 1px solid var(--color-border-subtle); }
 .file-thread-form > .field:nth-of-type(3), .file-thread-form-footer { grid-column: 1 / -1; }
-.file-thread-form-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+.file-thread-form-footer { display: flex; justify-content: flex-end; }
 
 /* The Clone popover, until components.css draws it. */
 .clone-menu { display: grid; gap: var(--space-12); width: min(400px, calc(100vw - var(--space-32))); padding: var(--space-12); }

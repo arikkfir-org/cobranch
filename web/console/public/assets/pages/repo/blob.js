@@ -13,4 +13,4 @@ export const subject = async ({ org, repo, path, at, rest, can }) => {
 };
 
 // A file at a ref: blob/ then the ref and the file's path.
-export default ({ repo, path, at, rest, can }) => repositoryFiles(repo, path, at, true, rest, can);
+export default ({ org, repo, path, at, rest, can }) => repositoryFiles(org, repo, path, at, true, rest, can);

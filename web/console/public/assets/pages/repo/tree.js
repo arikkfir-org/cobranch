@@ -11,4 +11,4 @@ export const subject = async ({ org, repo, path, at, rest, can }) => {
 };
 
 // A directory at a ref: tree/ then the ref and the directory's path, main's root without them.
-export default ({ repo, path, at, rest, can }) => repositoryFiles(repo, path, at, false, rest, can);
+export default ({ org, repo, path, at, rest, can }) => repositoryFiles(org, repo, path, at, false, rest, can);

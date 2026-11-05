@@ -1,9 +1,9 @@
 import { api } from "./api.js";
-import { lineLabel, linesAnchor } from "./chat.js";
+import { linesAnchor } from "./chat.js";
 import { h } from "./dom.js";
-import { banner, failure, field, input, textarea } from "./forms.js";
+import { failure, field, input, textarea } from "./forms.js";
 import { fromNow, plural, shortSha, size, subject, whenExactly } from "./format.js";
-import { authorAvatar, icon } from "./icons.js";
+import { authorAvatar, icon, principalAvatar } from "./icons.js";
 import { rendered } from "./markdown.js";
 import { popover } from "./menu.js";
 import { go } from "./router.js";
@@ -13,16 +13,15 @@ import { base, config } from "./state.js";
 // and the path, a directory's latest commit, its entries beside the commits that last changed them, and its README;
 // or a file's card, with its lines, its rendered Markdown, its image, or why it isn't shown. Its URL's parts after
 // tree/ or blob/ are a ref, then a path: the longest branch or tag name they start with, or else their first part, a
-// commit's full name. A repository nothing was pushed to says so.
-export async function repositoryFiles(repo, path, at, isFile, rest, can) {
+// commit's full name. A repository nothing was pushed to says so, with the command that clones it.
+export async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
   const { branches, tags } = await refs(path);
-  if (!branches.length) return [h("section", { class: "card" }, empty("folder-git-2", "No files yet",
-    ["Nothing has been pushed to this repository yet. Push ", h("code", {}, "main"), " to see its files: Clone has its URLs."]))];
+  if (!branches.length) return [noFiles(org, repo)];
   const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
   const toolbar = h("div", { class: "files-toolbar" }, refPicker(branches, tags, ref, (r) => (isFile ? at.blob(r, file) : at.tree(r, file))),
     filePath(repo, at, ref, file));
   const onBranch = branches.some((b) => b.name === ref) ? ref : null;
-  const shown = isFile ? await repositoryFile(path, at, ref, file, onBranch, can) : await repositoryTree(path, at, ref, file);
+  const shown = isFile ? await repositoryFile(repo, path, at, ref, file, onBranch, can) : await repositoryTree(repo, path, at, ref, file);
   return [toolbar, ...shown];
 }
 
@@ -87,6 +86,17 @@ export function cloneMenu(anchor, org, repo, push) {
     ?.setAttribute("role", "dialog");
 }
 
+// noFiles is the Files screen of a repository nothing was pushed to: what pushing does, and a Copy field with the
+// command that clones it over HTTPS, when the installation's Git server has an address.
+function noFiles(org, repo) {
+  const command = config.gitUrl ? "git clone " + config.gitUrl + "/" + org.slug + "/" + repo.slug + ".git" : null;
+  return h("div", { class: "empty files-empty" }, h("span", { class: "empty-icon" }, icon("folder-git-2")), h("h2", { class: "empty-title" }, "No files yet"),
+    h("p", { class: "empty-description" }, command ? "Push a branch and its files show here. The clone path is below; main becomes the default branch with the first push."
+      : "Push a branch and its files show here; main becomes the default branch with the first push."),
+    command ? h("div", { class: "field files-clone" }, h("span", { class: "field-label" }, "Clone"),
+      h("div", { class: "clone-url" }, h("code", { title: command }, command), copyIcon(command, "Copy the clone command"))) : null);
+}
+
 // copyButton copies text, and says Copied for two seconds once it has.
 export function copyButton(text, label = "Copy") {
   const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", title: label }, "Copy");
@@ -111,14 +121,19 @@ export function copyIcon(text, label) {
 const empty = (glyph, title, description, action) => h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon(glyph)),
   h("h2", { class: "empty-title" }, title), h("p", { class: "empty-description" }, description), action);
 
-// unreadable is what a page shows when the API couldn't read a directory or a file: what a ref or a path found
-// nothing at, an installation without a Git server, or any other failure.
-function unreadable(err, ref, path) {
+// unreadable is the Empty state a page shows when the API couldn't read a directory or a file: what a ref or a path
+// found nothing at, an installation without a Git server, or, for any other failure, the Unreadable screens' "Can't
+// read", which tries again; repo names the repository its text shows the path in.
+function unreadable(err, repo, ref, path, isFile) {
   const what = { "ref.not_found": ["git-branch", "No such branch, tag or commit", ["This repository has nothing named ", h("code", {}, ref), "."]],
     "path.not_found": ["file", "Nothing here", ["There is nothing at ", h("code", {}, path), " in ", h("code", {}, ref), "."]],
     "path.submodule": ["folder-git-2", "A submodule", [h("code", {}, path), " is a submodule, whose files are another repository's."]],
     "git.unavailable": ["server", "No Git server", "This installation runs no Git server, so its files can't be shown."] }[err.code];
-  return [what ? h("section", { class: "card" }, empty(...what)) : banner("danger", null, "The files couldn't be read: " + err.message)];
+  if (what) return empty(...what);
+  const again = h("button", { class: "btn btn-primary", type: "button", onclick: () => go(location.pathname.slice(base.length - 1) + location.search + location.hash, true) },
+    icon("refresh-cw"), "Try again");
+  return isFile ? empty("circle-x", "Can't read this file", path.split("/").pop() + " couldn't be read from the repository just now. Try again, or clone the repository and open it there.", again)
+    : empty("circle-x", "Can't read this directory", [repo.slug, path].filter(Boolean).join("/") + " couldn't be read from the repository just now. Try again, or clone the repository and read it there.", again);
 }
 
 // by is who made a commit, as a sentence names them: the user behind its author, or the name it gives.
@@ -126,8 +141,8 @@ const by = (person) => (person.principal ? person.principal.displayName : person
 
 // repositoryTree lists the directory at dir of ref: the latest commit that changed it, with how many did, which
 // links to their history; then its entries, directories first, each beside the commit that last changed it; then
-// its README. A file's path goes to its file's page.
-async function repositoryTree(path, at, ref, dir) {
+// its README. A file's path goes to its file's page; a directory that can't be read says why in the listing's card.
+async function repositoryTree(repo, path, at, ref, dir) {
   const query = new URLSearchParams({ ref, path: dir });
   const reading = api("GET", path + "/tree/commits?" + query).catch(() => null);
   let tree;
@@ -135,7 +150,7 @@ async function repositoryTree(path, at, ref, dir) {
     tree = await api("GET", path + "/tree?" + query);
   } catch (err) {
     if (err.code === "path.file") return go(at.blob(ref, dir).slice(base.length - 1), true), [];
-    return unreadable(err, ref, dir);
+    return [h("section", { class: "card" }, unreadable(err, repo, ref, dir, false))];
   }
   const last = await reading;
   // Entries come directories first, each group by name as people sort them, whatever their case.
@@ -204,37 +219,42 @@ const language = (name) => {
 
 // repositoryFile shows the file at path of ref in a card, as the File screen draws it: its name and facts over its
 // lines, which a Markdown file shows rendered first; its image; or, for a binary file or one past 1 MiB, why it isn't
-// shown, with a link to its bytes. A symlink shows its target; a directory's path goes to its directory's page. On a
-// branch, a text file's lines start threads of the branch's chat, and the chat's threads on the file are listed.
-async function repositoryFile(path, at, ref, file, branch, can) {
+// shown, with a link to its bytes. A symlink shows its target; a directory's path goes to its directory's page, and a
+// file that can't be read says why in its card. On a branch, a text file's lines start threads of the branch's chat,
+// and the chat's threads on the file are listed.
+async function repositoryFile(repo, path, at, ref, file, branch, can) {
+  const name = file.split("/").pop();
+  const historyLink = h("a", { class: "btn btn-ghost btn-sm", href: at.history(ref, false, file), "data-nav": "" }, icon("clock"), "History");
+  const facts = h("span", { class: "file-facts" });
+  const card = (glyph, said, actions, ...body) => {
+    facts.textContent = said.filter(Boolean).join(" · ");
+    return h("section", { class: "card file" }, h("div", { class: "card-header file-header" }, icon(glyph), h("h2", { class: "file-name" }, name), facts, actions), body);
+  };
   let f;
   try {
     f = await api("GET", path + "/blob?" + new URLSearchParams({ ref, path: file }));
   } catch (err) {
     if (err.code === "path.directory") return go(at.tree(ref, file).slice(base.length - 1), true), [];
-    return unreadable(err, ref, file);
+    const raw = h("a", { class: "btn btn-ghost btn-sm", href: at.raw(ref, file), target: "_blank", rel: "noopener" }, "Raw");
+    return [card("file-code", [language(name)], [raw, historyLink], unreadable(err, repo, ref, file, true))];
   }
-  const historyLink = h("a", { class: "btn btn-ghost btn-sm", href: at.history(ref, false, f.path), "data-nav": "" }, icon("clock"), "History");
   const download = (cls, label) => h("a", { class: cls, href: at.raw(f.commit, f.path, true) }, label);
-  const facts = h("span", { class: "file-facts" });
-  const card = (said, actions, ...body) => {
-    facts.textContent = said.filter(Boolean).join(" · ");
-    return h("section", { class: "card file" }, h("div", { class: "card-header file-header" }, icon("file-code"), h("h2", { class: "file-name" }, f.name), facts, actions), body);
-  };
   const type = f.name.includes(".") ? f.name.split(".").pop().toUpperCase() : null;
   if (f.kind === "symlink") {
     const target = f.path.split("/").slice(0, -1).concat(f.text.split("/")).reduce((p, n) => (n === ".." ? p.slice(0, -1) : n === "." || !n ? p : [...p, n]), []).join("/");
-    return [card(["symlink"], [historyLink], h("div", { class: "card-body" }, h("p", {}, "A symlink to ", h("a", { href: at.blob(ref, target), "data-nav": "" }, h("code", {}, f.text)), ".")))];
+    return [card("link", ["symlink", plural(f.size, "byte")], [historyLink, copyIcon(f.text, "Copy the link's target")],
+      h("div", { class: "file-symlink" }, icon("arrow-right"), h("a", { class: "file-symlink-target", href: at.blob(ref, target), "data-nav": "" }, f.text),
+        h("span", { class: "file-symlink-hint" }, "Links to this file in the same commit")))];
   }
   if (imageFile(f.name)) {
     const img = h("img", { src: at.raw(f.commit, f.path), alt: f.name });
     img.addEventListener("load", () => {
       if (img.naturalWidth) facts.textContent = [img.naturalWidth + " × " + img.naturalHeight, size(f.size), type].join(" · ");
     });
-    return [card([size(f.size), type], [download("btn btn-sm", "Download"), historyLink], h("div", { class: "file-image" }, img))];
+    return [card("file-code", [size(f.size), type], [download("btn btn-sm", "Download"), historyLink], h("div", { class: "file-image" }, img))];
   }
   if (f.binary || f.truncated) {
-    return [card([size(f.size), f.binary ? "binary" : language(f.name)], [download("btn btn-sm", "Download"), historyLink],
+    return [card("file-code", [size(f.size), f.binary ? "binary" : language(f.name)], [download("btn btn-sm", "Download"), historyLink],
       empty("file", "Not shown", "Files over 1 MiB, and binary files of any size, aren't shown. Download it, or clone the repository.",
         download("btn btn-primary", "Download " + size(f.size))))];
   }
@@ -245,7 +265,7 @@ async function repositoryFile(path, at, ref, file, branch, can) {
   const actions = [h("a", { class: "btn btn-ghost btn-sm", href: at.raw(f.commit, f.path), target: "_blank", rel: "noopener" }, "Raw"), historyLink,
     copyIcon(f.text, "Copy the file's text")];
   const shown = f.html !== undefined ? markdownFile(f, code, lines) : { views: null, body: code };
-  return [card(said, [shown.views, actions], shown.body), await lines.panel()].filter(Boolean);
+  return [card("file-code", said, [shown.views, actions], shown.body), await lines.panel()].filter(Boolean);
 }
 
 // markdownFile is a Markdown file's views: rendered, or its lines, which it shows first when the page's anchor names
@@ -326,8 +346,9 @@ function linePicker(path, at, branch, f, can) {
   };
 }
 
-// threadsCard is the card of the branch's chat's threads on a file, each by the lines it is on, and, for a viewer who
-// may post, the form that starts one on the lines picked (start and end), at the commit the page shows.
+// threadsCard is the card of the branch's chat's threads on a file, as File · Threads draws it: each by the lines it
+// is on, its first words, who started it and when; and, for a viewer who may post, the form that starts one on the
+// lines picked (start and end), at the commit the page shows.
 async function threadsCard(path, at, branch, f, can, start, end) {
   const chat = path + "/branches/" + encodeURIComponent(branch) + "/chat";
   const { el: error, fail } = failure();
@@ -337,13 +358,18 @@ async function threadsCard(path, at, branch, f, can, start, end) {
   } catch (err) {
     fail(err);
   }
-  const firstWords = (t) => { const first = t.messages && t.messages[0]; return first && first.body ? first.body.split("\n")[0].slice(0, 80) : ""; };
-  const row = (t) => h("li", { class: "file-thread" }, h("a", { class: "row-mono", href: at.branchPage(branch) + "#thread-" + t.id, "data-nav": "" }, lineLabel(t.anchor)),
-    t.anchor.sha !== f.commit ? h("span", { class: "tag" }, "at " + shortSha(t.anchor.sha)) : null, t.resolvedAt ? h("span", { class: "tag" }, "resolved") : null,
-    h("span", { class: "row-meta" }, firstWords(t)));
+  const firstWords = (t) => { const first = t.messages && t.messages[0]; return first && first.body ? first.body.split("\n")[0] : ""; };
+  const lines = (a) => "L" + a.startLine + (a.endLine > a.startLine ? "-" + a.endLine : "");
+  const row = (t) => h("li", { class: "file-thread" },
+    h("a", { class: "file-thread-lines", href: at.branchPage(branch) + "#thread-" + t.id, "data-nav": "" }, lines(t.anchor)),
+    h("span", { class: "file-thread-title" }, firstWords(t)),
+    t.anchor.sha !== f.commit ? h("span", { class: "badge-quiet tone-neutral" }, "at " + shortSha(t.anchor.sha)) : null,
+    t.resolvedAt ? h("span", { class: "badge-quiet tone-success" }, "Resolved") : null,
+    t.startedBy ? h("span", { class: "file-thread-by" }, principalAvatar(t.startedBy), t.startedBy.displayName) : null,
+    h("span", { class: "file-thread-when", title: whenExactly(t.createdAt) }, fromNow(t.createdAt)));
   let form = null;
   if (can("messages.post")) {
-    const body = textarea({ name: "body", required: true, maxlength: 20000, placeholder: "What about these lines? In Markdown." });
+    const body = textarea({ name: "body", required: true, maxlength: 20000, rows: 4 });
     const button = h("button", { class: "btn btn-primary", type: "submit" }, "Start thread");
     const startThread = (e) => {
       e.preventDefault();
@@ -352,10 +378,10 @@ async function threadsCard(path, at, branch, f, can, start, end) {
         .then((t) => go(at.branchPage(branch).slice(base.length - 1) + "#thread-" + t.id))
         .catch((err) => { button.disabled = false; fail(err); });
     };
-    form = h("form", { class: "file-thread-form", onsubmit: startThread }, field("From line", start), field("To line", end), field("Message", body),
-      h("div", { class: "file-thread-form-footer" }, h("span", { class: "field-help" }, "Pick lines by their numbers: click one, then shift-click another."), button));
+    form = h("form", { class: "file-thread-form", onsubmit: startThread }, field("From line", start), field("To line", end),
+      field("Message", body, "Everyone who can see the branch reads it; @mention an agent to bring it in."), h("div", { class: "file-thread-form-footer" }, button));
   }
   return h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Threads on this file"),
-    h("span", { class: "card-meta" }, branch + "'s chat")), error,
-  threads.length ? h("ul", { class: "list" }, threads.map(row)) : h("div", { class: "card-body" }, h("p", { class: "muted" }, "None yet.")), form);
+    h("span", { class: "card-meta" }, threads.length ? threads.length + " on this branch" : "Shift-click two lines to pick a range")), error,
+  threads.length ? h("ul", { class: "list file-threads" }, threads.map(row)) : h("div", { class: "card-body" }, h("p", { class: "muted" }, "None yet.")), form);
 }
