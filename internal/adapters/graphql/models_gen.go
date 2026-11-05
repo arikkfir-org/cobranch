@@ -45,6 +45,10 @@ type Agent struct {
 	Model *string `json:"model,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
 	Secrets []*AgentSecret `json:"secrets"`
+	// A page of the viewer's own conversation with the agent, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
+	// The ID of the agent's organization, which its conversation reads.
+	OrganizationID string `json:"-"`
 }
 
 // A role an agent holds, at its organization or, with a repository, on that repository.
@@ -441,6 +445,15 @@ type CommitPage struct {
 type CommitPrincipal struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
+}
+
+// Which of the viewer's own conversations a change or a subscription names: the one about the organization, about one of its repositories, or with one of its agents; naming both a repository and an agent is refused (BAD_USER_INPUT, conversation.invalid).
+type ConversationSubject struct {
+	OrganizationID string `json:"organizationId"`
+	// The repository it is about; null for the organization's or an agent's.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The agent it is with, by its principal ID; null for the organization's or a repository's.
+	AgentID *string `json:"agentId,omitempty"`
 }
 
 // The latest deletion of a branch of a name, which keeps what it was at and its merge.
@@ -1025,6 +1038,8 @@ type Organization struct {
 	AvailableModelProviders []string `json:"availableModelProviders"`
 	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`
+	// A page of the viewer's own conversation about the organization, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
 	IssueKey string `json:"issueKey"`
 	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
@@ -1178,6 +1193,8 @@ type Repository struct {
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
+	// A page of the viewer's own conversation about the repository, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes repo.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
 	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
 	Environments []*Environment `json:"environments"`
 	// One of the repository's environments by ID: null unless it is there; takes repo.read.
