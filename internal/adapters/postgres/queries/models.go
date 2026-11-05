@@ -365,6 +365,13 @@ type OrganizationLimit struct {
 	UpdatedBy    *uuid.UUID
 }
 
+type Preference struct {
+	PrincipalID uuid.UUID
+	Theme       string
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type Principal struct {
 	ID          uuid.UUID
 	Kind        string
