@@ -1,186 +1,159 @@
 <!doctype html>
 <html lang="en">
 <head>
+  {{- /* The Back-office's root: the path of its URL, without its trailing slash, where its assets are. */ -}}
+  {{- $root := regexReplaceAll "(?i)^[a-z][a-z0-9+.-]*://[^/]*|/$" (env "COBRANCH_BACK_OFFICE_URL") "" }}
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch Back-office</title>
+  <!-- The small mark (assets/lib/brand.js) in the theme's colours, as the design system's tokens name them: gray/0 on
+       gray/900, and gray/950 on gray/50 in dark mode, as the Console's. -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><style>.g{fill:%231a1d20}.m{stroke:%23ffffff}@media (prefers-color-scheme:dark){.g{fill:%23f8f9fa}.m{stroke:%23131517}}</style><rect class='g' width='16' height='16' rx='4'/><g class='m' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='4.857' r='1.086'/><circle cx='6' cy='11.143' r='1.086'/><circle cx='10.286' cy='6.286' r='1.086'/><path d='M6 5.943V10.057M10.286 7.371C10.286 9.086 6 8.8 6 10.514'/></g></svg>">
+  <meta name="color-scheme" content="light dark">
   <!-- The Back-office: where an installation's administrators run it, through the Admin API at the URL config.json
        names (docs/cobranch/designs/back-office). Its pages: the organizations (search, create one for a user, enter
        one, set its own limits), the users and the installation's settings, its limits among them. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
-       design system's colours (docs/cobranch/designs/design-system), as the Console's. Caddy serves this page for every
-       path, and it routes on the path. -->
+       design system's tokens, typefaces and marks (docs/cobranch/designs/design-system), the Console's own files, which
+       the image takes from it; their theme follows the system's. Caddy serves this page for every path, its root
+       written in, and it routes on the path. -->
+  <link rel="preload" href="{{ $root }}/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ $root }}/assets/tokens.css">
+  <link rel="stylesheet" href="{{ $root }}/assets/fonts.css">
   <style>
-    :root {
-      color-scheme: light;
-      --color-bg-canvas: #ffffff;
-      --color-bg-sunken: #f8f9fa;
-      --color-bg-raised: #ffffff;
-      --color-fg-default: #1a1d20;
-      --color-fg-muted: #6b737b;
-      --color-border-default: #e4e7ea;
-      --color-accent: #2f6fed;
-      --color-accent-fg: #ffffff;
-      --color-status-success-fg: #0e6a3f;
-      --color-status-success-bg: #ecfdf3;
-      --color-status-success-border: #a6f0c4;
-      --color-status-warning-fg: #8c500b;
-      --color-status-warning-bg: #fff8eb;
-      --color-status-warning-border: #fdd98a;
-      --color-status-danger-fg: #a1262b;
-      --color-status-danger-bg: #fff1f1;
-      --color-status-danger-border: #f7b8bb;
-      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-      --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        color-scheme: dark;
-        --color-bg-canvas: #131517;
-        --color-bg-sunken: #0c0d0f;
-        --color-bg-raised: #1b1e21;
-        --color-fg-default: #f8f9fa;
-        --color-fg-muted: #b4bcc2;
-        --color-border-default: #2e3338;
-        --color-accent: #6b9bff;
-        --color-accent-fg: #0c0d0f;
-        --color-status-success-fg: #6cdda0;
-        --color-status-success-bg: #062a1b;
-        --color-status-success-border: #105335;
-        --color-status-warning-fg: #fcc04d;
-        --color-status-warning-bg: #361c05;
-        --color-status-warning-border: #723f0f;
-        --color-status-danger-fg: #ff8a8e;
-        --color-status-danger-bg: #3a0d0f;
-        --color-status-danger-border: #7a2024;
-      }
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
       background: var(--color-bg-canvas);
       color: var(--color-fg-default);
-      font: 14px/20px var(--font-sans);
+      font: var(--text-body-medium);
+      letter-spacing: var(--text-body-medium-tracking);
     }
     body.centered { display: grid; place-items: center; }
-    h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
-    h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
-    h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
+    h1 { margin: 0; font: var(--text-display); letter-spacing: var(--text-display-tracking); }
+    h2 { margin: 0; font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+    h3 { margin: 0; font: var(--text-label-small); letter-spacing: var(--text-label-small-tracking); color: var(--color-fg-muted); text-transform: uppercase; }
     p { margin: 0; color: var(--color-fg-muted); }
-    a { color: var(--color-accent); }
-    code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    a { color: var(--color-fg-link); }
+    code { font: var(--text-code-medium); letter-spacing: var(--text-code-medium-tracking); color: var(--color-fg-default); }
     [hidden] { display: none !important; }
     main.card {
-      width: min(440px, calc(100vw - 32px));
+      width: min(440px, calc(100vw - var(--space-32)));
       display: grid;
-      gap: 16px;
-      padding: 32px;
+      gap: var(--space-16);
+      padding: var(--space-32);
       border: 1px solid var(--color-border-default);
-      border-radius: 12px;
+      border-radius: var(--radius-xl);
       background: var(--color-bg-sunken);
     }
+    .brand { display: flex; align-items: center; gap: var(--space-8); }
+    .brand .tag { font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); color: var(--color-fg-muted); }
     .status {
       justify-self: start;
-      padding: 3px 10px;
-      border-radius: 999px;
+      padding: var(--space-2) var(--space-8);
+      border-radius: var(--radius-full);
       border: 1px solid var(--color-status-warning-border);
       background: var(--color-status-warning-bg);
       color: var(--color-status-warning-fg);
-      font-size: 12px;
-      line-height: 16px;
-      font-weight: 500;
+      font: var(--text-label-small);
     }
     .status[data-state="ready"] {
       border-color: var(--color-status-success-border);
       background: var(--color-status-success-bg);
       color: var(--color-status-success-fg);
     }
-    .buttons { display: grid; gap: 8px; }
+    .buttons { display: grid; gap: var(--space-8); }
     .button {
       display: inline-block;
-      padding: 7px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--color-border-default);
-      background: var(--color-bg-raised);
-      color: var(--color-fg-default);
-      font: inherit;
-      font-weight: 500;
+      padding: var(--space-6) var(--space-12);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-action-secondary-border);
+      background: var(--color-action-secondary-bg);
+      color: var(--color-action-secondary-fg);
+      font: var(--text-body-medium-strong);
       text-align: center;
       text-decoration: none;
       cursor: pointer;
     }
+    .button:hover { background: var(--color-action-secondary-bg-hover); }
     .buttons .button { display: block; width: 100%; }
-    .button.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-fg); }
+    .button.primary { background: var(--color-action-primary-bg); border-color: var(--color-action-primary-bg); color: var(--color-action-primary-fg); }
+    .button.primary:hover { background: var(--color-action-primary-bg-hover); border-color: var(--color-action-primary-bg-hover); }
     .button.danger { color: var(--color-status-danger-fg); border-color: var(--color-status-danger-border); }
-    .button.small { padding: 3px 10px; font-size: 13px; }
-    .button:disabled { opacity: 0.6; cursor: default; }
+    .button.small { padding: var(--space-2) var(--space-8); font: var(--text-body-small-strong); }
+    .button:disabled { color: var(--color-fg-disabled); background: var(--color-action-secondary-bg); border-color: var(--color-border-default); cursor: default; }
     .alert {
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: var(--space-8) var(--space-12);
+      border-radius: var(--radius-lg);
       border: 1px solid var(--color-status-danger-border);
       background: var(--color-status-danger-bg);
       color: var(--color-status-danger-fg);
     }
     .notice {
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: var(--space-8) var(--space-12);
+      border-radius: var(--radius-lg);
       border: 1px solid var(--color-status-success-border);
       background: var(--color-status-success-bg);
       color: var(--color-status-success-fg);
     }
-    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .demo { padding-top: 12px; border-top: 1px solid var(--color-border-default); display: grid; gap: 8px; }
-    form { display: grid; gap: 10px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-12); flex-wrap: wrap; }
+    .demo { padding-top: var(--space-12); border-top: 1px solid var(--color-border-default); display: grid; gap: var(--space-8); }
+    form { display: grid; gap: var(--space-8); }
     form.inline { grid-template-columns: 1fr auto; align-items: end; }
     form.inline.with-role { grid-template-columns: 1fr auto auto; }
-    label { display: grid; gap: 4px; font-weight: 500; }
-    label span { color: var(--color-fg-muted); font-weight: 400; font-size: 12px; }
-    label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+    label { display: grid; gap: var(--space-4); font: var(--text-body-medium-strong); }
+    label span { color: var(--color-fg-muted); font: var(--text-caption); }
+    label.check { grid-template-columns: auto 1fr; align-items: center; gap: var(--space-8); }
     input, select, textarea {
-      padding: 7px 10px;
-      border-radius: 8px;
+      padding: var(--space-6) var(--space-8);
+      border-radius: var(--radius-md);
       border: 1px solid var(--color-border-default);
-      background: var(--color-bg-raised);
+      background: var(--color-bg-surface);
       color: var(--color-fg-default);
-      font: inherit;
+      font: var(--text-body-medium);
       width: 100%;
     }
+    input::placeholder, textarea::placeholder { color: var(--color-fg-subtle); }
     input[type="checkbox"] { width: auto; }
+    :focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
     header.bar {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 10px 24px;
+      gap: var(--space-16);
+      padding: var(--space-8) var(--space-24);
       border-bottom: 1px solid var(--color-border-default);
       background: var(--color-bg-sunken);
       flex-wrap: wrap;
     }
-    header.bar .brand { font-weight: 600; letter-spacing: -0.2px; text-decoration: none; color: var(--color-fg-default); }
-    header.bar .tag { color: var(--color-fg-muted); font-weight: 500; }
-    header.bar nav { display: flex; gap: 4px; }
-    header.bar nav a { padding: 5px 10px; border-radius: 8px; color: var(--color-fg-muted); text-decoration: none; font-weight: 500; }
-    header.bar nav a.current { background: var(--color-bg-raised); color: var(--color-fg-default); border: 1px solid var(--color-border-default); }
+    header.bar .brand { text-decoration: none; }
+    header.bar .brand .tag { font: var(--text-body-medium-strong); letter-spacing: var(--text-body-medium-strong-tracking); }
+    header.bar nav { display: flex; gap: var(--space-4); }
+    header.bar nav a { padding: var(--space-4) var(--space-8); border-radius: var(--radius-md); color: var(--color-fg-muted); text-decoration: none; font: var(--text-body-medium-strong); }
+    header.bar nav a:hover { background: var(--color-bg-hover); color: var(--color-fg-default); }
+    header.bar nav a.current { background: var(--color-bg-selected); color: var(--color-fg-default); }
     header.bar .spacer { flex: 1; }
-    main.page { width: min(1080px, 100%); margin: 0 auto; padding: 24px 16px; display: grid; gap: 24px; }
-    section.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); overflow-x: auto; }
+    main.page { width: min(1080px, 100%); margin: 0 auto; padding: var(--space-24) var(--space-16); display: grid; gap: var(--space-24); }
+    section.panel { display: grid; gap: var(--space-12); padding: var(--space-16); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--color-border-default); vertical-align: top; }
-    th { color: var(--color-fg-muted); font-weight: 500; font-size: 12px; }
+    th, td { text-align: left; padding: var(--space-8) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); vertical-align: top; }
+    th { color: var(--color-fg-muted); font: var(--text-label-small); }
     td.actions { text-align: right; white-space: nowrap; }
     td.number { font-variant-numeric: tabular-nums; }
-    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); font-size: 12px; margin: 0 4px 2px 0; }
-    .muted { color: var(--color-fg-muted); font-size: 12px; }
+    .chip { display: inline-block; padding: 0 var(--space-8); border-radius: var(--radius-full); border: 1px solid var(--color-border-default); background: var(--color-bg-surface); font: var(--text-caption); margin: 0 var(--space-4) var(--space-2) 0; }
+    .muted { color: var(--color-fg-muted); font: var(--text-caption); }
     form.search { grid-template-columns: 1fr auto; align-items: end; }
     form.create { grid-template-columns: repeat(3, 1fr) auto; align-items: end; }
     @media (max-width: 720px) { form.create { grid-template-columns: 1fr; } }
-    .size { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .size { display: grid; grid-template-columns: 1fr auto; gap: var(--space-8); }
     .size select { width: auto; }
-    tr.entering td { background: var(--color-bg-raised); }
+    tr.entering td { background: var(--color-bg-selected); }
   </style>
 </head>
 <body class="centered">
   <div id="app"></div>
-  <script>
+  <script type="module">
+    import { logo } from "{{ $root }}/assets/lib/brand.js";
+
     // The Back-office's root, wherever the operator mounts it (its route strips the prefix): the path of its URL, which
     // config.json names, and which every directory serves. Every page's path is relative to it.
     let base = "/";
@@ -272,7 +245,7 @@
 
     function showCard(...children) {
       document.body.className = "centered";
-      app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Back-office"), ...children));
+      app.replaceChildren(h("main", { class: "card" }, h("h1", { class: "brand" }, logo(), h("span", { class: "tag" }, "Back-office")), ...children));
     }
 
     function render() {
@@ -286,7 +259,7 @@
       const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"], ["providers", "Identity providers", "installation.manage"],
         ["settings", "Settings", "installation.manage"]].filter(([, , p]) => can(p));
       if (!pages.some(([p]) => p === page)) return go("/" + pages[0][0], true);
-      const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), h("span", { class: "tag" }, "Back-office"),
+      const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, logo(), h("span", { class: "tag" }, "Back-office")),
         h("nav", {}, pages.map(([p, label]) => h("a", { href: base + p, "data-nav": "", class: p === page ? "current" : "" }, label))),
         h("span", { class: "spacer" }), h("a", { href: config.consoleUrl }, "Console"), h("span", {}, me.displayName),
         h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out"));

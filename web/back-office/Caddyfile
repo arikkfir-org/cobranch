@@ -3,7 +3,9 @@
 # isn't set up), where the Back-office itself does (COBRANCH_BACK_OFFICE_URL, whose path is the pages' root when a route
 # mounts it at a prefix, and where a sign-in returns) and where the Console does (COBRANCH_CONSOLE_URL), which an
 # administrator who enters an organization opens. The pages route in the browser, so a page at any depth asks for
-# config.json beside itself, and every directory answers it. The operator's routes bring the domain and TLS.
+# config.json beside itself, and every directory answers it. The page itself comes with the Back-office's root written
+# in (templates), where it asks for the design system's tokens, typefaces and marks, under assets/. The operator's
+# routes bring the domain and TLS.
 {
 	admin off
 	auto_https off
@@ -29,9 +31,18 @@
 		header Cache-Control no-store
 		respond `\{"adminUrl":"{env.COBRANCH_ADMIN_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","backOfficeUrl":"{env.COBRANCH_BACK_OFFICE_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}"\}` 200
 	}
+	# The Console's tokens, typefaces and marks, which the image takes from it (Dockerfile). Browsers check them again
+	# before they use them (no-cache), so a page never draws with an older release's.
+	handle /assets/* {
+		root * /srv
+		header Cache-Control no-cache
+		file_server
+	}
 	handle {
 		root * /srv
-		# The Back-office routes in the browser: every path it doesn't have a file for gets its page.
+		# The Back-office routes in the browser: every path it doesn't have a file for gets its page, with its root
+		# written in.
+		templates
 		try_files {path} /index.html
 		file_server
 	}
