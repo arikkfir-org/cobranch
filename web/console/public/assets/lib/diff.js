@@ -1,8 +1,9 @@
 // A diff, as the Commit and Branch screens draw it: a line counting the files and lines it changes beside the Unified
 // and Split switch, then a card of each file's change (Diff card), its hunks' lines in one column, or the old beside
-// the new.
+// the new. A branch's lists its files first, and draws its chat's open threads under the lines they are on.
 
 import { api } from "./api.js";
+import { lineThreads } from "./diffthreads.js";
 import { h } from "./dom.js";
 import { banner } from "./forms.js";
 import { plural } from "./format.js";
@@ -23,18 +24,23 @@ const savedLayout = () => {
 const longFile = 500;
 
 // diffView reads the diff at url and answers what shows it: its counts, the layout switch and its files' cards, or
-// why it couldn't be read. With drafting, a reviewer drafts comments on its lines.
-export async function diffView(url, at, drafting) {
-  let d;
+// why it couldn't be read. With drafting, a reviewer drafts comments on its lines. With chat, a branch's conversation
+// ({ chat, post, moderate } as its subject has them), a card lists its files first, and the conversation's open
+// threads show under the lines they are on.
+export async function diffView(url, at, drafting, chat) {
+  let d, threads;
   try {
-    d = await api("GET", url);
+    // Threads that can't be read leave the diff without them, and say so.
+    [d, threads] = await Promise.all([api("GET", url), chat ? lineThreads(chat).catch((err) => ({ failed: err })) : null]);
   } catch (err) {
     return [banner("warning", null, err.code === "git.unavailable" ? "This installation runs no Git server, so its changes can't be shown."
       : "The changes couldn't be read: " + err.message)];
   }
   let layout = savedLayout();
   const cards = h("div", { class: "diff-cards" });
-  const draw = () => cards.replaceChildren(...d.files.map((f) => diffCard(f, at, d, drafting, layout)));
+  const unread = threads && threads.failed ? banner("warning", null, "The branch's threads on these lines couldn't be read: " + threads.failed.message) : null;
+  if (unread) threads = null;
+  const draw = () => cards.replaceChildren(...d.files.map((f, i) => diffCard(f, i, at, d, drafting, threads, layout)));
   const choose = (to) => () => {
     layout = to;
     try {
@@ -50,18 +56,35 @@ export async function diffView(url, at, drafting) {
     files ? [h("span", { class: "diff-added" }, "+" + d.additions), h("span", { class: "diff-removed" }, "−" + d.deletions)] : null,
     h("span", { class: "spacer" }), d.files.length ? switcher : null);
   draw();
-  return [stats, d.files.length ? cards : null,
+  return [stats, unread, chat && d.files.length ? filesCard(d, cards) : null, d.files.length ? cards : null,
     d.filesLeftOut ? h("p", { class: "diff-left-out" }, plural(d.filesLeftOut, "more file") + " changed past the 3,000 a diff shows.") : null];
 }
 
-// diffCard is one file's change (Diff card): its path, what it adds and removes and a menu to its file, over its
-// hunks, laid out as layout says, or why it shows none.
-function diffCard(f, at, d, drafting, layout) {
+// pathOf is how a file's change names it: its path, after the one it had for a renamed file.
+const pathOf = (f) => f.oldPath ? f.oldPath + " → " + f.path : f.path;
+
+// filesCard is the card that lists a diff's files (Files), each with what it adds and removes, and a link down to its
+// change among cards, the n-th file's the n-th card.
+function filesCard(d, cards) {
+  const down = (i) => (e) => {
+    e.preventDefault();
+    const card = cards.children[i];
+    if (card) card.scrollIntoView({ block: "start" });
+  };
+  return h("section", { class: "card diff-files", "aria-label": "Files" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Files")),
+    h("ul", { class: "diff-files-list" }, d.files.map((f, i) => h("li", { class: "diff-files-row" }, icon("file-code"),
+      h("a", { class: "diff-files-path", href: "#file-" + (i + 1), title: pathOf(f), onclick: down(i) }, pathOf(f)), h("span", { class: "spacer" }),
+      f.binary ? h("span", { class: "diff-files-binary" }, "binary") : [h("span", { class: "diff-added" }, "+" + f.additions), h("span", { class: "diff-removed" }, "−" + f.deletions)]))));
+}
+
+// diffCard is d's i-th file's change (Diff card): its path, what it adds and removes and a menu to its file, over its
+// hunks, laid out as layout says, or why it shows none; threads draws the threads on its lines under them.
+function diffCard(f, i, at, d, drafting, threads, layout) {
   const file = f.status === "deleted" ? (d.base ? at.blob(d.base, f.path) : null) : at.blob(d.head, f.path);
   const more = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "More for " + f.path, title: "More", "aria-haspopup": "menu",
     onclick: () => fileMenu(more, f, file) }, icon("ellipsis"));
   const header = h("div", { class: "diff-card-header" }, icon("file-code"),
-    h("span", { class: "diff-card-path", title: f.oldPath ? f.oldPath + " → " + f.path : f.path }, f.oldPath ? f.oldPath + " → " + f.path : f.path),
+    h("span", { class: "diff-card-path", title: pathOf(f) }, pathOf(f)),
     f.binary ? null : [h("span", { class: "diff-added" }, "+" + f.additions), h("span", { class: "diff-removed" }, "−" + f.deletions)],
     h("span", { class: "spacer" }), more);
   const notes = [];
@@ -70,7 +93,9 @@ function diffCard(f, at, d, drafting, layout) {
   else if (f.truncated) notes.push("Too large to show here: " + plural(f.additions + f.deletions, "line") + " changed.");
   else if (!f.hunks.length && !notes.length) notes.push(f.status === "renamed" ? "Renamed without changes." : f.status === "added" ? "An empty file, added." : "An empty file.");
   const drafter = drafting ? lineDrafter(f, d, drafting) : null;
-  const lines = () => layout === "split" ? splitLines(f.hunks, drafter) : unifiedLines(f.hunks, drafter);
+  // What shows under a line: the threads on it, then the comments drafted on it.
+  const below = (l) => [...(threads ? threads.under(anchorOf(f, d, l), at) : []), ...(drafter ? drafter.drafted(l) : [])];
+  const lines = () => layout === "split" ? splitLines(f.hunks, drafter, below) : unifiedLines(f.hunks, drafter, below);
   const count = f.hunks.reduce((n, hk) => n + hk.lines.length, 0);
   let body = null;
   if (f.hunks.length && count <= longFile) body = lines();
@@ -79,7 +104,7 @@ function diffCard(f, at, d, drafting, layout) {
     const wait = h("div", { class: "diff-note" }, h("span", {}, "A long change, folded."), show);
     body = wait;
   }
-  return h("section", { class: "card diff-card", "aria-label": f.path }, header, notes.map((n) => h("p", { class: "diff-note" }, n)), body);
+  return h("section", { class: "card diff-card", id: "file-" + (i + 1), "aria-label": f.path }, header, notes.map((n) => h("p", { class: "diff-note" }, n)), body);
 }
 
 // fileMenu opens a file's menu under anchor: View file, at the commit that holds it, and Copy path.
@@ -99,25 +124,26 @@ const hunkHead = (hk) => "@@ -" + hk.oldStart + "," + hk.oldLines + " +" + hk.ne
 // lineText is a line's text, and the mark of a last line without a newline.
 const lineText = (l) => h("span", { class: "diff-text" }, l.text, l.noNewline ? h("span", { class: "diff-no-newline" }, "  No newline at end of file") : null);
 
-// unifiedLines are hunks in one column: each line under its numbers in the old file and the new, then its sign; with
-// drafter, a line takes a comment and shows those drafted on it beneath.
-function unifiedLines(hunks, drafter) {
+// unifiedLines are hunks in one column: each line under its numbers in the old file and the new, then its sign, and
+// below(line) beneath it; with drafter, a line takes a comment.
+function unifiedLines(hunks, drafter, below) {
   const rows = hunks.flatMap((hk) => [h("div", { class: "diff-line diff-hunk" }, h("span", { class: "diff-text" }, hunkHead(hk))),
     hk.lines.flatMap((l) => [h("div", { class: "diff-line diff-" + l.kind }, drafter ? drafter.button(l) : null,
       h("span", { class: "diff-num" }, l.old || ""), h("span", { class: "diff-num" }, l.new || ""), h("span", { class: "diff-sign" }, signs[l.kind]), lineText(l)),
-    drafter ? drafter.drafted(l) : []])]);
+    below(l)])]);
   return h("div", { class: "diff-lines" }, h("div", { class: "diff-rows" }, rows));
 }
 
 // splitLines are hunks with the old beside the new: context on both sides, and each run of removed lines beside the
-// run of added lines after it, the shorter side padded with filler; each half repeats the hunk's header. With drafter,
-// a removed line takes a comment on the old side and every other line on the new, and drafts span both.
-function splitLines(hunks, drafter) {
+// run of added lines after it, the shorter side padded with filler; each half repeats the hunk's header, and what
+// shows below a line spans both. With drafter, a removed line takes a comment on the old side and every other line on
+// the new.
+function splitLines(hunks, drafter, below) {
   const half = (l, side) => l ? h("div", { class: "diff-half diff-" + l.kind }, drafter && (side === "old") === (l.kind === "removed") ? drafter.button(l) : null,
     h("span", { class: "diff-num" }, (side === "old" ? l.old : l.new) || ""), h("span", { class: "diff-sign" }, signs[l.kind]), lineText(l))
     : h("div", { class: "diff-half diff-filler" });
   const row = (old, now) => [h("div", { class: "diff-split-row" }, half(old, "old"), half(now, "new")),
-    drafter ? [old && old.kind === "removed" ? drafter.drafted(old) : [], now ? drafter.drafted(now) : []] : []];
+    old && old.kind === "removed" ? below(old) : [], now ? below(now) : []];
   const rows = hunks.flatMap((hk) => {
     const out = [h("div", { class: "diff-split-row" }, [0, 1].map(() => h("div", { class: "diff-half diff-hunk" }, h("span", { class: "diff-text" }, hunkHead(hk)))))];
     for (let i = 0; i < hk.lines.length;) {
@@ -136,11 +162,13 @@ function splitLines(hunks, drafter) {
   return h("div", { class: "diff-lines diff-split" }, rows);
 }
 
-// lineDrafter drafts comments on the lines of file f of diff d into drafting's: an added or unchanged line is anchored
-// at its number in d's head, a removed one at its number in d's base, where the reviewer saw it.
+// anchorOf is where line l of file f of diff d is: an added or unchanged line at its number in d's head, a removed one
+// at its number in d's base, where a reviewer saw it.
+const anchorOf = (f, d, l) => l.kind === "removed" ? { sha: d.base, path: f.oldPath || f.path, startLine: l.old, endLine: l.old }
+  : { sha: d.head, path: f.path, startLine: l.new, endLine: l.new };
+
+// lineDrafter drafts comments on the lines of file f of diff d into drafting's, each anchored where its line is.
 function lineDrafter(f, d, drafting) {
-  const anchorOf = (l) => l.kind === "removed" ? { sha: d.base, path: f.oldPath || f.path, startLine: l.old, endLine: l.old }
-    : { sha: d.head, path: f.path, startLine: l.new, endLine: l.new };
   const same = (a, b) => a.sha === b.sha && a.path === b.path && a.startLine === b.startLine && a.endLine === b.endLine;
   const drafted = (c) => {
     const remove = () => {
@@ -171,10 +199,10 @@ function lineDrafter(f, d, drafting) {
   };
   return {
     button: (l) => {
-      const a = anchorOf(l);
+      const a = anchorOf(f, d, l);
       return h("button", { class: "diff-comment", type: "button", title: "Comment on this line", "aria-label": "Comment on line " + a.startLine + " of " + a.path,
         onclick: (e) => open(e.currentTarget.closest(".diff-line, .diff-split-row"), a) }, icon("plus"));
     },
-    drafted: (l) => drafting.comments.filter((c) => same(c.anchor, anchorOf(l))).map(drafted),
+    drafted: (l) => drafting.comments.filter((c) => same(c.anchor, anchorOf(f, d, l))).map(drafted),
   };
 }

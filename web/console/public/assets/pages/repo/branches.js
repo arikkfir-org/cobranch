@@ -61,13 +61,13 @@ async function repositoryBranch(ctx, name) {
     ...await tabContent(ctx, b, tab)].filter(Boolean);
 }
 
-// tabContent is what b's tab shows: its overview, its changes with the reviews of its head, the runs of its head
-// and the jobs it starts by hand, or its environments.
+// tabContent is what b's tab shows: its overview, its changes with its chat's threads on their lines and the reviews of
+// its head, the runs of its head and the jobs it starts by hand, or its environments.
 async function tabContent(ctx, b, tab) {
-  const { path, at, can, fail } = ctx;
+  const { org, repo, path, at, can, fail } = ctx;
   if (tab === "changes") {
     const drafting = reviewDrafting(path, b, can);
-    return [...await diffView(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, drafting),
+    return [...await diffView(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can)),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
   if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsPanel(path, at, can, fail, b.head)];
