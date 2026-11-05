@@ -54,13 +54,16 @@ async function jobsList(path, at, fail) {
         show();
       }, 250);
     } });
-  // show draws the runs the address's filters keep, and counts them, of every run once they keep fewer.
+  // show draws the runs the address's filters keep, and counts them, of every run once they keep fewer. A later show
+  // overtakes it: what it reads after one started draws nothing.
+  let shown = 0;
   async function show() {
+    const mine = ++shown;
     const now = new URLSearchParams(location.search);
     const filtered = filterNames.some((n) => now.get(n));
     const [page, all] = await Promise.all([list.load(path + "/runs?" + apiQuery(now), false),
       filtered ? api("GET", path + "/runs?limit=1").then((d) => d.total, () => undefined) : undefined]);
-    if (!page) return;
+    if (!page || mine !== shown) return;
     const n = page.data.total;
     const runs = (k) => k.toLocaleString() + (k === 1 ? " run" : " runs");
     count.textContent = n === undefined ? "" : all === undefined ? runs(n) : n.toLocaleString() + " of " + runs(all);

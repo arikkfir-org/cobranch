@@ -99,6 +99,14 @@ export const machineAvatar = (name, size = 20) => h("span", { class: "avatar ava
 // a person's otherwise, or machine's when it is neither, as a key's.
 export const principalAvatar = (p, size = 20, machine = false) => agents.has(p.id) ? avatar(p.displayName, true, size)
   : machine ? machineAvatar(p.displayName, size) : avatar(p.displayName, false, size);
+// actorAvatar is the avatar of whoever did something, by its kind: a person's initials, an agent's mark, or a machine's
+// glyph (a job's cog, an API key's key, any other's server).
+export function actorAvatar(actor) {
+  if (actor.kind === "agent") return avatar(actor.displayName, true);
+  if (actor.kind === "user" || !actor.kind) return avatar(actor.displayName || "?");
+  return h("span", { class: "avatar avatar-machine", "aria-hidden": "true", title: actor.displayName },
+    icon({ job: "cog", api_key: "key-round" }[actor.kind] || "server"));
+}
 // authorAvatar is a commit author's or committer's avatar: their user's, or the dashed one of an author no account
 // holds.
 export const authorAvatar = (person, size = 20) => person.principal ? principalAvatar(person.principal, size)

@@ -3,7 +3,7 @@ import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { h } from "../../lib/dom.js";
 import { ago, capitalized, plural, shortSha, since, whenExactly } from "../../lib/format.js";
-import { avatar, icon } from "../../lib/icons.js";
+import { actorAvatar, avatar, icon } from "../../lib/icons.js";
 import { pageHeading } from "../../lib/layout.js";
 import { visibilities } from "../../lib/organization.js";
 import { base } from "../../lib/state.js";
@@ -153,14 +153,6 @@ function agentsCard(org, agents, working, can) {
 const activityCard = (list) => card("Recent activity", null, list.length ? h("ol", { class: "activity-list" }, list.map((x) => h("li", { class: "activity-item" },
   actorAvatar(x.actor), h("span", { title: "In " + x.repository }, (x.actor.kind ? x.actor.displayName : "Someone since gone") + " " + happened(x)),
   h("time", { datetime: x.at, title: whenExactly(x.at) }, capitalized(ago(x.at)))))) : note("Nothing has happened yet."));
-
-// actorAvatar is the avatar of whoever did something: a person's initials, an agent's mark, or a machine's glyph (a
-// job's cog, an API key's key, any other's server).
-function actorAvatar(actor) {
-  if (actor.kind === "agent") return avatar(actor.displayName, true);
-  if (actor.kind === "user" || !actor.kind) return avatar(actor.displayName || "?");
-  return h("span", { class: "avatar avatar-machine", "aria-hidden": "true" }, icon({ job: "cog", api_key: "key-round" }[actor.kind] || "server"));
-}
 
 // refName is a ref's name as people say it: a branch's or a tag's without its prefix.
 const refName = (ref) => ref.replace(/^refs\/(heads|tags)\//, "");

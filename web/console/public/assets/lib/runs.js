@@ -1,7 +1,7 @@
 import { api, apiPage } from "./api.js";
 import { h } from "./dom.js";
 import { capitalized, shortSha, since, whenExactly } from "./format.js";
-import { icon, machineAvatar, principalAvatar } from "./icons.js";
+import { actorAvatar, icon, machineAvatar } from "./icons.js";
 import { go, render } from "./router.js";
 
 // The run states, drawn as the annotation statuses are.
@@ -90,8 +90,7 @@ export const noRuns = (glyph, title, text, action = null) => h("section", { clas
   h("div", { class: "empty-icon" }, icon(glyph)), h("h2", { class: "empty-title" }, title), h("p", { class: "empty-description" }, text), action));
 
 // runRow is a run's row in the Jobs table: its job and number, linking to its page; its branch, or tag; its commit;
-// its status; when it started, or was queued while it waits; how long it ran; and who caused it, or its job's avatar
-// for a schedule's run.
+// its status; when it started, or was queued while it waits; how long it ran; and who caused it.
 const runRow = (at, r) => {
   const ref = r.ref.replace(/^refs\/(heads|tags)\//, "");
   return h("tr", {},
@@ -101,8 +100,14 @@ const runRow = (at, r) => {
     h("td", {}, runStatus(r)),
     h("td", { class: "cell-muted", title: whenExactly(r.startedAt || r.queuedAt) }, since(r.startedAt || r.queuedAt)),
     h("td", {}, duration(r)),
-    h("td", {}, r.causedBy ? principalAvatar(r.causedBy) : machineAvatar(r.job.displayName + ", on its schedule")));
+    h("td", {}, causer(r)));
 };
+
+// causer is the avatar of who caused a run, by its kind: a person, an agent, a job or an API key; its job's for a
+// schedule's run; or a dash once whoever caused it is gone.
+const causer = (r) => r.causedBy ? actorAvatar(r.causedBy)
+  : r.trigger.kind === "schedule" ? machineAvatar(r.job.displayName + ", on its schedule")
+  : h("span", { class: "cell-unassigned", title: "Someone since gone" }, "–");
 
 // runActions are Start for a waiting run, Cancel for one that hasn't ended, and Re-run for one that has, which opens
 // the new run, for a viewer holding jobs.run.
