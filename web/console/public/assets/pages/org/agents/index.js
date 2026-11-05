@@ -1,5 +1,5 @@
 import { api } from "../../../lib/api.js";
-import { agentPage, emptyState, spendReport, statusBadge, taskPage, taskTitle } from "../../../lib/agent.js";
+import { agentPage, emptyState, spendReport, statusBadge, taskLink, taskTitle } from "../../../lib/agent.js";
 import { h } from "../../../lib/dom.js";
 import { plural } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
@@ -30,7 +30,7 @@ async function showAgents(org, main) {
         h("span", { class: "cell-two-lines" }, h("span", {}, a.name), a.description ? h("span", {}, a.description) : ""))),
       h("td", { class: a.model ? "cell-mono" : "cell-muted" }, a.model || "Not set"),
       h("td", {}, statusBadge(!!t)),
-      h("td", {}, t ? h("a", { href: taskPage(org, t), "data-nav": "" }, "#" + t.number + " " + taskTitle(t)) : h("span", { class: "cell-muted" }, "—")),
+      h("td", {}, t ? taskLink(org, t, "", "#" + t.number + " " + taskTitle(t)) : h("span", { class: "cell-muted" }, "—")),
       h("td", { title: "Tasks it was given this month" }, report ? String(monthly.get(a.id) || 0) : "–"));
   };
   if (!agents.length) {

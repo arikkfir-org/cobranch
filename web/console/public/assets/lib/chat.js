@@ -187,6 +187,9 @@ export async function conversation(s, signal) {
     else v.list.append(el);
     v.messages.set(m.id, { m, el });
   };
+  // taskAt is the address of agent's task number, on its agent's page, or, for an agent since gone, the address that
+  // finds its agent.
+  const taskAt = (agent, number) => base + org + (agent ? "/agents/" + agent.id : "") + "/tasks/" + number;
   const messageView = (v, m) => {
     const mine = m.author && m.author.id === me.id;
     const agent = !!m.taskNumber || (m.author && agents.has(m.author.id));
@@ -219,11 +222,11 @@ export async function conversation(s, signal) {
     const act = (glyph, label, onclick) => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label, onclick }, icon(glyph));
     const actions = m.deletedAt ? [] : [mine && post ? act("pencil", "Edit", edit) : null, (mine && post) || moderate ? act("x", "Delete", remove) : null].filter(Boolean);
     const name = m.author ? m.author.displayName : "Someone since gone";
-    const tag = !agent ? null : m.taskNumber ? h("a", { class: "tag tone-ai", href: base + org + "/tasks/" + m.taskNumber, "data-nav": "",
+    const tag = !agent ? null : m.taskNumber ? h("a", { class: "tag tone-ai", href: taskAt(m.author, m.taskNumber), "data-nav": "",
       title: "An agent posted it, working task #" + m.taskNumber + "." }, icon("sparkles"), "Agent") : h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent");
     // A message that asked an agent names it, and links the task it asked for.
     const asked = m.askedTaskNumber ? h("p", { class: "chat-message-asked" }, icon("sparkles"), h("span", {}, "Asked " + (m.askedAgent ? m.askedAgent.displayName : "an agent since gone")),
-      "·", h("a", { href: base + org + "/tasks/" + m.askedTaskNumber, "data-nav": "" }, "#" + m.askedTaskNumber)) : null;
+      "·", h("a", { href: taskAt(m.askedAgent, m.askedTaskNumber), "data-nav": "" }, "#" + m.askedTaskNumber)) : null;
     return h("div", { class: "chat-message", id: "message-" + m.id }, avatar(name, agent, 32),
       h("div", { class: "chat-message-text-column" },
         h("div", { class: "chat-message-header" }, h("strong", {}, name), tag,
