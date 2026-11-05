@@ -82,6 +82,16 @@
 
 ## Docs
 
+- The design system is the Figma file `ZJVoycorwQStSjh89hnSrK`, the source of truth for how the Console looks, and code
+  follows it, never leads (`docs/cobranch/designs/design-system.md`, "Design to code"). A visual change (a colour,
+  size, radius, text style, shadow, component or screen) is made in Figma first; a value that isn't a token is a Figma
+  change, never a CSS one. `web/console/public/assets/tokens.css` is generated from the file's export
+  (`web/console/tools/`): never edit it by hand, and a pull request that changes it names the Figma change it carries.
+  Each Figma component maps to one class of the Console's component stylesheet, named after it (`Badge/Quiet` is
+  `.badge-quiet`); a page composes those classes and writes no component CSS of its own. A page group is done when
+  the Console matches its Figma screen at 1440 wide, light and dark, shown side by side in the pull request. When
+  the code needs what the file lacks (a state, an empty or error screen), the file gets it first; a forced divergence
+  is said in the pull request and corrected in the file in the same unit of work.
 - Cobranch's pages are in `docs/cobranch/`, published to the docs site under `cobranch/`: snapshots of the designs in
   `designs/`. A change keeps those it touches true, in the same pull request.
 - Pages at `https://docs.dev.kfirs.com/<path>` (every repository's `docs/`) are behind the hub's sign-in. Read one with
