@@ -58,7 +58,7 @@ classes that map its components. A fix to a component reaches every screen and e
 
 Colour has two layers: primitives hold raw values, and semantic tokens alias them per mode. Components use semantic
 tokens only, and Light and Dark are two modes of the one `Color` collection, so a frame changes theme by switching its
-mode. Both themes are equal: the system's setting decides, and a person may override it.
+mode. Both themes are equal: the system's setting decides, and a person may override it. The choice is kept with the person (`/v1/me/preferences`), so every browser they sign in from follows it; each browser keeps a copy to draw its first frame in the right theme.
 
 **Primitives** (`Primitives`): a cool gray in 15 steps, from `gray/0` #ffffff to `gray/1000` #0c0d0f; blue, green,
 amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 50 and 60% for overlays and shadows.

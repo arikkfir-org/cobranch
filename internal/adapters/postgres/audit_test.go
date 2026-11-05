@@ -132,6 +132,21 @@ var auditCases = []struct {
 		},
 	},
 	{
+		name: "a person's preferences are rows of their own, as them", table: "preferences",
+		do: func(t *testing.T, s *AuthStore, _ *pgxpool.Pool) *uuid.UUID {
+			up := alice(t, s)
+			first, err := s.SavePreferences(t.Context(), up.Principal.ID, auth.Preferences{Theme: auth.ThemeDark, UpdatedAt: now}, 0)
+			must(t, err)
+			_, err = s.SavePreferences(t.Context(), up.Principal.ID, auth.Preferences{Theme: auth.ThemeLight, UpdatedAt: now.Add(time.Minute)}, first.Version)
+			must(t, err)
+			return &up.Principal.ID
+		},
+		want: []auditRow{
+			{Action: "insert", After: map[string]any{"principal_id": nil, "theme": nil, "updated_at": nil, "version": nil}},
+			{Action: "update", Before: map[string]any{"principal_id": nil, "theme": nil, "updated_at": nil, "version": nil}, After: map[string]any{"theme": nil, "updated_at": nil, "version": nil}},
+		},
+	},
+	{
 		name: "a change outside a store's transaction names no principal", table: "principals",
 		do: func(t *testing.T, _ *AuthStore, pool *pgxpool.Pool) *uuid.UUID {
 			_, err := pool.Exec(t.Context(), "INSERT INTO principals (id, kind, display_name) VALUES ($1, 'user', 'Bob')", uuid.New())
