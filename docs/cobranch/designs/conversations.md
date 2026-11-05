@@ -196,11 +196,19 @@ person’s private task shows as a place in the queue, nothing more.
 
 - **Each page names its subject.** A page module exports `subject(ctx)`, the app shell's contract: its key, title, kind,
   the chat's base path, what posting and moderating take, the composer's placeholder, and whether the subject is gone.
-  The shell's pane reads, posts and follows whatever the page names, and switches when the page does.
-- **Private or shared, said once.** The pane's header names the subject and marks a private conversation "Only you", a
-  shared chat with who reads it.
-- **The composer's @** lists the organization's agents the viewer may assign; picking one sets `ask`. A task's messages
-  show its agent, its number and its state, which link to the task's page.
+  The shell's pane reads, posts and follows whatever the page names, and switches when the page does. The
+  organization's and a repository's pages that name no other subject show the viewer's own conversation about them,
+  and an agent's page the viewer's conversation with the agent.
+- **Private or shared, said once.** The pane's header names the subject and marks a private conversation "Private to
+  you", a shared chat with who reads it. An agent's conversation is headed by the agent's name, and says every message
+  asks it.
+- **Ask, or @.** For a viewer who holds `agents.assign`, Ask at the composer's end, or typing @ at the start of a word,
+  opens the organization's agents above it; picking one sets `ask` and shows the agent as its tag in Ask's place, whose
+  × asks nobody again. A thread's reply is the same box, with the same Ask. An agent's conversation has no Ask: every
+  new thread asks its agent. A message that asked an agent reads "Asked Researcher · #12" under its text, the number
+  linking to the task; an agent's own messages carry its Agent tag, which links to the task it works.
+- **Private tasks in lists.** Another person's private task shows as "Asked in private", with the agent, its number,
+  state and times, and no link.
 - **Artifacts in the pane.** An artifact an agent generates in a conversation shows in that conversation's pane as a
   card that opens it. It belongs to the chat's repository unless the chat is an issue's or the organization's, and one
   generated in a private conversation stays private to its person until they share it; the artifact's records are the
