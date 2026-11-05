@@ -318,7 +318,8 @@ While it runs, the REST and GraphQL servers read its pod’s logs from Kubernete
   `logs/<repo-id>/<run-id>/<container>`, up to `jobs.logs.maxBytes` each, masking the run's secret values. While the run
   runs, the REST and GraphQL servers read its pod's logs from Kubernetes, up to `jobs.logs.maxBytes` each, masked with
   the values its Secret lists, and the Console reads them again every five seconds; maintenance deletes archived logs
-  after `jobs.logs.retention`.
+  after `jobs.logs.retention`. Each line is read with the time Kubernetes logged it, which the archive keeps before it and the APIs answer beside the text (`times`), so the Console shows each line's time since its step started; a log kept before logs kept their times has none.
+- **Steps.** A run's steps are its pod's containers in the order they run: the checkout, the job's init containers, then its containers (a script's is `main`), each with its state (waiting, running, succeeded or failed), exit code, the cluster's reason where it says more (`OOMKilled`), and when it started and ended. While the run runs, the APIs read them from its pod; when it ends, the controller keeps them in `job_run_steps` (migration `00060`), beside its logs, and the sweep keeps those of a run cancelled while its pod ran. A run that ended before steps were kept shows its logs' containers instead.
 - **Following runs.** Every `JOBS_POLL_INTERVAL` (5 s) the controller claims queued runs and reads its pods' states;
   every `JOBS_SWEEP_INTERVAL` (5 min) it deletes what ended without it: pods of runs cancelled or superseded, namespaces
   of deleted organizations, and expired run tokens. A pod left by an earlier attempt at a run is deleted, and the run
@@ -432,7 +433,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | REST, under `/v1/orgs/{org}` | GraphQL | Takes |
 | --- | --- | --- |
 | `GET /repos/{repo}/runs?sha=&job=&branch=&state=&q=`, `GET …/runs/{n}` | `Repository.runs(sha:, job:, branch:, states:, query:)`, `Repository.run` | `repo.read` |
-| `GET …/runs/{n}/logs`, `GET …/runs/{n}/logs/{container}` (text) | `Run.logs` | `repo.read` |
+| `GET …/runs/{n}/logs`, `GET …/runs/{n}/logs/{container}` (text), `GET …/runs/{n}/steps` | `Run.logs`, `Run.steps` | `repo.read` |
 | `POST …/runs/{n}/start`, `/cancel`, `/rerun` | `startRun`, `cancelRun`, `rerunRun` | `jobs.run` |
 | `POST /repos/{repo}/branches/{branch}/jobs/{job}/runs` | `runJob` | `jobs.run`, the job declaring `manual` |
 | `POST /repos/{repo}/events` | `postEvent` | `jobs.run` |
@@ -442,8 +443,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | `GET /repos/{repo}/jobs` | `Repository.jobPrincipals` | `repo.read` |
 
 - **A repository's Jobs tab** lists its runs as a table, newest first: each one's job and number, branch, commit, status, when it started, how long it ran and who caused it (whoever started it, else its trigger's actor, drawn by their kind: a person, an agent, a job or an API key; a schedule's run shows its job's avatar, and one whose causer is gone a dash). Its filters keep the runs whose job's name or branch holds a text, ignoring case, or whose commit starts with it, of a job, on a branch and in a status, and it counts what they keep, of every run once they keep fewer. A run's status is its annotation's word: Pending while it waits or is queued, In progress while it runs, then Successful or Failed, a cancellation reading Failed with its reason in a tooltip. **A commit's page** counts the runs at the commit beside its annotations and links them there, by its short name as the filter's text, and **a branch's Jobs tab** (`?tab=jobs`) shows its pushes, newest first, each a card of its jobs' runs at that commit, the latest attempt of each, with its status, what its job's annotation found, how long it ran and a link to its page. The head's card leads, even before anything ran there, with Run for each job it starts by hand that hasn't run there and, once its runs ended, Re-run all; two pushes show and the earlier ones open beneath them, those the branch's newest hundred runs name, then a hundred runs' more at a time (Older pushes); each card reads its own commit's runs on the branch. Start, Re-run and Cancel are on a run's page.
-- **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
-  runs.
+- **A run's page** shows its job, status and Start, Cancel or Re-run with Download logs, then a line of its branch or tag, commit, the commit's subject, what queued it and who, when it started and how long it ran, and, for a re-run, its attempt and who re-ran it; a banner says why it failed or who cancelled it. Its Steps card lists its steps, the first that failed selected unless the address names another (`?step=`), beside the selected one's log, each line with its time since the step started, with Raw for the text; Definition (`?definition`) shows its job as `/cobranch.yaml` declared it when it was queued. While it runs, it reads its steps and logs again every five seconds, its log marked Live. A webhook's run says where it posted, and a run that hasn't started says what it waits for.
 - **An organization's Secrets page** lists its secrets, by name, with who is granted each, and **a repository's Secrets tab**, under its Settings, lists its own by name, who is granted each showing in Change. Both add, change and delete them, and grant them to the organization's members, API keys, jobs and agents.
 
 ## Data model
@@ -452,7 +452,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 
 ![This slice’s tables: recorded settings, job principals, runs and secrets](jobs/er.svg)
 
-`secrets` and `grants` carry trigger `audit()`, the value kept out of the log; runs are history, not data people manage,
+`secrets` and `grants` carry trigger `audit()`, the value kept out of the log; runs and their steps (`job_run_steps`) are history, not data people manage,
 so they don’t. Every new row carries `org_id`.
 
 ## Rollout
