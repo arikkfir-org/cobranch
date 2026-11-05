@@ -12,7 +12,7 @@ import { base } from "../lib/state.js";
 // component is. It draws from the classes alone: what differs from Figma is a bug in components.css or in the file.
 
 export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
-export const crumbs = (rest) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
+export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
 
 // showHelp draws the help page at rest, the path's parts after help/, under the Console's bar.
 export function showHelp(rest) {
