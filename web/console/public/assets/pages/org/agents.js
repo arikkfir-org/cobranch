@@ -15,9 +15,12 @@ async function agentItems({ org }) {
   const [agents, running] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
     api("GET", "/orgs/" + org.slug + "/tasks?state=running&limit=100").then((d) => new Set(d.tasks.map((t) => t.agent.id)), () => new Set())]);
   setAgents(new Set(agents.map((a) => a.id)));
-  return { whole: true, count: agents.length, items: agents.map((a) => ({ key: a.id, label: a.name, href: base + org.slug + "/agents/" + a.id, avatar: "agent",
+  return { whole: true, count: agents.length, items: agents.map((a) => ({ ...agentItem(org, a),
     dot: running.has(a.id) ? "ai" : null, dotLabel: running.has(a.id) ? "Working" : null })) };
 }
+
+// agentItem is agent a as a sub item of the sidebar's Agents: it opens the agent's tasks, which put it first there.
+export const agentItem = (org, a) => ({ key: a.id, label: a.name, href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), avatar: "agent" });
 
 // grantChips names an agent's grants: a role at the organization, or a role on one of its repositories.
 const grantChips = (grants) => grants.length ? grants.map((g) => h("span", { class: "chip" }, g.roleName, g.repositorySlug ? " on " + g.repositorySlug : ""))

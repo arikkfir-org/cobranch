@@ -134,8 +134,8 @@ at a phone’s width the sidebar goes off-canvas.
   them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Members, Roles,
   API keys and Secrets under Settings; Tasks under Agents); `place: "foot"` puts Settings at the sidebar's foot. A page
   with `nav.items` is a section, which shows five sub items: those the viewer opened last in this browser, as the
-  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent)
-  puts it first.
+  section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent's
+  tasks) puts it first.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and

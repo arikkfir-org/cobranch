@@ -6,12 +6,13 @@ import { logo } from "./brand.js";
 import { app, h } from "./dom.js";
 import { avatar, icon } from "./icons.js";
 import { closeMenu, popover } from "./menu.js";
-import { converse, paneElement, paneToggle } from "./pane.js";
+import { converse, leave, paneElement, paneToggle } from "./pane.js";
 import { bareSidebar, sidebar } from "./sidebar.js";
 import { base, config, me } from "./state.js";
 import { setTheme, theme, themes } from "./theme.js";
 
 export function showCard(...children) {
+  leave();
   document.body.className = "centered";
   app.replaceChildren(h("main", { class: "card" }, h("h1", { class: "brand" }, logo()), ...children));
 }
