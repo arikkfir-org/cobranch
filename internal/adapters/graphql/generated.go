@@ -583,6 +583,7 @@ type ComplexityRoot struct {
 		UpdateIssue            func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
 		UpdateLabel            func(childComplexity int, organizationID string, id string, input LabelPatch, expectedVersion *int) int
 		UpdateOrganization     func(childComplexity int, id string, input OrganizationSettings) int
+		UpdatePreferences      func(childComplexity int, input PreferencesPatch, expectedVersion *int) int
 		UpdateRepository       func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole             func(childComplexity int, organizationID string, id string, input RoleInput) int
 		UpdateSecret           func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
@@ -654,6 +655,11 @@ type ComplexityRoot struct {
 	PersonalTokenCreated struct {
 		Secret func(childComplexity int) int
 		Token  func(childComplexity int) int
+	}
+
+	Preferences struct {
+		Theme   func(childComplexity int) int
+		Version func(childComplexity int) int
 	}
 
 	Push struct {
@@ -898,6 +904,7 @@ type ComplexityRoot struct {
 		Organizations  func(childComplexity int) int
 		Permissions    func(childComplexity int) int
 		PersonalTokens func(childComplexity int) int
+		Preferences    func(childComplexity int) int
 		SSHKeys        func(childComplexity int) int
 		Sessions       func(childComplexity int) int
 		Usage          func(childComplexity int) int
@@ -930,6 +937,7 @@ type MutationResolver interface {
 	RevokePersonalToken(ctx context.Context, id string) (bool, error)
 	AddSSHKey(ctx context.Context, input SSHKeyInput) (*SSHKey, error)
 	DeleteSSHKey(ctx context.Context, id string) (bool, error)
+	UpdatePreferences(ctx context.Context, input PreferencesPatch, expectedVersion *int) (*Preferences, error)
 	CreateAgent(ctx context.Context, organizationID string, input AgentInput) (*Agent, error)
 	UpdateAgent(ctx context.Context, organizationID string, id string, input AgentPatch, expectedVersion *int) (*Agent, error)
 	DeleteAgent(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
@@ -1074,6 +1082,7 @@ type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
 	PersonalTokens(ctx context.Context, obj *User) ([]*PersonalToken, error)
 	SSHKeys(ctx context.Context, obj *User) ([]*SSHKey, error)
+	Preferences(ctx context.Context, obj *User) (*Preferences, error)
 	Permissions(ctx context.Context, obj *User) ([]string, error)
 	Organizations(ctx context.Context, obj *User) ([]*Organization, error)
 	Invitations(ctx context.Context, obj *User) ([]*Invitation, error)
@@ -3862,6 +3871,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateOrganization(childComplexity, args["id"].(string), args["input"].(OrganizationSettings)), true
+	case "Mutation.updatePreferences":
+		if e.ComplexityRoot.Mutation.UpdatePreferences == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updatePreferences_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdatePreferences(childComplexity, args["input"].(PreferencesPatch), args["expectedVersion"].(*int)), true
 	case "Mutation.updateRepository":
 		if e.ComplexityRoot.Mutation.UpdateRepository == nil {
 			break
@@ -4231,6 +4251,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PersonalTokenCreated.Token(childComplexity), true
+
+	case "Preferences.theme":
+		if e.ComplexityRoot.Preferences.Theme == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Preferences.Theme(childComplexity), true
+	case "Preferences.version":
+		if e.ComplexityRoot.Preferences.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Preferences.Version(childComplexity), true
 
 	case "Push.at":
 		if e.ComplexityRoot.Push.At == nil {
@@ -5387,6 +5420,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.PersonalTokens(childComplexity), true
+	case "User.preferences":
+		if e.ComplexityRoot.User.Preferences == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.Preferences(childComplexity), true
 	case "User.sshKeys":
 		if e.ComplexityRoot.User.SSHKeys == nil {
 			break
@@ -5440,6 +5479,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("NewSecret", ec.unmarshalInputNewSecret),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
+			graphql.NewInputUnmarshaler("PreferencesPatch", ec.unmarshalInputPreferencesPatch),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
 			graphql.NewInputUnmarshaler("ReviewCommentInput", ec.unmarshalInputReviewCommentInput),
 			graphql.NewInputUnmarshaler("ReviewInput", ec.unmarshalInputReviewInput),
@@ -7180,6 +7220,8 @@ type Mutation {
   addSSHKey(input: SSHKeyInput!): SSHKey!
   "Deletes one of the viewer's SSH keys; the next connection with it fails; only from a session, never from a token or an API key. False when the viewer has no such key."
   deleteSSHKey(id: ID!): Boolean!
+  "Changes the viewer's preferences input names and answers them as they now are; only a person has them, never an agent, a job or an API key (FORBIDDEN, preferences.people_only). With expectedVersion, 0 before the first change, preferences at another version are refused (CONFLICT, precondition.failed)."
+  updatePreferences(input: PreferencesPatch!, expectedVersion: Int): Preferences!
 }
 
 "A person: a principal of kind user."
@@ -7194,6 +7236,27 @@ type User {
   personalTokens: [PersonalToken!]!
   "The user's SSH keys, newest first."
   sshKeys: [SSHKey!]!
+  "How Cobranch looks to the user, wherever they sign in: the defaults, at version 0, until they first change one."
+  preferences: Preferences!
+}
+
+"The colours the Console draws in; SYSTEM follows the operating system's."
+enum Theme {
+  SYSTEM
+  LIGHT
+  DARK
+}
+
+"How Cobranch looks to a person, wherever they sign in."
+type Preferences {
+  theme: Theme!
+  "Counts their changes, 0 before the first."
+  version: Int!
+}
+
+"What changes the preferences; a field left out keeps its value."
+input PreferencesPatch {
+  theme: Theme
 }
 
 type Email {
@@ -8655,6 +8718,16 @@ func (ec *executionContext) childFields_PersonalTokenCreated(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type PersonalTokenCreated", field.Name)
 }
 
+func (ec *executionContext) childFields_Preferences(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "theme":
+		return ec.fieldContext_Preferences_theme(ctx, field)
+	case "version":
+		return ec.fieldContext_Preferences_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Preferences", field.Name)
+}
+
 func (ec *executionContext) childFields_Push(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -9107,6 +9180,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_personalTokens(ctx, field)
 	case "sshKeys":
 		return ec.fieldContext_User_sshKeys(ctx, field)
+	case "preferences":
+		return ec.fieldContext_User_preferences(ctx, field)
 	case "permissions":
 		return ec.fieldContext_User_permissions(ctx, field)
 	case "organizations":
@@ -11418,6 +11493,28 @@ func (ec *executionContext) field_Mutation_updateOrganization_args(ctx context.C
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updatePreferences_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (PreferencesPatch, error) {
+			return ec.unmarshalNPreferencesPatch2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPreferencesPatch(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg1
 	return args, nil
 }
 
@@ -20142,6 +20239,50 @@ func (ec *executionContext) fieldContext_Mutation_deleteSSHKey(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_updatePreferences(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updatePreferences(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdatePreferences(ctx, fc.Args["input"].(PreferencesPatch), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Preferences) graphql.Marshaler {
+			return ec.marshalNPreferences2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPreferences(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updatePreferences(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Preferences(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updatePreferences_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createAgent(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24743,6 +24884,52 @@ func (ec *executionContext) _PersonalTokenCreated_secret(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_PersonalTokenCreated_secret(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PersonalTokenCreated", field, false, false, "String")
+}
+
+func (ec *executionContext) _Preferences_theme(ctx context.Context, field graphql.CollectedField, obj *Preferences) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Preferences_theme(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Theme, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v Theme) graphql.Marshaler {
+			return ec.marshalNTheme2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Preferences_theme(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Preferences", field, false, false, "Theme")
+}
+
+func (ec *executionContext) _Preferences_version(ctx context.Context, field graphql.CollectedField, obj *Preferences) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Preferences_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Preferences_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Preferences", field, false, false, "Int")
 }
 
 func (ec *executionContext) _Push_id(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
@@ -29421,6 +29608,38 @@ func (ec *executionContext) fieldContext_User_sshKeys(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _User_preferences(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_preferences(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().Preferences(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Preferences) graphql.Marshaler {
+			return ec.marshalNPreferences2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPreferences(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_preferences(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Preferences(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _User_permissions(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31766,6 +31985,48 @@ func (ec *executionContext) unmarshalInputPersonalTokenInput(ctx context.Context
 func UnmarshalPersonalTokenInput(ctx context.Context, raw any) (PersonalTokenInput, error) {
 	var out PersonalTokenInput
 	err := graphql.UnmarshalNamedInputFromContext(ctx, "PersonalTokenInput", raw, &out)
+	return out, err
+}
+
+func (ec *executionContext) unmarshalInputPreferencesPatch(ctx context.Context, obj any) (PreferencesPatch, error) {
+	var it PreferencesPatch
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"theme"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "theme":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("theme"))
+			data, err := ec.unmarshalOTheme2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Theme = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalPreferencesPatch unmarshals raw into the PreferencesPatch input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalPreferencesPatch(ctx context.Context, raw any) (PreferencesPatch, error) {
+	var out PreferencesPatch
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "PreferencesPatch", raw, &out)
 	return out, err
 }
 
@@ -35302,6 +35563,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "updatePreferences":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updatePreferences(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createAgent":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createAgent(ctx, field)
@@ -36240,6 +36508,44 @@ func (ec *executionContext) _PersonalTokenCreated(ctx context.Context, sel ast.S
 			}
 		case "secret":
 			out.Values[i] = ec._PersonalTokenCreated_secret(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var preferencesImplementors = []string{"Preferences"}
+
+func (ec *executionContext) _Preferences(ctx context.Context, sel ast.SelectionSet, obj *Preferences) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, preferencesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Preferences")
+		case "theme":
+			out.Values[i] = ec._Preferences_theme(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._Preferences_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -37804,6 +38110,12 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_sshKeys(ctx, field, obj)
+				})
+		case "preferences":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._User_preferences(ctx, field, obj)
 				})
 		case "permissions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -39446,6 +39758,19 @@ func (ec *executionContext) unmarshalNPersonalTokenInput2cobranchᚗdevᚋintern
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNPreferences2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPreferences(ctx context.Context, sel ast.SelectionSet, v *Preferences) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Preferences!")
+		return graphql.Null
+	}
+	return ec._Preferences(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPreferencesPatch2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPreferencesPatch(ctx context.Context, v any) (PreferencesPatch, error) {
+	res, err := ec.unmarshalInputPreferencesPatch(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*Repository) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -39897,6 +40222,16 @@ func (ec *executionContext) unmarshalNTaskState2cobranchᚗdevᚋinternalᚋadap
 }
 
 func (ec *executionContext) marshalNTaskState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskState(ctx context.Context, sel ast.SelectionSet, v TaskState) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNTheme2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx context.Context, v any) (Theme, error) {
+	var res Theme
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTheme2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx context.Context, sel ast.SelectionSet, v Theme) graphql.Marshaler {
 	return v
 }
 
@@ -40771,6 +41106,22 @@ func (ec *executionContext) marshalOTaskState2ᚕcobranchᚗdevᚋinternalᚋada
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalOTheme2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx context.Context, v any) (*Theme, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(Theme)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTheme2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTheme(ctx context.Context, sel ast.SelectionSet, v *Theme) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v any) (*time.Time, error) {

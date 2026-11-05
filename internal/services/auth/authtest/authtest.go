@@ -64,7 +64,9 @@ type Store struct {
 	// Tasks are the agents' tasks that task tokens work, by ID, and TaskTokens those tokens by hash.
 	Tasks      map[uuid.UUID]*Task
 	TaskTokens map[string]auth.Credential
-	Fail       error
+	// Saved are the people's preferences once they change one, by user.
+	Saved map[uuid.UUID]auth.Preferences
+	Fail  error
 }
 
 // Task is an agent's task as task tokens see it: what it grants, its agent, and whether it ended.
@@ -79,7 +81,7 @@ func NewStore() *Store {
 	return &Store{Flows: map[string]auth.Flow{}, Identities: map[string]auth.Identity{}, Users: map[uuid.UUID]auth.User{},
 		Grants: map[uuid.UUID][]auth.Grant{}, ByToken: map[string]auth.Session{},
 		Credentials: map[string]auth.Credential{}, Principals: map[uuid.UUID]auth.Principal{},
-		Tasks: map[uuid.UUID]*Task{}, TaskTokens: map[string]auth.Credential{}}
+		Tasks: map[uuid.UUID]*Task{}, TaskTokens: map[string]auth.Credential{}, Saved: map[uuid.UUID]auth.Preferences{}}
 }
 
 // CreateTaskToken records a token of task taskID by hash, or answers auth.ErrNotFound for a task that isn't there or
@@ -426,6 +428,35 @@ func (s *Store) InstallationSettings(context.Context) (auth.InstallationSettings
 		return auth.InstallationSettings{}, s.Fail
 	}
 	return s.Installation, nil
+}
+
+// Preferences reads a user's preferences, the defaults at version 0 until they change one.
+func (s *Store) Preferences(_ context.Context, userID uuid.UUID) (auth.Preferences, error) {
+	if s.Fail != nil {
+		return auth.Preferences{}, s.Fail
+	}
+	if p, ok := s.Saved[userID]; ok {
+		return p, nil
+	}
+	return auth.DefaultPreferences, nil
+}
+
+// SavePreferences writes a user's preferences at the next version, if they are still at version, or answers
+// auth.ErrPreferencesChanged.
+func (s *Store) SavePreferences(ctx context.Context, userID uuid.UUID, p auth.Preferences, version int64) (auth.Preferences, error) {
+	if s.Fail != nil {
+		return auth.Preferences{}, s.Fail
+	}
+	current, err := s.Preferences(ctx, userID)
+	if err != nil {
+		return auth.Preferences{}, err
+	}
+	if current.Version != version {
+		return auth.Preferences{}, auth.ErrPreferencesChanged
+	}
+	p.Version = version + 1
+	s.Saved[userID] = p
+	return p, nil
 }
 
 // IdentityProviders lists the providers the Back-office added.

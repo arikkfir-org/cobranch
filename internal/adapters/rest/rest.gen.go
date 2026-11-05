@@ -902,6 +902,27 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for Theme.
+const (
+	Dark   Theme = "dark"
+	Light  Theme = "light"
+	System Theme = "system"
+)
+
+// Valid indicates whether the value is a known member of the Theme enum.
+func (e Theme) Valid() bool {
+	switch e {
+	case Dark:
+		return true
+	case Light:
+		return true
+	case System:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TranscriptEntryKind.
 const (
 	TranscriptEntryKindInput  TranscriptEntryKind = "input"
@@ -2274,6 +2295,21 @@ type PostedEvent struct {
 	Runs []Run `json:"runs"`
 }
 
+// Preferences How Cobranch looks to a person, wherever they sign in.
+type Preferences struct {
+	// Theme The colours the Console draws in; system follows the operating system's.
+	Theme Theme `json:"theme"`
+
+	// Version Counts their changes, 0 before the first; their ETag.
+	Version int64 `json:"version"`
+}
+
+// PreferencesPatch What changes the preferences, as a merge patch; a field left out keeps its value.
+type PreferencesPatch struct {
+	// Theme The colours the Console draws in; system follows the operating system's.
+	Theme *Theme `json:"theme,omitempty"`
+}
+
 // Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
@@ -2727,6 +2763,9 @@ type TaskInput struct {
 // TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 type TaskState string
 
+// Theme The colours the Console draws in; system follows the operating system's.
+type Theme string
+
 // TranscriptEntry A step of a task's transcript, numbered from 1 in its task; entries never change.
 type TranscriptEntry struct {
 	// Body What the harness recorded, as it wrote it. A state entry's holds state, and summary or reason.
@@ -2864,6 +2903,9 @@ type IfMatchLabel = string
 // IfMatchModelProvider defines model for ifMatchModelProvider.
 type IfMatchModelProvider = string
 
+// IfMatchPreferences defines model for ifMatchPreferences.
+type IfMatchPreferences = string
+
 // IfMatchSecret defines model for ifMatchSecret.
 type IfMatchSecret = string
 
@@ -2932,6 +2974,18 @@ type ThreadID = openapi_types.UUID
 
 // UserID defines model for user.
 type UserID = openapi_types.UUID
+
+// GetMyPreferencesParams defines parameters for GetMyPreferences.
+type GetMyPreferencesParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateMyPreferencesParams defines parameters for UpdateMyPreferences.
+type UpdateMyPreferencesParams struct {
+	// IfMatch The ETag of the preferences the change was made from, "0" before the first change, or * for whichever are there; a change made meanwhile is refused with 412.
+	IfMatch *IfMatchPreferences `json:"If-Match,omitempty"`
+}
 
 // GetMyUsageParams defines parameters for GetMyUsage.
 type GetMyUsageParams struct {
@@ -3433,6 +3487,9 @@ type ListBuiltInRolesParams struct {
 // ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
 type ListBuiltInRolesParamsScope string
 
+// UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody defines body for UpdateMyPreferences for application/merge-patch+json ContentType.
+type UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody = PreferencesPatch
+
 // AddMySSHKeyJSONRequestBody defines body for AddMySSHKey for application/json ContentType.
 type AddMySSHKeyJSONRequestBody = SSHKeyInput
 
@@ -3585,6 +3642,12 @@ type ServerInterface interface {
 	// ListMyOrganizations The organizations the user belongs to, by name.
 	// (GET /me/organizations)
 	ListMyOrganizations(w http.ResponseWriter, r *http.Request)
+	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
+	// (GET /me/preferences)
+	GetMyPreferences(w http.ResponseWriter, r *http.Request, params GetMyPreferencesParams)
+	// UpdateMyPreferences Changes the viewer's preferences the merge patch (RFC 7396) names. The change names the ETag it was made from in If-Match ("0" before the first change, * for whichever is there); without it, the answer is 428.
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(w http.ResponseWriter, r *http.Request, params UpdateMyPreferencesParams)
 	// ListMySessions The user's live sessions, newest first.
 	// (GET /me/sessions)
 	ListMySessions(w http.ResponseWriter, r *http.Request)
@@ -4135,6 +4198,88 @@ func (siw *ServerInterfaceWrapper) ListMyOrganizations(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMyOrganizations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) GetMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMyPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyPreferences(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMyPreferences operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateMyPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchPreferences
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMyPreferences(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11253,6 +11398,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/ssh-keys", wrapper.ListMySSHKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/ssh-keys", wrapper.AddMySSHKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/ssh-keys/{id}", wrapper.DeleteMySSHKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/preferences", wrapper.GetMyPreferences)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/me/preferences", wrapper.UpdateMyPreferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/organizations", wrapper.ListMyOrganizations)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/usage", wrapper.GetMyUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
@@ -11756,6 +11903,217 @@ type ListMyOrganizationsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListMyOrganizationsdefaultApplicationProblemPlusJSONResponse) VisitListMyOrganizationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferencesRequestObject struct {
+	Params GetMyPreferencesParams
+}
+
+type GetMyPreferencesResponseObject interface {
+	VisitGetMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type GetMyPreferences200ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyPreferences200JSONResponse struct {
+	Body    Preferences
+	Headers GetMyPreferences200ResponseHeaders
+}
+
+func (response GetMyPreferences200JSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferences304ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyPreferences304Response struct {
+	Headers GetMyPreferences304ResponseHeaders
+}
+
+func (response GetMyPreferences304Response) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetMyPreferences401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyPreferences401ApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferences403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMyPreferences403ApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMyPreferencesdefaultApplicationProblemPlusJSONResponse) VisitGetMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesRequestObject struct {
+	Params UpdateMyPreferencesParams
+	Body   *UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateMyPreferencesResponseObject interface {
+	VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error
+}
+
+type UpdateMyPreferences200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateMyPreferences200JSONResponse struct {
+	Body    Preferences
+	Headers UpdateMyPreferences200ResponseHeaders
+}
+
+func (response UpdateMyPreferences200JSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMyPreferences400ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences401ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences403ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences412ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferences428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMyPreferences428ApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMyPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMyPreferencesdefaultApplicationProblemPlusJSONResponse) VisitUpdateMyPreferencesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -26473,6 +26831,12 @@ type StrictServerInterface interface {
 	// ListMyOrganizations The organizations the user belongs to, by name.
 	// (GET /me/organizations)
 	ListMyOrganizations(ctx context.Context, request ListMyOrganizationsRequestObject) (ListMyOrganizationsResponseObject, error)
+	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
+	// (GET /me/preferences)
+	GetMyPreferences(ctx context.Context, request GetMyPreferencesRequestObject) (GetMyPreferencesResponseObject, error)
+	// UpdateMyPreferences Changes the viewer's preferences the merge patch (RFC 7396) names. The change names the ETag it was made from in If-Match ("0" before the first change, * for whichever is there); without it, the answer is 428.
+	// (PATCH /me/preferences)
+	UpdateMyPreferences(ctx context.Context, request UpdateMyPreferencesRequestObject) (UpdateMyPreferencesResponseObject, error)
 	// ListMySessions The user's live sessions, newest first.
 	// (GET /me/sessions)
 	ListMySessions(ctx context.Context, request ListMySessionsRequestObject) (ListMySessionsResponseObject, error)
@@ -27095,6 +27459,65 @@ func (sh *strictHandler) ListMyOrganizations(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMyOrganizationsResponseObject); ok {
 		if err := validResponse.VisitListMyOrganizationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMyPreferences operation middleware
+func (sh *strictHandler) GetMyPreferences(w http.ResponseWriter, r *http.Request, params GetMyPreferencesParams) {
+	var request GetMyPreferencesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyPreferences(ctx, request.(GetMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitGetMyPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMyPreferences operation middleware
+func (sh *strictHandler) UpdateMyPreferences(w http.ResponseWriter, r *http.Request, params UpdateMyPreferencesParams) {
+	var request UpdateMyPreferencesRequestObject
+
+	request.Params = params
+
+	var body UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMyPreferences(ctx, request.(UpdateMyPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMyPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMyPreferencesResponseObject); ok {
+		if err := validResponse.VisitUpdateMyPreferencesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

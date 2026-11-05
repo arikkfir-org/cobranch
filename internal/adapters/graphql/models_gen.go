@@ -965,6 +965,18 @@ type PersonalTokenInput struct {
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }
 
+// How Cobranch looks to a person, wherever they sign in.
+type Preferences struct {
+	Theme Theme `json:"theme"`
+	// Counts their changes, 0 before the first.
+	Version int `json:"version"`
+}
+
+// What changes the preferences; a field left out keeps its value.
+type PreferencesPatch struct {
+	Theme *Theme `json:"theme,omitempty"`
+}
+
 // The push that first brought a commit.
 type Push struct {
 	ID string `json:"id"`
@@ -1370,6 +1382,8 @@ type User struct {
 	PersonalTokens []*PersonalToken `json:"personalTokens"`
 	// The user's SSH keys, newest first.
 	SSHKeys []*SSHKey `json:"sshKeys"`
+	// How Cobranch looks to the user, wherever they sign in: the defaults, at version 0, until they first change one.
+	Preferences *Preferences `json:"preferences"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.
@@ -2973,6 +2987,64 @@ func (e *TaskState) UnmarshalJSON(b []byte) error {
 }
 
 func (e TaskState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// The colours the Console draws in; SYSTEM follows the operating system's.
+type Theme string
+
+const (
+	ThemeSystem Theme = "SYSTEM"
+	ThemeLight  Theme = "LIGHT"
+	ThemeDark   Theme = "DARK"
+)
+
+var AllTheme = []Theme{
+	ThemeSystem,
+	ThemeLight,
+	ThemeDark,
+}
+
+func (e Theme) IsValid() bool {
+	switch e {
+	case ThemeSystem, ThemeLight, ThemeDark:
+		return true
+	}
+	return false
+}
+
+func (e Theme) String() string {
+	return string(e)
+}
+
+func (e *Theme) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Theme(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Theme", str)
+	}
+	return nil
+}
+
+func (e Theme) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Theme) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Theme) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

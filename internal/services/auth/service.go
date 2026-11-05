@@ -100,6 +100,11 @@ type Store interface {
 	InstallationSettings(ctx context.Context) (InstallationSettings, error)
 	// IdentityProviders lists the identity providers the Back-office added, by ID.
 	IdentityProviders(ctx context.Context) ([]StoredProvider, error)
+	// Preferences reads a person's preferences: DefaultPreferences, at version 0, until they first change one.
+	Preferences(ctx context.Context, userID uuid.UUID) (Preferences, error)
+	// SavePreferences writes a person's preferences as them, if they are still at version (0 before their first
+	// change), and answers them as written; ErrPreferencesChanged otherwise.
+	SavePreferences(ctx context.Context, userID uuid.UUID, p Preferences, version int64) (Preferences, error)
 }
 
 // Settings is the installation's sign-in configuration, from the chart's values. A sign-up setting they leave unset
