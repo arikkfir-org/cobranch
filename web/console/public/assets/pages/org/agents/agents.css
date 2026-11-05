@@ -1,7 +1,8 @@
 /* The Agents pages (pages/org/agents.js, its tabs, lib/agent.js, lib/task.js): an agent's page with its header, task
    rows and facts, a task's page with its transcript and spend, the month's figures, an agent's costliest task against
-   its cap, and the events of the Activity tab. Tokens and components.css's components only; the task Row, the Fact,
-   the Turn and the Stat are frames of the agent's screens, not components of the design system. */
+   its cap, and the events of the Activity tab. Tokens and components.css's components only; the task Row, the Turn
+   and the Stat are frames of the agent's screens, not components of the design system, and the facts are Fact rows
+   with the cards' own label and dividers. */
 
 /* An agent's page: its header, then its tasks beside what it runs on. */
 .agent-header { align-items: center; gap: var(--space-12); }
