@@ -260,9 +260,11 @@ func (s *Server) readLog(w http.ResponseWriter, r *http.Request, o objects) erro
 		if err != nil {
 			return err
 		}
-		if log.Total, err = strconv.Atoi(strings.TrimSpace(string(out))); err != nil {
+		n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+		if err != nil {
 			return fmt.Errorf("counting the history of %s: git rev-list printed %q: %w", o.commit, out, err)
 		}
+		log.Total = &n
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(gitinternal.LogOf(log)) // a caller gone away gets nothing more

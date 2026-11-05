@@ -317,6 +317,9 @@ Nothing of an installation is in the product: the chart wires the internal call 
 - **The shared token goes a release later.** The release that sends the viewer's token stops reading the token
   PostgreSQL held, and the next drops its table, so the release before keeps working through a rolling upgrade. While
   old and new servers run side by side, a code read between an old one and a new one fails until both have rolled.
+- **A history's filter and count wait for the Git server to roll.** A Git server of the release before reads neither
+  `grep` nor `count`: while it still answers, an every-parent history lists its walk unfiltered and uncounted, and the
+  Commits screen shows no count rather than a wrong one.
 
 ## Risks
 

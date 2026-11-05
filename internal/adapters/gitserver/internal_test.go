@@ -282,8 +282,8 @@ func TestInternalLog(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Log() error = %v, want %v", err, tt.wantErr)
 			}
-			if err == nil && (log.Commit != b.named(tt.wantCommit) || !sameLog(log.Entries, tt.want) || log.Total != tt.wantTotal) {
-				t.Errorf("Log() = %+v, want %v at %s, of %d", log, tt.want, tt.wantCommit, tt.wantTotal)
+			if err == nil && (log.Commit != b.named(tt.wantCommit) || !sameLog(log.Entries, tt.want) || !counts(log.Total, tt.count, tt.wantTotal)) {
+				t.Errorf("Log() = %v at %s, of %s, want %v at %s, of %d", log.Entries, log.Commit, countOf(log.Total), tt.want, b.named(tt.wantCommit), tt.wantTotal)
 			}
 		})
 	}
@@ -402,6 +402,22 @@ func TestInternalPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+// counts tells whether total is what a walk asked to count carries: want, or nil when it wasn't asked.
+func counts(total *int, count bool, want int) bool {
+	if !count {
+		return total == nil
+	}
+	return total != nil && *total == want
+}
+
+// countOf is what total points at, or "none".
+func countOf(total *int) string {
+	if total == nil {
+		return "none"
+	}
+	return strconv.Itoa(*total)
 }
 
 // sameLog reports whether got and want name the same commits with the same parents, in the same order.

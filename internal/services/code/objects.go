@@ -101,11 +101,11 @@ type LogQuery struct {
 
 // Log is a page of a walk of history, as the Git server reads it: the commit its ref resolved to, the commits the page
 // holds, reachable from it with every parent followed, newest first, and, when the query asked for Count, how many the
-// whole walk holds.
+// whole walk holds: nil when the server didn't count, as a Git server of an earlier release doesn't.
 type Log struct {
 	Commit  string
 	Entries []LogEntry
-	Total   int
+	Total   *int
 }
 
 // LastCommits is what last changed a directory at a commit, as the Git server reads it: the commit its ref resolved

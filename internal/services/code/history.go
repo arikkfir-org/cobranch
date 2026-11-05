@@ -228,7 +228,10 @@ func (s *Service) everyParent(ctx context.Context, repoID uuid.UUID, q HistoryQu
 	case len(log.Entries) == 0 && q.Cursor != "":
 		return Page{}, &orgs.ValidationError{Field: "cursor", Code: "cursor.invalid", Message: "no page of this repository's history starts here"}
 	}
-	page := Page{Total: counted(q, log.Total)}
+	var page Page
+	if q.Cursor == "" {
+		page.Total = log.Total
+	}
 	if len(log.Entries) > size {
 		log.Entries, page.Next = log.Entries[:size], encodeCursor(log.Commit, skip+size)
 	}

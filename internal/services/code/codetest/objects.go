@@ -33,6 +33,7 @@ type Objects struct {
 	Deletions []code.DeleteRequest
 	OnDelete  func(req code.DeleteRequest) error
 	Diffs     []code.DiffRequest
+	Earlier   bool // answers a walk of history as a Git server of an earlier release: neither filtered nor counted
 }
 
 // The suffixes of the paths Objects holds a symlink or a submodule at.
@@ -167,12 +168,13 @@ func (o *Objects) Log(_ context.Context, _ uuid.UUID, q code.LogQuery) (code.Log
 	if q.Path != "" {
 		log = o.Logs[at(commit, q.Path)]
 	}
-	if q.Grep != "" {
+	if q.Grep != "" && !o.Earlier {
 		log = slices.DeleteFunc(slices.Clone(log), func(e code.LogEntry) bool { return !Holds(o.Messages[e.SHA], q.Grep) })
 	}
 	out := code.Log{Commit: commit}
-	if q.Count {
-		out.Total = len(log)
+	if q.Count && !o.Earlier {
+		n := len(log)
+		out.Total = &n
 	}
 	log = log[min(q.Skip, len(log)):]
 	out.Entries = slices.Clone(log[:min(q.Limit, len(log))])

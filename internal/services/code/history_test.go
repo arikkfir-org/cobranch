@@ -156,6 +156,7 @@ func TestHistoryQueryAndTotal(t *testing.T) {
 	total := func(n int) *int { return &n }
 	tests := []struct {
 		name      string
+		earlier   bool
 		q         code.HistoryQuery
 		want      []string
 		wantNext  string
@@ -179,6 +180,8 @@ func TestHistoryQueryAndTotal(t *testing.T) {
 			want: []string{"6"}, wantTotal: total(1)},
 		{name: "every parent's query, a page and where its next starts", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll, Query: "commit", Limit: 2},
 			want: []string{"5", "6"}, wantNext: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwNToy", wantTotal: total(6)},
+		{name: "every parent from a Git server of an earlier release, uncounted", earlier: true, q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll},
+			want: []string{"5", "6", "4", "3", "2", "1"}},
 		{name: "a path's, counted as git counts it", q: code.HistoryQuery{Branch: "main", Path: "docs"}, want: []string{"6", "2"}, wantTotal: total(3)},
 		{name: "a path's whose message holds a query", q: code.HistoryQuery{Branch: "main", Path: "docs", Query: "commit 2"}, want: []string{"2"},
 			wantTotal: total(1)},
@@ -189,6 +192,7 @@ func TestHistoryQueryAndTotal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := withLogs(newFixture())
+			f.objects.Earlier = tt.earlier
 			got, err := f.service.History(t.Context(), f.max, f.repo, tt.q)
 			if !sameError(err, tt.wantErr) {
 				t.Fatalf("got error %v, want %v", err, tt.wantErr)

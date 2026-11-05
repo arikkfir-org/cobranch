@@ -68,7 +68,7 @@ type LogEntry struct {
 type Log struct {
 	Commit  string     `json:"commit"`
 	Entries []LogEntry `json:"entries"`
-	Total   int        `json:"total,omitempty"`
+	Total   *int       `json:"total,omitempty"`
 }
 
 // LastCommits is what last changed a directory at a commit, as the internal call carries it: code.LastCommits.
