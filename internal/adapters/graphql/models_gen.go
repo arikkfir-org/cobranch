@@ -1514,7 +1514,7 @@ type Repository struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// The permissions the viewer holds on the repository.
 	ViewerPermissions []string `json:"viewerPermissions"`
-	// Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too.
+	// Who holds roles on the repository, by display name, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization counts when it gives a repository permission.
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
@@ -1574,14 +1574,25 @@ type Repository struct {
 	JobPrincipals []*Grantee `json:"jobPrincipals"`
 }
 
-// A principal's grants on a repository.
+// A principal's roles on a repository.
 type RepositoryAccess struct {
 	PrincipalID string `json:"principalId"`
 	// user, api_key, job or agent.
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
-	// The roles it holds on the repository, each with the permissions it gives there.
+	// The roles it holds on the repository itself, each with the permissions it gives there; none for a principal the organization's roles alone reach.
 	Roles []*Role `json:"roles"`
+	// Every role that reaches the repository, how and since when; its grants on the repository first, then its roles at the organization.
+	Grants []*RepositoryGrant `json:"grants"`
+}
+
+// A role that reaches a repository, with the permissions it gives there.
+type RepositoryGrant struct {
+	Role *Role `json:"role"`
+	// repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it.
+	Through string `json:"through"`
+	// When the role was granted.
+	Since time.Time `json:"since"`
 }
 
 // What makes or changes a repository. updateRepository takes every field as the repository's new value.

@@ -4540,13 +4540,13 @@ paths:
   /orgs/{org}/repos/{repo}/access:
     get:
       operationId: listRepositoryAccess
-      summary: Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+      summary: Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
       responses:
         "200":
-          description: The principals with grants on the repository, by display name.
+          description: The principals holding roles on the repository, by display name.
           content:
             application/json:
               schema:
@@ -7930,8 +7930,8 @@ components:
           type: string
     RepositoryAccess:
       type: object
-      description: A principal's grants on a repository.
-      required: [principalId, kind, displayName, roles]
+      description: A principal's roles on a repository.
+      required: [principalId, kind, displayName, roles, grants]
       properties:
         principalId:
           type: string
@@ -7943,9 +7943,29 @@ components:
           type: string
         roles:
           type: array
-          description: The roles it holds on the repository, each with the permissions it gives there.
+          description: The roles it holds on the repository itself, each with the permissions it gives there; none for a principal the organization's roles alone reach.
           items:
             $ref: "#/components/schemas/Role"
+        grants:
+          type: array
+          description: Every role that reaches the repository, how and since when; its grants on the repository first, then its roles at the organization.
+          items:
+            $ref: "#/components/schemas/RepositoryGrant"
+    RepositoryGrant:
+      type: object
+      description: A role that reaches a repository, with the permissions it gives there.
+      required: [role, through, since]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        through:
+          type: string
+          description: repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it.
+          enum: [repository, organization]
+        since:
+          type: string
+          format: date-time
+          description: When the role was granted.
     OrganizationOverview:
       type: object
       description: >-

@@ -11,9 +11,11 @@ import (
 func TestRepositoryQueries(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "an Owner's repositories, with their lazy fields", viewer: olivia,
-			document: fixed(`{ organization(slug: "acme") { repositories { slug name visibility objectFormat viewerPermissions access { displayName kind roles { name } } roles { name } } } }`),
+			document: fixed(`{ organization(slug: "acme") { repositories { slug name visibility objectFormat viewerPermissions access { displayName kind roles { name } grants { role { name } through } } roles { name } } } }`),
 			want: []string{`"slug":"website"`, `"visibility":"PRIVATE"`, `"objectFormat":"sha1"`, `"repo.manage"`,
-				`"access":[{"displayName":"Olivia","kind":"user","roles":[{"name":"Maintainer"}]}]`, `{"name":"Reader"},{"name":"Developer"}`}},
+				`"access":[{"displayName":"Olivia","kind":"user","roles":[{"name":"Maintainer"}],` +
+					`"grants":[{"role":{"name":"Maintainer"},"through":"repository"},{"role":{"name":"Owner"},"through":"organization"}]}]`,
+				`{"name":"Reader"},{"name":"Developer"}`}},
 		{name: "a repository summed up", viewer: func(f *orgFixture) *auth.Authenticated {
 			f.repoStore.RepoSummaries[f.website.ID] = repos.Summary{OpenBranches: 4, ReadyBranches: 2, LastPushAt: time.Date(2026, 11, 5, 1, 2, 3, 0, time.UTC), Main: repos.MainFailing}
 			return &f.olivia

@@ -1027,9 +1027,16 @@ type ComplexityRoot struct {
 
 	RepositoryAccess struct {
 		DisplayName func(childComplexity int) int
+		Grants      func(childComplexity int) int
 		Kind        func(childComplexity int) int
 		PrincipalID func(childComplexity int) int
 		Roles       func(childComplexity int) int
+	}
+
+	RepositoryGrant struct {
+		Role    func(childComplexity int) int
+		Since   func(childComplexity int) int
+		Through func(childComplexity int) int
 	}
 
 	RepositorySummary struct {
@@ -6492,6 +6499,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RepositoryAccess.DisplayName(childComplexity), true
+	case "RepositoryAccess.grants":
+		if e.ComplexityRoot.RepositoryAccess.Grants == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryAccess.Grants(childComplexity), true
 	case "RepositoryAccess.kind":
 		if e.ComplexityRoot.RepositoryAccess.Kind == nil {
 			break
@@ -6510,6 +6523,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RepositoryAccess.Roles(childComplexity), true
+
+	case "RepositoryGrant.role":
+		if e.ComplexityRoot.RepositoryGrant.Role == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryGrant.Role(childComplexity), true
+	case "RepositoryGrant.since":
+		if e.ComplexityRoot.RepositoryGrant.Since == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryGrant.Since(childComplexity), true
+	case "RepositoryGrant.through":
+		if e.ComplexityRoot.RepositoryGrant.Through == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryGrant.Through(childComplexity), true
 
 	case "RepositorySummary.lastPushAt":
 		if e.ComplexityRoot.RepositorySummary.LastPushAt == nil {
@@ -9930,7 +9962,7 @@ type Repository {
   createdAt: Time!
   "The permissions the viewer holds on the repository."
   viewerPermissions: [String!]!
-  "Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too."
+  "Who holds roles on the repository, by display name, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization counts when it gives a repository permission."
   access: [RepositoryAccess!]!
   "The roles the repository grants, each with the permissions it gives there; takes repo.read."
   roles: [Role!]!
@@ -9961,14 +9993,25 @@ enum MainStatus {
   PASSING
 }
 
-"A principal's grants on a repository."
+"A principal's roles on a repository."
 type RepositoryAccess {
   principalId: ID!
   "user, api_key, job or agent."
   kind: String!
   displayName: String!
-  "The roles it holds on the repository, each with the permissions it gives there."
+  "The roles it holds on the repository itself, each with the permissions it gives there; none for a principal the organization's roles alone reach."
   roles: [Role!]!
+  "Every role that reaches the repository, how and since when; its grants on the repository first, then its roles at the organization."
+  grants: [RepositoryGrant!]!
+}
+
+"A role that reaches a repository, with the permissions it gives there."
+type RepositoryGrant {
+  role: Role!
+  "repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it."
+  through: String!
+  "When the role was granted."
+  since: Time!
 }
 
 "What makes or changes a repository. updateRepository takes every field as the repository's new value."
@@ -12268,8 +12311,22 @@ func (ec *executionContext) childFields_RepositoryAccess(ctx context.Context, fi
 		return ec.fieldContext_RepositoryAccess_displayName(ctx, field)
 	case "roles":
 		return ec.fieldContext_RepositoryAccess_roles(ctx, field)
+	case "grants":
+		return ec.fieldContext_RepositoryAccess_grants(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RepositoryAccess", field.Name)
+}
+
+func (ec *executionContext) childFields_RepositoryGrant(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "role":
+		return ec.fieldContext_RepositoryGrant_role(ctx, field)
+	case "through":
+		return ec.fieldContext_RepositoryGrant_through(ctx, field)
+	case "since":
+		return ec.fieldContext_RepositoryGrant_since(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RepositoryGrant", field.Name)
 }
 
 func (ec *executionContext) childFields_RepositorySummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -36911,6 +36968,116 @@ func (ec *executionContext) fieldContext_RepositoryAccess_roles(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _RepositoryAccess_grants(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryAccess_grants(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Grants, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RepositoryGrant) graphql.Marshaler {
+			return ec.marshalNRepositoryGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryGrantᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryAccess_grants(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RepositoryAccess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RepositoryGrant(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RepositoryGrant_role(ctx context.Context, field graphql.CollectedField, obj *RepositoryGrant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryGrant_role(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Role, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Role) graphql.Marshaler {
+			return ec.marshalNRole2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRole(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryGrant_role(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RepositoryGrant",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Role(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RepositoryGrant_through(ctx context.Context, field graphql.CollectedField, obj *RepositoryGrant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryGrant_through(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Through, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryGrant_through(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryGrant", field, false, false, "String")
+}
+
+func (ec *executionContext) _RepositoryGrant_since(ctx context.Context, field graphql.CollectedField, obj *RepositoryGrant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryGrant_since(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Since, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryGrant_since(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryGrant", field, false, false, "Time")
+}
+
 func (ec *executionContext) _RepositorySummary_openBranches(ctx context.Context, field graphql.CollectedField, obj *RepositorySummary) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -50652,6 +50819,54 @@ func (ec *executionContext) _RepositoryAccess(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "grants":
+			out.Values[i] = ec._RepositoryAccess_grants(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var repositoryGrantImplementors = []string{"RepositoryGrant"}
+
+func (ec *executionContext) _RepositoryGrant(ctx context.Context, sel ast.SelectionSet, obj *RepositoryGrant) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, repositoryGrantImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RepositoryGrant")
+		case "role":
+			out.Values[i] = ec._RepositoryGrant_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "through":
+			out.Values[i] = ec._RepositoryGrant_through(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "since":
+			out.Values[i] = ec._RepositoryGrant_since(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -54281,6 +54496,30 @@ func (ec *executionContext) marshalNRepositoryAccess2ᚖcobranchᚗdevᚋinterna
 		return graphql.Null
 	}
 	return ec._RepositoryAccess(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRepositoryGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryGrantᚄ(ctx context.Context, sel ast.SelectionSet, v []*RepositoryGrant) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRepositoryGrant2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryGrant(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRepositoryGrant2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryGrant(ctx context.Context, sel ast.SelectionSet, v *RepositoryGrant) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "RepositoryGrant!")
+		return graphql.Null
+	}
+	return ec._RepositoryGrant(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNRepositoryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryInput(ctx context.Context, v any) (RepositoryInput, error) {

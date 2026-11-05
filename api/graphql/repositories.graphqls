@@ -43,7 +43,7 @@ type Repository {
   createdAt: Time!
   "The permissions the viewer holds on the repository."
   viewerPermissions: [String!]!
-  "Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too."
+  "Who holds roles on the repository, by display name, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization counts when it gives a repository permission."
   access: [RepositoryAccess!]!
   "The roles the repository grants, each with the permissions it gives there; takes repo.read."
   roles: [Role!]!
@@ -74,14 +74,25 @@ enum MainStatus {
   PASSING
 }
 
-"A principal's grants on a repository."
+"A principal's roles on a repository."
 type RepositoryAccess {
   principalId: ID!
   "user, api_key, job or agent."
   kind: String!
   displayName: String!
-  "The roles it holds on the repository, each with the permissions it gives there."
+  "The roles it holds on the repository itself, each with the permissions it gives there; none for a principal the organization's roles alone reach."
   roles: [Role!]!
+  "Every role that reaches the repository, how and since when; its grants on the repository first, then its roles at the organization."
+  grants: [RepositoryGrant!]!
+}
+
+"A role that reaches a repository, with the permissions it gives there."
+type RepositoryGrant {
+  role: Role!
+  "repository for a grant on the repository itself, organization for a role at its organization, which reaches every repository of it."
+  through: String!
+  "When the role was granted."
+  since: Time!
 }
 
 "What makes or changes a repository. updateRepository takes every field as the repository's new value."

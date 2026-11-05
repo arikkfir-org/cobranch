@@ -114,10 +114,32 @@ type Principal struct {
 	DisplayName string
 }
 
-// Access is a principal's grants on a repository: the roles it holds there.
+// Access is a principal's grants on a repository: the roles it holds there, and every role that reaches it.
 type Access struct {
 	Principal Principal
-	Roles     []orgs.Role
+	// Roles are the roles it holds on the repository itself; none for a principal its organization's roles alone reach.
+	Roles []orgs.Role
+	// Grants are the roles that reach the repository, how and since when: its grants there first, then its roles at
+	// the repository's organization that give any repository permission, which reach every repository of it.
+	Grants []Grant
+}
+
+// Through is how a principal holds a role on a repository.
+type Through string
+
+// The ways a role reaches a repository.
+const (
+	// ThroughRepository is a grant on the repository itself.
+	ThroughRepository Through = "repository"
+	// ThroughOrganization is a role at the repository's organization, which reaches every repository of it.
+	ThroughOrganization Through = "organization"
+)
+
+// Grant is a role that reaches a repository, with how and since when: the Console's Access tab lists one a row.
+type Grant struct {
+	Role    orgs.Role
+	Through Through
+	Since   time.Time
 }
 
 // The errors the domain answers; an adapter maps each to its status.

@@ -415,6 +415,32 @@ func TestAccessAndRoles(t *testing.T) {
 	}
 }
 
+func TestAccessGrants(t *testing.T) {
+	// Each principal's grants on the repository come first, then the organization's roles that give a repository
+	// permission, kept to those: Max's Member, Gwen's Guest and the Deploy key's Guest give none.
+	f := newFixture(t)
+	access, err := f.service.Access(t.Context(), f.max, f.website.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, a := range access {
+		for _, g := range a.Grants {
+			got = append(got, a.Principal.DisplayName+":"+g.Role.Name+":"+string(g.Through))
+			if g.Role.ID == auth.RoleOwner && slices.Contains(g.Role.Permissions, "org.manage") {
+				t.Errorf("Owner gives %v on the repository, want its repository permissions alone", g.Role.Permissions)
+			}
+		}
+	}
+	want := []string{"Max:Developer:repository", "Olivia:Maintainer:repository", "Olivia:Owner:organization", "Rita:Release manager:organization"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Access() grants = %v, want %v", got, want)
+	}
+	if i := slices.IndexFunc(access, func(a repos.Access) bool { return a.Principal.ID == f.rita.ID }); i < 0 || len(access[i].Roles) != 0 {
+		t.Errorf("Rita's roles on the repository = %+v, want none: her role is the organization's", access)
+	}
+}
+
 func TestGrant(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "an Owner grants a guest Reader, who then reads it", run: func(ctx context.Context, f *fixture) error {
