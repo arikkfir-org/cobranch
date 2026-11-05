@@ -2174,6 +2174,50 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/spend:
+    get:
+      operationId: getOrganizationSpend
+      summary: >-
+        What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its
+        calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read,
+        wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on
+        repositories the viewer doesn't read too, as its usage counts every repository.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: month
+          in: query
+          description: The month, such as 2026-11; this month in the zone when absent.
+          schema:
+            type: string
+        - name: zone
+          in: query
+          description: The IANA time zone the month's days begin and end in, such as Asia/Jerusalem; UTC when absent.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: What the agents spent.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSpend"
+        "304":
+          description: The report is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -5625,7 +5669,8 @@ paths:
         walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as
         git log --date-order lists it (no commit before its children, the newest first among those the graph leaves
         free), it reads the Git server (an installation without one answers 503) and leaves out any commit
-        no push recorded.
+        no push recorded. A path's history follows every parent and holds the commits that changed what is there, as
+        git log -- path lists them.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -5642,9 +5687,17 @@ paths:
             or a commit's full name. A full name is tried first, then a branch, then a tag.
           schema:
             type: string
+        - name: path
+          in: query
+          description: >-
+            A file's or a directory's path from the repository's root, as names separated by /, whose history the page
+            lists: the commits that changed what is there, every parent followed. A path's history takes parents=all
+            or none, and parents=first is 400 parents.path.
+          schema:
+            type: string
         - name: parents
           in: query
-          description: Which parents of each commit the history follows, the first alone or every one.
+          description: Which parents of each commit the history follows, the first alone or every one; every one for a path's.
           schema:
             type: string
             enum: [first, all]
@@ -6659,6 +6712,87 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/tree/commits:
+    get:
+      operationId: getTreeCommits
+      summary: >-
+        What last changed the directory at a path of the commit a ref names, for a listing of its entries to show beside
+        each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git
+        log -- path lists them; takes repo.read. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - $ref: "#/components/parameters/path"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: What last changed the directory.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreeCommits"
+        "304":
+          description: The answer is still the one If-None-Match names.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/paths:
+    get:
+      operationId: getPaths
+      summary: >-
+        The path of every file and symlink in the commit a ref names, for a viewer to find a file by its path, in the
+        order Git keeps them, up to 50,000 of them; takes repo.read. It reads the Git server: an installation without
+        one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The paths.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paths"
+        "304":
+          description: The paths are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/blob:
     get:
       operationId: getBlob
@@ -6691,6 +6825,56 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/blame:
+    get:
+      operationId: getBlame
+      summary: >-
+        Which commit last changed each line of the file at a path of the commit a ref names, as git blame tells it, for
+        the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink,
+        a binary file or one over 1 MiB is a 400 whose code is path.text. It reads the Git server: an installation
+        without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The file's lines in runs, each with the commit that last changed it.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Blame"
+        "304":
+          description: The answer is still the one If-None-Match names.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -7133,9 +7317,10 @@ components:
           description: The Console's page.
           enum: [sign-in, welcome, settings, help, help.components, organization, organization.members,
             organization.roles, organization.api-keys, organization.settings, organization.new-repository, organization.issues,
-            organization.agents, organization.tasks, organization.secrets, organization.usage, repository.code, repository.file,
+            organization.agents, organization.agents-activity, organization.agents-quotas, organization.agent, organization.tasks,
+            organization.secrets, organization.usage, organization.artifacts, repository.code, repository.file,
             repository.commits, repository.commit, repository.branches, repository.branch, repository.changes,
-            repository.runs, repository.environments, repository.secrets, repository.access, repository.settings]
+            repository.runs, repository.environments, repository.secrets, repository.access, repository.settings, repository.artifacts]
         navigation:
           type: string
           description: load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
@@ -9477,6 +9662,88 @@ components:
           description: >-
             Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown,
             README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+    TreeCommits:
+      type: object
+      description: >-
+        What last changed a directory at a commit. A commit no push recorded is left out, and so is an entry nobody
+        changed in the 10,000 commits the walk reads from the newest.
+      required: [commit, path, count, entries, commits]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        path:
+          type: string
+          description: The directory's path from the repository's root; empty for the root.
+        count:
+          type: integer
+          description: How many commits reachable from the commit changed the directory, every commit for the root.
+        latest:
+          type: string
+          description: The latest commit that changed the directory, one of commits.
+        entries:
+          type: object
+          description: The latest commit that changed each of the directory's entries, by the entry's name, each one of commits.
+          additionalProperties:
+            type: string
+        commits:
+          type: array
+          description: Every commit latest and entries name, once, the most recently committed first.
+          items:
+            $ref: "#/components/schemas/Commit"
+    Paths:
+      type: object
+      description: The path of every file and symlink in a commit's tree, without its submodules'.
+      required: [commit, paths, truncated]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        paths:
+          type: array
+          description: The paths from the repository's root, in the order Git keeps them, up to 50,000 of them.
+          items:
+            type: string
+        truncated:
+          type: boolean
+          description: Whether the tree holds more paths than paths lists.
+    Blame:
+      type: object
+      description: >-
+        Which commit last changed each line of a file at a commit. A run whose commit no push recorded keeps its name,
+        with no commit of commits to show.
+      required: [commit, path, ranges, commits]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        path:
+          type: string
+          description: The file's path from the repository's root.
+        ranges:
+          type: array
+          description: The file's lines in runs, in order, each the lines one commit last changed.
+          items:
+            $ref: "#/components/schemas/BlameRange"
+        commits:
+          type: array
+          description: Every commit a push recorded of those ranges name, once, the most recently committed first.
+          items:
+            $ref: "#/components/schemas/Commit"
+    BlameRange:
+      type: object
+      description: A run of a file's lines that one commit last changed.
+      required: [sha, start, lines]
+      properties:
+        sha:
+          type: string
+          description: The commit's full name.
+        start:
+          type: integer
+          description: The run's first line, counted from 1.
+        lines:
+          type: integer
+          description: How many lines the run holds.
     TreeEntry:
       type: object
       description: One of a directory's entries.
@@ -10100,6 +10367,101 @@ components:
         ended:
           type: boolean
           description: Whether it has ended; its token then acts no more.
+    OrganizationSpend:
+      type: object
+      description: >-
+        What an organization's agents spent in a month, from its first moment until the next month's, in a time zone.
+        Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+      required: [month, zone, since, until, agents, models]
+      properties:
+        month:
+          type: string
+          description: The month, such as 2026-11.
+        zone:
+          type: string
+          description: The time zone its days begin and end in.
+        since:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+        agents:
+          type: array
+          description: Every agent of the organization, by name.
+          items:
+            $ref: "#/components/schemas/AgentSpend"
+        models:
+          type: array
+          description: Every model of the organization, and every other model its tasks' calls asked in the month, by provider and name.
+          items:
+            $ref: "#/components/schemas/ModelSpend"
+    AgentSpend:
+      type: object
+      description: What one of an organization's agents spent in a month, with the model it runs on and the cap it puts on each task now.
+      required: [agent, tasks, failedOnCap, active, spent]
+      properties:
+        agent:
+          $ref: "#/components/schemas/Principal"
+        provider:
+          type: string
+          description: The model provider it runs on; absent while it runs on none.
+        model:
+          type: string
+          description: The model it runs on; absent while it runs on none.
+        cap:
+          type: string
+          description: The most a task of it may spend; absent for none.
+        tasks:
+          type: integer
+          format: int64
+          description: Its tasks queued in the month.
+        failedOnCap:
+          type: integer
+          format: int64
+          description: Those of them that failed having spent its cap.
+        active:
+          type: integer
+          format: int64
+          description: Those of them still queued, running or waiting.
+        spent:
+          type: string
+          description: What its calls in the month cost.
+        costliest:
+          $ref: "#/components/schemas/TaskCost"
+    TaskCost:
+      type: object
+      description: The task of an agent's queued in the month that spent most in all, of those the viewer sees.
+      required: [number, title, spent]
+      properties:
+        number:
+          type: integer
+          format: int64
+        title:
+          type: string
+        spent:
+          type: string
+          description: What it spent in all.
+    ModelSpend:
+      type: object
+      description: What the calls of one model cost in a month, how many tasks made them, and the tokens it read and wrote.
+      required: [provider, model, tasks, inputTokens, outputTokens, spent]
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        tasks:
+          type: integer
+          format: int64
+        inputTokens:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+        spent:
+          type: string
     TranscriptEntryKind:
       type: string
       description: >-

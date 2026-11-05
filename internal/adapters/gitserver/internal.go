@@ -31,7 +31,8 @@ const (
 )
 
 // InternalHandler serves the internal call (package gitinternal): the REST and GraphQL servers' reads of a
-// repository's trees, files, history and diffs, each from one snapshot, and their merges and branch deletions. Its
+// repository's trees, files, paths, blame, history and diffs, each from one snapshot, and their merges and branch
+// deletions. Its
 // callers send on their viewer's token, and it serves only what that viewer may read, merge or delete, as Git's own
 // port does, so it holds up whoever calls it.
 func (s *Server) InternalHandler() http.Handler {
@@ -40,6 +41,9 @@ func (s *Server) InternalHandler() http.Handler {
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blob", s.internal("blob", s.readBlob))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal("raw", s.readRaw))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/log", s.internal("log", s.readLog))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/last-commits", s.internal("last-commits", s.readLastCommits))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blame", s.internal("blame", s.readBlame))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/paths", s.internal("paths", s.readPaths))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/diff", s.internal("diff", s.readDiff))
 	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/merge", s.mergeHandler())
 	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/delete", s.deleteHandler())
@@ -140,38 +144,44 @@ func problem(w http.ResponseWriter, status int, p gitinternal.Problem) {
 
 // readTree answers the tree at the request's path, with its entries in the order Git keeps them.
 func (s *Server) readTree(w http.ResponseWriter, r *http.Request, o objects) error {
-	ctx := r.Context()
-	treeSHA := ""
-	if o.path == "" {
-		out, err := s.read(ctx, o.dir, nil, "rev-parse", "--verify", o.commit+"^{tree}")
-		if err != nil {
-			return err
-		}
-		treeSHA = strings.TrimSpace(string(out))
-	} else {
-		e, err := s.entry(ctx, o)
-		if err != nil {
-			return err
-		}
-		switch e.Kind {
-		case code.KindSubmodule:
-			return code.ErrSubmodule
-		case code.KindBlob, code.KindSymlink:
-			return code.ErrNotTree
-		}
-		treeSHA = e.SHA
-	}
-	out, err := s.read(ctx, o.dir, nil, "ls-tree", "-l", "-z", treeSHA)
-	if err != nil {
-		return err
-	}
-	entries, err := parseTree(out, o.path)
+	treeSHA, entries, err := s.tree(r.Context(), o)
 	if err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(gitinternal.TreeOf(code.Tree{Commit: o.commit, Path: o.path, SHA: treeSHA, Entries: entries})) // a caller gone away gets nothing more
 	return nil
+}
+
+// tree reads the directory at the read's path: its tree's object and its entries, in the order Git keeps them;
+// code.ErrNotTree for a file or a symlink, and code.ErrSubmodule for a submodule.
+func (s *Server) tree(ctx context.Context, o objects) (string, []code.Entry, error) {
+	treeSHA := ""
+	if o.path == "" {
+		out, err := s.read(ctx, o.dir, nil, "rev-parse", "--verify", o.commit+"^{tree}")
+		if err != nil {
+			return "", nil, err
+		}
+		treeSHA = strings.TrimSpace(string(out))
+	} else {
+		e, err := s.entry(ctx, o)
+		if err != nil {
+			return "", nil, err
+		}
+		switch e.Kind {
+		case code.KindSubmodule:
+			return "", nil, code.ErrSubmodule
+		case code.KindBlob, code.KindSymlink:
+			return "", nil, code.ErrNotTree
+		}
+		treeSHA = e.SHA
+	}
+	out, err := s.read(ctx, o.dir, nil, "ls-tree", "-l", "-z", treeSHA)
+	if err != nil {
+		return "", nil, err
+	}
+	entries, err := parseTree(out, o.path)
+	return treeSHA, entries, err
 }
 
 // readBlob answers the file or symlink at the request's path, with its content up to the limit the request asks for.
@@ -222,7 +232,8 @@ const maxLog = 1000
 // readLog answers the commits reachable from the commit the request's ref resolved to, every parent followed, in
 // git rev-list --date-order: no commit before its children, and among those the graph leaves free, the newest first,
 // so a commit whose clock ran ahead stays beneath the ones that build on it; after skipping as many as the request
-// asks, each with its parents.
+// asks, each with its parents. With a path, it answers only the commits that changed what is there, as git log --
+// path simplifies history, each with the parents that simplification leaves it.
 func (s *Server) readLog(w http.ResponseWriter, r *http.Request, o objects) error {
 	skip, skipErr := strconv.Atoi(r.URL.Query().Get("skip"))
 	limit, limitErr := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -232,7 +243,11 @@ func (s *Server) readLog(w http.ResponseWriter, r *http.Request, o objects) erro
 	}
 	log := code.Log{Commit: o.commit, Entries: []code.LogEntry{}}
 	if limit > 0 {
-		out, err := s.read(r.Context(), o.dir, nil, "rev-list", "--date-order", "--parents", "--skip="+strconv.Itoa(skip), "--max-count="+strconv.Itoa(limit), o.commit, "--")
+		args := []string{"rev-list", "--date-order", "--parents", "--skip=" + strconv.Itoa(skip), "--max-count=" + strconv.Itoa(limit), o.commit, "--"}
+		if o.path != "" {
+			args = append(args, o.path)
+		}
+		out, err := s.read(r.Context(), o.dir, nil, args...)
 		if err != nil {
 			return err
 		}

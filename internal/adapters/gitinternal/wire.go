@@ -14,8 +14,9 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
-// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit; /diff, with
+// ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob,
+// /raw, /last-commits and /blame, each with the query parameters ref and path, and blob with limit; /paths, with ref;
+// /log, with ref, path, skip and limit; /diff, with
 // ref, the head, and base and mergeBase; POST <ReposPath>{id}/merge, with a MergeRequest; and POST
 // <ReposPath>{id}/delete, with a DeleteRequest, which answers 204.
 const ReposPath = "/internal/v1/repos/"
@@ -67,6 +68,83 @@ type LogEntry struct {
 type Log struct {
 	Commit  string     `json:"commit"`
 	Entries []LogEntry `json:"entries"`
+}
+
+// LastCommits is what last changed a directory at a commit, as the internal call carries it: code.LastCommits.
+type LastCommits struct {
+	Commit  string            `json:"commit"`
+	Path    string            `json:"path"`
+	Count   int               `json:"count"`
+	Latest  string            `json:"latest"`
+	Entries map[string]string `json:"entries"`
+}
+
+// LastCommitsOf is last as the internal call carries it.
+func LastCommitsOf(last code.LastCommits) LastCommits {
+	return LastCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Latest: last.Latest, Entries: last.Entries}
+}
+
+// Domain is the domain's last commits.
+func (l LastCommits) Domain() code.LastCommits {
+	entries := l.Entries
+	if entries == nil {
+		entries = map[string]string{}
+	}
+	return code.LastCommits{Commit: l.Commit, Path: l.Path, Count: l.Count, Latest: l.Latest, Entries: entries}
+}
+
+// BlameRange is a run of a file's lines that one commit last changed, as the internal call carries it:
+// code.BlameRange.
+type BlameRange struct {
+	SHA   string `json:"sha"`
+	Start int    `json:"start"`
+	Lines int    `json:"lines"`
+}
+
+// Blame is which commit last changed each line of a file, as the internal call carries it: code.Blame.
+type Blame struct {
+	Commit string       `json:"commit"`
+	Path   string       `json:"path"`
+	Ranges []BlameRange `json:"ranges"`
+}
+
+// BlameOf is blame as the internal call carries it.
+func BlameOf(blame code.Blame) Blame {
+	ranges := make([]BlameRange, 0, len(blame.Ranges))
+	for _, r := range blame.Ranges {
+		ranges = append(ranges, BlameRange{SHA: r.SHA, Start: r.Start, Lines: r.Lines})
+	}
+	return Blame{Commit: blame.Commit, Path: blame.Path, Ranges: ranges}
+}
+
+// Domain is the domain's blame.
+func (b Blame) Domain() code.Blame {
+	ranges := make([]code.BlameRange, 0, len(b.Ranges))
+	for _, r := range b.Ranges {
+		ranges = append(ranges, code.BlameRange{SHA: r.SHA, Start: r.Start, Lines: r.Lines})
+	}
+	return code.Blame{Commit: b.Commit, Path: b.Path, Ranges: ranges}
+}
+
+// Paths is the path of every file and symlink in a commit's tree, as the internal call carries it: code.Paths.
+type Paths struct {
+	Commit    string   `json:"commit"`
+	Paths     []string `json:"paths"`
+	Truncated bool     `json:"truncated"`
+}
+
+// PathsOf is paths as the internal call carries it.
+func PathsOf(paths code.Paths) Paths {
+	return Paths{Commit: paths.Commit, Paths: paths.Paths, Truncated: paths.Truncated}
+}
+
+// Domain is the domain's paths.
+func (p Paths) Domain() code.Paths {
+	paths := p.Paths
+	if paths == nil {
+		paths = []string{}
+	}
+	return code.Paths{Commit: p.Commit, Paths: paths, Truncated: p.Truncated}
 }
 
 // LogOf is log as the internal call carries it.

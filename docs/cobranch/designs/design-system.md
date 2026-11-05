@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 51 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
-| Screens | 47 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 49 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -260,7 +260,7 @@ plan.
 | Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action, body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
-| Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`; `.tooltip`, or `data-tooltip` on what it labels |
+| Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`, and `.empty-centred` on a card, a card's body or a screen that shows nothing else, which holds it at 480px with 48px above and below; `.tooltip`, or `data-tooltip` on what it labels |
 | App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | `.app-sidebar`, `.app-topbar` (`lib/shell.css`) |
 | App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
@@ -329,7 +329,7 @@ only cue.
 
 ## Screens
 
-Forty-seven screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Forty-nine screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -341,6 +341,8 @@ Researcher waits for a task.
 | [Repositories](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=69-3127) | Every repository as a table: visibility, default branch, open branches, status, last push |
 | [New repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12992) | A card of a repository's name and description; Create repository opens it |
 | [Repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-646) | Branches by status (no pull requests), merge requirements, environments |
+| [Files](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=117-9579) | A directory at a ref: its latest commit, each entry beside the commit that last changed it, the README; Go to file |
+| [File](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=117-10012) | A file as numbered lines with Raw, Blame and History; its Markdown, binary, image, symlink, threads, empty and unreadable states beside it |
 | [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
@@ -383,7 +385,7 @@ Researcher waits for a task.
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-Not drawn yet: files and diffs, jobs, delivery and environments, and error states.
+The repository's other screens (Commits and Commit, a branch's Files changed, Jobs and Environment, Jobs, Run and Delivery) are drawn, and join this table as the Console takes them on ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)). Error states are drawn beside the screen they belong to.
 
 ### Sign in
 

@@ -7,9 +7,113 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const agentSpend = `-- name: AgentSpend :many
+WITH queued AS (
+    SELECT t.agent_id, t.number, t.title, t.state, t.cap_reached,
+        (SELECT coalesce(sum(s.cost), 0) FROM task_spend s WHERE s.task_id = t.id)::bigint AS spent,
+        ((t.repo_id IS NULL OR t.repo_id = ANY ($2::uuid[])) AND NOT (t.kind = ANY ($3::text[]))
+            AND (NOT t.private OR coalesce(t.assigned_by = $4::uuid, false)))::boolean AS shown
+    FROM agent_tasks t
+    WHERE t.org_id = $1 AND t.created_at >= $5 AND t.created_at < $6
+), calls AS (
+    SELECT s.agent_id, sum(s.cost)::bigint AS spent
+    FROM task_spend s
+    WHERE s.org_id = $1 AND s.created_at >= $5 AND s.created_at < $6
+    GROUP BY s.agent_id
+), costliest AS (
+    SELECT DISTINCT ON (q.agent_id) q.agent_id, q.number, q.title, q.spent
+    FROM queued q WHERE q.shown
+    ORDER BY q.agent_id, q.spent DESC, q.number DESC
+)
+SELECT ag.principal_id, ag.name, ag.provider, ag.model, coalesce(ag.cap, 0)::bigint AS cap,
+    count(q.number)::bigint AS tasks,
+    count(q.number) FILTER (WHERE q.cap_reached)::bigint AS failed_on_cap,
+    count(q.number) FILTER (WHERE q.state IN ('queued', 'running', 'waiting'))::bigint AS active,
+    coalesce(max(c.spent), 0)::bigint AS spent,
+    coalesce(max(cl.number), 0)::bigint AS costliest_number, coalesce(max(cl.title), '')::text AS costliest_title,
+    coalesce(max(cl.spent), 0)::bigint AS costliest_spent
+FROM agents ag
+    LEFT JOIN queued q ON q.agent_id = ag.principal_id
+    LEFT JOIN calls c ON c.agent_id = ag.principal_id
+    LEFT JOIN costliest cl ON cl.agent_id = ag.principal_id
+WHERE ag.org_id = $1
+GROUP BY ag.principal_id
+ORDER BY lower(ag.name), ag.principal_id
+`
+
+type AgentSpendParams struct {
+	OrgID      uuid.UUID
+	Readable   []uuid.UUID
+	Hidden     []string
+	PrivateFor uuid.UUID
+	Since      time.Time
+	Until      time.Time
+}
+
+type AgentSpendRow struct {
+	PrincipalID     uuid.UUID
+	Name            string
+	Provider        *string
+	Model           *string
+	Cap             int64
+	Tasks           int64
+	FailedOnCap     int64
+	Active          int64
+	Spent           int64
+	CostliestNumber int64
+	CostliestTitle  string
+	CostliestSpent  int64
+}
+
+// AgentSpend answers each of an organization's agents, by name, with its model and cap and what it spent in
+// [since, until): its tasks queued then, of every repository and kind, counted by how they stand, what its calls then
+// cost, and the costliest of those tasks that names no repository or one of readable, is of none of the kinds in
+// hidden, and isn't private to another than private_for, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
+// whatever the cap is now.
+func (q *Queries) AgentSpend(ctx context.Context, arg AgentSpendParams) ([]AgentSpendRow, error) {
+	rows, err := q.db.Query(ctx, agentSpend,
+		arg.OrgID,
+		arg.Readable,
+		arg.Hidden,
+		arg.PrivateFor,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentSpendRow
+	for rows.Next() {
+		var i AgentSpendRow
+		if err := rows.Scan(
+			&i.PrincipalID,
+			&i.Name,
+			&i.Provider,
+			&i.Model,
+			&i.Cap,
+			&i.Tasks,
+			&i.FailedOnCap,
+			&i.Active,
+			&i.Spent,
+			&i.CostliestNumber,
+			&i.CostliestTitle,
+			&i.CostliestSpent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const insertSpend = `-- name: InsertSpend :execrows
 INSERT INTO task_spend (task_id, id, org_id, agent_id, provider, model, input_tokens, output_tokens, cost)
@@ -94,6 +198,16 @@ func (q *Queries) LockSpendingTask(ctx context.Context, id uuid.UUID) (LockSpend
 	return i, err
 }
 
+const markCapReached = `-- name: MarkCapReached :exec
+UPDATE agent_tasks SET cap_reached = true WHERE id = $1
+`
+
+// MarkCapReached records that a task failed on reaching its agent's cap.
+func (q *Queries) MarkCapReached(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markCapReached, id)
+	return err
+}
+
 const modelPrices = `-- name: ModelPrices :one
 SELECT input_price, output_price FROM models WHERE org_id = $1 AND provider = $2 AND model = $3
 `
@@ -109,6 +223,60 @@ func (q *Queries) ModelPrices(ctx context.Context, orgID uuid.UUID, provider str
 	var i ModelPricesRow
 	err := row.Scan(&i.InputPrice, &i.OutputPrice)
 	return i, err
+}
+
+const modelSpend = `-- name: ModelSpend :many
+SELECT coalesce(m.provider, c.provider)::text AS provider, coalesce(m.model, c.model)::text AS model,
+    coalesce(c.tasks, 0)::bigint AS tasks, coalesce(c.input_tokens, 0)::bigint AS input_tokens,
+    coalesce(c.output_tokens, 0)::bigint AS output_tokens, coalesce(c.spent, 0)::bigint AS spent
+FROM (SELECT md.provider, md.model FROM models md WHERE md.org_id = $1) m
+    FULL JOIN (
+        SELECT s.provider, s.model, count(DISTINCT s.task_id)::bigint AS tasks,
+            sum(s.input_tokens)::bigint AS input_tokens, sum(s.output_tokens)::bigint AS output_tokens,
+            sum(s.cost)::bigint AS spent
+        FROM task_spend s
+        WHERE s.org_id = $1 AND s.created_at >= $2 AND s.created_at < $3
+        GROUP BY s.provider, s.model
+    ) c ON c.provider = m.provider AND c.model = m.model
+ORDER BY 1, 2
+`
+
+type ModelSpendRow struct {
+	Provider     string
+	Model        string
+	Tasks        int64
+	InputTokens  int64
+	OutputTokens int64
+	Spent        int64
+}
+
+// ModelSpend answers each of an organization's models, and each other model its tasks' calls asked in [since, until),
+// by provider and name, with what those calls read, wrote and cost and how many tasks made them.
+func (q *Queries) ModelSpend(ctx context.Context, orgID uuid.UUID, since time.Time, until time.Time) ([]ModelSpendRow, error) {
+	rows, err := q.db.Query(ctx, modelSpend, orgID, since, until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ModelSpendRow
+	for rows.Next() {
+		var i ModelSpendRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Model,
+			&i.Tasks,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.Spent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const taskSpent = `-- name: TaskSpent :one

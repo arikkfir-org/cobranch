@@ -3,7 +3,7 @@ import { filesBranch, repositoryFiles } from "../../lib/code.js";
 
 export const nav = { label: "Files", order: 10 };
 export const view = "repository.code";
-export const crumbs = ({ root, rest }) => [{ label: "Files", href: root + "/tree" }, ...(rest.length ? [{ label: rest.join("/") }] : [])];
+export const crumbs = () => [{ label: "Files" }];
 // subject is the branch's conversation, on its files.
 export const subject = async ({ org, repo, path, at, rest, can }) => {
   const branch = await filesBranch(path, rest);

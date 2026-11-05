@@ -20,8 +20,17 @@ type Objects interface {
 	// Raw streams the bytes of the file or symlink at path in the commit ref names.
 	Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (Raw, error)
 	// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, newest first
-	// as git log --date-order lists them, after skipping the first skip.
-	Log(ctx context.Context, repoID uuid.UUID, ref string, skip, limit int) (Log, error)
+	// as git log --date-order lists them, after skipping the first skip; with a path, only those that changed what is
+	// there, as git log -- path lists them.
+	Log(ctx context.Context, repoID uuid.UUID, ref, path string, skip, limit int) (Log, error)
+	// LastCommits reads what last changed the directory at path in the commit ref names: how many commits changed it,
+	// the latest of them, and the latest that changed each of its entries.
+	LastCommits(ctx context.Context, repoID uuid.UUID, ref, path string) (LastCommits, error)
+	// Blame reads which commit last changed each line of the file at path in the commit ref names, as git blame tells
+	// it.
+	Blame(ctx context.Context, repoID uuid.UUID, ref, path string) (Blame, error)
+	// Paths reads the path of every file and symlink in the commit ref names, up to MaxPaths of them.
+	Paths(ctx context.Context, repoID uuid.UUID, ref string) (Paths, error)
 	// Merge builds the merge req asks for and records it as a push of its base, answering once it is committed:
 	// ErrBranchMoved when the branch or its base moved, and a *MergeError for a merge Cobranch won't make.
 	Merge(ctx context.Context, repoID uuid.UUID, req MergeRequest) (Merged, error)
@@ -47,8 +56,20 @@ func (unavailable) Raw(context.Context, uuid.UUID, string, string) (Raw, error) 
 	return Raw{}, ErrUnavailable
 }
 
-func (unavailable) Log(context.Context, uuid.UUID, string, int, int) (Log, error) {
+func (unavailable) Log(context.Context, uuid.UUID, string, string, int, int) (Log, error) {
 	return Log{}, ErrUnavailable
+}
+
+func (unavailable) LastCommits(context.Context, uuid.UUID, string, string) (LastCommits, error) {
+	return LastCommits{}, ErrUnavailable
+}
+
+func (unavailable) Blame(context.Context, uuid.UUID, string, string) (Blame, error) {
+	return Blame{}, ErrUnavailable
+}
+
+func (unavailable) Paths(context.Context, uuid.UUID, string) (Paths, error) {
+	return Paths{}, ErrUnavailable
 }
 
 func (unavailable) Merge(context.Context, uuid.UUID, MergeRequest) (Merged, error) {
@@ -96,6 +117,26 @@ func (s *Service) Tree(ctx context.Context, v Viewer, repoID uuid.UUID, ref, pat
 		return Tree{}, failed(span, "reading the tree", err)
 	}
 	return tree, nil
+}
+
+// Paths reads the path of every file and symlink in the commit ref names (a full commit name, a branch or a tag, in
+// that order), in the order Git keeps them, up to MaxPaths of them, for a viewer to find a file by its path; it takes
+// repo.read.
+func (s *Service) Paths(ctx context.Context, v Viewer, repoID uuid.UUID, ref string) (Paths, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.Paths")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.ref", ref))
+	if err := s.check(ctx, v, repoID, ref, ""); err != nil {
+		return Paths{}, failed(span, "reading the tree's paths", err)
+	}
+	paths, err := s.objects.Paths(ctx, repoID, ref)
+	if err != nil {
+		return Paths{}, failed(span, "reading the tree's paths", err)
+	}
+	if paths.Paths == nil {
+		paths.Paths = []string{}
+	}
+	return paths, nil
 }
 
 // File reads the file or symlink at path in the commit ref names: whether it is binary and, when it isn't, its text

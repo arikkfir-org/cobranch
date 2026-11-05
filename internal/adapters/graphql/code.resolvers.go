@@ -151,14 +151,20 @@ func (r *repositoryResolver) DeletedBranch(ctx context.Context, obj *Repository,
 }
 
 // History is the resolver for the history field.
-func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error) {
+func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) (*CommitPage, error) {
 	v, repoID, err := repoOf(ctx, obj)
 	if err != nil {
 		return nil, err
 	}
-	q := code.HistoryQuery{Branch: branch, Parents: historyParents[parents], Limit: first}
+	q := code.HistoryQuery{Branch: branch, Limit: first}
 	if ref != nil {
 		q.Ref = *ref
+	}
+	if path != nil {
+		q.Path = *path
+	}
+	if parents != nil {
+		q.Parents = historyParents[*parents]
 	}
 	if after != nil {
 		q.Cursor = *after
@@ -241,6 +247,32 @@ func (r *repositoryResolver) Tree(ctx context.Context, obj *Repository, ref stri
 	return out, nil
 }
 
+// TreeCommits is the resolver for the treeCommits field.
+func (r *repositoryResolver) TreeCommits(ctx context.Context, obj *Repository, ref string, path string) (*TreeCommits, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	last, err := r.Code.TreeCommits(ctx, v, repoID, ref, path)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the tree's last commits")
+	}
+	return treeCommits(last), nil
+}
+
+// Paths is the resolver for the paths field.
+func (r *repositoryResolver) Paths(ctx context.Context, obj *Repository, ref string) (*Paths, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	paths, err := r.Code.Paths(ctx, v, repoID, ref)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the tree's paths")
+	}
+	return &Paths{Commit: paths.Commit, Paths: paths.Paths, Truncated: paths.Truncated}, nil
+}
+
 // Blob is the resolver for the blob field.
 func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error) {
 	v, repoID, err := repoOf(ctx, obj)
@@ -252,6 +284,19 @@ func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref stri
 		return nil, codeFail(ctx, err, "reading the file")
 	}
 	return file(f), nil
+}
+
+// Blame is the resolver for the blame field.
+func (r *repositoryResolver) Blame(ctx context.Context, obj *Repository, ref string, path string) (*Blame, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	blame, err := r.Code.Blame(ctx, v, repoID, ref, path)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the file's blame")
+	}
+	return blameOf(blame), nil
 }
 
 // BranchDiff is the resolver for the branchDiff field.

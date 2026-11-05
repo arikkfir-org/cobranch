@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -222,7 +223,7 @@ func TestInternalRaw(t *testing.T) {
 func TestInternalLog(t *testing.T) {
 	t.Parallel()
 	b := newBrowsed(t)
-	all, err := b.client.Log(b.ctx(t), website, "main", 0, 10)
+	all, err := b.client.Log(b.ctx(t), website, "main", "", 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,13 +235,18 @@ func TestInternalLog(t *testing.T) {
 		t.Fatalf("Log(main) = %+v, want the merge with both its parents, then feature's commit, then the first, whose clock ran ahead", all)
 	}
 	tests := []struct {
-		name, ref   string
-		skip, limit int
-		wantCommit  string
-		want        []code.LogEntry
-		wantErr     error
+		name, ref, path string
+		skip, limit     int
+		wantCommit      string
+		want            []code.LogEntry
+		wantErr         error
 	}{
 		{name: "after a skip, at most the limit", ref: "main", skip: 1, limit: 1, wantCommit: "merge", want: all.Entries[1:2]},
+		{name: "a file's, the merge simplified away", ref: "main", path: "feature.txt", limit: 10, wantCommit: "merge",
+			want: []code.LogEntry{{SHA: b.feature, Parents: []string{}}}},
+		{name: "a directory's", ref: "main", path: "docs", limit: 10, wantCommit: "merge", want: []code.LogEntry{{SHA: b.first, Parents: []string{}}}},
+		{name: "a path is a name, not a pattern", ref: "main", path: "doc*", limit: 10, wantCommit: "merge"},
+		{name: "a path nothing ever held", ref: "main", path: "gone.txt", limit: 10, wantCommit: "merge"},
 		{name: "past the end", ref: "main", skip: 3, limit: 10, wantCommit: "merge"},
 		{name: "no commits, only the ref resolved", ref: "main", limit: 0, wantCommit: "merge"},
 		{name: "an annotated tag, peeled", ref: "v1", limit: 10, wantCommit: "first", want: []code.LogEntry{{SHA: b.first, Parents: []string{}}}},
@@ -250,7 +256,7 @@ func TestInternalLog(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := b.client.Log(b.ctx(t), website, b.named(tt.ref), tt.skip, tt.limit)
+			log, err := b.client.Log(b.ctx(t), website, b.named(tt.ref), tt.path, tt.skip, tt.limit)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Log() error = %v, want %v", err, tt.wantErr)
 			}
@@ -263,6 +269,116 @@ func TestInternalLog(t *testing.T) {
 		if status := b.status(t, "/log?ref=main&"+query); status != http.StatusBadRequest {
 			t.Errorf("log?%s answered %d, want %d", query, status, http.StatusBadRequest)
 		}
+	}
+}
+
+func TestInternalLastCommits(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	tests := []struct {
+		name, ref, path string
+		want            code.LastCommits
+		wantErr         error
+	}{
+		{name: "main's root: the merge is the latest, the feature's commit changed its file", ref: "main",
+			want: code.LastCommits{Commit: "merge", Count: 3, Latest: "merge", Entries: map[string]string{"README.md": "first", "big.txt": "first",
+				"bin": "first", "docs": "first", "feature.txt": "feature", "link": "first", "logo.png": "first", "vendor": "first"}}},
+		{name: "a directory the merge didn't change", ref: "main", path: "docs",
+			want: code.LastCommits{Commit: "merge", Path: "docs", Count: 1, Latest: "first", Entries: map[string]string{"*.md": "first", "guide.md": "first",
+				"with space ü.md": "first"}}},
+		{name: "at an annotated tag", ref: "v1", path: "bin",
+			want: code.LastCommits{Commit: "first", Path: "bin", Count: 1, Latest: "first", Entries: map[string]string{"tool": "first"}}},
+		{name: "a file's path", ref: "main", path: "README.md", wantErr: code.ErrNotTree},
+		{name: "a submodule's path", ref: "main", path: "vendor/lib", wantErr: code.ErrSubmodule},
+		{name: "a ref that names nothing", ref: "gone", wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.client.LastCommits(b.ctx(t), website, b.named(tt.ref), tt.path)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("LastCommits() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			want := tt.want
+			want.Commit, want.Latest, want.Entries = b.named(want.Commit), b.named(want.Latest), map[string]string{}
+			for name, sha := range tt.want.Entries {
+				want.Entries[name] = b.named(sha)
+			}
+			if got.Commit != want.Commit || got.Path != want.Path || got.Count != want.Count || got.Latest != want.Latest || !maps.Equal(got.Entries, want.Entries) {
+				t.Errorf("LastCommits() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+func TestInternalBlame(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	mustGit(t, b.dir, "checkout", "-q", "-b", "blamed", b.merge)
+	more := commit(t, b.dir, "README.md", "# Website\nMore\n")
+	mustGit(t, b.dir, "push", "-q", "origin", "blamed")
+	tests := []struct {
+		name, ref, path string
+		wantCommit      string
+		want            []code.BlameRange
+		wantErr         error
+	}{
+		{name: "a line each commit added, by line", ref: "blamed", path: "README.md", wantCommit: more,
+			want: []code.BlameRange{{SHA: b.first, Start: 1, Lines: 1}, {SHA: more, Start: 2, Lines: 1}}},
+		{name: "a file a merged branch added", ref: "main", path: "feature.txt", wantCommit: b.merge, want: []code.BlameRange{{SHA: b.feature, Start: 1, Lines: 1}}},
+		{name: "a name Git's pathspecs would read as a pattern", ref: "v1", path: "docs/*.md", wantCommit: b.first,
+			want: []code.BlameRange{{SHA: b.first, Start: 1, Lines: 1}}},
+		{name: "a directory", ref: "main", path: "docs", wantErr: code.ErrNotBlob},
+		{name: "a submodule", ref: "main", path: "vendor/lib", wantErr: code.ErrSubmodule},
+		{name: "a path the commit doesn't hold", ref: "v1", path: "feature.txt", wantErr: code.ErrPathNotFound},
+		{name: "a ref that names nothing", ref: "gone", path: "README.md", wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.client.Blame(b.ctx(t), website, tt.ref, tt.path)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Blame() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.Commit != tt.wantCommit || got.Path != tt.path || !slices.Equal(got.Ranges, tt.want) {
+				t.Errorf("Blame() = %+v, want commit %s and runs %+v", got, tt.wantCommit, tt.want)
+			}
+		})
+	}
+}
+
+func TestInternalPaths(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	tests := []struct {
+		name, ref  string
+		wantCommit string
+		want       []string
+		wantErr    error
+	}{
+		{name: "every file and symlink, in Git's order, without the submodule", ref: "main", wantCommit: b.merge,
+			want: []string{"README.md", "big.txt", "bin/tool", "docs/*.md", "docs/guide.md", "docs/with space ü.md", "feature.txt", "link", "logo.png"}},
+		{name: "at an annotated tag", ref: "v1", wantCommit: b.first,
+			want: []string{"README.md", "big.txt", "bin/tool", "docs/*.md", "docs/guide.md", "docs/with space ü.md", "link", "logo.png"}},
+		{name: "a ref that names nothing", ref: "gone", wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.client.Paths(b.ctx(t), website, tt.ref)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Paths() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.Commit != tt.wantCommit || got.Truncated || !slices.Equal(got.Paths, tt.want) {
+				t.Errorf("Paths() = %+v, want commit %s and paths %q", got, tt.wantCommit, tt.want)
+			}
+		})
 	}
 }
 

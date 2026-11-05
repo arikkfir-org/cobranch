@@ -8,6 +8,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
 )
 
 func TestCodeQueries(t *testing.T) {
@@ -59,6 +60,45 @@ func TestCodeQueries(t *testing.T) {
 	})
 }
 
+// TestPathQueries checks a path's history, what last changed a directory and each of its entries, a tree's paths and a
+// file's blame.
+func TestPathQueries(t *testing.T) {
+	repo := func(fields string) func(*orgFixture) string {
+		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
+	}
+	runOrgCases(t, []orgCase{
+		{name: "a path's history follows every parent", document: repo(`history(path: "docs", first: 1) { commits { sha } nextCursor }`),
+			viewer: oliviaAfter(func(f *orgFixture) {
+				f.objects.PathHistory(shaOf("c"), "docs", []code.LogEntry{logged("c", "a"), logged("a")})
+			}), want: []string{`"commits":[{"sha":"` + shaOf("c") + `"}],"nextCursor":"`}},
+		{name: "a path's history along first parents", viewer: olivia, document: repo(`history(path: "docs", parents: FIRST) { nextCursor }`),
+			wantCode: badUserInput, wantReason: "parents.path"},
+		{name: "what last changed a directory and each of its entries",
+			document: repo(`treeCommits(path: "docs") { commit path count latest { sha } entries { name commit { sha } } }`),
+			viewer: oliviaAfter(func(f *orgFixture) {
+				f.objects.LastChanged(code.LastCommits{Commit: shaOf("c"), Path: "docs", Count: 2, Latest: shaOf("c"),
+					Entries: map[string]string{"guide.md": shaOf("b"), "deep": shaOf("c"), "lost.md": shaOf("z")}})
+			}),
+			want: []string{`"treeCommits":{"commit":"` + shaOf("c") + `","path":"docs","count":2,"latest":{"sha":"` + shaOf("c") + `"},` +
+				`"entries":[{"name":"deep","commit":{"sha":"` + shaOf("c") + `"}},{"name":"guide.md","commit":{"sha":"` + shaOf("b") + `"}}]}`}},
+		{name: "a directory nothing changed in the walk", viewer: olivia, document: repo(`treeCommits { count latest { sha } entries { name } }`),
+			want: []string{`"treeCommits":{"count":0,"latest":null,"entries":[]}`}},
+		{name: "what last changed a file's path", viewer: olivia, document: repo(`treeCommits(path: "README.md") { count }`),
+			wantCode: notFound, wantReason: "path.file"},
+		{name: "every file and symlink's path", viewer: olivia, document: repo(`paths { commit paths truncated }`),
+			want: []string{`"paths":{"commit":"` + shaOf("c") + `","paths":["README.md","docs/deep/notes.txt","docs/guide.md","latest` + codetest.Symlink +
+				`","logo.png"],"truncated":false}`}},
+		{name: "a file's blame, each run with its commit when a push recorded it",
+			document: repo(`blame(path: "docs/guide.md") { commit path ranges { start lines sha commit { sha } } }`),
+			viewer: oliviaAfter(func(f *orgFixture) {
+				f.objects.Blamed(shaOf("c"), "docs/guide.md", []code.BlameRange{{SHA: shaOf("b"), Start: 1, Lines: 2}, {SHA: shaOf("z"), Start: 3, Lines: 1}})
+			}),
+			want: []string{`"blame":{"commit":"` + shaOf("c") + `","path":"docs/guide.md","ranges":[{"start":1,"lines":2,"sha":"` + shaOf("b") +
+				`","commit":{"sha":"` + shaOf("b") + `"}},{"start":3,"lines":1,"sha":"` + shaOf("z") + `","commit":null}]}`}},
+		{name: "a binary file's blame", viewer: olivia, document: repo(`blame(path: "logo.png") { commit }`), wantCode: badUserInput, wantReason: "path.text"},
+	})
+}
+
 func TestFileQueries(t *testing.T) {
 	repo := func(fields string) func(*orgFixture) string {
 		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
@@ -98,6 +138,14 @@ func TestFilesWithoutGitServer(t *testing.T) {
 	body := f.query(&f.olivia, `{ organization(slug: "acme") { repository(slug: "website") { tree { sha } } } }`)
 	if !strings.Contains(body, `"code":"UNAVAILABLE"`) || !strings.Contains(body, `"reason":"git.unavailable"`) {
 		t.Errorf("body = %s, want UNAVAILABLE", body)
+	}
+}
+
+// oliviaAfter is Olivia once setup has readied the fixture.
+func oliviaAfter(setup func(f *orgFixture)) func(*orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		setup(f)
+		return &f.olivia
 	}
 }
 

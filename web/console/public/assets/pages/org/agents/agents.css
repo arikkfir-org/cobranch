@@ -1,0 +1,89 @@
+/* The Agents pages (pages/org/agents.js, its tabs, lib/agent.js): an agent's page with its header, task rows and facts,
+   the month's figures, an agent's costliest task against its cap, and the events of the Activity tab. Tokens and
+   components.css's components only; the task Row, the Fact and the Stat are frames of the agent's screens, not
+   components of the design system. */
+
+/* An agent's page: its header, then its tasks beside what it runs on. */
+.agent-header { align-items: center; gap: var(--space-12); }
+.agent-header-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-columns { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-24); align-items: start; }
+.agent-column { display: grid; gap: var(--space-24); min-width: 0; }
+@media (max-width: 1024px) {
+  .agent-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A task of the agent's page (Row): its number, its title over where it works, its state, what it spent against its
+   cap, when, and who assigned it. */
+.agent-task {
+  display: flex; align-items: center; gap: var(--space-12); min-width: 0; padding: var(--space-8) var(--space-16);
+  border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); text-decoration: none;
+}
+.agent-task:last-child { border-bottom: 0; }
+.agent-task:hover { background: var(--color-bg-hover); }
+.agent-task .row-meta { color: var(--color-fg-subtle); }
+.agent-task-number { flex: none; min-width: var(--space-24); color: var(--color-fg-subtle); font: var(--text-code-small); }
+.agent-task-spend { flex: none; min-width: 96px; white-space: nowrap; color: var(--color-fg-default); font: var(--text-code-small); text-align: right; }
+.agent-task-when { flex: none; color: var(--color-fg-subtle); font: var(--text-caption); text-align: right; white-space: nowrap; }
+.agent-task-nobody { flex: none; width: var(--size-icon-md); }
+
+/* What the agent runs on, and its activity (Fact): a key in Caption over 88px, then its value. */
+.agent-facts { margin: 0; }
+.agent-facts .fact-row {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: var(--space-16);
+  padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle);
+}
+.agent-facts .fact-row:last-child { border-bottom: 0; }
+.agent-facts .fact-row dt { color: var(--color-fg-subtle); font: var(--text-caption); }
+.agent-facts .fact-row dd { min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-body-small); overflow-wrap: anywhere; }
+.agent-facts .fact-row dd.fact-row-code { font: var(--text-code-small); }
+.fact-row-clamp { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 6; white-space: pre-line; }
+.fact-row-danger { color: var(--color-status-danger-fg); }
+
+/* An event's icon, in its tone. */
+.event-icon { display: inline-flex; flex: none; color: var(--tone-fg); }
+
+/* Agents: an agent as the table's first cell, its 32px avatar beside its name over what it is for. */
+.agents-agent { display: flex; align-items: center; gap: var(--space-12); padding-block: var(--space-12); }
+.agents-agent-small { gap: var(--space-8); padding-block: var(--space-8); }
+.table td a.agents-agent:hover { text-decoration: none; }
+.table td a.agents-agent:hover .cell-two-lines > :first-child { text-decoration: underline; }
+
+/* Agents · Activity: the agent, the event with its icon, and the task, a link. */
+.activity-agent, .activity-event { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.activity-event > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px; }
+.table td a.activity-task { color: var(--color-fg-link); }
+
+/* Agents · Quotas: the month's figures (Stat), four across. */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-16); }
+.stat {
+  display: grid; gap: var(--space-4); min-width: 0; padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface);
+}
+.stat-label, .stat-meta { color: var(--color-fg-muted); font: var(--text-caption); }
+.stat-value { color: var(--color-fg-default); font: var(--text-heading-large); letter-spacing: var(--text-heading-large-tracking); }
+.stat-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1024px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* An agent of By agent, its 24px avatar beside its name over its model; and its costliest task against its cap on a
+   260px Meter track. */
+.quota-agent { display: flex; align-items: center; gap: var(--space-8); padding-block: var(--space-8); }
+.quota-agent-text { display: grid; min-width: 0; }
+.quota-agent-name { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.quota-agent-text code { color: var(--color-fg-muted); font: var(--text-code-small); }
+.table td a.quota-agent:hover, .table td a.quota:hover { text-decoration: none; }
+.quota { display: grid; gap: var(--space-4); width: 260px; }
+.quota-said { color: var(--color-fg-muted); font: var(--text-caption); }
+
+/* Agents and Activity: names, models and moments stay on one line; what a row says past its column's width ends in an
+   ellipsis, whole on hover. */
+.agents-table { table-layout: fixed; }
+.agents-table th:nth-child(2) { width: 200px; }
+.agents-table th:nth-child(3) { width: 120px; }
+.agents-table th:nth-child(4) { width: 280px; }
+.agents-table th:nth-child(5) { width: 80px; }
+.agents-table td, .activity-table td:first-child { white-space: nowrap; }
+.agents-table td, .agents-agent .cell-two-lines, .agents-agent .cell-two-lines > * { overflow: hidden; text-overflow: ellipsis; }
+.agents-agent .cell-two-lines { min-width: 0; }
+.table td a.activity-task { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }

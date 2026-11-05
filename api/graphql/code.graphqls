@@ -15,8 +15,8 @@ extend type Repository {
   branch(name: String!): Branch
   "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
   deletedBranch(name: String!): DeletedBranch
-  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100."
-  history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
+  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100."
+  history(branch: String! = "main", ref: String, path: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
   "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
@@ -25,8 +25,14 @@ extend type Repository {
   tags: [Tag!]!
   "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
   tree(ref: String! = "main", path: String! = ""): Tree
+  "What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree."
+  treeCommits(ref: String! = "main", path: String! = ""): TreeCommits
+  "The path of every file and symlink of the commit ref names, as tree takes it, in the order Git keeps them, up to 50,000 of them, for a viewer to find a file by its path; takes repo.read. A ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found; an installation without a Git server answers UNAVAILABLE."
+  paths(ref: String! = "main"): Paths
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
+  "Which commit last changed each line of the file at path of the commit ref names, as tree takes them, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a BAD_USER_INPUT error whose reason is path.text. A ref or a path that finds nothing is an error, as for blob."
+  blame(ref: String! = "main", path: String!): Blame
   "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
   branchDiff(name: String!): Diff
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
@@ -53,6 +59,59 @@ type Tree {
   entries: [TreeEntry!]!
   "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
   readme: File
+}
+
+"The path of every file and symlink in a commit's tree, without its submodules'."
+type Paths {
+  "The commit the ref resolved to."
+  commit: String!
+  "The paths from the repository's root, in the order Git keeps them, up to 50,000 of them."
+  paths: [String!]!
+  "Whether the tree holds more paths than paths lists."
+  truncated: Boolean!
+}
+
+"Which commit last changed each line of a file at a commit."
+type Blame {
+  "The commit the ref resolved to."
+  commit: String!
+  "The file's path from the repository's root."
+  path: String!
+  "The file's lines in runs, in order, each the lines one commit last changed."
+  ranges: [BlameRange!]!
+}
+
+"A run of a file's lines that one commit last changed."
+type BlameRange {
+  "The run's first line, counted from 1."
+  start: Int!
+  "How many lines the run holds."
+  lines: Int!
+  "The commit's full name."
+  sha: String!
+  "The commit, with the push that first brought it: null when no push recorded it."
+  commit: Commit
+}
+
+"What last changed a directory at a commit."
+type TreeCommits {
+  "The commit the ref resolved to."
+  commit: String!
+  "The directory's path from the repository's root; empty for the root."
+  path: String!
+  "How many commits reachable from the commit changed the directory, every commit for the root."
+  count: Int!
+  "The latest commit that changed the directory."
+  latest: Commit
+  "The latest commit that changed each of the directory's entries, by the entry's name."
+  entries: [EntryCommit!]!
+}
+
+"The latest commit that changed one of a directory's entries."
+type EntryCommit {
+  "The entry's name."
+  name: String!
+  commit: Commit!
 }
 
 "Which parents of each commit a history follows."

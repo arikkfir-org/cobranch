@@ -93,6 +93,49 @@ type Log struct {
 	Entries []LogEntry
 }
 
+// LastCommits is what last changed a directory at a commit, as the Git server reads it: the commit its ref resolved
+// to, the directory's path, how many commits changed it, the latest of them, and the latest that changed each of its
+// entries, by name. The walk for the entries stops at MaxLastWalk commits, so an entry nobody changed in that long has
+// none.
+type LastCommits struct {
+	Commit  string
+	Path    string
+	Count   int
+	Latest  string
+	Entries map[string]string
+}
+
+// MaxLastWalk is the most commits a walk for a directory's entries' last commits reads.
+const MaxLastWalk = 10000
+
+// Blame is which commit last changed each line of a file at a commit, as the Git server reads it with git blame: the
+// commit its ref resolved to, the file's path, and its lines in runs, in order, each the lines one commit last changed.
+type Blame struct {
+	Commit string
+	Path   string
+	Ranges []BlameRange
+}
+
+// BlameRange is a run of a file's lines that one commit last changed: the commit's name, the run's first line, counted
+// from 1, and how many lines it holds.
+type BlameRange struct {
+	SHA   string
+	Start int
+	Lines int
+}
+
+// Paths is the path of every file and symlink in a commit's tree, as the Git server reads it: the commit its ref
+// resolved to and the paths, in the order Git keeps them, at most MaxPaths of them, Truncated when the tree holds
+// more.
+type Paths struct {
+	Commit    string
+	Paths     []string
+	Truncated bool
+}
+
+// MaxPaths is the most paths a read of a tree's files answers.
+const MaxPaths = 50000
+
 // Tag is one of a repository's tags and the object its ref names: a commit, or an annotated tag that names one.
 type Tag struct {
 	Name   string

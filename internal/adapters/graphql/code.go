@@ -3,6 +3,8 @@ package graphql
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +30,9 @@ type Code interface {
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
+	TreeCommits(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.TreeCommits, error)
+	Paths(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref string) (code.Paths, error)
+	Blame(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.FileBlame, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
@@ -73,6 +78,33 @@ func codeFail(ctx context.Context, err error, what string) error {
 		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
 	}
 	return fail(ctx, err, "repository", what)
+}
+
+// treeCommits is what last changed a directory as the schema shows it: each entry's latest commit by the entry's
+// name.
+func treeCommits(last code.TreeCommits) *TreeCommits {
+	commits := make(map[string]*Commit, len(last.Commits))
+	for _, c := range last.Commits {
+		commits[c.SHA] = commit(c)
+	}
+	out := &TreeCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Latest: commits[last.Latest], Entries: []*EntryCommit{}}
+	for _, name := range slices.Sorted(maps.Keys(last.Entries)) {
+		out.Entries = append(out.Entries, &EntryCommit{Name: name, Commit: commits[last.Entries[name]]})
+	}
+	return out
+}
+
+// blameOf is a file's blame as the schema shows it: each run with its commit, when a push recorded it.
+func blameOf(blame code.FileBlame) *Blame {
+	commits := make(map[string]*Commit, len(blame.Commits))
+	for _, c := range blame.Commits {
+		commits[c.SHA] = commit(c)
+	}
+	out := &Blame{Commit: blame.Commit, Path: blame.Path, Ranges: make([]*BlameRange, 0, len(blame.Ranges))}
+	for _, r := range blame.Ranges {
+		out.Ranges = append(out.Ranges, &BlameRange{Start: r.Start, Lines: r.Lines, Sha: r.SHA, Commit: commits[r.SHA]})
+	}
+	return out
 }
 
 // historyParents are the parents a history follows as the domain names them.

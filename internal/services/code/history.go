@@ -28,12 +28,13 @@ const (
 )
 
 // HistoryQuery is the page of history a caller asks for: from the commit Ref names (a full commit name, a branch or a
-// tag, in that order), or else from Branch's head; following Parents (ParentsFirst when empty); from Cursor, where the
-// previous page said the next one starts, instead of either; and at most Limit commits, 0 asking for
-// DefaultPageSize.
+// tag, in that order), or else from Branch's head; following Parents (ParentsFirst when empty, ParentsAll when it
+// names a Path); only the commits that changed what is at Path, when it names one; from Cursor, where the previous
+// page said the next one starts, instead of either; and at most Limit commits, 0 asking for DefaultPageSize.
 type HistoryQuery struct {
 	Branch  string
 	Ref     string
+	Path    string
 	Parents Parents
 	Cursor  string
 	Limit   int
@@ -43,12 +44,13 @@ type HistoryQuery struct {
 // walks the commits pushes recorded, and a branch whose head is no commit a push recorded has none. Following every
 // parent, the Git server walks the snapshot in git log --date-order (no commit before its children), and the page leaves out any commit
 // no push recorded; its cursor holds the commit the first page started from and how many came
-// before it, so later pages hold still while the branch moves on.
+// before it, so later pages hold still while the branch moves on. A path's history follows every parent, and holds
+// the commits that changed what is there, as git log -- path lists them.
 func (s *Service) History(ctx context.Context, v Viewer, repoID uuid.UUID, q HistoryQuery) (Page, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.History")
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", q.Branch),
-		attribute.String("cobranch.ref", q.Ref), attribute.String("cobranch.parents", string(q.Parents)))
+		attribute.String("cobranch.ref", q.Ref), attribute.String("cobranch.path", q.Path), attribute.String("cobranch.parents", string(q.Parents)))
 	if err := s.read(ctx, v, repoID); err != nil {
 		return Page{}, failed(span, "reading the history", err)
 	}
@@ -56,14 +58,20 @@ func (s *Service) History(ctx context.Context, v Viewer, repoID uuid.UUID, q His
 	if err != nil {
 		return Page{}, err
 	}
+	if err := ValidatePath(q.Path); err != nil {
+		return Page{}, err
+	}
 	var page Page
-	switch q.Parents {
-	case "", ParentsFirst:
-		page, err = s.firstParents(ctx, repoID, q, size)
-	case ParentsAll:
+	switch {
+	case q.Parents != "" && q.Parents != ParentsFirst && q.Parents != ParentsAll:
+		return Page{}, &orgs.ValidationError{Field: "parents", Code: "parents.invalid", Message: "first or all"}
+	case q.Path != "" && q.Parents == ParentsFirst:
+		return Page{}, &orgs.ValidationError{Field: "parents", Code: "parents.path",
+			Message: "a path's history follows every parent, as git log -- path does"}
+	case q.Path != "":
 		page, err = s.everyParent(ctx, repoID, q, size)
 	default:
-		return Page{}, &orgs.ValidationError{Field: "parents", Code: "parents.invalid", Message: "first or all"}
+		page, err = s.byParents(ctx, repoID, q, size)
 	}
 	if err == nil {
 		err = s.renderCommits(ctx, repoID, page.Commits)
@@ -72,6 +80,14 @@ func (s *Service) History(ctx context.Context, v Viewer, repoID uuid.UUID, q His
 		return Page{}, failed(span, "reading the history", err)
 	}
 	return page, nil
+}
+
+// byParents is a page of history of the whole repository, following the parents q asks for.
+func (s *Service) byParents(ctx context.Context, repoID uuid.UUID, q HistoryQuery, size int) (Page, error) {
+	if q.Parents == ParentsAll {
+		return s.everyParent(ctx, repoID, q, size)
+	}
+	return s.firstParents(ctx, repoID, q, size)
 }
 
 // firstParents is a page of history along first parents, from the commit pushes recorded where it starts.
@@ -125,14 +141,15 @@ func (s *Service) firstFrom(ctx context.Context, repoID uuid.UUID, q HistoryQuer
 	case !errors.Is(err, repos.ErrNotFound):
 		return "", fmt.Errorf("finding branch %q: %w", q.Ref, err)
 	}
-	log, err := s.objects.Log(ctx, repoID, q.Ref, 0, 0)
+	log, err := s.objects.Log(ctx, repoID, q.Ref, "", 0, 0)
 	if err != nil {
 		return "", fmt.Errorf("finding the commit of %q: %w", q.Ref, err)
 	}
 	return log.Commit, nil
 }
 
-// everyParent is a page of history along every parent, as the Git server walks it, with the commits pushes recorded.
+// everyParent is a page of history along every parent, as the Git server walks it, with the commits pushes recorded:
+// of the whole repository, or of what is at q.Path when it names one.
 func (s *Service) everyParent(ctx context.Context, repoID uuid.UUID, q HistoryQuery, size int) (Page, error) {
 	ref, skip := q.Ref, 0
 	if ref == "" {
@@ -147,7 +164,7 @@ func (s *Service) everyParent(ctx context.Context, repoID uuid.UUID, q HistoryQu
 	if err != nil {
 		return Page{}, err
 	}
-	log, err := s.objects.Log(ctx, repoID, ref, skip, size+1)
+	log, err := s.objects.Log(ctx, repoID, ref, q.Path, skip, size+1)
 	switch {
 	case err != nil:
 		return Page{}, fmt.Errorf("walking the history of %q: %w", ref, err)

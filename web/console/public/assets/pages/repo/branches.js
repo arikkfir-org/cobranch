@@ -57,7 +57,7 @@ async function repositoryBranch(ctx, name) {
   const tab = b.base || tabShown() !== "changes" ? tabShown() : "";
   // The base's requirements, which b's checks stand against: b's own are those of merges into it.
   const base = b.base && checking.includes(b.status) ? await api("GET", ctx.path + "/branches/" + encodeURIComponent(b.base)).catch(() => null) : null;
-  return [branchHeader(ctx, b), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements) : null, branchTabBar(ctx, b, tab),
+  return [branchHeader(ctx, b), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements, tab) : null, branchTabBar(ctx, b, tab),
     ...await tabContent(ctx, b, tab)].filter(Boolean);
 }
 
@@ -138,10 +138,10 @@ const checking = ["blocked", "processing", "ready"];
 
 // mergeStatus is how b's merge stands: why it is Blocked or Processing, or that it is Ready, Empty or Merged, over
 // each of its merge requirements as its status last worked them out, as the Branch screen draws them. required is
-// its base's requirements, when they could be read.
-function mergeStatus(ctx, b, required) {
+// its base's requirements, when they could be read; tab is the tab shown, whose sections its action may link.
+function mergeStatus(ctx, b, required, tab) {
   const s = branchStatuses[b.status];
-  const [title, message, action] = statusReason(ctx, b);
+  const [title, message, action] = statusReason(ctx, b, tab);
   const rows = checking.includes(b.status) ? checkRows(ctx, b, required) : [];
   return h("section", { class: "card merge-status tone-" + statusTones[b.status] },
     h("div", { class: "merge-status-reason" }, icon(s.icon), h("div", { class: "banner-text" }, h("strong", { class: "banner-title" }, title),
@@ -149,8 +149,9 @@ function mergeStatus(ctx, b, required) {
     rows.length ? h("ul", { class: "list" }, rows) : null);
 }
 
-// statusReason is the title of b's merge card, the sentence beneath it, and the link to what it names, if any.
-function statusReason({ at }, b) {
+// statusReason is the title of b's merge card, the sentence beneath it, and the link to what it names, if any: the
+// reviews on the Overview and Files changed tabs, the annotations on the Overview, which alone show them.
+function statusReason({ at }, b, tab) {
   const s = branchStatuses[b.status];
   const go = (href, label) => h("a", { class: "btn btn-ghost btn-sm", href, "data-nav": href.startsWith("#") ? null : "" }, label);
   if (b.status === "merged") return ["Merged into " + b.base, ["By ", b.merge && b.merge.by ? b.merge.by.displayName : "a principal since gone", " · ",
@@ -159,7 +160,8 @@ function statusReason({ at }, b) {
   if (b.status === "ready") return ["Ready to merge", ["It meets every requirement of ", h("code", {}, b.base), " at ", shortSha(b.head), "."], null];
   const c = b.status === "blocked" ? b.checks.find((c) => !c.met) : null;
   if (b.status === "processing" || !c) return [s.word + ": " + processingWhat(b), [whyNot(b), " Every push checks the branch again."], null];
-  const action = ["changes_requested", "ai", "approvals"].includes(c.kind) ? go("#reviews", "View reviews") : c.kind === "annotation" ? go("#annotations", "View annotations") : null;
+  const action = ["changes_requested", "ai", "approvals"].includes(c.kind) && (tab === "" || tab === "changes") ? go("#reviews", "View reviews")
+    : c.kind === "annotation" && tab === "" ? go("#annotations", "View annotations") : null;
   return [s.word + ": " + checkShort(b, c), [whyNot(b), " Every push checks the branch again."], action];
 }
 

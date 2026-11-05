@@ -8,6 +8,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
 )
 
 // listing checks that a tree lists the entries want names, in order, each as name:kind.
@@ -83,6 +84,47 @@ func TestTreeAPI(t *testing.T) {
 			wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "a token with repo.read alone reads it", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree"),
 			wantStatus: 200},
+	})
+}
+
+func TestTreeCommitsAPI(t *testing.T) {
+	const at = "/v1/orgs/acme/repos/website/tree/commits"
+	lastChanged := func(f *orgFixture) {
+		f.objects.LastChanged(code.LastCommits{Commit: shaOf("c"), Path: "docs", Count: 2, Latest: shaOf("c"),
+			Entries: map[string]string{"guide.md": shaOf("b"), "deep": shaOf("c"), "lost.md": shaOf("z")}})
+	}
+	runOrgCases(t, []orgCase{
+		{name: "a directory's count, latest and entries, each commit once", viewer: olivia, method: "GET", path: fixed(at + "?path=docs"), before: lastChanged,
+			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[TreeCommits](t, body)
+				var commits []string
+				for _, c := range got.Commits {
+					commits = append(commits, c.Sha)
+				}
+				if got.Commit != shaOf("c") || got.Path != "docs" || got.Count != 2 || got.Latest == nil || *got.Latest != shaOf("c") ||
+					len(got.Entries) != 2 || got.Entries["guide.md"] != shaOf("b") || got.Entries["deep"] != shaOf("c") ||
+					len(commits) != 2 || !slices.Contains(commits, shaOf("b")) || !slices.Contains(commits, shaOf("c")) {
+					t.Errorf("tree commits = %s, want docs' count, latest c, guide.md at b, deep at c, without what no push recorded", body)
+				}
+			}},
+		{name: "nothing changed it in the walk", viewer: olivia, method: "GET", path: fixed(at), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[TreeCommits](t, body); got.Latest != nil || len(got.Entries) != 0 || len(got.Commits) != 0 || got.Commit != shaOf("c") {
+					t.Errorf("tree commits = %s, want none", body)
+				}
+			}},
+		{name: "its ETag answers 304 while it holds", viewer: olivia, method: "GET", path: fixed(at + "?path=docs"), before: lastChanged, wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				tag := f.call(&f.olivia, "GET", at+"?path=docs", "").Header().Get("ETag")
+				req := httptest.NewRequest("GET", at+"?path=docs", nil)
+				req.Header.Set("If-None-Match", tag)
+				if rec := f.serve(&f.olivia, req); tag == "" || rec.Code != 304 {
+					t.Errorf("ETag %q answered %d, want 304", tag, rec.Code)
+				}
+			}},
+		{name: "a ref that names nothing", viewer: olivia, method: "GET", path: fixed(at + "?ref=gone"), wantStatus: 404, wantCode: "ref.not_found"},
+		{name: "a path that climbs out", viewer: olivia, method: "GET", path: fixed(at + "?path=.."), wantStatus: 400, wantCode: "path.invalid"},
+		{name: "a Member who doesn't read it", viewer: maxim, method: "GET", path: fixed(at), wantStatus: 404, wantCode: "repository.not_found"},
 	})
 }
 
@@ -240,6 +282,74 @@ func TestFilesConditional(t *testing.T) {
 
 // TestFilesWithoutGitServer checks that an installation without a Git server answers 503 for files, and still lists
 // branches.
+func TestPathsAPI(t *testing.T) {
+	const at = "/v1/orgs/acme/repos/website/paths"
+	runOrgCases(t, []orgCase{
+		{name: "main's files and symlinks, without its submodule", viewer: olivia, method: "GET", path: fixed(at), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[Paths](t, body)
+				want := []string{"README.md", "docs/deep/notes.txt", "docs/guide.md", "latest" + codetest.Symlink, "logo.png"}
+				if got.Commit != shaOf("c") || got.Truncated || !slices.Equal(got.Paths, want) {
+					t.Errorf("paths = %s, want %q at c", body, want)
+				}
+			}},
+		{name: "at a tag", viewer: olivia, method: "GET", path: fixed(at + "?ref=v1.0.0"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[Paths](t, body); got.Commit != shaOf("b") || !slices.Equal(got.Paths, []string{"README.md"}) {
+					t.Errorf("paths = %s, want b's README.md", body)
+				}
+			}},
+		{name: "its ETag answers 304 while it holds", viewer: olivia, method: "GET", path: fixed(at), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				tag := f.call(&f.olivia, "GET", at, "").Header().Get("ETag")
+				req := httptest.NewRequest("GET", at, nil)
+				req.Header.Set("If-None-Match", tag)
+				if rec := f.serve(&f.olivia, req); tag == "" || rec.Code != 304 {
+					t.Errorf("ETag %q answered %d, want 304", tag, rec.Code)
+				}
+			}},
+		{name: "a ref that names nothing", viewer: olivia, method: "GET", path: fixed(at + "?ref=gone"), wantStatus: 404, wantCode: "ref.not_found"},
+		{name: "a Member who doesn't read it", viewer: maxim, method: "GET", path: fixed(at), wantStatus: 404, wantCode: "repository.not_found"},
+	})
+}
+
+func TestBlameAPI(t *testing.T) {
+	const at = "/v1/orgs/acme/repos/website/blame"
+	blamed := func(f *orgFixture) {
+		f.objects.Blamed(shaOf("c"), "docs/guide.md", []code.BlameRange{{SHA: shaOf("b"), Start: 1, Lines: 2}, {SHA: shaOf("z"), Start: 3, Lines: 1},
+			{SHA: shaOf("c"), Start: 4, Lines: 1}})
+	}
+	runOrgCases(t, []orgCase{
+		{name: "the runs, and each recorded commit once", viewer: olivia, method: "GET", path: fixed(at + "?path=docs/guide.md"), before: blamed, wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[Blame](t, body)
+				var commits []string
+				for _, c := range got.Commits {
+					commits = append(commits, c.Sha)
+				}
+				want := []BlameRange{{Sha: shaOf("b"), Start: 1, Lines: 2}, {Sha: shaOf("z"), Start: 3, Lines: 1}, {Sha: shaOf("c"), Start: 4, Lines: 1}}
+				if got.Commit != shaOf("c") || got.Path != "docs/guide.md" || !slices.Equal(got.Ranges, want) ||
+					len(commits) != 2 || !slices.Contains(commits, shaOf("b")) || !slices.Contains(commits, shaOf("c")) {
+					t.Errorf("blame = %s, want three runs, and b and c without what no push recorded", body)
+				}
+			}},
+		{name: "its ETag answers 304 while it holds", viewer: olivia, method: "GET", path: fixed(at + "?path=README.md"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				tag := f.call(&f.olivia, "GET", at+"?path=README.md", "").Header().Get("ETag")
+				req := httptest.NewRequest("GET", at+"?path=README.md", nil)
+				req.Header.Set("If-None-Match", tag)
+				if rec := f.serve(&f.olivia, req); tag == "" || rec.Code != 304 {
+					t.Errorf("ETag %q answered %d, want 304", tag, rec.Code)
+				}
+			}},
+		{name: "a binary file", viewer: olivia, method: "GET", path: fixed(at + "?path=logo.png"), wantStatus: 400, wantCode: "path.text"},
+		{name: "a symlink", viewer: olivia, method: "GET", path: fixed(at + "?path=latest" + codetest.Symlink), wantStatus: 400, wantCode: "path.text"},
+		{name: "a directory", viewer: olivia, method: "GET", path: fixed(at + "?path=docs"), wantStatus: 404, wantCode: "path.directory"},
+		{name: "without a path", viewer: olivia, method: "GET", path: fixed(at), wantStatus: 400},
+		{name: "a Member who doesn't read it", viewer: maxim, method: "GET", path: fixed(at + "?path=README.md"), wantStatus: 404, wantCode: "repository.not_found"},
+	})
+}
+
 func TestFilesWithoutGitServer(t *testing.T) {
 	f := newOrgFixture(t)
 	f.code = code.NewService(f.codeStore, nil, nil, auth.NewAuthorizer(f.store))

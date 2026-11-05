@@ -90,6 +90,13 @@ function build() {
   shell = { root, crumbs, content };
 }
 
+// recrumb draws the breadcrumbs, each { label, href }, the last the page shown, and names the browser's tab after it,
+// as frame does, and as a page does again once it has read what it shows.
+export function recrumb(crumbs) {
+  shell.crumbs.replaceChildren(...crumbs.map((c, i) => crumb(c, i === crumbs.length - 1)));
+  document.title = (crumbs.length ? crumbs[crumbs.length - 1].label + " · " : "") + "Cobranch";
+}
+
 // frame draws the shell for a page and answers the element the page draws into: the sidebar of org (where the viewer
 // acts with can, and the page shown is the organization's part), or of no organization when org is null; the
 // breadcrumbs, each { label, href }, the last the page shown; the heading above the page, when its group of
@@ -101,8 +108,7 @@ export function frame({ org, can, part, crumbs, subject, head }) {
   if (!shell.root.isConnected) app.replaceChildren(shell.root);
   shell.root.classList.remove("app-sidebar-open");
   shell.root.querySelector(".app-sidebar-slot").replaceChildren(org ? sidebar(org, can, part) : bareSidebar());
-  shell.crumbs.replaceChildren(...crumbs.map((c, i) => crumb(c, i === crumbs.length - 1)));
-  document.title = (crumbs.length ? crumbs[crumbs.length - 1].label + " · " : "") + "Cobranch";
+  recrumb(crumbs);
   const main = h("main", { class: "page" });
   shell.content.replaceChildren(...[head, main].filter(Boolean));
   shell.content.scrollTop = 0;

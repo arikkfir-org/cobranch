@@ -125,6 +125,76 @@ func (a api) GetTree(ctx context.Context, req GetTreeRequestObject) (GetTreeResp
 	return GetTree200JSONResponse{Body: body, Headers: GetTree200ResponseHeaders{ETag: tag}}, nil
 }
 
+// GetTreeCommits answers what last changed the directory at a path of the commit a ref names, or 304 while the caller
+// holds it.
+func (a api) GetTreeCommits(ctx context.Context, req GetTreeCommitsRequestObject) (GetTreeCommitsResponseObject, error) {
+	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	dir := ""
+	if req.Params.Path != nil {
+		dir = *req.Params.Path
+	}
+	last, err := a.code.TreeCommits(ctx, v, repo.ID, refOf(req.Params.Ref), dir)
+	if err != nil {
+		return nil, codeFail(err)
+	}
+	body := TreeCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Entries: last.Entries, Commits: mapAll(last.Commits, commit)}
+	if last.Latest != "" {
+		body.Latest = &last.Latest
+	}
+	tag, err := bodyTag("tree-commits", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetTreeCommits304Response{Headers: GetTreeCommits304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetTreeCommits200JSONResponse{Body: body, Headers: GetTreeCommits200ResponseHeaders{ETag: tag}}, nil
+}
+
+// GetPaths answers the path of every file and symlink in the commit a ref names, or 304 while the caller holds them.
+func (a api) GetPaths(ctx context.Context, req GetPathsRequestObject) (GetPathsResponseObject, error) {
+	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	paths, err := a.code.Paths(ctx, v, repo.ID, refOf(req.Params.Ref))
+	if err != nil {
+		return nil, codeFail(err)
+	}
+	tag := etag("paths", paths.Commit, "", refOf(req.Params.Ref), req.Org, req.Repo)
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetPaths304Response{Headers: GetPaths304ResponseHeaders{ETag: tag}}, nil
+	}
+	body := Paths{Commit: paths.Commit, Paths: paths.Paths, Truncated: paths.Truncated}
+	return GetPaths200JSONResponse{Body: body, Headers: GetPaths200ResponseHeaders{ETag: tag}}, nil
+}
+
+// GetBlame answers which commit last changed each line of the file at a path of the commit a ref names, or 304 while
+// the caller holds it.
+func (a api) GetBlame(ctx context.Context, req GetBlameRequestObject) (GetBlameResponseObject, error) {
+	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	blame, err := a.code.Blame(ctx, v, repo.ID, refOf(req.Params.Ref), req.Params.Path)
+	if err != nil {
+		return nil, codeFail(err)
+	}
+	body := Blame{Commit: blame.Commit, Path: blame.Path, Commits: mapAll(blame.Commits, commit),
+		Ranges: mapAll(blame.Ranges, func(r code.BlameRange) BlameRange { return BlameRange{Sha: r.SHA, Start: r.Start, Lines: r.Lines} })}
+	tag, err := bodyTag("blame", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetBlame304Response{Headers: GetBlame304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetBlame200JSONResponse{Body: body, Headers: GetBlame200ResponseHeaders{ETag: tag}}, nil
+}
+
 func entry(e code.Entry) TreeEntry {
 	out := TreeEntry{Name: e.Name, Path: e.Path, Kind: TreeEntryKind(e.Kind), Mode: e.Mode, Sha: e.SHA}
 	if e.Kind == code.KindBlob || e.Kind == code.KindSymlink {

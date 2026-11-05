@@ -223,8 +223,14 @@ func (s *AgentStore) RecordSpend(ctx context.Context, taskID uuid.UUID, u agents
 			return nil
 		}
 		out.Ended = true
-		_, err = failTask(ctx, q, taskID, agents.CapReason(out.Spent, out.Cap))
-		return err
+		failed, err := failTask(ctx, q, taskID, agents.CapReason(out.Spent, out.Cap))
+		if err != nil || !failed {
+			return err
+		}
+		if err := q.MarkCapReached(ctx, taskID); err != nil {
+			return fmt.Errorf("marking task %s as failed on its cap: %w", taskID, err)
+		}
+		return nil
 	})
 	return out, err
 }
