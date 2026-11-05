@@ -75,7 +75,7 @@ func (s *Service) asking(ctx context.Context, v Viewer, subj Subject, agentID uu
 	if err != nil {
 		return nil, fmt.Errorf("asking the agent: %w", err)
 	}
-	if err := s.agentReads(ctx, agentID, subj); err != nil {
+	if err := s.agentTalks(ctx, agentID, subj); err != nil {
 		return nil, err
 	}
 	t.Kind, t.Private = KindTask, subj.Private()
@@ -85,9 +85,10 @@ func (s *Service) asking(ctx context.Context, v Viewer, subj Subject, agentID uu
 	return &t, nil
 }
 
-// agentReads refuses to ask agentID in the subject's chat unless the agent reads it by its own grants, as its task
-// must, which its assigner's permissions cap further.
-func (s *Service) agentReads(ctx context.Context, agentID uuid.UUID, subj Subject) error {
+// agentTalks refuses to ask agentID in the subject's chat unless the agent reads it and posts there by its own grants,
+// as its task must to answer in its thread, which its assigner's permissions cap further: ask.unreadable when it
+// doesn't read the chat, and ask.readonly when it reads but doesn't post.
+func (s *Service) agentTalks(ctx context.Context, agentID uuid.UUID, subj Subject) error {
 	r, scopeID := rulesOf(subj)
 	held, err := s.authz.Holds(ctx, agentID, r.scope, scopeID)
 	if err != nil {
@@ -95,6 +96,9 @@ func (s *Service) agentReads(ctx context.Context, agentID uuid.UUID, subj Subjec
 	}
 	if !slices.Contains(held, r.view) || !slices.Contains(held, r.read) {
 		return &orgs.ValidationError{Field: "ask", Code: "ask.unreadable", Message: "the agent can't read this chat, where its task would talk"}
+	}
+	if !slices.Contains(held, r.post) {
+		return &orgs.ValidationError{Field: "ask", Code: "ask.readonly", Message: "the agent reads this chat but can't post there, so its task couldn't answer: " + r.post + " " + r.where}
 	}
 	return nil
 }

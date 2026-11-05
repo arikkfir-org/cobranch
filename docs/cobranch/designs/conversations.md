@@ -141,9 +141,10 @@ says otherwise; asking again in a thread whose task ended starts the next task t
   presence would say where it works; the task and its transcript answer 404. Its token reads and posts only in its own
   thread of its assigner's conversation, never starts another there, and only while the assigner still owns the
   conversation and reads its subject; under that token, the task reads private records as its assigner.
-- **What the agent may read.** Asking needs the agent itself to read the chat by its own grants (`ask.unreadable`
-  otherwise), since its task talks there; the task is then capped by its assigner too, as every task call is. An agent
-  that isn't the organization's is `ask.invalid`.
+- **What the agent may read.** Asking needs the agent itself to read the chat and post there by its own grants, since
+  its task answers there (`ask.unreadable` when it doesn't read the chat, `ask.readonly` when it reads but doesn't
+  post); the task is then capped by its assigner too, as every task call is. An agent that isn't the organization's is
+  `ask.invalid`.
 
 ## The agent's conversation
 
@@ -188,7 +189,7 @@ person’s private task shows as a place in the queue, nothing more.
 - **Asking** (second pull request) adds `ask`, an agent's ID, to `ChatThreadInput` and `ChatMessageInput` in every chat,
   REST and GraphQL alike; `askedTaskId`, `askedTaskNumber` and `askedAgent` to the message that asked; `private` to
   `Task`; and `conversation` to the task token's `MyTask`, naming the conversation its task talks in for the harness.
-  Refusals: 400 `ask.invalid`, `ask.unreadable`, `ask.busy`, and `ask.unavailable` on an installation whose chats ask no
+  Refusals: 400 `ask.invalid`, `ask.unreadable`, `ask.readonly`, `ask.busy`, and `ask.unavailable` on an installation whose chats ask no
   agents.
 
 ## The Console

@@ -21,7 +21,7 @@ import (
 type askFixture struct {
 	*conversationFixture
 	tasks          *agentstest.Store
-	scout          uuid.UUID
+	scout, reader  uuid.UUID
 	feature, issue chats.Subject
 }
 
@@ -30,9 +30,12 @@ func newAskFixture(t *testing.T) *askFixture {
 	f := &askFixture{conversationFixture: newConversationFixture(t), tasks: agentstest.NewStore()}
 	f.tasks.AddAgent(agents.Agent{ID: f.agent, OrgID: f.org, Name: "Builder"})
 	f.scout = f.tasks.AddAgent(agents.Agent{OrgID: f.org, Name: "Scout"}).ID
+	f.reader = f.tasks.AddAgent(agents.Agent{OrgID: f.org, Name: "Reader"}).ID
 	f.o.Grant(f.agent, auth.RoleMember, auth.ScopeOrganization, f.org)
 	f.o.Grant(f.agent, auth.RoleDeveloper, auth.ScopeRepository, f.repo)
 	f.o.Grant(f.scout, auth.RoleGuest, auth.ScopeOrganization, f.org)
+	f.o.Grant(f.reader, auth.RoleGuest, auth.ScopeOrganization, f.org)
+	f.o.Grant(f.reader, auth.RoleReader, auth.ScopeRepository, f.repo)
 	f.feature = f.store.SetBranch(chats.Subject{OrgID: f.org, RepoID: f.repo, Branch: "feature", Head: sha(2), Org: "acme", Repo: "website"})
 	f.issue = f.store.SetIssue(chats.Subject{OrgID: f.org, Number: 7, Issue: "ACME-7", Org: "acme"})
 	f.tasks.Repos[f.repo] = agentstest.Repository{Org: f.org, Slug: "website"}
@@ -140,6 +143,8 @@ func TestAskRefused(t *testing.T) {
 			agent: func(f *askFixture) uuid.UUID { return f.scout }, wantErr: invalid("ask.unreadable")},
 		{name: "an agent that can't read the issues", kind: chats.KindIssue, viewer: func(f *askFixture) chats.Viewer { return f.mem },
 			agent: func(f *askFixture) uuid.UUID { return f.scout }, wantErr: invalid("ask.unreadable")},
+		{name: "an agent that reads the branch's chat but can't post there", kind: chats.KindBranch, viewer: func(f *askFixture) chats.Viewer { return f.mem },
+			agent: func(f *askFixture) uuid.UUID { return f.reader }, wantErr: invalid("ask.readonly")},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
