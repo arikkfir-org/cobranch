@@ -9,7 +9,7 @@ import { privateSubject } from "./chat.js";
 import { openDialog } from "./dialog.js";
 import { h } from "./dom.js";
 import { when } from "./format.js";
-import { banner, field, input, selectBox, textarea } from "./forms.js";
+import { banner, failure, field, input, selectBox, textarea } from "./forms.js";
 import { avatar, icon } from "./icons.js";
 import { recrumb } from "./layout.js";
 import { rendered } from "./markdown.js";
@@ -23,25 +23,33 @@ const titles = new Map();
 export const titleOf = (id) => titles.get(id) || "Artifact";
 export const knowTitle = (a) => titles.set(a.id, a.title);
 
-// reading is the read of the artifact the page shows, which its subject starts and its body takes, so the two make
-// one call: { key, read }.
+// reading is the read of the artifact the page shows, and whether the viewer reads its repository, which its subject
+// starts and its body takes, so the two make one call each: { key, read, repo }.
 let reading = null;
 
-// read reads one of the organization's artifacts, or takes the read the page's subject started.
+// repoOf is the repository of an artifact that the viewer reads, or null: an artifact is shared with people who may
+// not read its repository, who are led to its organization's conversation and page instead.
+const repoOf = (org, a) => (a.repository ? api("GET", "/orgs/" + org.slug + "/repos/" + encodeURIComponent(a.repository.slug))
+  .then(() => a.repository, () => null) : Promise.resolve(null));
+
+// read reads one of the organization's artifacts and the repository of it that the viewer reads, or takes the reads the
+// page's subject started.
 function read(org, id) {
   const key = org.slug + "/" + id;
-  const taken = reading && reading.key === key ? reading.read : null;
+  const taken = reading && reading.key === key ? reading : null;
   reading = null;
-  return taken || api("GET", "/orgs/" + org.slug + "/artifacts/" + encodeURIComponent(id));
+  if (taken) return taken;
+  const r = api("GET", "/orgs/" + org.slug + "/artifacts/" + encodeURIComponent(id));
+  return { read: r, repo: r.then((a) => repoOf(org, a), () => null) };
 }
 
 // artifactSubject is the conversation the pane shows on an artifact's page: the viewer's own about its repository,
-// where they ask an agent to revise it, or about its organization for one attached to none.
+// where they ask an agent to revise it, or about its organization for one attached to none or to a repository the
+// viewer doesn't read.
 export function artifactSubject(org, can, id) {
-  const r = api("GET", "/orgs/" + org.slug + "/artifacts/" + encodeURIComponent(id));
-  reading = { key: org.slug + "/" + id, read: r };
-  return r.then((a) => (a.repository ? privateSubject("repo:" + org.slug + "/" + a.repository.slug, a.repository.slug, true,
-    "/orgs/" + org.slug + "/repos/" + a.repository.slug + "/conversation", can) : null), () => null);
+  reading = { key: org.slug + "/" + id, ...read(org, id) };
+  return reading.repo.then((repo) => (repo ? privateSubject("repo:" + org.slug + "/" + repo.slug, repo.slug, true,
+    "/orgs/" + org.slug + "/repos/" + repo.slug + "/conversation", can) : null));
 }
 
 // reaches say how far an audience reaches an artifact: as its header's badge, its Access card and Share say it.
@@ -110,13 +118,14 @@ function about(a) {
 const row = (lead, text, ...after) => h("div", { class: "card-row" }, lead, h("div", { class: "row-text" }, text), ...after);
 
 // access is the Access card: the artifact's owner and those it is shared with, each with their role, which a viewer who
-// manages it takes back; then how far its repository's and its organization's readers reach it; Manage opens Share.
-function access(org, a, who, manage, share, refresh) {
+// manages it takes back, or is told why not (fail); then how far its repository's and its organization's readers reach
+// it; Manage opens Share.
+function access(org, a, who, manage, share, refresh, fail) {
   const person = (p, agent, role, unshare) => row(avatar(p.displayName, agent, 24), h("span", { class: "row-title" }, p.displayName),
     h("span", { class: "row-aside" }, role),
     unshare ? h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Stop sharing with " + p.displayName,
       title: "Stop sharing", onclick: unshare }, icon("x")) : null);
-  const unshare = (g) => () => api("DELETE", "/orgs/" + org.slug + "/artifacts/" + a.id + "/access/" + g.principalId).then(refresh, refresh);
+  const unshare = (g) => () => api("DELETE", "/orgs/" + org.slug + "/artifacts/" + a.id + "/access/" + g.principalId).then(refresh, fail);
   const grants = who.grants.filter((g) => !a.owner || g.principalId !== a.owner.id)
     .map((g) => person(g, g.kind === "agent", roles[g.role], manage ? unshare(g) : null));
   const audience = (label, reach, glyph) => reach && reach !== "none"
@@ -181,18 +190,23 @@ function editDialog(org, a, v, refresh) {
   const note = input({ name: "note", maxlength: 500, placeholder: "What changed" });
   const path = "/orgs/" + org.slug + "/artifacts/" + a.id;
   const changed = (err) => Promise.reject(err.status === 412 ? new Error("Someone changed it meanwhile. Close this to see their change, then edit it again.") : err);
+  // A Save retried after a failure keeps what the last one did: the title it changed, and the version's ID, which the
+  // API adds once however often it is sent.
+  const id = crypto.randomUUID();
+  let tag = '"' + a.version + '"';
+  let titled = a.title;
   openDialog({
     title: "Edit " + a.title,
     body: [field("Title", title), field(formats[v.mediaType] || "Body", text, "Saving writes it as version " + (a.head + 1) + "."), field("Why", note)],
     action: "Save",
     submit: async () => {
-      let tag = '"' + a.version + '"';
-      if (title.value !== a.title) {
+      if (title.value !== titled) {
         const after = await api("PATCH", path, { title: title.value }, { "Content-Type": "application/merge-patch+json", "If-Match": tag }).catch(changed);
         tag = '"' + after.version + '"';
+        titled = after.title;
       }
       if (text.value !== v.body || v.number !== a.head) {
-        await api("POST", path + "/versions", { id: crypto.randomUUID(), mediaType: v.mediaType, body: text.value, note: note.value }, { "If-Match": tag }).catch(changed);
+        await api("POST", path + "/versions", { id, mediaType: v.mediaType, body: text.value, note: note.value }, { "If-Match": tag }).catch(changed);
       }
       refresh(true);
     },
@@ -211,17 +225,19 @@ const gone = (org, main) => main.replaceChildren(emptyCard("No such artifact", "
 
 // showArtifact draws an artifact's page into main, with the version the page's query names, or its newest.
 export async function showArtifact(org, main, can, id) {
+  const reads = read(org, id);
   let a;
   try {
-    a = await read(org, id);
+    a = await reads.read;
   } catch (err) {
     if (err.status === 404 || err.status === 400) return gone(org, main);
     throw err;
   }
   knowTitle(a);
+  const repo = await reads.repo;
   const orgCrumb = { label: org.name, href: base + org.slug };
-  recrumb(a.repository ? [orgCrumb, { label: a.repository.slug, href: base + org.slug + "/" + a.repository.slug },
-    { label: "Artifacts", href: base + org.slug + "/" + a.repository.slug + "/artifacts" }, { label: a.title }]
+  recrumb(repo ? [orgCrumb, { label: repo.slug, href: base + org.slug + "/" + repo.slug },
+    { label: "Artifacts", href: base + org.slug + "/" + repo.slug + "/artifacts" }, { label: a.title }]
     : [orgCrumb, { label: "Artifacts", href: base + org.slug + "/artifacts" }, { label: a.title }]);
   remember(org, "artifacts", { key: a.id, label: a.title, href: artifactHref(org, a), code: true, icon: "file" });
   const asked = Number(new URLSearchParams(location.search).get("version")) || 0;
@@ -246,6 +262,7 @@ export async function showArtifact(org, main, can, id) {
     h("p", { class: "page-header-description artifact-origin", title: origin(a, v.number) }, origin(a, v.number))), h("div", { class: "page-header-actions" }, actions));
   const older = v.number !== a.head ? banner("info", null, "This is version " + v.number + ". The artifact shows version " + a.head + ".",
     h("a", { class: "btn btn-ghost btn-sm", href: artifactHref(org, a), "data-nav": "" }, "Show the newest")) : null;
-  main.replaceChildren(...[header, older, h("div", { class: "artifact-columns" }, h("div", { class: "artifact-main" }, body(org, a, v)),
-    h("div", { class: "artifact-side" }, about(a), access(org, a, who, manage, share, () => refresh()), versions(org, a, list, v.number)))].filter(Boolean));
+  const failed = failure();
+  main.replaceChildren(...[header, failed.el, older, h("div", { class: "artifact-columns" }, h("div", { class: "artifact-main" }, body(org, a, v)),
+    h("div", { class: "artifact-side" }, about(a), access(org, a, who, manage, share, () => refresh(), failed.fail), versions(org, a, list, v.number)))].filter(Boolean));
 }

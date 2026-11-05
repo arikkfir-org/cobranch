@@ -37,7 +37,7 @@ async function showArtifacts(org, main) {
     api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
   list.forEach(knowTitle);
   const repoCount = new Set(list.filter((a) => a.repository).map((a) => a.repository.id)).size;
-  const description = list.length + " across " + repoCount + (repoCount === 1 ? " repository" : " repositories") + " · what agents produced for you and your organization";
+  const description = list.length + (list.length === 1 ? " artifact" : " artifacts") + " across " + repoCount + (repoCount === 1 ? " repository" : " repositories") + " · what agents produced for you and your organization";
   const header = pageHeader({ title: "Artifacts", description });
   if (!list.length && !query.size) {
     return main.replaceChildren(header, emptyCard("No artifacts yet", "Ask an agent in a conversation for a document, a diagram, a report or a page, and it shows here."));
