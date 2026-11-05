@@ -6572,12 +6572,12 @@ type Artifact {
   updatedAt: Time
   "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
-  "Its versions, newest first, without their bodies."
-  versions: [ArtifactVersion!]!
+  "Its versions, newest first, without their bodies; null for a viewer who may only list it."
+  versions: [ArtifactVersion!]
   "One of its versions with its body, 0 for its newest; null unless it is there."
   versionByNumber(number: Int!): ArtifactVersion
-  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too."
-  access: ArtifactAccess!
+  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it."
+  access: ArtifactAccess
 }
 
 "The repository an artifact is attached to."
@@ -15586,10 +15586,10 @@ func (ec *executionContext) _Artifact_versions(ctx context.Context, field graphq
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
-			return ec.marshalNArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx, selections, v)
+			return ec.marshalOArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_versions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15662,10 +15662,10 @@ func (ec *executionContext) _Artifact_access(ctx context.Context, field graphql.
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
-			return ec.marshalNArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx, selections, v)
+			return ec.marshalOArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_access(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -37109,7 +37109,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "versions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
-				true, true,
+				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Artifact_versions(ctx, field, obj)
 				})
@@ -37121,7 +37121,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 				})
 		case "access":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
-				true, true,
+				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Artifact_access(ctx, field, obj)
 				})
@@ -43308,14 +43308,6 @@ func (ec *executionContext) marshalNArtifact2ᚖcobranchᚗdevᚋinternalᚋadap
 	return ec._Artifact(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx context.Context, sel ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
-	if v == nil {
-		graphql.AddInvalidNullError(ctx, "ArtifactAccess!")
-		return graphql.Null
-	}
-	return ec._ArtifactAccess(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNArtifactGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactGrantᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactGrant) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -43373,22 +43365,6 @@ func (ec *executionContext) unmarshalNArtifactRole2cobranchᚗdevᚋinternalᚋa
 
 func (ec *executionContext) marshalNArtifactRole2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRole(ctx context.Context, sel ast.SelectionSet, v ArtifactRole) graphql.Marshaler {
 	return v
-}
-
-func (ec *executionContext) marshalNArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
 }
 
 func (ec *executionContext) marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx context.Context, sel ast.SelectionSet, v *ArtifactVersion) graphql.Marshaler {
@@ -45189,6 +45165,13 @@ func (ec *executionContext) marshalOArtifact2ᚖcobranchᚗdevᚋinternalᚋadap
 	return ec._Artifact(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx context.Context, sel ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ArtifactAccess(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, v any) (*ArtifactAudience, error) {
 	if v == nil {
 		return nil, nil
@@ -45249,6 +45232,25 @@ func (ec *executionContext) marshalOArtifactRepository2ᚖcobranchᚗdevᚋinter
 		return graphql.Null
 	}
 	return ec._ArtifactRepository(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx context.Context, sel ast.SelectionSet, v *ArtifactVersion) graphql.Marshaler {

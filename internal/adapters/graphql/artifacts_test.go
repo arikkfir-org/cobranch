@@ -159,19 +159,19 @@ func TestOrganizationArtifacts(t *testing.T) {
 		{name: "one the viewer may only list, through its owner", viewer: maxim, document: func(f *orgFixture) string {
 			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeUser, f.olivia.User.ID)
 			return list(``, listedFields)(f)
-		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"]}`}},
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"],"versions":null,"versionByNumber":null,"access":null}`}},
 		{name: "one the viewer may only list, in its repository", viewer: maxim, document: func(f *orgFixture) string {
 			f.withArtifacts()
 			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeRepository, f.website.ID)
 			return `{ organization(slug: "acme") { repository(slug: "website") { artifacts ` + listedFields + ` } } }`
-		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"]}`}},
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"],"versions":null,"versionByNumber":null,"access":null}`}},
 	})
 }
 
 // listedFields selects every field of an artifact a list may show, and listedNulls is what a viewer who may only list
 // it gets of those its readers alone see.
 const (
-	listedFields = `{ title kind owner { displayName } summary repository { slug } repositoryAccess organizationAccess audience agent { id } taskNumber branch head mediaType version createdBy { id } createdAt updatedBy { id } updatedAt permissions }`
+	listedFields = `{ title kind owner { displayName } summary repository { slug } repositoryAccess organizationAccess audience agent { id } taskNumber branch head mediaType version createdBy { id } createdAt updatedBy { id } updatedAt permissions versions { number } versionByNumber(number: 0) { number } access { repositoryAccess } }`
 	listedNulls  = `"summary":null,"repository":null,"repositoryAccess":null,"organizationAccess":null,"audience":null,"agent":null,"taskNumber":null,"branch":null,"head":null,"mediaType":null,"version":null,"createdBy":null,"createdAt":null,"updatedBy":null,"updatedAt":null`
 )
 

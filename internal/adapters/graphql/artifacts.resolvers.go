@@ -17,6 +17,9 @@ import (
 
 // Versions is the resolver for the versions field.
 func (r *artifactResolver) Versions(ctx context.Context, obj *Artifact) ([]*ArtifactVersion, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err
@@ -30,6 +33,9 @@ func (r *artifactResolver) Versions(ctx context.Context, obj *Artifact) ([]*Arti
 
 // VersionByNumber is the resolver for the versionByNumber field.
 func (r *artifactResolver) VersionByNumber(ctx context.Context, obj *Artifact, number int) (*ArtifactVersion, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err
@@ -49,6 +55,9 @@ func (r *artifactResolver) VersionByNumber(ctx context.Context, obj *Artifact, n
 
 // Access is the resolver for the access field.
 func (r *artifactResolver) Access(ctx context.Context, obj *Artifact) (*ArtifactAccess, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err

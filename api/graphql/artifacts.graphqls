@@ -108,12 +108,12 @@ type Artifact {
   updatedAt: Time
   "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
-  "Its versions, newest first, without their bodies."
-  versions: [ArtifactVersion!]!
+  "Its versions, newest first, without their bodies; null for a viewer who may only list it."
+  versions: [ArtifactVersion!]
   "One of its versions with its body, 0 for its newest; null unless it is there."
   versionByNumber(number: Int!): ArtifactVersion
-  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too."
-  access: ArtifactAccess!
+  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it."
+  access: ArtifactAccess
 }
 
 "The repository an artifact is attached to."

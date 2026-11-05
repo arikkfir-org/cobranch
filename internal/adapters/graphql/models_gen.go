@@ -207,12 +207,12 @@ type Artifact struct {
 	UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
 	// What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read.
 	Permissions []string `json:"permissions,omitempty"`
-	// Its versions, newest first, without their bodies.
-	Versions []*ArtifactVersion `json:"versions"`
+	// Its versions, newest first, without their bodies; null for a viewer who may only list it.
+	Versions []*ArtifactVersion `json:"versions,omitempty"`
 	// One of its versions with its body, 0 for its newest; null unless it is there.
 	VersionByNumber *ArtifactVersion `json:"versionByNumber,omitempty"`
-	// Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too.
-	Access *ArtifactAccess `json:"access"`
+	// Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it.
+	Access *ArtifactAccess `json:"access,omitempty"`
 }
 
 // Who reaches an artifact; grants on its repository and at its organization reach it too.

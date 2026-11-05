@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -63,6 +64,12 @@ func artifact(a artifacts.Artifact) *Artifact {
 	out.Version, out.CreatedBy, out.CreatedAt, out.UpdatedBy, out.UpdatedAt = &version, artifactPrincipal(a.CreatedBy), &created,
 		artifactPrincipal(a.UpdatedBy), &updated
 	return out
+}
+
+// listedOnly reports whether a list shows a to a viewer who may only list it, for whom its versions and who reaches it
+// are null rather than an error that would null the whole list.
+func listedOnly(a *Artifact) bool {
+	return a.Permissions != nil && !slices.Contains(a.Permissions, artifacts.PermRead)
 }
 
 // artifactVersion is ver as the API shows it, with its body and HTML only when it has them.
