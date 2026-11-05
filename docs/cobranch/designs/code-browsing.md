@@ -218,7 +218,7 @@ on.
 - **Any ref.** History takes `ref` (a branch, a tag or a commit) beside today's `branch`, and its cursor is opaque: for
   every parent, the commit it started from and how many it has listed, so pages hold still while the branch moves.
 - **A path's history.** `path` narrows every-parent history to the commits that changed what is at a path, as `git
-  rev-list -- <path>` simplifies it, and its cursor keeps the path. Along first parents it is refused (`400`,
+  rev-list -- <path>` simplifies it; a caller repeats `path` with its cursor, as it repeats `parents=all`. Along first parents it is refused (`400`,
   `parents.path`), since PostgreSQL holds no paths. Built for the Files screen's History links
   ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
 

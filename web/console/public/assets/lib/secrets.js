@@ -50,7 +50,7 @@ export async function secretsSections(org, path, grants, fail, repos, actions) {
       h("p", { class: "section-header-description" }, "Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it.")),
       actions ? null : add),
     ...(list.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-count" }, plural(list.length, "secret"))), table, none]
-      : [h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No secrets here yet"),
+      : [h("div", { class: "card empty-centred" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No secrets here yet"),
         h("p", { class: "empty-description" }, "Add a token or a password that jobs and agents need, and grant it to them.")))])];
 }
 

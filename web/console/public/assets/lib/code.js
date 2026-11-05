@@ -363,7 +363,7 @@ async function repositoryFile(repo, path, at, ref, file, branch, can) {
   if (f.kind === "symlink") {
     const target = f.path.split("/").slice(0, -1).concat(f.text.split("/")).reduce((p, n) => (n === ".." ? p.slice(0, -1) : n === "." || !n ? p : [...p, n]), []).join("/");
     return [card("link", ["symlink", plural(f.size, "byte")], [historyLink, copyIcon(f.text, "Copy the link's target")],
-      h("div", { class: "file-symlink" }, icon("arrow-right"), h("a", { class: "file-symlink-target", href: at.blob(ref, target), "data-nav": "" }, f.text),
+      h("div", { class: "file-symlink" }, icon("arrow-right"), h("a", { class: "file-symlink-target", href: at.blob(f.commit, target), "data-nav": "" }, f.text),
         h("span", { class: "file-symlink-hint" }, "Links to this file in the same commit")))];
   }
   if (imageFile(f.name)) {
