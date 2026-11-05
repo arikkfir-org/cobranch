@@ -1071,7 +1071,7 @@ type Organization struct {
 	ModelProviders []*ModelProvider `json:"modelProviders"`
 	// The model providers the installation knows, by name: those the organization may add.
 	AvailableModelProviders []string `json:"availableModelProviders"`
-	// The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read.
+	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	Models []*Model `json:"models"`
 	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`

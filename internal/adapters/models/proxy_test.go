@@ -139,23 +139,26 @@ func TestProxyMeters(t *testing.T) {
 		wantStatus   int
 		wantSent     bool
 		wantReports  int
+		wantAnswer   bool // whether the provider's answer reaches the harness
 	}{
-		{name: "a turn", method: http.MethodPost, path: "/v1/messages", body: turn, wantStatus: http.StatusOK, wantSent: true, wantReports: 1},
+		{name: "a turn", method: http.MethodPost, path: "/v1/messages", body: turn, wantStatus: http.StatusOK, wantSent: true, wantReports: 1, wantAnswer: true},
 		{name: "another path", method: http.MethodPost, path: "/v1/models", body: turn, wantStatus: http.StatusNotFound},
 		{name: "a read", method: http.MethodGet, path: "/v1/messages", wantStatus: http.StatusNotFound},
 		{name: "another model", method: http.MethodPost, path: "/v1/messages", body: `{"model":"bigger-model"}`, wantStatus: http.StatusForbidden},
 		{name: "a stream", method: http.MethodPost, path: "/v1/messages", body: `{"model":"test-model","stream":true}`, wantStatus: http.StatusBadRequest},
 		{name: "not JSON", method: http.MethodPost, path: "/v1/messages", body: `model=test-model`, wantStatus: http.StatusBadRequest},
 		{name: "a turn the provider fails isn't reported", method: http.MethodPost, path: "/v1/messages", body: turn, status: http.StatusInternalServerError,
-			wantStatus: http.StatusInternalServerError, wantSent: true},
-		{name: "a turn whose report fails still answers", method: http.MethodPost, path: "/v1/messages", body: turn, meter: []error{failed},
-			wantStatus: http.StatusOK, wantSent: true, wantReports: 1},
-		{name: "the next turn waits while the report still fails", method: http.MethodPost, path: "/v1/messages", body: turn, meter: []error{failed},
+			wantStatus: http.StatusInternalServerError, wantSent: true, wantAnswer: true},
+		{name: "a turn whose report fails is held back", method: http.MethodPost, path: "/v1/messages", body: turn, meter: []error{failed},
+			wantStatus: http.StatusServiceUnavailable, wantSent: true, wantReports: 1},
+		{name: "asked again, it waits while the report still fails", method: http.MethodPost, path: "/v1/messages", body: turn, meter: []error{failed},
 			wantStatus: http.StatusServiceUnavailable, wantReports: 1},
-		{name: "the next turn goes once the report does", method: http.MethodPost, path: "/v1/messages", body: turn,
-			wantStatus: http.StatusOK, wantSent: true, wantReports: 2},
+		{name: "asked again once the report goes, it gets the answer held back", method: http.MethodPost, path: "/v1/messages", body: turn,
+			wantStatus: http.StatusOK, wantReports: 1, wantAnswer: true},
+		{name: "the next turn goes", method: http.MethodPost, path: "/v1/messages", body: turn,
+			wantStatus: http.StatusOK, wantSent: true, wantReports: 1, wantAnswer: true},
 		{name: "the turn that reaches the cap answers", method: http.MethodPost, path: "/v1/messages", body: turn, end: true,
-			wantStatus: http.StatusOK, wantSent: true, wantReports: 1},
+			wantStatus: http.StatusOK, wantSent: true, wantReports: 1, wantAnswer: true},
 		{name: "no turn goes once the task has ended", method: http.MethodPost, path: "/v1/messages", body: turn, wantStatus: http.StatusPaymentRequired},
 	}
 	provider := &compressingProvider{answer: `{"usage":{"input_tokens":100,"output_tokens":10}}`}
@@ -175,9 +178,10 @@ func TestProxyMeters(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		reports := meter.reports()[before:]
-		if w.Code != s.wantStatus || provider.sent() != s.wantSent || len(reports) != s.wantReports {
-			t.Fatalf("%s: answered %d, sent on %t, reported %+v; want %d, %t, %d reports", s.name, w.Code, provider.sent(), reports,
-				s.wantStatus, s.wantSent, s.wantReports)
+		answered := strings.Contains(w.Body.String(), `"input_tokens":100`)
+		if w.Code != s.wantStatus || provider.sent() != s.wantSent || len(reports) != s.wantReports || answered != s.wantAnswer {
+			t.Fatalf("%s: answered %d %q, sent on %t, reported %+v; want %d, %t, %d reports, the answer %t", s.name, w.Code, w.Body.String(),
+				provider.sent(), reports, s.wantStatus, s.wantSent, s.wantReports, s.wantAnswer)
 		}
 		for _, u := range reports {
 			if u.Input != 100 || u.Output != 10 || u.Model != "test-model" {
@@ -185,8 +189,13 @@ func TestProxyMeters(t *testing.T) {
 			}
 		}
 	}
-	got := meter.reports()
-	// The report that failed twice went a third time, as the same call, so that it counts once.
+	repeatedUnderItsID(t, meter.reports())
+}
+
+// repeatedUnderItsID checks TestProxyMeters' reports: the report that failed twice went a third time, as the same call,
+// so that it counts once.
+func repeatedUnderItsID(t *testing.T, got []agents.Usage) {
+	t.Helper()
 	if failedID := got[len(got)-5].ID; got[len(got)-4].ID != failedID || got[len(got)-3].ID != failedID || got[len(got)-2].ID == failedID {
 		t.Errorf("reports = %+v, want the failed one repeated under its ID before the next turn's", got)
 	}
@@ -224,6 +233,43 @@ func TestProxyStopsAtTheEndOfItsTask(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestProxyDropsAHeldAnswerForAnotherTurn covers a harness that, its turn held back, asks another once the report
+// lands: the held answer answers only the turn it was held for, and the new turn goes on.
+func TestProxyDropsAHeldAnswerForAnotherTurn(t *testing.T) {
+	provider := &compressingProvider{answer: `{"usage":{"input_tokens":100,"output_tokens":10}}`}
+	upstream := httptest.NewServer(provider)
+	defer upstream.Close()
+	meter := &fakeMeter{}
+	handler, err := Proxy(Settings{Provider: "anthropic", Model: "test-model", Key: "test-key", URL: upstream.URL}, meter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	turns := []struct {
+		name       string
+		body       string
+		meter      []error
+		wantStatus int
+		wantSent   bool
+	}{
+		{name: "a turn whose report fails is held back", body: `{"model":"test-model","messages":[1]}`, meter: []error{errors.New("down")},
+			wantStatus: http.StatusServiceUnavailable, wantSent: true},
+		{name: "another turn goes on once the report lands", body: `{"model":"test-model","messages":[2]}`, wantStatus: http.StatusOK, wantSent: true},
+		{name: "the first, asked again, goes on too", body: `{"model":"test-model","messages":[1]}`, wantStatus: http.StatusOK, wantSent: true},
+	}
+	for _, turn := range turns {
+		meter.script(turn.meter, false)
+		provider.reset(0)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(turn.body)))
+		if w.Code != turn.wantStatus || provider.sent() != turn.wantSent {
+			t.Errorf("%s: answered %d, sent on %t; want %d, %t", turn.name, w.Code, provider.sent(), turn.wantStatus, turn.wantSent)
+		}
+	}
+	if got := meter.reports(); len(got) != 4 || got[0].ID != got[1].ID || got[2].ID == got[1].ID {
+		t.Errorf("reports = %+v, want the failed one again, under its ID, before each later turn's own", got)
 	}
 }
 

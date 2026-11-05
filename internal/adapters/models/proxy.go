@@ -55,8 +55,12 @@ func Proxy(s Settings, meter Meter) (http.Handler, error) {
 		Transport:      transport,
 		ModifyResponse: m.meterAnswer,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			if errors.Is(err, errEnded) {
+			switch {
+			case errors.Is(err, errEnded):
 				http.Error(w, err.Error(), http.StatusPaymentRequired)
+				return
+			case errors.Is(err, errUnrecorded):
+				http.Error(w, unrecorded, http.StatusServiceUnavailable)
 				return
 			}
 			slog.ErrorContext(r.Context(), "Reaching the model provider failed", "provider", s.Provider, "error", err)

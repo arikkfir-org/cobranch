@@ -4629,7 +4629,7 @@ type ServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams)
-	// ListModels The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read.
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	// (GET /orgs/{org}/models)
 	ListModels(w http.ResponseWriter, r *http.Request, org Org)
 	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
@@ -35549,7 +35549,7 @@ type StrictServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(ctx context.Context, request SetModelProviderRequestObject) (SetModelProviderResponseObject, error)
-	// ListModels The organization's models, by provider and name, each with what it costs, the most a task on it may spend and the agents on it; takes org.read.
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	// (GET /orgs/{org}/models)
 	ListModels(ctx context.Context, request ListModelsRequestObject) (ListModelsResponseObject, error)
 	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.

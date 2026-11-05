@@ -3,12 +3,14 @@ package models
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/google/uuid"
@@ -26,8 +28,9 @@ type Meter interface {
 
 // metered is the model proxy's gate in front of the provider, next: it sends on only a turn of the task's model, asked whole
 // rather than streamed, so that each answer says what the turn read and wrote, and reports that before the harness
-// reads the answer. A report that fails is kept and sent again before the next turn, which waits for it, so a task
-// never runs more than one turn ahead of what it spent; once the task has ended, at its cap or otherwise, no turn goes.
+// reads the answer. A turn whose report fails is answered 503 and its answer held back, until the harness asks the turn
+// again and the report lands, so the harness never acts on a turn Cobranch hasn't recorded; once the task has ended, at
+// its cap or otherwise, no turn goes.
 // A task that ends otherwise, cancelled or timed out, is learnt of from the report of the turn on its way then, whose
 // answer is withheld: the provider charged for it, but the harness never acts on it.
 type metered struct {
@@ -37,13 +40,41 @@ type metered struct {
 	// mu holds one turn at a time, as the harness asks them, with what it reads and writes below.
 	mu      sync.Mutex
 	pending *agents.Usage
+	held    *answer
+	turn    [sha256.Size]byte
 	ended   bool
 }
+
+// answer is a turn's answer held back until what the turn spent is recorded: the request it answers, by its digest, and
+// what the provider answered.
+type answer struct {
+	turn   [sha256.Size]byte
+	status int
+	header http.Header
+	body   []byte
+}
+
+// serve writes the held answer to w.
+func (a *answer) serve(w http.ResponseWriter) {
+	for k, v := range a.header {
+		w.Header()[k] = v
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(a.body)))
+	w.WriteHeader(a.status)
+	_, _ = w.Write(a.body) // a harness that stopped listening asks the turn again, and the provider answers it anew
+}
+
+// errUnrecorded is a turn's answer held back because its report failed.
+var errUnrecorded = errors.New("the turn's spend isn't recorded yet")
+
+// unrecorded is the answer to a turn while what a turn spent isn't recorded yet.
+const unrecorded = "Cobranch hasn't recorded what a turn spent yet: ask again shortly."
 
 // errEnded is a turn refused, or its answer withheld, because the task has ended.
 var errEnded = errors.New("the task has ended, as it does once it reaches its cap: its model takes no more turns")
 
-// ServeHTTP sends a turn of the task's model on, after the report of the last one, unless the task has ended.
+// ServeHTTP sends a turn of the task's model on, after the report of the last one, unless the task has ended; a turn
+// asked again once its report lands gets the answer held back for it.
 func (m *metered) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -54,7 +85,14 @@ func (m *metered) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if m.pending != nil {
 		if err := m.report(r.Context(), *m.pending); err != nil && !m.ended {
 			slog.WarnContext(r.Context(), "Reporting the last call's spend failed again", "error", err)
-			http.Error(w, "Cobranch hasn't recorded what the last turn spent yet: ask again shortly.", http.StatusServiceUnavailable)
+			http.Error(w, unrecorded, http.StatusServiceUnavailable)
+			return
+		}
+	}
+	if held := m.held; held != nil {
+		m.held = nil
+		if held.turn == m.turn {
+			held.serve(w)
 			return
 		}
 	}
@@ -79,6 +117,7 @@ func (m *metered) admit(r *http.Request) (int, error) {
 		return http.StatusRequestEntityTooLarge, errors.New("a turn's request is at most 32 MiB")
 	}
 	r.Body, r.ContentLength = io.NopCloser(bytes.NewReader(body)), int64(len(body))
+	m.turn = sha256.Sum256(body)
 	var asked struct {
 		Model  string `json:"model"`
 		Stream bool   `json:"stream"`
@@ -107,8 +146,9 @@ func turnPath(provider, model string) string {
 }
 
 // meterAnswer reads a turn's answer, reports what it read and wrote, and puts the answer back for the harness. A report
-// that fails is kept for the next turn, and the answer still goes: the provider already charged for it. A report that
-// finds the task already ended withholds the answer, errEnded, so the harness takes no step past the task's end.
+// that fails is kept, and the answer held back for the turn asked again, errUnrecorded: the provider already charged for
+// it. A report that finds the task already ended withholds the answer, errEnded, so the harness takes no step past the
+// task's end.
 func (m *metered) meterAnswer(resp *http.Response) error {
 	if resp.StatusCode/100 != 2 {
 		return nil
@@ -135,18 +175,21 @@ func (m *metered) meterAnswer(resp *http.Response) error {
 			"output_tokens", output, "error", err)
 		return errEnded
 	case err != nil:
-		slog.WarnContext(ctx, "Reporting a call's spend failed: it goes again before the next turn", "error", err)
+		slog.WarnContext(ctx, "Reporting a call's spend failed: its answer waits for the turn asked again", "error", err)
 		m.pending = &u
+		m.held = &answer{turn: m.turn, status: resp.StatusCode, header: resp.Header.Clone(), body: body}
+		return errUnrecorded
 	}
 	return nil
 }
 
-// report sends u, and records whether the task has ended; the pending report goes once it is sent.
+// report sends u, and records whether the task has ended; the pending report goes once it is sent, and an answer held
+// back goes with it once the task has ended otherwise.
 func (m *metered) report(ctx context.Context, u agents.Usage) error {
 	spend, err := m.meter.RecordSpend(ctx, u)
 	if err != nil {
 		if errors.Is(err, agents.ErrEnded) || errors.Is(err, harness.ErrRefused) {
-			m.ended, m.pending = true, nil
+			m.ended, m.pending, m.held = true, nil, nil
 		}
 		return fmt.Errorf("reporting call %s: %w", u.ID, err)
 	}

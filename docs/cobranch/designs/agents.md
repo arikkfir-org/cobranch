@@ -372,8 +372,8 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
   cancelled or timed out, is learnt of from the report of the turn on its way then, and the proxy withholds that turn's
   answer: the provider charged for it, but the harness never acts on it.
 - **At most one turn over.** A turn's price is known only once it is answered, so the turn that crosses the cap still
-  answers. A report that fails is kept and sent again before the next turn, which waits for it; a turn never starts
-  while the last one is unreported.
+  answers. A turn whose report fails is answered 503 and its answer held back; the harness asks it again, as it does
+  any 503, and gets the answer once the report lands, so it never acts on a turn Cobranch hasn't recorded.
 - **Tasks live on their agent's page** (**Agreed**, 2026-11-04): a task is work given to an agent, explicitly or by
   being asked, so the agent's page shows what it is working on, its queue and its history, each task with what it spent
   against its cap, and the agent's facts show what it spent this month; the Agents page gains Activity and Quotas tabs,

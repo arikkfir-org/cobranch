@@ -189,7 +189,7 @@ func (s *AgentStore) RemoveModel(ctx context.Context, actor, orgID uuid.UUID, pr
 
 // RecordSpend records a call of a task's model under the task's lock, priced at its organization's prices for the
 // reported model of its agent's provider, or for its agent's model when it has none for that one, and answers what
-// the task spent. A task that reaches the lower of its agent's cap and its model's ends Failed, saying so, and a
+// the task spent. A task that reaches its agent's cap ends Failed, saying so, and a
 // report that repeats an ID records nothing; agents.ErrEnded for a task that has ended (agents.Store).
 func (s *AgentStore) RecordSpend(ctx context.Context, taskID uuid.UUID, u agents.Usage) (agents.Spend, error) {
 	var out agents.Spend

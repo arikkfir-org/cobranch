@@ -31,10 +31,10 @@ CREATE TRIGGER audit AFTER INSERT OR UPDATE OR DELETE ON models FOR EACH ROW EXE
 INSERT INTO models (org_id, provider, model)
 SELECT DISTINCT org_id, provider, model FROM agents WHERE provider IS NOT NULL;
 
--- An agent runs only on one of its organization's models, and has a cap, the most one of its tasks may spend, or none.
-ALTER TABLE agents
-    ADD COLUMN cap bigint CHECK (cap BETWEEN 1 AND 1000000000000),
-    ADD CONSTRAINT agents_catalog_model FOREIGN KEY (org_id, provider, model) REFERENCES models (org_id, provider, model);
+-- An agent has a cap, the most one of its tasks may spend, or none. It runs only on one of its organization's models,
+-- which the agents service checks rather than a foreign key: the release before this one still puts an agent on any
+-- model of a provider, and both run side by side through a rolling upgrade.
+ALTER TABLE agents ADD COLUMN cap bigint CHECK (cap BETWEEN 1 AND 1000000000000);
 
 -- A call of a task's model, as the model proxy of the task's pod reported it, by an ID of its own so that a report it
 -- repeats counts once: the model, the tokens it read and wrote, and what it cost at the organization's prices then.
@@ -57,5 +57,5 @@ CREATE INDEX task_spend_agent ON task_spend (agent_id, created_at);
 
 -- +goose Down
 DROP TABLE task_spend;
-ALTER TABLE agents DROP CONSTRAINT agents_catalog_model, DROP COLUMN cap;
+ALTER TABLE agents DROP COLUMN cap;
 DROP TABLE models;

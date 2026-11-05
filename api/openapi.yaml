@@ -1883,8 +1883,8 @@ paths:
     get:
       operationId: listModels
       summary: >-
-        The organization's models, by provider and name, each with what it costs, the most a task on it may spend and
-        the agents on it; takes org.read.
+        The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps
+        its own tasks. Takes org.read.
       parameters:
         - $ref: "#/components/parameters/org"
       responses:
