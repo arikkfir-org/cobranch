@@ -272,6 +272,35 @@ func TestIssueBranch(t *testing.T) {
 	}
 }
 
+// TestCreateHidesBranches checks that the issue Create answers with shows the branch its name linked only to those who
+// read the branch's repository.
+func TestCreateHidesBranches(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		viewer func(f *fixture) issues.Viewer
+		want   string
+	}{
+		{"the owner sees the branch named after it", func(f *fixture) issues.Viewer { return f.olivia }, "secret/acme-1-ship"},
+		{"a member who doesn't read its repository sees none", func(f *fixture) issues.Viewer { return f.max }, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.store.AddBranch(f.secret.ID, "acme-1-ship")
+			created, err := f.service.Create(ctx, tc.viewer(f), f.acme.ID, issues.Input{Title: "Ship it"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if branch := branchOf(created); branch != tc.want {
+				t.Errorf("Create() = branch %q, want %q", branch, tc.want)
+			}
+			if got, err := f.service.Get(ctx, f.olivia, f.acme.ID, created.Number); err != nil || branchOf(got) != "secret/acme-1-ship" {
+				t.Errorf("Olivia's Get() = branch %q, %v; want secret/acme-1-ship, linked", branchOf(got), err)
+			}
+		})
+	}
+}
+
 // branchOf is the issue's live branch as "repository/name", or "" for none.
 func branchOf(i issues.Issue) string {
 	if i.Branch == nil {

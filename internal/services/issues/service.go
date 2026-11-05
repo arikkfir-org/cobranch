@@ -299,7 +299,12 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 		return Issue{}, failed(span, "creating the issue", err)
 	}
 	span.SetAttributes(attribute.Int("cobranch.issue.number", created.Number))
-	return s.rendered(ctx, created)
+	// Creating it links branches named after it in any of the organization's repositories, readable or not.
+	readable, err := s.readable(ctx, v, orgID)
+	if err != nil {
+		return Issue{}, failed(span, "creating the issue", err)
+	}
+	return s.rendered(ctx, shown(created, readable))
 }
 
 // assignee is the member or the agent of the organization id names, or nil for uuid.Nil; anyone else is a

@@ -123,8 +123,8 @@ func (s *Store) linkEvent(actor, issueID uuid.UUID, kind string, b issues.Branch
 		Branch: &issues.EventBranch{RepositoryID: b.Repository.ID, Repository: b.Repository.Slug, Name: b.Name, LinkedBy: issues.LinkedByHand}})
 }
 
-// Create numbers and records the issue.
-func (s *Store) Create(_ context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
+// Create numbers and records the issue, and links the branches that name it.
+func (s *Store) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
 	if s.Fail != nil {
 		return issues.Issue{}, s.Fail
 	}
@@ -132,7 +132,15 @@ func (s *Store) Create(_ context.Context, actor uuid.UUID, issue issues.Issue) (
 	issue.Number = s.last[issue.OrgID]
 	s.Issues = append(s.Issues, issue)
 	s.event(actor, issue.ID, "issue.created", nil)
-	return s.filled(issue), nil
+	// As the database does, the organization's live branches with no link whose names name the issue link to it.
+	for _, b := range s.Live {
+		if n, ok := issues.Named(b.Name, s.Orgs.Orgs[issue.OrgID].IssueKey); ok && n == issue.Number && b.IssueID == uuid.Nil {
+			if err := s.Link(ctx, actor, b, &issue.ID); err != nil {
+				return issues.Issue{}, err
+			}
+		}
+	}
+	return s.filled(s.Issues[len(s.Issues)-1]), nil
 }
 
 func (s *Store) index(orgID uuid.UUID, number int) int {
