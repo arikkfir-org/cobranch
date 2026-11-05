@@ -39,6 +39,11 @@ type Store struct {
 	// EnvironmentList and DeliveryList hold each repository's environments and deliveries, in the order added.
 	EnvironmentList map[uuid.UUID][]code.Environment
 	DeliveryList    map[uuid.UUID][]code.Delivery
+	// Objects holds what each environment holds; Targets each repository's default branch's targets; and Clusters the
+	// secrets targets name as their clusters, of every organization.
+	Objects  map[uuid.UUID][]code.EnvironmentObject
+	Targets  map[uuid.UUID][]code.Target
+	Clusters []code.ClusterSecret
 	// Renders holds the renders kept, by delivery ID.
 	Renders map[uuid.UUID][]byte
 	// Defined are the jobs each branch's head declares, by repository and branch.
@@ -62,7 +67,8 @@ func NewStore() *Store {
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
 		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, Steps: map[uuid.UUID][]jobs.Step{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
-		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{},
+		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{}, Objects: map[uuid.UUID][]code.EnvironmentObject{},
+		Targets: map[uuid.UUID][]code.Target{},
 		Defined: map[uuid.UUID]map[string][]jobs.Job{}, ActivityList: map[uuid.UUID][]code.Activity{}, Viewed: map[string][]code.ViewedFile{}}
 }
 

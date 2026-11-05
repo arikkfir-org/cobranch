@@ -177,3 +177,39 @@ func TestPlanFor(t *testing.T) {
 		})
 	}
 }
+
+func TestURLFor(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		c       delivery.Context
+		want    string
+		wantErr string
+	}{
+		{name: "none", url: "", c: planContext},
+		{name: "a fixed address", url: "https://shop.example.com", c: planContext, want: "https://shop.example.com"},
+		{name: "the branch and namespace", url: "https://${branch.slug}.${namespace}.${organization}.example.com/${repository}",
+			c: planContext, want: "https://feature-login.shop-feature-login.acme.example.com/shop"},
+		{name: "a variable without a value", url: "https://${repository}.example.com", c: delivery.Context{Branch: "main"},
+			wantErr: "invalid delivery: target previews's URL: unknown variable ${repository}"},
+		{name: "no host", url: "https:///${branch.slug}", c: planContext,
+			wantErr: "invalid delivery: target previews's URL \"https:///feature-login\" is not an http or https address"},
+		{name: "a host that breaks the address", url: "http://${branch}", c: delivery.Context{Branch: "a b/%zz"},
+			wantErr: "is not an http or https address"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := code.Target{Name: "previews", Namespace: "n", URL: tt.url}
+			got, err := delivery.URLFor(target, tt.c, "shop-feature-login")
+			if tt.wantErr != "" {
+				if !errors.Is(err, delivery.ErrInvalid) || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("URLFor() = %q, %v, want ErrInvalid %q", got, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Errorf("URLFor() = %q, %v, want %q", got, err, tt.want)
+			}
+		})
+	}
+}

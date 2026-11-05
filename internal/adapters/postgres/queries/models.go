@@ -218,6 +218,8 @@ type EnvironmentObject struct {
 	DeliveryID    *uuid.UUID
 	Health        string
 	Message       string
+	Ready         string
+	CreatedAt     *time.Time
 }
 
 type Identity struct {

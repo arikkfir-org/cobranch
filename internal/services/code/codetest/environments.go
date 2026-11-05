@@ -85,15 +85,47 @@ func (s *Store) withLatest(repoID uuid.UUID, e code.Environment) code.Environmen
 	return e
 }
 
-// Deliveries lists an environment's deliveries, newest first, as code.Store does.
-func (s *Store) Deliveries(ctx context.Context, repoID, environmentID uuid.UUID, before int64, limit int) ([]code.Delivery, error) {
+// Deliveries lists an environment's deliveries of kinds, newest first, as code.Store does.
+func (s *Store) Deliveries(ctx context.Context, repoID, environmentID uuid.UUID, kinds []code.DeliveryKind, before int64,
+	limit int) ([]code.Delivery, error) {
 	if _, err := s.Environment(ctx, repoID, environmentID); err != nil {
 		return nil, err
 	}
 	var out []code.Delivery
 	for _, d := range slices.Backward(s.DeliveryList[repoID]) {
-		if d.EnvironmentID == environmentID && (before == 0 || d.Number < before) && len(out) < limit {
+		if d.EnvironmentID == environmentID && (before == 0 || d.Number < before) && len(out) < limit &&
+			(len(kinds) == 0 || slices.Contains(kinds, d.Kind)) {
 			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+// EnvironmentObjects lists what an environment holds, as code.Store does.
+func (s *Store) EnvironmentObjects(ctx context.Context, repoID, environmentID uuid.UUID) ([]code.EnvironmentObject, error) {
+	if _, err := s.Environment(ctx, repoID, environmentID); err != nil {
+		return nil, err
+	}
+	return s.Objects[environmentID], nil
+}
+
+// DeliveryTargets lists the repository's default branch's targets, as code.Store does.
+func (s *Store) DeliveryTargets(_ context.Context, repoID uuid.UUID) ([]code.Target, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return s.Targets[repoID], nil
+}
+
+// ClusterSecrets finds those of ids among Clusters, as code.Store does; it doesn't tell organizations apart.
+func (s *Store) ClusterSecrets(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]code.ClusterSecret, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []code.ClusterSecret
+	for _, c := range s.Clusters {
+		if slices.Contains(ids, c.ID) {
+			out = append(out, c)
 		}
 	}
 	return out, nil

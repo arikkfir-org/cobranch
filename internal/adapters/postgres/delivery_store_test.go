@@ -182,8 +182,18 @@ func (f *deliveryFixture) checkHealth(t *testing.T, d deliverer.Delivery) {
 		t.Fatalf("Progressing() = %+v, %v, want production", envs, err)
 	}
 	healthy := code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}
-	if err := f.d.SetHealth(ctx, d.EnvironmentID, inventory(code.Healthy, "site", "settings"), code.Healthy, healthy); err != nil {
+	read, created := inventory(code.Healthy, "site", "settings"), time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
+	read[1].Ready, read[1].Created = "1/1", &created
+	if err := f.d.SetHealth(ctx, d.EnvironmentID, read, code.Healthy, healthy); err != nil {
 		t.Fatalf("SetHealth() = %v", err)
+	}
+	listed, err := f.c.EnvironmentObjects(ctx, d.RepoID, d.EnvironmentID)
+	if err != nil || len(listed) != 2 || listed[0].CreatedAt != nil || listed[1].Ready != "1/1" || listed[1].CreatedAt == nil ||
+		!listed[1].CreatedAt.Equal(created) || listed[1].Delivery != d.Number || listed[1].Health != code.Healthy {
+		t.Errorf("EnvironmentObjects() = %+v, %v, want settings ready 1/1, created at 09:00, applied by #%d", listed, err, d.Number)
+	}
+	if _, err := f.c.EnvironmentObjects(ctx, f.secret.ID, d.EnvironmentID); !errors.Is(err, repos.ErrNotFound) {
+		t.Errorf("another repository's EnvironmentObjects() = %v, want %v", err, repos.ErrNotFound)
 	}
 	if got := f.note(t, d.RepoID, shaA, "delivery/production"); got != "successful: Healthy by production" {
 		t.Errorf("annotation of a healthy delivery = %q", got)

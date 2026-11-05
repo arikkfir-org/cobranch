@@ -149,17 +149,22 @@ SELECT * FROM environment_objects WHERE environment_id = $1 ORDER BY position;
 -- name: DeleteEnvironmentObjects :exec
 DELETE FROM environment_objects WHERE environment_id = $1;
 
--- InsertEnvironmentObjects records an environment's inventory: the nth of each list is the nth object.
+-- InsertEnvironmentObjects records an environment's inventory: the nth of each list is the nth object. Its creation
+-- times are RFC 3339, or empty for one never read.
 -- name: InsertEnvironmentObjects :exec
-INSERT INTO environment_objects (environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message)
+INSERT INTO environment_objects (environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message,
+    ready, created_at)
 SELECT @environment_id::uuid, unnest(@positions::int[]), unnest(@api_groups::text[]), unnest(@versions::text[]),
     unnest(@kinds::text[]), unnest(@namespaces::text[]), unnest(@names::text[]), unnest(@uids::text[]),
-    unnest(@delivery_ids::uuid[]), unnest(@healths::text[]), unnest(@messages::text[]);
+    unnest(@delivery_ids::uuid[]), unnest(@healths::text[]), unnest(@messages::text[]),
+    unnest(@readies::text[]), nullif(unnest(@created_ats::text[]), '')::timestamptz;
 
--- SetObjectHealths records the health each of an environment's objects read as, by position.
+-- SetObjectHealths records the health each of an environment's objects read as, by position, with how much of it is
+-- ready and when the cluster created it: RFC 3339, or empty for one it couldn't read.
 -- name: SetObjectHealths :exec
-UPDATE environment_objects o SET health = h.health, message = h.message
-FROM (SELECT unnest(@positions::int[]) AS position, unnest(@healths::text[]) AS health, unnest(@messages::text[]) AS message) h
+UPDATE environment_objects o SET health = h.health, message = h.message, ready = h.ready, created_at = h.created_at
+FROM (SELECT unnest(@positions::int[]) AS position, unnest(@healths::text[]) AS health, unnest(@messages::text[]) AS message,
+    unnest(@readies::text[]) AS ready, nullif(unnest(@created_ats::text[]), '')::timestamptz AS created_at) h
 WHERE o.environment_id = @environment_id AND o.position = h.position;
 
 -- SetEnvironmentDelivered records a delivery of a commit, or a resync, that succeeded: the environment's revision, its

@@ -208,6 +208,9 @@ func (f *fixture) checkApplied(t *testing.T, first []cluster.Ref) {
 	if err != nil || health != cluster.Healthy || len(objects) != 3 {
 		t.Fatalf("Health() = %v, %s, %v, want 3 Healthy", objects, health, err)
 	}
+	if o := objects[2]; o.Created == nil || !o.Created.Equal(c.GetCreationTimestamp().Time) || o.Ready != "" {
+		t.Errorf("Health() of ConfigMap/c = created %v, ready %q; want its creation time and no ready count", o.Created, o.Ready)
+	}
 	if objects, health, err := asStranger(t).Health(ctx, first); err != nil || health != cluster.Unknown || !strings.Contains(objects[0].Message, "forbidden") {
 		t.Errorf("Health() as a stranger = %v, %s, %v, want Unknown, since it may not read them", objects, health, err)
 	}

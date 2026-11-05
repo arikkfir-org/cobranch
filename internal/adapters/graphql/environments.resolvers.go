@@ -26,8 +26,25 @@ func (r *branchResolver) Environments(ctx context.Context, obj *Branch) ([]*Envi
 	return environments(obj.repoID.String(), list), nil
 }
 
+// Objects is the resolver for the objects field.
+func (r *environmentResolver) Objects(ctx context.Context, obj *Environment) ([]*EnvironmentObject, error) {
+	v, repoID, err := codeRepo(ctx, obj.RepositoryID)
+	if err != nil {
+		return nil, err
+	}
+	environmentID, err := parseID(ctx, obj.ID, "environment")
+	if err != nil {
+		return nil, err
+	}
+	list, err := r.Code.EnvironmentObjects(ctx, v, repoID, environmentID)
+	if err != nil {
+		return nil, fail(ctx, err, "environment", "listing the environment's objects")
+	}
+	return mapAll(list, environmentObject), nil
+}
+
 // Deliveries is the resolver for the deliveries field.
-func (r *environmentResolver) Deliveries(ctx context.Context, obj *Environment, first int, after *string) (*DeliveryPage, error) {
+func (r *environmentResolver) Deliveries(ctx context.Context, obj *Environment, first int, after *string, kinds []DeliveryKind) (*DeliveryPage, error) {
 	v, repoID, err := codeRepo(ctx, obj.RepositoryID)
 	if err != nil {
 		return nil, err
@@ -43,7 +60,7 @@ func (r *environmentResolver) Deliveries(ctx context.Context, obj *Environment, 
 	if first < 1 {
 		return nil, refuse(ctx, badUserInput, "limit.invalid", "first is 1 to 100")
 	}
-	page, err := r.Code.Deliveries(ctx, v, repoID, environmentID, before, first)
+	page, err := r.Code.Deliveries(ctx, v, repoID, environmentID, deliveryKinds(kinds), before, first)
 	if err != nil {
 		return nil, fail(ctx, err, "environment", "listing the deliveries")
 	}
@@ -161,6 +178,19 @@ func (r *repositoryResolver) Delivery(ctx context.Context, obj *Repository, numb
 		return nil, fail(ctx, err, "repository", "reading the delivery")
 	}
 	return delivery(d), nil
+}
+
+// DeliveryTargets is the resolver for the deliveryTargets field.
+func (r *repositoryResolver) DeliveryTargets(ctx context.Context, obj *Repository) ([]*DeliveryTarget, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	list, err := r.Code.DeliveryTargets(ctx, v, repoID)
+	if err != nil {
+		return nil, fail(ctx, err, "repository", "listing the targets")
+	}
+	return mapAll(list, deliveryTarget), nil
 }
 
 // Environment returns EnvironmentResolver implementation.

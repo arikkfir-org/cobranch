@@ -398,6 +398,7 @@ type ComplexityRoot struct {
 		StartedAt     func(childComplexity int) int
 		StartedBy     func(childComplexity int) int
 		State         func(childComplexity int) int
+		Subject       func(childComplexity int) int
 		Target        func(childComplexity int) int
 		Trigger       func(childComplexity int) int
 		Version       func(childComplexity int) int
@@ -406,6 +407,15 @@ type ComplexityRoot struct {
 	DeliveryPage struct {
 		Deliveries func(childComplexity int) int
 		NextCursor func(childComplexity int) int
+	}
+
+	DeliveryTarget struct {
+		Branches    func(childComplexity int) int
+		Cluster     func(childComplexity int) int
+		ClusterName func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Namespace   func(childComplexity int) int
+		URL         func(childComplexity int) int
 	}
 
 	Diff struct {
@@ -446,20 +456,37 @@ type ComplexityRoot struct {
 	}
 
 	Environment struct {
-		Branch     func(childComplexity int) int
-		Cluster    func(childComplexity int) int
-		CreatedAt  func(childComplexity int) int
-		Deliveries func(childComplexity int, first int, after *string) int
-		Health     func(childComplexity int) int
-		ID         func(childComplexity int) int
-		Latest     func(childComplexity int) int
-		Namespace  func(childComplexity int) int
-		Paused     func(childComplexity int) int
-		Revision   func(childComplexity int) int
-		Sync       func(childComplexity int) int
-		SyncedAt   func(childComplexity int) int
-		Target     func(childComplexity int) int
-		Version    func(childComplexity int) int
+		Branch      func(childComplexity int) int
+		Cluster     func(childComplexity int) int
+		ClusterName func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		Deliveries  func(childComplexity int, first int, after *string, kinds []DeliveryKind) int
+		Health      func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Latest      func(childComplexity int) int
+		Namespace   func(childComplexity int) int
+		Objects     func(childComplexity int) int
+		Paused      func(childComplexity int) int
+		Renders     func(childComplexity int) int
+		Revision    func(childComplexity int) int
+		Sync        func(childComplexity int) int
+		SyncedAt    func(childComplexity int) int
+		Target      func(childComplexity int) int
+		URL         func(childComplexity int) int
+		Version     func(childComplexity int) int
+	}
+
+	EnvironmentObject struct {
+		CreatedAt func(childComplexity int) int
+		Delivery  func(childComplexity int) int
+		Group     func(childComplexity int) int
+		Health    func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		Message   func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Namespace func(childComplexity int) int
+		Ready     func(childComplexity int) int
+		Version   func(childComplexity int) int
 	}
 
 	File struct {
@@ -983,6 +1010,11 @@ type ComplexityRoot struct {
 		Old  func(childComplexity int) int
 	}
 
+	Render struct {
+		Kind func(childComplexity int) int
+		Path func(childComplexity int) int
+	}
+
 	Repository struct {
 		Access            func(childComplexity int) int
 		Artifacts         func(childComplexity int, kind *ArtifactKind) int
@@ -1000,6 +1032,7 @@ type ComplexityRoot struct {
 		CreatedBy         func(childComplexity int) int
 		DeletedBranch     func(childComplexity int, name string) int
 		Delivery          func(childComplexity int, number int) int
+		DeliveryTargets   func(childComplexity int) int
 		Description       func(childComplexity int) int
 		Environment       func(childComplexity int, id string) int
 		Environments      func(childComplexity int) int
@@ -1312,7 +1345,9 @@ type BranchResolver interface {
 	Issue(ctx context.Context, obj *Branch) (*BranchIssue, error)
 }
 type EnvironmentResolver interface {
-	Deliveries(ctx context.Context, obj *Environment, first int, after *string) (*DeliveryPage, error)
+	Objects(ctx context.Context, obj *Environment) ([]*EnvironmentObject, error)
+
+	Deliveries(ctx context.Context, obj *Environment, first int, after *string, kinds []DeliveryKind) (*DeliveryPage, error)
 }
 type IssueResolver interface {
 	Activity(ctx context.Context, obj *Issue) ([]*IssueEvent, error)
@@ -1481,6 +1516,7 @@ type RepositoryResolver interface {
 	Environments(ctx context.Context, obj *Repository) ([]*Environment, error)
 	Environment(ctx context.Context, obj *Repository, id string) (*Environment, error)
 	Delivery(ctx context.Context, obj *Repository, number int) (*Delivery, error)
+	DeliveryTargets(ctx context.Context, obj *Repository) ([]*DeliveryTarget, error)
 	Runs(ctx context.Context, obj *Repository, sha *string, job *string, branch *string, states []RunState, query *string, first int, after *string) (*RunPage, error)
 	Run(ctx context.Context, obj *Repository, number int) (*Run, error)
 	Secrets(ctx context.Context, obj *Repository) ([]*Secret, error)
@@ -3024,6 +3060,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Delivery.State(childComplexity), true
+	case "Delivery.subject":
+		if e.ComplexityRoot.Delivery.Subject == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Delivery.Subject(childComplexity), true
 	case "Delivery.target":
 		if e.ComplexityRoot.Delivery.Target == nil {
 			break
@@ -3055,6 +3097,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.DeliveryPage.NextCursor(childComplexity), true
+
+	case "DeliveryTarget.branches":
+		if e.ComplexityRoot.DeliveryTarget.Branches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.Branches(childComplexity), true
+	case "DeliveryTarget.cluster":
+		if e.ComplexityRoot.DeliveryTarget.Cluster == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.Cluster(childComplexity), true
+	case "DeliveryTarget.clusterName":
+		if e.ComplexityRoot.DeliveryTarget.ClusterName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.ClusterName(childComplexity), true
+	case "DeliveryTarget.name":
+		if e.ComplexityRoot.DeliveryTarget.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.Name(childComplexity), true
+	case "DeliveryTarget.namespace":
+		if e.ComplexityRoot.DeliveryTarget.Namespace == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.Namespace(childComplexity), true
+	case "DeliveryTarget.url":
+		if e.ComplexityRoot.DeliveryTarget.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeliveryTarget.URL(childComplexity), true
 
 	case "Diff.additions":
 		if e.ComplexityRoot.Diff.Additions == nil {
@@ -3205,6 +3284,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Environment.Cluster(childComplexity), true
+	case "Environment.clusterName":
+		if e.ComplexityRoot.Environment.ClusterName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Environment.ClusterName(childComplexity), true
 	case "Environment.createdAt":
 		if e.ComplexityRoot.Environment.CreatedAt == nil {
 			break
@@ -3221,7 +3306,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Environment.Deliveries(childComplexity, args["first"].(int), args["after"].(*string)), true
+		return e.ComplexityRoot.Environment.Deliveries(childComplexity, args["first"].(int), args["after"].(*string), args["kinds"].([]DeliveryKind)), true
 	case "Environment.health":
 		if e.ComplexityRoot.Environment.Health == nil {
 			break
@@ -3246,12 +3331,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Environment.Namespace(childComplexity), true
+	case "Environment.objects":
+		if e.ComplexityRoot.Environment.Objects == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Environment.Objects(childComplexity), true
 	case "Environment.paused":
 		if e.ComplexityRoot.Environment.Paused == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Environment.Paused(childComplexity), true
+	case "Environment.renders":
+		if e.ComplexityRoot.Environment.Renders == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Environment.Renders(childComplexity), true
 	case "Environment.revision":
 		if e.ComplexityRoot.Environment.Revision == nil {
 			break
@@ -3276,12 +3373,79 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Environment.Target(childComplexity), true
+	case "Environment.url":
+		if e.ComplexityRoot.Environment.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Environment.URL(childComplexity), true
 	case "Environment.version":
 		if e.ComplexityRoot.Environment.Version == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Environment.Version(childComplexity), true
+
+	case "EnvironmentObject.createdAt":
+		if e.ComplexityRoot.EnvironmentObject.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.CreatedAt(childComplexity), true
+	case "EnvironmentObject.delivery":
+		if e.ComplexityRoot.EnvironmentObject.Delivery == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Delivery(childComplexity), true
+	case "EnvironmentObject.group":
+		if e.ComplexityRoot.EnvironmentObject.Group == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Group(childComplexity), true
+	case "EnvironmentObject.health":
+		if e.ComplexityRoot.EnvironmentObject.Health == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Health(childComplexity), true
+	case "EnvironmentObject.kind":
+		if e.ComplexityRoot.EnvironmentObject.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Kind(childComplexity), true
+	case "EnvironmentObject.message":
+		if e.ComplexityRoot.EnvironmentObject.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Message(childComplexity), true
+	case "EnvironmentObject.name":
+		if e.ComplexityRoot.EnvironmentObject.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Name(childComplexity), true
+	case "EnvironmentObject.namespace":
+		if e.ComplexityRoot.EnvironmentObject.Namespace == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Namespace(childComplexity), true
+	case "EnvironmentObject.ready":
+		if e.ComplexityRoot.EnvironmentObject.Ready == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Ready(childComplexity), true
+	case "EnvironmentObject.version":
+		if e.ComplexityRoot.EnvironmentObject.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EnvironmentObject.Version(childComplexity), true
 
 	case "File.binary":
 		if e.ComplexityRoot.File.Binary == nil {
@@ -6165,6 +6329,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.RefUpdate.Old(childComplexity), true
 
+	case "Render.kind":
+		if e.ComplexityRoot.Render.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Render.Kind(childComplexity), true
+	case "Render.path":
+		if e.ComplexityRoot.Render.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Render.Path(childComplexity), true
+
 	case "Repository.access":
 		if e.ComplexityRoot.Repository.Access == nil {
 			break
@@ -6321,6 +6498,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Delivery(childComplexity, args["number"].(int)), true
+	case "Repository.deliveryTargets":
+		if e.ComplexityRoot.Repository.DeliveryTargets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.DeliveryTargets(childComplexity), true
 	case "Repository.description":
 		if e.ComplexityRoot.Repository.Description == nil {
 			break
@@ -9381,6 +9564,8 @@ extend type Repository {
   environment(id: ID!): Environment
   "One of the repository's deliveries by number: null unless it is there; takes repo.read."
   delivery(number: Int!): Delivery
+  "The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read."
+  deliveryTargets: [DeliveryTarget!]!
 }
 
 extend type Branch {
@@ -9408,7 +9593,15 @@ type Environment {
   branch: String!
   "The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster."
   cluster: ID
+  "The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise."
+  clusterName: String
   namespace: String!
+  "Where it answers, its target's url in the default branch's /cobranch.yaml with its variables expanded; null when the target has none."
+  url: String
+  "The roots its branch's head renders for it, in order; empty while its target or its /cobranch.yaml is gone, or its roots can't be planned."
+  renders: [Render!]!
+  "What it holds, in the order its last apply applied it, each with its health as last read."
+  objects: [EnvironmentObject!]!
   "The commit of its last successful delivery; null before one."
   revision: String
   "When a delivery last succeeded; null before one."
@@ -9419,11 +9612,62 @@ type Environment {
   paused: Boolean!
   "Its newest delivery; null before one."
   latest: Delivery
-  "A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100."
-  deliveries(first: Int! = 30, after: String): DeliveryPage!
+  "A page of its deliveries of kinds, or of every kind when it is empty, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100."
+  deliveries(first: Int! = 30, after: String, kinds: [DeliveryKind!]! = []): DeliveryPage!
   createdAt: Time!
   "Counts its changes from 1."
   version: Int!
+}
+
+"A root a delivery renders."
+type Render {
+  kind: RenderKind!
+  "The directory, relative to the repository, with its variables expanded."
+  path: String!
+}
+
+"How a root renders."
+enum RenderKind {
+  "Renders the chart there."
+  HELM
+  "Builds the kustomization there."
+  KUSTOMIZE
+  "Reads every manifest under it."
+  MANIFESTS
+}
+
+"An object an environment holds, as its last apply applied it, with its health as the controller last read it."
+type EnvironmentObject {
+  "Its API group; empty for the core group."
+  group: String!
+  version: String!
+  kind: String!
+  "Its namespace; empty for an object of the whole cluster."
+  namespace: String!
+  name: String!
+  health: EnvironmentHealth!
+  "Why it has its health, as kstatus words it; may be empty."
+  message: String!
+  "How many of its replicas, pods or completions are ready, as 2/2; null for a kind that counts none."
+  ready: String
+  "When its cluster created it; null before a health read found it."
+  createdAt: Time
+  "The number of the delivery whose apply recorded it; null once that delivery is gone."
+  delivery: Int
+}
+
+"A target the default branch's /cobranch.yaml declares under delivery. Its namespace and url keep their variables."
+type DeliveryTarget {
+  name: String!
+  "The branch patterns it delivers."
+  branches: [String!]!
+  "The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster."
+  cluster: ID
+  "The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise."
+  clusterName: String
+  namespace: String!
+  "Where its environments answer; null without one."
+  url: String
 }
 
 "Whether an environment's cluster holds its branch's newest commit."
@@ -9465,6 +9709,8 @@ type Delivery {
   kind: DeliveryKind!
   "The commit it delivers; null for a teardown."
   sha: String
+  "The first line of that commit's message; empty for a teardown."
+  subject: String!
   trigger: DeliveryTrigger!
   "The push that queued it; null for any other."
   push: ID
@@ -11342,6 +11588,8 @@ func (ec *executionContext) childFields_Delivery(ctx context.Context, field grap
 		return ec.fieldContext_Delivery_kind(ctx, field)
 	case "sha":
 		return ec.fieldContext_Delivery_sha(ctx, field)
+	case "subject":
+		return ec.fieldContext_Delivery_subject(ctx, field)
 	case "trigger":
 		return ec.fieldContext_Delivery_trigger(ctx, field)
 	case "push":
@@ -11372,6 +11620,24 @@ func (ec *executionContext) childFields_DeliveryPage(ctx context.Context, field 
 		return ec.fieldContext_DeliveryPage_nextCursor(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type DeliveryPage", field.Name)
+}
+
+func (ec *executionContext) childFields_DeliveryTarget(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_DeliveryTarget_name(ctx, field)
+	case "branches":
+		return ec.fieldContext_DeliveryTarget_branches(ctx, field)
+	case "cluster":
+		return ec.fieldContext_DeliveryTarget_cluster(ctx, field)
+	case "clusterName":
+		return ec.fieldContext_DeliveryTarget_clusterName(ctx, field)
+	case "namespace":
+		return ec.fieldContext_DeliveryTarget_namespace(ctx, field)
+	case "url":
+		return ec.fieldContext_DeliveryTarget_url(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DeliveryTarget", field.Name)
 }
 
 func (ec *executionContext) childFields_Diff(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -11458,8 +11724,16 @@ func (ec *executionContext) childFields_Environment(ctx context.Context, field g
 		return ec.fieldContext_Environment_branch(ctx, field)
 	case "cluster":
 		return ec.fieldContext_Environment_cluster(ctx, field)
+	case "clusterName":
+		return ec.fieldContext_Environment_clusterName(ctx, field)
 	case "namespace":
 		return ec.fieldContext_Environment_namespace(ctx, field)
+	case "url":
+		return ec.fieldContext_Environment_url(ctx, field)
+	case "renders":
+		return ec.fieldContext_Environment_renders(ctx, field)
+	case "objects":
+		return ec.fieldContext_Environment_objects(ctx, field)
 	case "revision":
 		return ec.fieldContext_Environment_revision(ctx, field)
 	case "syncedAt":
@@ -11480,6 +11754,32 @@ func (ec *executionContext) childFields_Environment(ctx context.Context, field g
 		return ec.fieldContext_Environment_version(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Environment", field.Name)
+}
+
+func (ec *executionContext) childFields_EnvironmentObject(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "group":
+		return ec.fieldContext_EnvironmentObject_group(ctx, field)
+	case "version":
+		return ec.fieldContext_EnvironmentObject_version(ctx, field)
+	case "kind":
+		return ec.fieldContext_EnvironmentObject_kind(ctx, field)
+	case "namespace":
+		return ec.fieldContext_EnvironmentObject_namespace(ctx, field)
+	case "name":
+		return ec.fieldContext_EnvironmentObject_name(ctx, field)
+	case "health":
+		return ec.fieldContext_EnvironmentObject_health(ctx, field)
+	case "message":
+		return ec.fieldContext_EnvironmentObject_message(ctx, field)
+	case "ready":
+		return ec.fieldContext_EnvironmentObject_ready(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_EnvironmentObject_createdAt(ctx, field)
+	case "delivery":
+		return ec.fieldContext_EnvironmentObject_delivery(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EnvironmentObject", field.Name)
 }
 
 func (ec *executionContext) childFields_File(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -12310,6 +12610,16 @@ func (ec *executionContext) childFields_RefUpdate(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type RefUpdate", field.Name)
 }
 
+func (ec *executionContext) childFields_Render(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_Render_kind(ctx, field)
+	case "path":
+		return ec.fieldContext_Render_path(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Render", field.Name)
+}
+
 func (ec *executionContext) childFields_Repository(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -12382,6 +12692,8 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_environment(ctx, field)
 	case "delivery":
 		return ec.fieldContext_Repository_delivery(ctx, field)
+	case "deliveryTargets":
+		return ec.fieldContext_Repository_deliveryTargets(ctx, field)
 	case "runs":
 		return ec.fieldContext_Repository_runs(ctx, field)
 	case "run":
@@ -13091,6 +13403,14 @@ func (ec *executionContext) field_Environment_deliveries_args(ctx context.Contex
 		return nil, err
 	}
 	args["after"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "kinds",
+		func(ctx context.Context, v any) ([]DeliveryKind, error) {
+			return ec.unmarshalNDeliveryKind2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryKindᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["kinds"] = arg2
 	return args, nil
 }
 
@@ -22804,6 +23124,29 @@ func (ec *executionContext) fieldContext_Delivery_sha(_ context.Context, field g
 	return graphql.NewScalarFieldContext("Delivery", field, false, false, "String")
 }
 
+func (ec *executionContext) _Delivery_subject(ctx context.Context, field graphql.CollectedField, obj *Delivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Delivery_subject(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Subject, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Delivery_subject(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Delivery", field, false, false, "String")
+}
+
 func (ec *executionContext) _Delivery_trigger(ctx context.Context, field graphql.CollectedField, obj *Delivery) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23073,6 +23416,144 @@ func (ec *executionContext) _DeliveryPage_nextCursor(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_DeliveryPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("DeliveryPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeliveryTarget_name(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeliveryTarget_branches(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_branches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Branches, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_branches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeliveryTarget_cluster(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_cluster(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cluster, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_cluster(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "ID")
+}
+
+func (ec *executionContext) _DeliveryTarget_clusterName(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_clusterName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClusterName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_clusterName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeliveryTarget_namespace(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_namespace(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Namespace, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeliveryTarget_url(ctx context.Context, field graphql.CollectedField, obj *DeliveryTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeliveryTarget_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeliveryTarget_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeliveryTarget", field, false, false, "String")
 }
 
 func (ec *executionContext) _Diff_base(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
@@ -23700,6 +24181,29 @@ func (ec *executionContext) fieldContext_Environment_cluster(_ context.Context, 
 	return graphql.NewScalarFieldContext("Environment", field, false, false, "ID")
 }
 
+func (ec *executionContext) _Environment_clusterName(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Environment_clusterName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClusterName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Environment_clusterName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Environment", field, false, false, "String")
+}
+
 func (ec *executionContext) _Environment_namespace(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23721,6 +24225,93 @@ func (ec *executionContext) _Environment_namespace(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_Environment_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Environment", field, false, false, "String")
+}
+
+func (ec *executionContext) _Environment_url(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Environment_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Environment_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Environment", field, false, false, "String")
+}
+
+func (ec *executionContext) _Environment_renders(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Environment_renders(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Renders, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Render) graphql.Marshaler {
+			return ec.marshalNRender2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRenderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Environment_renders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Environment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Render(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Environment_objects(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Environment_objects(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Environment().Objects(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*EnvironmentObject) graphql.Marshaler {
+			return ec.marshalNEnvironmentObject2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentObjectᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Environment_objects(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Environment",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EnvironmentObject(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Environment_revision(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
@@ -23880,7 +24471,7 @@ func (ec *executionContext) _Environment_deliveries(ctx context.Context, field g
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Environment().Deliveries(ctx, obj, fc.Args["first"].(int), fc.Args["after"].(*string))
+			return ec.Resolvers.Environment().Deliveries(ctx, obj, fc.Args["first"].(int), fc.Args["after"].(*string), fc.Args["kinds"].([]DeliveryKind))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *DeliveryPage) graphql.Marshaler {
@@ -23958,6 +24549,236 @@ func (ec *executionContext) _Environment_version(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_Environment_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Environment", field, false, false, "Int")
+}
+
+func (ec *executionContext) _EnvironmentObject_group(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_group(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Group, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_version(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_kind(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_namespace(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_namespace(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Namespace, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_name(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_health(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_health(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Health, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v EnvironmentHealth) graphql.Marshaler {
+			return ec.marshalNEnvironmentHealth2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentHealth(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_health(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "EnvironmentHealth")
+}
+
+func (ec *executionContext) _EnvironmentObject_message(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_ready(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_ready(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ready, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_ready(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "String")
+}
+
+func (ec *executionContext) _EnvironmentObject_createdAt(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "Time")
+}
+
+func (ec *executionContext) _EnvironmentObject_delivery(ctx context.Context, field graphql.CollectedField, obj *EnvironmentObject) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EnvironmentObject_delivery(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Delivery, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_EnvironmentObject_delivery(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EnvironmentObject", field, false, false, "Int")
 }
 
 func (ec *executionContext) _File_commit(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
@@ -35572,6 +36393,52 @@ func (ec *executionContext) fieldContext_RefUpdate_new(_ context.Context, field 
 	return graphql.NewScalarFieldContext("RefUpdate", field, false, false, "String")
 }
 
+func (ec *executionContext) _Render_kind(ctx context.Context, field graphql.CollectedField, obj *Render) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Render_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v RenderKind) graphql.Marshaler {
+			return ec.marshalNRenderKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRenderKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Render_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Render", field, false, false, "RenderKind")
+}
+
+func (ec *executionContext) _Render_path(ctx context.Context, field graphql.CollectedField, obj *Render) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Render_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Render_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Render", field, false, false, "String")
+}
+
 func (ec *executionContext) _Repository_id(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36826,6 +37693,38 @@ func (ec *executionContext) fieldContext_Repository_delivery(ctx context.Context
 	if fc.Args, err = ec.field_Repository_delivery_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_deliveryTargets(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_deliveryTargets(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().DeliveryTargets(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*DeliveryTarget) graphql.Marshaler {
+			return ec.marshalNDeliveryTarget2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryTargetᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_deliveryTargets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DeliveryTarget(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -46923,6 +47822,11 @@ func (ec *executionContext) _Delivery(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "subject":
+			out.Values[i] = ec._Delivery_subject(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "trigger":
 			out.Values[i] = ec._Delivery_trigger(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -47003,6 +47907,64 @@ func (ec *executionContext) _DeliveryPage(ctx context.Context, sel ast.Selection
 			}
 		case "nextCursor":
 			out.Values[i] = ec._DeliveryPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var deliveryTargetImplementors = []string{"DeliveryTarget"}
+
+func (ec *executionContext) _DeliveryTarget(ctx context.Context, sel ast.SelectionSet, obj *DeliveryTarget) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deliveryTargetImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeliveryTarget")
+		case "name":
+			out.Values[i] = ec._DeliveryTarget_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "branches":
+			out.Values[i] = ec._DeliveryTarget_branches(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cluster":
+			out.Values[i] = ec._DeliveryTarget_cluster(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "clusterName":
+			out.Values[i] = ec._DeliveryTarget_clusterName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "namespace":
+			out.Values[i] = ec._DeliveryTarget_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._DeliveryTarget_url(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -47304,11 +48266,32 @@ func (ec *executionContext) _Environment(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "clusterName":
+			out.Values[i] = ec._Environment_clusterName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "namespace":
 			out.Values[i] = ec._Environment_namespace(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "url":
+			out.Values[i] = ec._Environment_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "renders":
+			out.Values[i] = ec._Environment_renders(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "objects":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Environment_objects(ctx, field, obj)
+				})
 		case "revision":
 			out.Values[i] = ec._Environment_revision(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -47354,6 +48337,84 @@ func (ec *executionContext) _Environment(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._Environment_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var environmentObjectImplementors = []string{"EnvironmentObject"}
+
+func (ec *executionContext) _EnvironmentObject(ctx context.Context, sel ast.SelectionSet, obj *EnvironmentObject) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, environmentObjectImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EnvironmentObject")
+		case "group":
+			out.Values[i] = ec._EnvironmentObject_group(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._EnvironmentObject_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._EnvironmentObject_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespace":
+			out.Values[i] = ec._EnvironmentObject_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._EnvironmentObject_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "health":
+			out.Values[i] = ec._EnvironmentObject_health(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._EnvironmentObject_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ready":
+			out.Values[i] = ec._EnvironmentObject_ready(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._EnvironmentObject_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "delivery":
+			out.Values[i] = ec._EnvironmentObject_delivery(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -50844,6 +51905,44 @@ func (ec *executionContext) _RefUpdate(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var renderImplementors = []string{"Render"}
+
+func (ec *executionContext) _Render(ctx context.Context, sel ast.SelectionSet, obj *Render) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, renderImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Render")
+		case "kind":
+			out.Values[i] = ec._Render_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._Render_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var repositoryImplementors = []string{"Repository"}
 
 func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSet, obj *Repository) graphql.Marshaler {
@@ -51054,6 +52153,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_delivery(ctx, field, obj)
+				})
+		case "deliveryTargets":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_deliveryTargets(ctx, field, obj)
 				})
 		case "runs":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -53883,6 +54988,36 @@ func (ec *executionContext) marshalNDeliveryKind2cobranchᚗdevᚋinternalᚋada
 	return v
 }
 
+func (ec *executionContext) unmarshalNDeliveryKind2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryKindᚄ(ctx context.Context, v any) ([]DeliveryKind, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]DeliveryKind, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNDeliveryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryKind(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNDeliveryKind2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryKindᚄ(ctx context.Context, sel ast.SelectionSet, v []DeliveryKind) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNDeliveryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryKind(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNDeliveryPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryPage(ctx context.Context, sel ast.SelectionSet, v *DeliveryPage) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "DeliveryPage!")
@@ -53899,6 +55034,30 @@ func (ec *executionContext) unmarshalNDeliveryState2cobranchᚗdevᚋinternalᚋ
 
 func (ec *executionContext) marshalNDeliveryState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryState(ctx context.Context, sel ast.SelectionSet, v DeliveryState) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNDeliveryTarget2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryTargetᚄ(ctx context.Context, sel ast.SelectionSet, v []*DeliveryTarget) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNDeliveryTarget2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryTarget(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDeliveryTarget2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryTarget(ctx context.Context, sel ast.SelectionSet, v *DeliveryTarget) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "DeliveryTarget!")
+		return graphql.Null
+	}
+	return ec._DeliveryTarget(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNDeliveryTrigger2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryTrigger(ctx context.Context, v any) (DeliveryTrigger, error) {
@@ -54025,6 +55184,30 @@ func (ec *executionContext) unmarshalNEnvironmentHealth2cobranchᚗdevᚋinterna
 
 func (ec *executionContext) marshalNEnvironmentHealth2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentHealth(ctx context.Context, sel ast.SelectionSet, v EnvironmentHealth) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNEnvironmentObject2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentObjectᚄ(ctx context.Context, sel ast.SelectionSet, v []*EnvironmentObject) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNEnvironmentObject2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentObject(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNEnvironmentObject2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentObject(ctx context.Context, sel ast.SelectionSet, v *EnvironmentObject) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "EnvironmentObject!")
+		return graphql.Null
+	}
+	return ec._EnvironmentObject(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNEnvironmentSync2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEnvironmentSync(ctx context.Context, v any) (EnvironmentSync, error) {
@@ -54825,6 +56008,40 @@ func (ec *executionContext) marshalNRefUpdate2ᚖcobranchᚗdevᚋinternalᚋada
 		return graphql.Null
 	}
 	return ec._RefUpdate(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRender2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRenderᚄ(ctx context.Context, sel ast.SelectionSet, v []*Render) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRender2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRender(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRender2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRender(ctx context.Context, sel ast.SelectionSet, v *Render) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Render!")
+		return graphql.Null
+	}
+	return ec._Render(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRenderKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRenderKind(ctx context.Context, v any) (RenderKind, error) {
+	var res RenderKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRenderKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRenderKind(ctx context.Context, sel ast.SelectionSet, v RenderKind) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*Repository) graphql.Marshaler {

@@ -42,7 +42,7 @@ func (f *jobsFixture) deliveries(t *testing.T, repoID uuid.UUID) []string {
 	}
 	var all []code.Delivery
 	for _, e := range envs {
-		list, err := f.c.Deliveries(ctx, repoID, e.ID, 0, 100)
+		list, err := f.c.Deliveries(ctx, repoID, e.ID, nil, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,7 +453,7 @@ func TestCodeStoreReadsDeliveries(t *testing.T) {
 	}
 	for name, call := range map[string]func() error{
 		"Environment": func() error { _, err := f.c.Environment(ctx, f.secret.ID, production.ID); return err },
-		"Deliveries":  func() error { _, err := f.c.Deliveries(ctx, f.secret.ID, production.ID, 0, 10); return err },
+		"Deliveries":  func() error { _, err := f.c.Deliveries(ctx, f.secret.ID, production.ID, nil, 0, 10); return err },
 		"Redeliver":   func() error { _, err := f.c.Redeliver(ctx, f.max, f.secret.ID, production.ID); return err },
 		"Pause":       func() error { _, err := f.c.PauseEnvironment(ctx, f.max, f.secret.ID, production.ID); return err },
 		"Resume":      func() error { _, err := f.c.ResumeEnvironment(ctx, f.max, f.secret.ID, production.ID); return err },
@@ -464,16 +464,94 @@ func TestCodeStoreReadsDeliveries(t *testing.T) {
 	}
 	got, err := f.c.Environment(ctx, repo, preview.ID)
 	if err != nil || got.Target.DisplayName != "previews" || got.Branch != "feature/login" || got.Namespace != "shop-feature-login" ||
-		got.Cluster != nil || got.Health != code.Unknown || got.Latest == nil || got.Latest.Number != 2 || got.Version < 1 {
+		got.Cluster != nil || got.Health != code.Unknown || got.Latest == nil || got.Latest.Number != 2 || got.Latest.Subject != "Change "+shaB[:1] ||
+		got.Version < 1 {
 		t.Errorf("Environment(preview) = %+v, %v", got, err)
 	}
 	d, err := f.c.Delivery(ctx, repo, 1)
 	if err != nil || d.Kind != code.DeliverCommit || d.Trigger != code.TriggeredByPush || d.PushID == nil || d.StartedBy != nil ||
-		d.EnvironmentID != production.ID || d.Target != "production" || d.Branch != "main" {
+		d.EnvironmentID != production.ID || d.Target != "production" || d.Branch != "main" || d.Subject != "Change "+shaA[:1] {
 		t.Errorf("Delivery(#1) = %+v, %v", d, err)
 	}
-	if page, err := f.c.Deliveries(ctx, repo, preview.ID, 2, 10); err != nil || len(page) != 0 {
+	if page, err := f.c.Deliveries(ctx, repo, preview.ID, nil, 0, 10); err != nil || len(page) != 1 || page[0].Subject != "Change "+shaB[:1] {
+		t.Errorf("Deliveries(preview) = %+v, %v; want #2 with its commit's subject", page, err)
+	}
+	if page, err := f.c.Deliveries(ctx, repo, preview.ID, nil, 2, 10); err != nil || len(page) != 0 {
 		t.Errorf("Deliveries(before #2) = %+v, %v", page, err)
+	}
+}
+
+// plannedFile delivers main to production, at a fixed URL, and each feature/ branch to a preview in the cluster of the
+// secret it names, each at a URL of its own; previews render a kustomization too.
+const plannedFile = `delivery:
+  targets:
+    production:
+      branches: [main]
+      namespace: shop
+      url: https://shop.example.com
+    previews:
+      branches: ["feature/**"]
+      cluster: %s
+      namespace: shop-${branch.slug}
+      url: https://${branch.slug}.${repository}.${organization}.example.com
+  roots:
+    - path: deploy/chart
+      helm: {}
+    - path: deploy/overlays/${target}
+      kustomize: {}
+      targets: [previews]
+`
+
+// TestCodeStorePlansEnvironments gives each environment its target's URL and the roots its branch's head renders,
+// lists main's targets, finds the secrets they name as their clusters, and lists an environment's deliveries of the
+// kinds asked.
+func TestCodeStorePlansEnvironments(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	repo, secret := f.website.ID, uuid.New()
+	if _, err := f.pool.Exec(ctx, "INSERT INTO secrets (id, org_id, repo_id, name, value) VALUES ($1, $2, $3, 'previews-gke', '\\x00')",
+		secret, f.acme.ID, repo); err != nil {
+		t.Fatal(err)
+	}
+	file := fmt.Sprintf(plannedFile, secret)
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
+		tip(t, "main", "blob-1", file))
+	f.push(t, pushOf(repo, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/feature/login", Old: git.ZeroSHA, New: shaB}}, commit(shaB, person("Olivia", "olivia@example.com"), shaA)),
+		tip(t, "feature/login", "blob-1", file))
+	envs, err := f.c.Environments(ctx, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"previews https://feature-login.website.acme.example.com [{helm deploy/chart} {kustomize deploy/overlays/previews}]",
+		"production https://shop.example.com [{helm deploy/chart}]"}
+	var got []string
+	for _, e := range envs {
+		got = append(got, fmt.Sprintf("%s %s %v", e.Target.DisplayName, e.URL, e.Renders))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Environments() = %q, want %q", got, want)
+	}
+	if one, err := f.c.Environment(ctx, repo, envs[0].ID); err != nil || one.URL != envs[0].URL || len(one.Renders) != 2 {
+		t.Errorf("Environment(previews) = %+v, %v, want its URL and renders", one, err)
+	}
+	targets, err := f.c.DeliveryTargets(ctx, repo)
+	if err != nil || len(targets) != 2 || targets[1].Cluster == nil || *targets[1].Cluster != secret ||
+		targets[1].URL != "https://${branch.slug}.${repository}.${organization}.example.com" {
+		t.Errorf("DeliveryTargets() = %+v, %v, want production and previews, as main declares them", targets, err)
+	}
+	clusters, err := f.c.ClusterSecrets(ctx, repo, []uuid.UUID{secret, uuid.New()})
+	if err != nil || len(clusters) != 1 || clusters[0].Name != "previews-gke" || clusters[0].RepoID == nil || *clusters[0].RepoID != repo {
+		t.Errorf("ClusterSecrets() = %+v, %v, want previews-gke, of website", clusters, err)
+	}
+	for kinds, n := range map[string]int{"teardown": 0, "deliver teardown": 1} {
+		var ks []code.DeliveryKind
+		for _, k := range strings.Fields(kinds) {
+			ks = append(ks, code.DeliveryKind(k))
+		}
+		if list, err := f.c.Deliveries(ctx, repo, envs[1].ID, ks, 0, 10); err != nil || len(list) != n {
+			t.Errorf("Deliveries(%s) = %d, %v, want %d", kinds, len(list), err, n)
+		}
 	}
 }
 

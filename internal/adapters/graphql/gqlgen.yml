@@ -114,12 +114,14 @@ models:
       environments: { resolver: true }
       environment: { resolver: true }
       delivery: { resolver: true }
+      deliveryTargets: { resolver: true }
       secrets: { resolver: true }
       jobPrincipals: { resolver: true }
       artifacts: { resolver: true }
   Environment:
     fields:
       deliveries: { resolver: true }
+      objects: { resolver: true }
     extraFields:
       RepositoryID:
         description: The ID of the environment's repository, which its deliveries read.

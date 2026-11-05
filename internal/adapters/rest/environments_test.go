@@ -269,3 +269,110 @@ func TestUploadManifestsAPI(t *testing.T) {
 			wantCode: "auth.unauthenticated"},
 	})
 }
+
+// clusterID is the secret that holds the cluster website's production delivers to.
+var clusterID = uuid.MustParse("0195d3c4-0000-7000-8000-0000000000c1")
+
+// withPlans gives withEnvironments' production its cluster, its URL, what it renders and what it holds, and website
+// its targets, before the viewer's setup.
+func withPlans(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return withEnvironments(func(f *orgFixture) *auth.Authenticated {
+		created := time.Date(2026, 11, 2, 9, 0, 0, 0, time.FixedZone("IST", 2*3600))
+		e := &f.codeStore.EnvironmentList[f.website.ID][0]
+		e.Cluster, e.URL, e.Renders = &clusterID, "https://shop.example.com", []code.Render{{Kind: "helm", Path: "deploy/chart"}}
+		f.codeStore.Clusters = []code.ClusterSecret{{ID: clusterID, OrgID: f.acme.ID, RepoID: &f.website.ID, Name: "prod-gke"}}
+		f.codeStore.Objects[productionID] = []code.EnvironmentObject{
+			{Group: "apps", Version: "v1", Kind: "Deployment", Namespace: "shop", Name: "api", Health: code.Healthy, Ready: "2/2", CreatedAt: &created, Delivery: 1},
+			{Version: "v1", Kind: "Service", Namespace: "shop", Name: "api", Health: code.Missing, Message: "it is gone"}}
+		f.codeStore.Targets[f.website.ID] = []code.Target{
+			{Name: "production", Branches: []string{"main"}, Cluster: &clusterID, Namespace: "shop", URL: "https://shop.example.com"},
+			{Name: "previews", Branches: []string{"feature/**"}, Namespace: "shop-${branch.slug}"}}
+		f.codeStore.AddDelivery(f.website.ID, code.Delivery{EnvironmentID: productionID, Kind: code.Resync, SHA: shaOf("b"),
+			Trigger: code.TriggeredBySchedule, State: code.DeliverySucceeded})
+		return viewer(f)
+	})
+}
+
+func TestEnvironmentPlansAPI(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "its URL, renders and, to an Owner, its cluster's name", viewer: withPlans(olivia), method: http.MethodGet, path: fixed(productionPath),
+			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				e := decode[Environment](t, body)
+				if e.Url == nil || *e.Url != "https://shop.example.com" || len(e.Renders) != 1 || e.Renders[0] != (Render{Kind: "helm", Path: "deploy/chart"}) ||
+					e.Cluster == nil || *e.Cluster != clusterID || e.ClusterName == nil || *e.ClusterName != "prod-gke" {
+					t.Errorf("environment = %s", body)
+				}
+			}},
+		{name: "a Reader sees no cluster's name", viewer: withPlans(maxReading), method: http.MethodGet, path: fixed(productionPath), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if e := decode[Environment](t, body); e.ClusterName != nil || e.Cluster == nil || e.Url == nil {
+					t.Errorf("environment = %s, want its cluster unnamed", body)
+				}
+			}},
+		{name: "a preview renders nothing yet", viewer: withPlans(maxReading), method: http.MethodGet, path: fixed(previewPath), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if !strings.Contains(string(body), `"renders":[]`) || strings.Contains(string(body), `"url"`) {
+					t.Errorf("environment = %s, want renders [] and no url", body)
+				}
+			}},
+	})
+}
+
+func TestEnvironmentObjectsAPI(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "its objects", viewer: withPlans(maxReading), method: http.MethodGet, path: fixed(productionPath + "/objects"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[struct{ Objects []EnvironmentObject }](t, body).Objects
+				if len(got) != 2 || got[0].Group == nil || *got[0].Group != "apps" || got[0].Ready == nil || *got[0].Ready != "2/2" ||
+					got[0].CreatedAt == nil || got[0].CreatedAt.Location() != time.UTC || got[0].Delivery == nil || *got[0].Delivery != 1 {
+					t.Fatalf("objects = %s", body)
+				}
+				if s := got[1]; s.Group != nil || s.Ready != nil || s.CreatedAt != nil || s.Delivery != nil || s.Health != "missing" || s.Message != "it is gone" {
+					t.Errorf("the Service = %+v", s)
+				}
+			}},
+		{name: "the objects of one that isn't there", viewer: withPlans(maxReading), method: http.MethodGet,
+			path: fixed(environmentsPath + "/" + uuid.NewString() + "/objects"), wantStatus: 404, wantCode: "environment.not_found"},
+		{name: "the objects, to someone who can't read it", viewer: withPlans(nia), method: http.MethodGet, path: fixed(productionPath + "/objects"), wantStatus: 404},
+	})
+}
+
+func TestEnvironmentDeliveryKindsAPI(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "commits and teardowns, a page that links the next", viewer: withPlans(maxReading), method: http.MethodGet,
+			path: fixed(productionPath + "/deliveries?kind=deliver&kind=teardown&limit=1"), wantStatus: 200,
+			wantHeader: http.Header{"Link": {`<?cursor=2&kind=deliver&kind=teardown&limit=1>; rel="next"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[struct{ Deliveries []Delivery }](t, body); len(got.Deliveries) != 1 || got.Deliveries[0].Number != 2 {
+					t.Errorf("deliveries = %s, want #2 and not the resync, #4", body)
+				}
+			}},
+		{name: "resyncs", viewer: withPlans(maxReading), method: http.MethodGet, path: fixed(productionPath + "/deliveries?kind=resync"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[struct{ Deliveries []Delivery }](t, body); len(got.Deliveries) != 1 || got.Deliveries[0].Kind != "resync" {
+					t.Errorf("deliveries = %s", body)
+				}
+			}},
+		{name: "a kind there is none of", viewer: withPlans(maxReading), method: http.MethodGet, path: fixed(productionPath + "/deliveries?kind=rollback"), wantStatus: 400},
+	})
+}
+
+func TestTargetsAPI(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "the targets", viewer: withPlans(olivia), method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/targets"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[struct{ Targets []DeliveryTarget }](t, body).Targets
+				if len(got) != 2 || got[0].ClusterName == nil || *got[0].ClusterName != "prod-gke" || got[0].Url == nil || got[1].Cluster != nil ||
+					got[1].Url != nil || got[1].Namespace != "shop-${branch.slug}" || len(got[1].Branches) != 1 {
+					t.Errorf("targets = %s", body)
+				}
+			}},
+		{name: "no targets yet", viewer: maxReading, method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/targets"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if strings.TrimSpace(string(body)) != `{"targets":[]}` {
+					t.Errorf("targets = %s, want []", body)
+				}
+			}},
+		{name: "the targets, to someone who can't read them", viewer: withPlans(nia), method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/targets"),
+			wantStatus: 404},
+	})
+}

@@ -57,7 +57,10 @@ type Code interface {
 	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	Environments(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.Environment, error)
 	Environment(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Environment, error)
-	Deliveries(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID, before int64, limit int) (code.DeliveryPage, error)
+	EnvironmentObjects(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) ([]code.EnvironmentObject, error)
+	DeliveryTargets(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.DeliveryTarget, error)
+	Deliveries(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID, kinds []code.DeliveryKind, before int64,
+		limit int) (code.DeliveryPage, error)
 	Delivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
 	Redeliver(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Delivery, error)
 	PauseEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)

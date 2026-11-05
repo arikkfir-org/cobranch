@@ -22,12 +22,14 @@ type DeliverySettings struct {
 }
 
 // Target is where the branches its patterns match deliver: a cluster, by the ID of the secret that holds its
-// kubeconfig, or the installation's own cluster when Cluster is nil, and a namespace, which may name Variables.
+// kubeconfig, or the installation's own cluster when Cluster is nil, and a namespace, which may name Variables. URL,
+// when set, is where its environments answer, which may name Variables too, and which the Console opens.
 type Target struct {
 	Name      string     `json:"name"`
 	Branches  []string   `json:"branches"`
 	Cluster   *uuid.UUID `json:"cluster,omitempty"`
 	Namespace string     `json:"namespace"`
+	URL       string     `json:"url,omitempty"`
 }
 
 // Root is a directory of the commit that a delivery renders: a Helm chart when Helm is set, a kustomization when
@@ -84,8 +86,12 @@ func Expand(s string, values map[string]string) (string, error) {
 // one namespace whatever commit it delivers.
 var namespaceRefuses = []string{"namespace", "commit", "commit.short"}
 
-// checkVariables reports a ${name} in s that Variables doesn't list or, for a namespace, one of namespaceRefuses.
-func checkVariables(s string, namespace bool) error {
+// urlRefuses are the Variables a target's URL takes none of: the commit, since an environment keeps one URL whatever
+// commit it delivers.
+var urlRefuses = []string{"commit", "commit.short"}
+
+// checkVariables reports a ${name} in s that Variables doesn't list or that refuses lists, for what s is.
+func checkVariables(s, what string, refuses []string) error {
 	for _, m := range variable.FindAllStringSubmatch(s, -1) {
 		if strings.HasPrefix(m[0], "$$") {
 			continue
@@ -93,8 +99,8 @@ func checkVariables(s string, namespace bool) error {
 		if !slices.Contains(Variables, m[1]) {
 			return fmt.Errorf("${%s} is not a variable: use %s", m[1], "${"+strings.Join(Variables, "}, ${")+"}")
 		}
-		if namespace && slices.Contains(namespaceRefuses, m[1]) {
-			return fmt.Errorf("a namespace takes no ${%s}: an environment keeps one namespace", m[1])
+		if slices.Contains(refuses, m[1]) {
+			return fmt.Errorf("a %s takes no ${%s}: an environment keeps one %s", what, m[1], what)
 		}
 	}
 	return nil
@@ -152,13 +158,13 @@ func parseTargets(node *yaml.Node) ([]Target, error) {
 	return targets, nil
 }
 
-// parseTarget reads one target's settings: its branches, its cluster and its namespace.
+// parseTarget reads one target's settings: its branches, its cluster, its namespace and its URL.
 func parseTarget(name string, node *yaml.Node) (Target, error) {
 	t := Target{Name: name}
 	if isNull(node) {
 		return t, &SettingsError{Line: node.Line, Message: name + " needs branches and a namespace"}
 	}
-	if err := onlyKeys(node, name, "branches", "cluster", "namespace"); err != nil {
+	if err := onlyKeys(node, name, "branches", "cluster", "namespace", "url"); err != nil {
 		return t, err
 	}
 	branches := valueOf(node, "branches")
@@ -181,8 +187,16 @@ func parseTarget(name string, node *yaml.Node) (Target, error) {
 	if namespace == nil || isNull(namespace) {
 		return t, &SettingsError{Line: node.Line, Message: name + " needs a namespace"}
 	}
-	if t.Namespace, err = templated(namespace, "namespace", true); err != nil {
+	if t.Namespace, err = templated(namespace, "namespace", namespaceRefuses); err != nil {
 		return t, err
+	}
+	if n := valueOf(node, "url"); n != nil && !isNull(n) {
+		if t.URL, err = templated(n, "URL", urlRefuses); err != nil {
+			return t, err
+		}
+		if !strings.HasPrefix(t.URL, "https://") && !strings.HasPrefix(t.URL, "http://") {
+			return t, &SettingsError{Line: n.Line, Message: "a URL starts with https:// or http://"}
+		}
 	}
 	return t, nil
 }
@@ -214,7 +228,7 @@ func parseRoot(node *yaml.Node) (Root, error) {
 		return r, &SettingsError{Line: node.Line, Message: "a root needs a path"}
 	}
 	var err error
-	if r.Path, err = templated(path, "path", false); err != nil {
+	if r.Path, err = templated(path, "path", nil); err != nil {
 		return r, err
 	}
 	if r.Helm, r.Kustomize, err = parseRenderer(node); err != nil {
@@ -264,7 +278,7 @@ func parseHelm(node *yaml.Node) (*HelmRoot, error) {
 	}
 	var err error
 	if n := valueOf(node, "release"); n != nil && !isNull(n) {
-		if h.Release, err = templated(n, "release", false); err != nil {
+		if h.Release, err = templated(n, "release", nil); err != nil {
 			return nil, err
 		}
 	}
@@ -288,7 +302,7 @@ func valuesFiles(node *yaml.Node) ([]string, error) {
 		return nil, err
 	}
 	for i, f := range files {
-		if err := checkVariables(f, false); err != nil {
+		if err := checkVariables(f, "", nil); err != nil {
 			return nil, &SettingsError{Line: node.Content[i].Line, Message: err.Error()}
 		}
 	}
@@ -314,7 +328,7 @@ func values(node *yaml.Node) (map[string]any, error) {
 // at all: only values are expanded.
 func checkValues(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
-		if err := checkVariables(node.Value, false); err != nil {
+		if err := checkVariables(node.Value, "", nil); err != nil {
 			return &SettingsError{Line: node.Line, Message: err.Error()}
 		}
 	}
@@ -338,12 +352,12 @@ func targetNames(node *yaml.Node) ([]string, error) {
 	return distinctList(node, "targets", "targets must list one or more targets' names", targetName.MatchString)
 }
 
-// templated reads a non-empty string that may name Variables; a namespace takes none of namespaceRefuses.
-func templated(node *yaml.Node, what string, namespace bool) (string, error) {
+// templated reads a non-empty string, what, that may name Variables but those refuses lists.
+func templated(node *yaml.Node, what string, refuses []string) (string, error) {
 	if node.Kind != yaml.ScalarNode || node.Tag != "!!str" || node.Value == "" {
 		return "", &SettingsError{Line: node.Line, Message: what + " must be a string"}
 	}
-	if err := checkVariables(node.Value, namespace); err != nil {
+	if err := checkVariables(node.Value, what, refuses); err != nil {
 		return "", &SettingsError{Line: node.Line, Message: err.Error()}
 	}
 	return node.Value, nil

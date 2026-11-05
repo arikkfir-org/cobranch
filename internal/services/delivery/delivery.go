@@ -7,6 +7,7 @@ package delivery
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"regexp"
 	"slices"
@@ -130,16 +131,7 @@ var releaseName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9](
 // wouldn't take is ErrInvalid; with a root it can't plan, the plan still names the namespace, where the environment
 // lives whatever its roots.
 func PlanFor(roots []code.Root, target code.Target, c Context) (Plan, error) {
-	vars := map[string]string{"target": target.Name, "branch": c.Branch, "branch.slug": Slug(c.Branch)}
-	if c.Commit != "" {
-		vars["commit"], vars["commit.short"] = c.Commit, c.Commit[:min(7, len(c.Commit))]
-	}
-	if c.Repository != "" {
-		vars["repository"] = c.Repository
-	}
-	if c.Organization != "" {
-		vars["organization"] = c.Organization
-	}
+	vars := variables(target, c)
 	namespace, err := code.Expand(target.Namespace, vars)
 	if err != nil {
 		return Plan{}, fmt.Errorf("%w: target %s's namespace: %w", ErrInvalid, target.Name, err)
@@ -160,6 +152,41 @@ func PlanFor(roots []code.Root, target code.Target, c Context) (Plan, error) {
 		plan.Roots = append(plan.Roots, p)
 	}
 	return plan, nil
+}
+
+// variables are the values of the Variables a delivery of c to target expands, but ${namespace}.
+func variables(target code.Target, c Context) map[string]string {
+	vars := map[string]string{"target": target.Name, "branch": c.Branch, "branch.slug": Slug(c.Branch)}
+	if c.Commit != "" {
+		vars["commit"], vars["commit.short"] = c.Commit, c.Commit[:min(7, len(c.Commit))]
+	}
+	if c.Repository != "" {
+		vars["repository"] = c.Repository
+	}
+	if c.Organization != "" {
+		vars["organization"] = c.Organization
+	}
+	return vars
+}
+
+// URLFor is where target's environment of c's branch, in namespace, answers: target's URL with its variables
+// expanded, or empty when target has none. One that names a variable c lacks, or that isn't an http or https address
+// with a host once expanded, is ErrInvalid.
+func URLFor(target code.Target, c Context, namespace string) (string, error) {
+	if target.URL == "" {
+		return "", nil
+	}
+	vars := variables(target, c)
+	vars["namespace"] = namespace
+	s, err := code.Expand(target.URL, vars)
+	if err != nil {
+		return "", fmt.Errorf("%w: target %s's URL: %w", ErrInvalid, target.Name, err)
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return "", fmt.Errorf("%w: target %s's URL %q is not an http or https address", ErrInvalid, target.Name, s)
+	}
+	return s, nil
 }
 
 // planRoot expands one root's variables and checks its path and release.

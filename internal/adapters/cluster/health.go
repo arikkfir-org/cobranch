@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/fluxcd/cli-utils/pkg/kstatus/status"
 	"go.opentelemetry.io/otel/attribute"
@@ -40,11 +41,14 @@ func Worst(hs ...Health) Health {
 	return worst
 }
 
-// ObjectHealth is one inventoried object's health, with kstatus's message saying why.
+// ObjectHealth is one inventoried object's health, with kstatus's message saying why, how much of it is ready (2/2,
+// or empty for a kind that counts none) and when its cluster created it (nil when it couldn't be read).
 type ObjectHealth struct {
 	Ref     Ref
 	Health  Health
 	Message string
+	Ready   string
+	Created *time.Time
 }
 
 // Health reads each of refs from the cluster and gives its health by the kstatus rules, which Kubernetes' own tools
@@ -81,7 +85,39 @@ func (c *Cluster) health(ctx context.Context, r Ref) ObjectHealth {
 		return ObjectHealth{Ref: r, Health: Unknown, Message: "reading it: " + err.Error()}
 	}
 	h, message := healthOf(u)
-	return ObjectHealth{Ref: r, Health: h, Message: message}
+	out := ObjectHealth{Ref: r, Health: h, Message: message, Ready: readyOf(u)}
+	if created := u.GetCreationTimestamp(); !created.IsZero() {
+		at := created.UTC()
+		out.Created = &at
+	}
+	return out
+}
+
+// readyOf is how much of u is ready, as kubectl counts it: a Deployment's, StatefulSet's or ReplicaSet's ready replicas
+// of those it asks for, a DaemonSet's ready pods of those it schedules, a Job's succeeded pods of its completions; empty
+// for any other kind.
+func readyOf(u *unstructured.Unstructured) string {
+	gvk := u.GroupVersionKind()
+	count := func(fields ...string) int64 {
+		n, _, _ := unstructured.NestedInt64(u.Object, fields...) // a count that is missing or isn't one is none
+		return n
+	}
+	want := func(fields ...string) int64 {
+		if n, ok, err := unstructured.NestedInt64(u.Object, fields...); ok && err == nil {
+			return n
+		}
+		return 1 // Kubernetes' default replicas and completions
+	}
+	switch {
+	case gvk.Group == "apps" && (gvk.Kind == "Deployment" || gvk.Kind == "StatefulSet" || gvk.Kind == "ReplicaSet"):
+		return fmt.Sprintf("%d/%d", count("status", "readyReplicas"), want("spec", "replicas"))
+	case gvk.Group == "apps" && gvk.Kind == "DaemonSet":
+		return fmt.Sprintf("%d/%d", count("status", "numberReady"), count("status", "desiredNumberScheduled"))
+	case gvk.Group == "batch" && gvk.Kind == "Job":
+		return fmt.Sprintf("%d/%d", count("status", "succeeded"), want("spec", "completions"))
+	default:
+		return ""
+	}
 }
 
 // healthOf is u's health by the kstatus rules, and its message.

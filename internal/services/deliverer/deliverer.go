@@ -54,11 +54,14 @@ type Working struct {
 	Rendered bool
 }
 
-// Object is an object an environment holds, as its inventory records it, with its health as last read.
+// Object is an object an environment holds, as its inventory records it, with its health as last read: how much of it
+// is ready, as 2/2 (empty for a kind that counts none), and when its cluster created it (nil until a read finds it).
 type Object struct {
 	Group, Version, Kind, Namespace, Name, UID string
 	Health                                     code.Health
 	Message                                    string
+	Ready                                      string
+	Created                                    *time.Time
 }
 
 // key is what makes an object the same one across renders: its group, kind, namespace and name.
