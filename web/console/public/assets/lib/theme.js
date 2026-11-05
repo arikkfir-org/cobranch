@@ -36,7 +36,8 @@ export async function followPreferences() {
     if (p.version === 0 && theme() !== "system") {
       try {
         p = await api("PATCH", "/me/preferences", { theme: theme() }, { "Content-Type": "application/merge-patch+json", "If-Match": '"0"' });
-      } catch {
+      } catch (err) {
+        if (err.status !== 412) throw err;
         p = await api("GET", "/me/preferences");
       }
     }
