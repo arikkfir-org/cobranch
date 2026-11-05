@@ -10,6 +10,7 @@ import (
 	"errors"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"github.com/google/uuid"
 )
@@ -100,6 +101,30 @@ func (r *mutationResolver) RequestReview(ctx context.Context, repositoryID strin
 		return nil, fail(ctx, err, "branch", "requesting a review")
 	}
 	return aiReview(requested), nil
+}
+
+// Attention is the resolver for the attention field.
+func (r *organizationResolver) Attention(ctx context.Context, obj *Organization) ([]*AttentionBranch, error) {
+	list, err := resolveOrg(ctx, obj, r.Code.Attention, "listing what needs the viewer")
+	if err != nil {
+		return nil, err
+	}
+	return attentionBranches(ctx, obj, list)
+}
+
+// Activity is the resolver for the activity field.
+func (r *organizationResolver) Activity(ctx context.Context, obj *Organization, first int, after *string) (*ActivityPage, error) {
+	before, err := activityCursor(ctx, after)
+	if err != nil {
+		return nil, err
+	}
+	page, err := resolveOrg(ctx, obj, func(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (code.ActivityPage, error) {
+		return r.Code.Activity(ctx, v, orgID, before, first)
+	}, "listing the activity")
+	if err != nil {
+		return nil, err
+	}
+	return activityPage(page), nil
 }
 
 // Branches is the resolver for the branches field.

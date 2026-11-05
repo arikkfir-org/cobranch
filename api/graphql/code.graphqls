@@ -604,3 +604,104 @@ type Push {
   "When Cobranch recorded it."
   at: Time!
 }
+
+# What needs each viewer across an organization's repositories, and what happened in them, newest first
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "What needs you").
+
+extend type Organization {
+  "The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (FIX), waiting for an approval they may give of a head they neither wrote nor reviewed (REVIEW), Ready and theirs to merge (MERGE), or Processing with a head they wrote (WATCH); by need in that order, then the latest moved first. Takes org.read."
+  attention: [AttentionBranch!]!
+  "A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
+  activity(first: Int! = 30, after: String): ActivityPage!
+}
+
+"A branch that needs the viewer, the repository it is of, and why."
+type AttentionBranch {
+  "The repository's slug."
+  repository: String!
+  branch: Branch!
+  need: AttentionNeed!
+}
+
+"Why a branch needs the viewer."
+enum AttentionNeed {
+  "A Blocked head they wrote: only they move it on."
+  FIX
+  "An approval they may give, of a head they neither wrote nor reviewed."
+  REVIEW
+  "Ready, and theirs to merge."
+  MERGE
+  "A Processing head they wrote: its jobs and reviews still run."
+  WATCH
+}
+
+type ActivityPage {
+  activity: [Activity!]!
+  "Where the next page starts, as activity's after; null after the last page."
+  nextCursor: String
+}
+
+"One thing that happened in one of an organization's repositories: who did it, when and what. A push names the refs it moved and how many commits it brought; a merge the branches whose heads it brought into main; a review its commit, verdict and the live branch at it; a delivery its commit and itself."
+type Activity {
+  id: ID!
+  at: Time!
+  kind: ActivityKind!
+  actor: Actor!
+  "The repository's slug."
+  repository: String!
+  "A push's refs, each with the object it was at and the one it is at; all zeros for none."
+  refs: [RefUpdate!]
+  "How many commits a push brought."
+  commits: Int
+  "The branches a merge brought into main, each at the head it brought."
+  merged: [MergedHead!]
+  "The commit a review is of, or a delivery delivered; none for a teardown."
+  sha: String
+  review: ReviewState
+  "The live branch whose head a review is of, if any."
+  branch: String
+  delivery: ActivityDelivery
+}
+
+"What happened."
+enum ActivityKind {
+  "A push that merged nothing into main."
+  PUSHED
+  "A push that brought branches' heads into main."
+  MERGED
+  "A review submitted of a commit."
+  REVIEWED
+  "A delivery that ended, succeeded or failed, by its environment's target."
+  DELIVERED
+  "The repository's creation."
+  CREATED
+}
+
+"Who did something, by its principal; a principal deleted since keeps only its ID."
+type Actor {
+  id: ID!
+  displayName: String!
+  "The principal's kind, such as user, agent, job, api_key or target; empty once it is gone."
+  kind: String!
+}
+
+"A ref a push moved: the object it was at and the one it is at, all zeros for none."
+type RefUpdate {
+  name: String!
+  old: String!
+  new: String!
+}
+
+"A branch a merge brought into main, at the head it brought."
+type MergedHead {
+  branch: String!
+  sha: String!
+}
+
+"A delivery that ended: its number, what it did, the branch of its environment and how it ended, succeeded or failed."
+type ActivityDelivery {
+  number: Int!
+  kind: DeliveryKind!
+  environment: String!
+  state: DeliveryState!
+}

@@ -40,8 +40,10 @@ type Store struct {
 	Renders map[uuid.UUID][]byte
 	// Defined are the jobs each branch's head declares, by repository and branch.
 	Defined map[uuid.UUID]map[string][]jobs.Job
-	Now     time.Time
-	Fail    error
+	// ActivityList holds each organization's activity, in the order it happened.
+	ActivityList map[uuid.UUID][]code.Activity
+	Now          time.Time
+	Fail         error
 	// ReviewerOff, when set, is why the organization's AI reviewer reviews nothing: a request for a review answers it.
 	// Tasks is the number of the last task a request for a review started.
 	ReviewerOff error
@@ -56,7 +58,7 @@ func NewStore() *Store {
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
 		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
 		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{},
-		Defined: map[uuid.UUID]map[string][]jobs.Job{}}
+		Defined: map[uuid.UUID]map[string][]jobs.Job{}, ActivityList: map[uuid.UUID][]code.Activity{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -259,6 +261,23 @@ func (s *Store) OpenBranches(_ context.Context, repoIDs []uuid.UUID, limit int) 
 	}
 	slices.SortStableFunc(out, func(a, b code.RepoBranch) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 	return out[:min(len(out), limit)], nil
+}
+
+// Activity lists, newest first, at most limit of the organization's activity in ActivityList, which holds it in the
+// order it happened, in the repositories of repoIDs, from before (the zero cursor for the newest).
+func (s *Store) Activity(_ context.Context, orgID uuid.UUID, repoIDs []uuid.UUID, before code.ActivityCursor, limit int) ([]code.Activity, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []code.Activity
+	reached := before == code.ActivityCursor{}
+	for _, a := range slices.Backward(s.ActivityList[orgID]) {
+		if reached && len(out) < limit && slices.Contains(repoIDs, a.RepoID) {
+			out = append(out, a)
+		}
+		reached = reached || a.ID == before.ID
+	}
+	return out, nil
 }
 
 // FirstParents walks the repository's commits from sha along first parents.
