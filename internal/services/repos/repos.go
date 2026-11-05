@@ -106,6 +106,7 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 var ReservedSlugs = []string{
 	"agents",
 	"api-keys",
+	"artifacts",
 	"issues",
 	"members",
 	"new",

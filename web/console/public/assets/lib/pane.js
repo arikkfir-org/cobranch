@@ -25,6 +25,7 @@ let shown = null; // the subject the pane shows, or will once it opens
 let page = null; // the subject of the page on screen, which Following shows
 let pinned = false; // whether it stays on its subject while the viewer moves to another page's
 let drawn = null; // { key, stop } of the conversation drawn, while the pane is open
+let drafted = null; // the text compose leaves for the composer of the page's conversation, until the pane draws it
 const pane = h("aside", { class: "app-pane", "aria-label": "Conversation", hidden: !opened() });
 const toggle = h("button", { class: "icon-btn app-pane-toggle", type: "button", "aria-label": "Conversation", title: "Conversation", "aria-pressed": String(opened()),
   onclick: () => setOpen(pane.hidden) }, icon("message-square"));
@@ -100,7 +101,37 @@ function draw() {
   drawn = { key: s.key, stop: signal };
   const body = h("div", { class: "app-pane-body" });
   pane.replaceChildren(header(s), body);
-  if (!s.chat) return void body.append(h("div", { class: "app-pane-messages" }, emptyState(s)));
-  conversation(s, signal.signal).then((el) => { if (!signal.signal.aborted) body.replaceWith(el); },
+  if (!s.chat) {
+    drafted = null;
+    return void body.append(h("div", { class: "app-pane-messages" }, emptyState(s)));
+  }
+  conversation(s, signal.signal).then((el) => { if (!signal.signal.aborted) { body.replaceWith(el); fill(); } },
     (err) => { if (!signal.signal.aborted) body.replaceChildren(h("p", { class: "alert" }, err.message)); });
+}
+
+// compose opens the pane on the page's conversation with text in its composer, for the viewer to finish and send, and,
+// when pick is set, the menu of the agents to ask, as a page's "Ask an agent for one" does.
+export function compose(text, pick) {
+  drafted = { text, pick };
+  if (page && shown !== page) {
+    pinned = false;
+    shown = page;
+    if (!pane.hidden) draw();
+  }
+  if (pane.hidden) setOpen(true);
+  else fill();
+}
+
+// fill puts the text compose left in the composer that starts a thread, once the pane shows one.
+function fill() {
+  const box = drafted === null ? null : pane.querySelector(".app-pane-conversation > .app-pane-composer textarea:not(:disabled)");
+  if (!box) return;
+  const { text, pick } = drafted;
+  drafted = null;
+  box.value = text;
+  box.dispatchEvent(new Event("input"));
+  box.focus();
+  box.setSelectionRange(text.length, text.length);
+  const ask = pick ? box.form.querySelector(".app-pane-ask:not([hidden])") : null;
+  if (ask) ask.click();
 }
