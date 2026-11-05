@@ -22,7 +22,7 @@ const repoSubject = (org, repo, orgCan) => privateSubject("repo:" + org.slug + "
 // repository's heading and its tabs. A page's module answers the sections it shows from its default export, given the
 // organization, the repository, its API path, its links, the route's parts after the page's own (rest), can, orgCan,
 // the repository's root and fail; its nav ({ label, order }) makes it a tab, its under names the tab it shows under
-// instead ("" for Branches), its allowed(can), when it has one, says whether the viewer may open it, and its accepts(rest), when it has one,
+// instead ("" for Branches), its allowed(can, orgCan), when it has one, says whether the viewer may open it, and its accepts(rest), when it has one,
 // which parts it shows. Its heading, true or a function of rest, says whether the repository's heading and tabs show
 // above it (a page about one branch, commit or run shows its own instead); its crumbs name it in the breadcrumbs after
 // the repository, and its subject the conversation the pane shows (lib/pane.js); its count(ctx), when it has one,
@@ -41,7 +41,7 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub, ...rest].filter(Boolean).map(encodeURIComponent).join("/"), true);
   const can = (p) => repo.viewerPermissions.includes(p);
   const shown = repoPages.get(sub);
-  const allowed = (m) => !m.allowed || m.allowed(can);
+  const allowed = (m) => !m.allowed || m.allowed(can, orgCan);
   const tabs = [...repoPages].filter(([, m]) => m.nav && allowed(m)).sort(([, a], [, b]) => a.nav.order - b.nav.order);
   // A page shown under another's tab lights that tab, as a branch, a history and a commit light Branches and a file
   // Files.

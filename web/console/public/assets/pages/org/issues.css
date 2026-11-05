@@ -7,10 +7,10 @@
 .issue-side { display: flex; flex-direction: column; gap: var(--space-24); flex: none; width: var(--size-pane); }
 .issue-side > .btn { width: 100%; }
 .issues-table { table-layout: fixed; }
-.issues-table th:nth-child(2) { width: 150px; }
-.issues-table th:nth-child(3) { width: 170px; }
-.issues-table th:nth-child(4) { width: 260px; }
-.issues-table th:nth-child(5) { width: 120px; }
+.issues-table th.col-repository { width: 150px; }
+.issues-table th.col-assignee { width: 170px; }
+.issues-table th.col-branch { width: 260px; }
+.issues-table th.col-updated { width: 120px; }
 .issues-none { align-items: center; padding-block: var(--space-64); }
 .issues-none > .empty { width: 480px; max-width: 100%; }
 .issues-menu { width: 260px; }
@@ -28,11 +28,11 @@
 @media (max-width: 1100px) {
   .issue-columns { flex-direction: column; align-items: stretch; }
   .issue-side { width: auto; }
-  .issues-table :is(th, td):nth-child(4) { display: none; }
+  .issues-table .col-branch { display: none; }
 }
 @media (max-width: 768px) {
-  .issues-table :is(th, td):is(:nth-child(2), :nth-child(5)), .issues-table .cell-issue > .tag { display: none; }
-  .issues-table th:nth-child(3) { width: 130px; }
+  .issues-table :is(.col-repository, .col-updated), .issues-table .cell-issue > .tag { display: none; }
+  .issues-table th.col-assignee { width: 130px; }
   .issues-filters > .filters-count { flex-basis: 100%; }
   .labels-table :is(th, td):nth-child(2) { display: none; }
 }
