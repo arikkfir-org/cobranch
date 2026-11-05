@@ -198,7 +198,7 @@ person’s private task shows as a place in the queue, nothing more.
   the chat's base path, what posting and moderating take, the composer's placeholder, and whether the subject is gone.
   The shell's pane reads, posts and follows whatever the page names, and switches when the page does. The
   organization's and a repository's pages that name no other subject show the viewer's own conversation about them,
-  and an agent's page the viewer's conversation with the agent.
+  and an agent's page (its tasks, until the agent page lands) the viewer's conversation with the agent.
 - **Private or shared, said once.** The pane's header names the subject and marks a private conversation "Private to
   you", a shared chat with who reads it. An agent's conversation is headed by the agent's name, and says every message
   asks it.

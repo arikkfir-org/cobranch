@@ -1,4 +1,5 @@
 import { api, apiPage } from "../../lib/api.js";
+import { agentSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { capitalized, whenExactly } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
@@ -12,6 +13,11 @@ import { agentItem } from "./agents.js";
 export const nav = { label: "Tasks", order: 60, under: "agents" };
 export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agents" }, { label: "Tasks", href: root + "/tasks" }, ...(sub ? [{ label: "#" + sub }] : [])];
 export default ({ org, main, can, sub }) => sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
+// subject is the viewer's conversation with the agent whose tasks the list shows, as its page does.
+export const subject = ({ org, can, sub }) => {
+  const agent = !sub && new URLSearchParams(location.search).get("agent");
+  return agent ? api("GET", "/orgs/" + org.slug + "/agents/" + encodeURIComponent(agent)).then((a) => agentSubject(org, a, can), () => null) : null;
+};
 
 const activeTask = (t) => ["queued", "running", "waiting"].includes(t.state);
 // taskByline says whose a task is, where it works, who assigned it and when; of a task asked in another's private

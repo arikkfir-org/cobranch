@@ -149,7 +149,7 @@ at a phone’s width the sidebar goes off-canvas.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and
-  environments; an issue's comments on the issue; on an agent's page, the viewer's conversation with the agent;
+  environments; an issue's comments on the issue; beside an agent's tasks, the viewer's conversation with the agent;
   otherwise the viewer's own conversation about the repository or the organization, private to them. A
   thread on lines of a file shows them above its messages, with Resolved or Outdated beside them; a resolved thread
   folds into one row until Show opens it; a deleted branch's conversation stays, read-only; and while the pane can't
