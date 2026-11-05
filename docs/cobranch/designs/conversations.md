@@ -70,6 +70,11 @@ organization, the owner, the repository or the agent deletes the conversation an
   Updates and their cursors work as they do for a branch.
 - **Gone with its subject.** Deleting the organization, the owner, the repository or the agent cascades to the
   conversation and its threads; a request on it answers 404 from then on.
+- **What asking adds** (migration 00054): `chat_messages.asked_task_id`, the task a message asked for, a foreign key
+  checked at commit so the message and its task go in one transaction in either order, and cleared if the task is
+  deleted; `agent_tasks.private`, set when a task is asked in a private conversation; and the task kinds `chat`, for a
+  task asked in a branch's chat or a conversation, and `issue_chat`, for one asked in an issue's chat, which shows only
+  to those who read the organization's issues.
 
 ## Starting and following one
 
@@ -120,19 +125,25 @@ says otherwise; asking again in a thread whose task ended starts the next task t
   the person picks an agent after `@`; asking takes `agents.assign` in the organization beside what posting takes. A
   plain mention without `ask` asks nobody.
 - **A task in the thread.** The message and the agent's task are one transaction: the task is assigned by the person,
-  capped by their permissions, and talks in the message's thread, with the chat's repository and branch when it has
-  them, a repository's default branch in a repository's conversation, and the issue in an issue's chat. The agent posts
-  its replies there as itself, each linking its task, as in a branch's chat today.
-- **Following up.** A task that asks and waits takes the next message in its thread as its answer; asking again in a
-  thread whose task ended starts the next task there, which reads the thread from the start.
+  capped by their permissions, and talks in the message's thread. It works on the branch in a branch's chat; in the
+  repository in a repository's conversation, on a branch of its own, never the default branch; and in no repository in
+  an issue's chat or an organization's or agent's conversation. The agent posts its replies there as itself, each
+  linking its task, as in a branch's chat today, and the message that asked names the task and its agent.
+- **One task per thread at a time.** A thread's task reads what is posted there as its answers, so asking in a thread
+  whose task has yet to end is refused (`ask.busy`); a plain reply answers that task. Asking again once it ended starts
+  the next task there, which reads the thread from the start. The check runs inside the transaction that posts, under
+  the chat's lock, so two people asking at once get one task.
 - **In an agent's conversation** a thread's first message asks that agent unless it names another, since there is nobody
   else to talk to there.
-- **Private tasks.** A task asked in a private conversation is private too: its title, instructions and transcript show
-  to its assigner alone, and to others only as a place in the agent's queue. Its token reads and posts only in its own
-  thread of its assigner's conversation, and only while the assigner still owns and reads it.
-- **What the agent may read.** A task asked in an issue's chat reads that chat only if its agent and its assigner both
-  hold `issues.read`; one asked in a branch's chat, the branch's only with `repo.read`, as every task call is capped
-  today.
+- **Private tasks.** A task asked in a private conversation is private too, by a column of its own: its title,
+  instructions, summary, transcript and where it works show to its assigner alone. Others listing tasks see its number,
+  agent, kind, state and times, a place in the agent's queue; a list of one repository's tasks leaves it out, since its
+  presence would say where it works; the task and its transcript answer 404. Its token reads and posts only in its own
+  thread of its assigner's conversation, never starts another there, and only while the assigner still owns the
+  conversation and reads its subject; under that token, the task reads private records as its assigner.
+- **What the agent may read.** Asking needs the agent itself to read the chat by its own grants (`ask.unreadable`
+  otherwise), since its task talks there; the task is then capped by its assigner too, as every task call is. An agent
+  that isn't the organization's is `ask.invalid`.
 
 ## The agent's conversation
 
@@ -143,11 +154,14 @@ says otherwise; asking again in a thread whose task ended starts the next task t
 The tool lists only what the person may see: their own tasks, and the others they could see on the agent’s page; another
 person’s private task shows as a place in the queue, nothing more.
 
-- **A tasks tool.** A task asked in an agent's conversation gets a `tasks` tool beside its chat tools: the agent's tasks
-  its assigner may see, newest first, each with its state, its spend and where it came from, and the agent's queue, with
-  the assigner's queued tasks' places in it.
-- **The same records as the agent's page,** read through the REST API with the task's token, so the agent never tells a
-  person more than the person could read there.
+- **A tasks tool.** A task asked in a conversation with its own agent gets a `tasks` tool beside its chat tools, and its
+  prompt says so: what the agent works on now and its queue, oldest first as it will take them, each queued task with
+  its place, then the ten it ended last. Each line names the task's number, its state and since when, its title, who
+  asked for it and where it works; another person's private task shows its number, state and times alone. A task asked
+  of another agent in that conversation gets no such tool.
+- **The same records as the agent's page,** read through the REST API's task list with the task's token, so the agent
+  never tells a person more than the person could read there. Spend per task joins the lines once the agent page's spend
+  fields ([ENG-257](https://linear.app/arikkfir/issue/ENG-257)) are in that list.
 
 ## API
 
@@ -172,7 +186,10 @@ person’s private task shows as a place in the queue, nothing more.
 - **Refusals:** 404 `organization.not_found`, `repository.not_found` or `agent.not_found` for a subject the viewer can't
   read or that isn't there; 404 `thread.not_found` for a thread of another's conversation; 400 `anchor.not_allowed`.
 - **Asking** (second pull request) adds `ask`, an agent's ID, to `ChatThreadInput` and `ChatMessageInput` in every chat,
-  and `task` to the message it created a task from.
+  REST and GraphQL alike; `askedTaskId`, `askedTaskNumber` and `askedAgent` to the message that asked; `private` to
+  `Task`; and `conversation` to the task token's `MyTask`, naming the conversation its task talks in for the harness.
+  Refusals: 400 `ask.invalid`, `ask.unreadable`, `ask.busy`, and `ask.unavailable` on an installation whose chats ask no
+  agents.
 
 ## The Console
 
@@ -183,6 +200,10 @@ person’s private task shows as a place in the queue, nothing more.
   shared chat with who reads it.
 - **The composer's @** lists the organization's agents the viewer may assign; picking one sets `ask`. A task's messages
   show its agent, its number and its state, which link to the task's page.
+- **Artifacts in the pane.** An artifact an agent generates in a conversation shows in that conversation's pane as a
+  card that opens it. It belongs to the chat's repository unless the chat is an issue's or the organization's, and one
+  generated in a private conversation stays private to its person until they share it; the artifact's records are the
+  [artifacts](artifacts.md) design's ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)).
 - **Built on the new shell** ([ENG-255](https://linear.app/arikkfir/issue/ENG-255)): the organization's and
   repositories' pages hand their conversations to the pane as they move onto it.
 
@@ -197,6 +218,8 @@ person’s private task shows as a place in the queue, nothing more.
 | Its threads point at no file | A question about lines belongs in their branch's chat, where the team sees it | Anchors at the default branch: lines that move without a branch to follow them |
 | Asking is an explicit field the composer sets | A mention in prose never starts paid work by accident; the API says what it does | Parsing `@Name` from the body: ambiguous names, and work started by a quote |
 | A task asked privately is private | The conversation's privacy would leak through the task list and its transcript otherwise | Public tasks from private conversations: the agent's page would show what was asked |
+| Privacy is a column of the task | Deriving it from the thread leaks once the owner is deleted: their conversation goes, the task's thread goes with it, and its title would show to everyone | Joining the task's thread to its conversation in every task query |
+| One active task per thread | A thread's task takes what is posted there as its answers; two would take each other's | Several tasks talking in one thread |
 
 ## Failure modes and security
 
@@ -224,6 +247,8 @@ for the app shell and its pane ([ENG-255](https://linear.app/arikkfir/issue/ENG-
 - **Migration 00048** adds `conversations` and the threads' column and constraints. Rolling it back deletes every
   conversation, its threads and their events; the audit log keeps what they said.
 - **Nothing to configure.** No value of the chart changes.
+- **Migration 00054** (second pull request) adds the asked task, the private flag and the two task kinds. Rolling it
+  back deletes the tasks asked in chats, then the columns and the kinds.
 - **The second pull request** changes how tasks are listed and who reads them, after telling the agents' slice; the
   third waits for the app shell.
 
