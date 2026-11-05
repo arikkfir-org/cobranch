@@ -67,7 +67,8 @@ together. One that still fails shows “The Console couldn’t load” instead o
 Console loads no more modules: every page’s is already in.
 
 - **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
-  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/` and `fonts/` (its `templates`,
+  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/`, each tabbed page's directory
+  (`pages/org/settings/`) and `fonts/` (its `templates`,
   at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
   the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
   REST API, all at once, before it imports `console.js`: no import waits for the module that names it to arrive.
@@ -121,8 +122,9 @@ own paths are the organization slugs no organization may take.
   which a test holds.
 - **A page's tabs are files too.** A page whose views are tabs keeps them in a directory of its own name:
   `pages/org/settings/` holds Settings' General (`index.js`, at `/acme/settings`), Members, Roles, API keys, Agents,
-  Secrets, Models and Usage, each at `/acme/settings/<file>`. Caddy writes the names of every such directory's files
-  into the shell beside the others, and `lib/tabs.js` draws the tab bar from the modules' `tab` (`{ label, order }`),
+  Secrets, Models and Usage, each at `/acme/settings/<file>`. The shell names each such directory, one
+  entry in `index.html` (`pages/org/settings/` so far, so a new tabbed page adds its own), and Caddy writes its files'
+  names in beside the others; `lib/tabs.js` draws the tab bar from the modules' `tab` (`{ label, order }`),
   `allowed` and `count`. A slice that adds a tab adds a file there, and no organization slug: the old addresses of
   Members, Roles, API keys and Secrets (`/acme/members`) stay files of `pages/org/` that open their tab.
   **Rejected: each tab a page `under` Settings** (`pages/org/members.js`): every new tab would take an organization

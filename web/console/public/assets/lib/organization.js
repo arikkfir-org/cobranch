@@ -30,7 +30,7 @@ export function subjectOf(m, ctx, fallback) {
 const orgSubject = (org) => ({ key: "org:" + org.slug, title: org.name, scope: "Nothing to follow on this page", chat: null });
 
 // tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under, as
-// Members is under Settings): the parent's, labelled by its nav's tab or its label, then those under it, in order of
+// Tasks is under Agents): the parent's, labelled by its nav's tab or its label, then those under it, in order of
 // their nav; null for a page with none.
 function tabsOf(org, can, part, m) {
   const parent = m.nav && m.nav.under ? m.nav.under : part;
