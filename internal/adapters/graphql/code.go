@@ -52,6 +52,8 @@ type Code interface {
 	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
 	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
+	Attention(ctx context.Context, v code.Viewer, orgID uuid.UUID) ([]code.Attention, error)
+	Activity(ctx context.Context, v code.Viewer, orgID uuid.UUID, before code.ActivityCursor, limit int) (code.ActivityPage, error)
 }
 
 // unavailable is the code of the error a field answers when the installation lacks what it needs: a Git server.

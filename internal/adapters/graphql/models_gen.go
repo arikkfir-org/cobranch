@@ -21,6 +21,50 @@ type AIReview struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
+// One thing that happened in one of an organization's repositories: who did it, when and what. A push names the refs it moved and how many commits it brought; a merge the branches whose heads it brought into main; a review its commit, verdict and the live branch at it; a delivery its commit and itself.
+type Activity struct {
+	ID    string       `json:"id"`
+	At    time.Time    `json:"at"`
+	Kind  ActivityKind `json:"kind"`
+	Actor *Actor       `json:"actor"`
+	// The repository's slug.
+	Repository string `json:"repository"`
+	// A push's refs, each with the object it was at and the one it is at; all zeros for none.
+	Refs []*RefUpdate `json:"refs,omitempty"`
+	// How many commits a push brought.
+	Commits *int `json:"commits,omitempty"`
+	// The branches a merge brought into main, each at the head it brought.
+	Merged []*MergedHead `json:"merged,omitempty"`
+	// The commit a review is of, or a delivery delivered; none for a teardown.
+	Sha    *string      `json:"sha,omitempty"`
+	Review *ReviewState `json:"review,omitempty"`
+	// The live branch whose head a review is of, if any.
+	Branch   *string           `json:"branch,omitempty"`
+	Delivery *ActivityDelivery `json:"delivery,omitempty"`
+}
+
+// A delivery that ended: its number, what it did, the branch of its environment and how it ended, succeeded or failed.
+type ActivityDelivery struct {
+	Number      int           `json:"number"`
+	Kind        DeliveryKind  `json:"kind"`
+	Environment string        `json:"environment"`
+	State       DeliveryState `json:"state"`
+}
+
+type ActivityPage struct {
+	Activity []*Activity `json:"activity"`
+	// Where the next page starts, as activity's after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// Who did something, by its principal; a principal deleted since keeps only its ID.
+type Actor struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	// The principal's kind, such as user, agent, job, api_key or target; empty once it is gone.
+	Kind string `json:"kind"`
+}
+
 // One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// Its principal's ID.
@@ -297,6 +341,14 @@ type ArtifactVersion struct {
 	Body *string `json:"body,omitempty"`
 	// A Markdown body rendered and sanitized as the Console shows it; Artifact.versionByNumber answers it, a list doesn't.
 	HTML *string `json:"html,omitempty"`
+}
+
+// A branch that needs the viewer, the repository it is of, and why.
+type AttentionBranch struct {
+	// The repository's slug.
+	Repository string        `json:"repository"`
+	Branch     *Branch       `json:"branch"`
+	Need       AttentionNeed `json:"need"`
 }
 
 // Which commit last changed each line of a file at a commit.
@@ -1028,6 +1080,12 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
+// A branch a merge brought into main, at the head it brought.
+type MergedHead struct {
+	Branch string `json:"branch"`
+	Sha    string `json:"sha"`
+}
+
 // One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
 type Model struct {
 	Provider string `json:"provider"`
@@ -1199,6 +1257,10 @@ type Organization struct {
 	Artifact *Artifact `json:"artifact,omitempty"`
 	// The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
 	Artifacts []*Artifact `json:"artifacts"`
+	// The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (FIX), waiting for an approval they may give of a head they neither wrote nor reviewed (REVIEW), Ready and theirs to merge (MERGE), or Processing with a head they wrote (WATCH); by need in that order, then the latest moved first. Takes org.read.
+	Attention []*AttentionBranch `json:"attention"`
+	// A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100.
+	Activity *ActivityPage `json:"activity"`
 	// A page of the viewer's own conversation about the organization, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
 	Conversation *ChatPage `json:"conversation"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
@@ -1330,6 +1392,13 @@ type Push struct {
 }
 
 type Query struct {
+}
+
+// A ref a push moved: the object it was at and the one it is at, all zeros for none.
+type RefUpdate struct {
+	Name string `json:"name"`
+	Old  string `json:"old"`
+	New  string `json:"new"`
 }
 
 // One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes.
@@ -1982,6 +2051,73 @@ func (e AIReviewState) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// What happened.
+type ActivityKind string
+
+const (
+	// A push that merged nothing into main.
+	ActivityKindPushed ActivityKind = "PUSHED"
+	// A push that brought branches' heads into main.
+	ActivityKindMerged ActivityKind = "MERGED"
+	// A review submitted of a commit.
+	ActivityKindReviewed ActivityKind = "REVIEWED"
+	// A delivery that ended, succeeded or failed, by its environment's target.
+	ActivityKindDelivered ActivityKind = "DELIVERED"
+	// The repository's creation.
+	ActivityKindCreated ActivityKind = "CREATED"
+)
+
+var AllActivityKind = []ActivityKind{
+	ActivityKindPushed,
+	ActivityKindMerged,
+	ActivityKindReviewed,
+	ActivityKindDelivered,
+	ActivityKindCreated,
+}
+
+func (e ActivityKind) IsValid() bool {
+	switch e {
+	case ActivityKindPushed, ActivityKindMerged, ActivityKindReviewed, ActivityKindDelivered, ActivityKindCreated:
+		return true
+	}
+	return false
+}
+
+func (e ActivityKind) String() string {
+	return string(e)
+}
+
+func (e *ActivityKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ActivityKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ActivityKind", str)
+	}
+	return nil
+}
+
+func (e ActivityKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ActivityKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ActivityKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // Where an annotation stands, in any order its principal sets them.
 type AnnotationStatus string
 
@@ -2273,6 +2409,70 @@ func (e *ArtifactRole) UnmarshalJSON(b []byte) error {
 }
 
 func (e ArtifactRole) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Why a branch needs the viewer.
+type AttentionNeed string
+
+const (
+	// A Blocked head they wrote: only they move it on.
+	AttentionNeedFix AttentionNeed = "FIX"
+	// An approval they may give, of a head they neither wrote nor reviewed.
+	AttentionNeedReview AttentionNeed = "REVIEW"
+	// Ready, and theirs to merge.
+	AttentionNeedMerge AttentionNeed = "MERGE"
+	// A Processing head they wrote: its jobs and reviews still run.
+	AttentionNeedWatch AttentionNeed = "WATCH"
+)
+
+var AllAttentionNeed = []AttentionNeed{
+	AttentionNeedFix,
+	AttentionNeedReview,
+	AttentionNeedMerge,
+	AttentionNeedWatch,
+}
+
+func (e AttentionNeed) IsValid() bool {
+	switch e {
+	case AttentionNeedFix, AttentionNeedReview, AttentionNeedMerge, AttentionNeedWatch:
+		return true
+	}
+	return false
+}
+
+func (e AttentionNeed) String() string {
+	return string(e)
+}
+
+func (e *AttentionNeed) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AttentionNeed(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AttentionNeed", str)
+	}
+	return nil
+}
+
+func (e AttentionNeed) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AttentionNeed) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AttentionNeed) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

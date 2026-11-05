@@ -323,6 +323,45 @@ A branch of that name pushed again later is a new branch, and its page shows it 
   ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)) lands; a list of recently deleted branches; restoring one at
   its head; deleting merged branches in bulk from the branch list.
 
+## What needs you
+
+**Across an organization, each viewer gets the branches only they can move on, and what happened in the repositories they read**
+
+```mermaid
+flowchart LR
+  B["A live branch but main,<br/>in a repository the viewer reads"] --> F{"Blocked, and its head<br/>is the viewer's?"}
+  F -- yes --> FIX["fix"]
+  F -- no --> R{"Waits for an approval they may give,<br/>of a head they neither wrote nor reviewed?"}
+  R -- yes --> REV["review"]
+  R -- no --> M{"Ready, and they hold<br/>repo.merge?"}
+  M -- yes --> MER["merge"]
+  M -- no --> W{"Processing, and its head<br/>is the viewer's?"}
+  W -- yes --> WAT["watch"]
+  W -- no --> N["Not listed"]
+  E["events: repo.pushed, repo.created,<br/>review.submitted"] --> A["Activity, newest first"]
+  D["deliveries that ended,<br/>succeeded or failed"] --> A
+```
+
+- **Attention** weighs the 200 branches that moved last in the repositories the viewer reads, and lists at most 20 that
+  need them, by need (fix, review, merge, watch), then the latest moved first. A head is the viewer's when its commit's
+  author is their principal; reviewing needs `reviews.submit` and an unmet approvals check, and merging `repo.merge`.
+  Each comes with its branch, status and checks, so a client can say why without asking again.
+- **Activity** is what happened in those repositories: pushes, with the refs they moved and how many commits they
+  brought; merges into `main`, a push that brought branches' heads into it; reviews, with the live branch at the
+  reviewed commit; deliveries that ended, succeeded or failed, by their environment's target (applying a render again
+  is left out); and repositories created. It reads the organization's events beside its deliveries' ends, newest
+  first, a page at a time: the next page starts before the cursor the previous page's `Link` names, opaque to clients.
+- **The Console's Activity page** shows both: Needs your attention as Branch rows, each saying why
+  ("changes requested by Noa", "waiting for your merge"); the three repositories pushed to last; the organization's
+  agents at work, Working on a task, Watching every push (a built-in agent with a model) or Idle; and Recent
+  activity, a sentence each. The slug `activity` under an organization is the page's, so migration `00052` moves a
+  repository that had it to `activity-repository`, keeping its old slug among its slugs.
+
+| REST | GraphQL | Takes |
+| --- | --- | --- |
+| `GET /v1/orgs/{org}/attention` | `Organization.attention` | `org.read`; lists only repositories with `repo.read` |
+| `GET /v1/orgs/{org}/activity?cursor&limit` | `Organization.activity(first, after)` | `org.read`; lists only repositories with `repo.read` |
+
 ## The Console
 
 **The Console shows status where branches are listed, and why on each branch’s page**

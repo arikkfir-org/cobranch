@@ -297,6 +297,11 @@ func TestCreateHidesBranches(t *testing.T) {
 			if got, err := f.service.Get(ctx, f.olivia, f.acme.ID, created.Number); err != nil || branchOf(got) != "secret/acme-1-ship" {
 				t.Errorf("Olivia's Get() = branch %q, %v; want secret/acme-1-ship, linked", branchOf(got), err)
 			}
+			// Linked by its name, as the database links it.
+			if linked, err := f.service.Branches(ctx, f.olivia, f.acme.ID, created.Number); err != nil || len(linked) != 1 ||
+				linked[0].LinkedBy != issues.LinkedByName {
+				t.Errorf("Olivia's Branches() = %+v, %v; want acme-1-ship linked by name", linked, err)
+			}
 		})
 	}
 }

@@ -57,6 +57,8 @@ models:
       models: { resolver: true }
       spend: { resolver: true }
       conversation: { resolver: true }
+      attention: { resolver: true }
+      activity: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }

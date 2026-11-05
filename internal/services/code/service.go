@@ -67,6 +67,12 @@ type Store interface {
 	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
 	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
 	Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error)
+	// OpenBranches lists, latest moved first, at most limit of the live branches of the repositories of repoIDs that
+	// stand Blocked, Ready or Processing as requests to merge, each with its head commit and its repository.
+	OpenBranches(ctx context.Context, repoIDs []uuid.UUID, limit int) ([]RepoBranch, error)
+	// Activity lists, newest first, at most limit of what happened in the organization's repositories of repoIDs
+	// from before (the zero cursor for the newest).
+	Activity(ctx context.Context, orgID uuid.UUID, repoIDs []uuid.UUID, before ActivityCursor, limit int) ([]Activity, error)
 	RunStore
 	EnvironmentStore
 }

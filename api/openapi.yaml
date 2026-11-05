@@ -721,6 +721,83 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/attention:
+    get:
+      operationId: listOrganizationAttention
+      summary: >-
+        The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a
+        head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review),
+        Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then
+        the latest moved first. Takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The branches that need the viewer.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branches]
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AttentionBranch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/activity:
+    get:
+      operationId: listOrganizationActivity
+      summary: >-
+        A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges
+        into main, reviews, deliveries that ended (but those that applied a render again) and repositories created;
+        takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest activity when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many entries the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's activity, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [activity]
+                properties:
+                  activity:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Activity"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/leave:
     post:
       operationId: leaveOrganization
@@ -7651,6 +7728,117 @@ components:
           description: The roles it holds on the repository, each with the permissions it gives there.
           items:
             $ref: "#/components/schemas/Role"
+    AttentionBranch:
+      type: object
+      description: A branch that needs the viewer, the repository it is of, and why.
+      required: [repository, branch, need]
+      properties:
+        repository:
+          type: string
+          description: The repository's slug.
+        branch:
+          $ref: "#/components/schemas/Branch"
+        need:
+          type: string
+          description: >-
+            Why it needs the viewer: fix, a Blocked head they wrote; review, an approval they may give; merge, Ready and
+            theirs to merge; watch, a Processing head they wrote.
+          enum: [fix, review, merge, watch]
+          x-enum-varnames: [NeedFix, NeedReview, NeedMerge, NeedWatch]
+    Activity:
+      type: object
+      description: >-
+        One thing that happened in one of an organization's repositories: who did it, when and what. A push names the
+        refs it moved and how many commits it brought; a merge the branches whose heads it brought into main; a review
+        its commit, verdict and the live branch at it; a delivery its commit and itself.
+      required: [id, at, kind, actor, repository]
+      properties:
+        id:
+          type: string
+          format: uuid
+        at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [pushed, merged, reviewed, delivered, created]
+          x-enum-varnames: [ActivityPushed, ActivityMerged, ActivityReviewed, ActivityDelivered, ActivityCreated]
+        actor:
+          $ref: "#/components/schemas/Actor"
+        repository:
+          type: string
+          description: The repository's slug.
+        refs:
+          type: array
+          description: A push's refs, each with the object it was at and the one it is at; all zeros for none.
+          items:
+            $ref: "#/components/schemas/RefUpdate"
+        commits:
+          type: integer
+          description: How many commits a push brought.
+        merged:
+          type: array
+          description: The branches a merge brought into main, each at the head it brought.
+          items:
+            $ref: "#/components/schemas/MergedHead"
+        sha:
+          type: string
+          description: The commit a review is of, or a delivery delivered; none for a teardown.
+        review:
+          $ref: "#/components/schemas/ReviewState"
+        branch:
+          type: string
+          description: The live branch whose head a review is of, if any.
+        delivery:
+          $ref: "#/components/schemas/ActivityDelivery"
+    Actor:
+      type: object
+      description: Who did something, by its principal; a principal deleted since keeps only its ID.
+      required: [id, displayName, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        kind:
+          type: string
+          description: The principal's kind, such as user, agent, job, api_key or target; empty once it is gone.
+    RefUpdate:
+      type: object
+      required: [name, old, new]
+      properties:
+        name:
+          type: string
+          description: The ref, such as refs/heads/main.
+        old:
+          type: string
+        new:
+          type: string
+    MergedHead:
+      type: object
+      required: [branch, sha]
+      properties:
+        branch:
+          type: string
+        sha:
+          type: string
+    ActivityDelivery:
+      type: object
+      description: A delivery that ended, by its number, what it did, the branch of its environment and how it ended, succeeded or failed.
+      required: [number, kind, environment, state]
+      properties:
+        number:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          description: What it did, deliver or teardown, as a Delivery's kind says.
+        environment:
+          type: string
+          description: The branch of the environment it delivered to.
+        state:
+          $ref: "#/components/schemas/DeliveryState"
     Branch:
       type: object
       description: >-

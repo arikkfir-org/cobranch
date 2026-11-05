@@ -288,11 +288,14 @@
 .cell-unassigned { color: var(--color-fg-subtle); }
 
 /* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
-   or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
+   or state, and an action, such as a link (View all). A table or list alone is its own card, so in a card it drops its
+   border. */
 .card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }
 .card-header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
 .card-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.card-header > a { color: var(--color-fg-link); font: var(--text-body-small); text-decoration: none; white-space: nowrap; }
+.card-header > a:hover { text-decoration: underline; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
 /* A card's note: the muted Body/Small line a card shows in place of what it lists while it has none. */
@@ -444,11 +447,11 @@
 /* Rows, the Patterns page's components: lists of rich rows on the surface, in a card with border/default and radius/lg,
    each row divided from the next by border/subtle. A row's text is a title over its metadata. */
 .list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }
-:is(.commit-row, .annotation-row, .branch-row, .repository-row, .issue-row, .member-row) {
+:is(.commit-row, .annotation-row, .branch-row, .repository-row, .issue-row, .member-row, .agent-row) {
   display: flex; align-items: center; gap: var(--space-12); min-width: 0;
   padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-surface);
 }
-:is(.commit-row, .annotation-row, .branch-row, .repository-row, .issue-row, .member-row):last-child { border-bottom: 0; }
+:is(.commit-row, .annotation-row, .branch-row, .repository-row, .issue-row, .member-row, .agent-row):last-child { border-bottom: 0; }
 .row-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
 .row-title { overflow: hidden; color: var(--color-fg-default); font: var(--text-body-small-strong); text-overflow: ellipsis; white-space: nowrap; }
 .row-meta { overflow: hidden; color: var(--color-fg-muted); font: var(--text-caption); text-overflow: ellipsis; white-space: nowrap; }
@@ -477,3 +480,13 @@ a.row-title:hover { text-decoration: underline; }
 .issue-row .row-branch .icon svg { width: var(--space-12); height: var(--space-12); }
 /* Member row: avatar, name over email, when they joined, their role (a ghost button that opens a menu) and more
    actions (a ghost icon button): nothing of its own beyond the row. */
+/* Pattern/Agent row: an agent at work, its Avatar Agent 24, its name over what it does now, which wraps, and its
+   status Tag: Working (Info), Watching (AI) or Idle (Neutral). */
+.agent-row .row-meta { white-space: normal; }
+/* Activity/Item: one happening in a feed, in an .activity-list: the Avatar 20 of whoever did it, of any kind, the
+   sentence in Body/Small, which wraps, and how long ago in Caption, gap 8; items stack 16 apart inside the list's
+   12/16 padding. */
+.activity-list { display: flex; flex-direction: column; gap: var(--space-16); margin: 0; padding: var(--space-12) var(--space-16); list-style: none; }
+.activity-item { display: flex; align-items: flex-start; gap: var(--space-8); min-width: 0; }
+.activity-item > :not(.avatar, time) { flex: 1; min-width: 0; color: var(--color-fg-default); font: var(--text-body-small); overflow-wrap: anywhere; }
+.activity-item > time { flex: none; color: var(--color-fg-subtle); font: var(--text-caption); white-space: nowrap; }
