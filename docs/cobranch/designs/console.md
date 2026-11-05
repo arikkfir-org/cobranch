@@ -70,10 +70,10 @@ Console loads no more modules: every page’s is already in.
   and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/` and `fonts/` (its `templates`,
   at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
   the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
-  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to arrive.
-  Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the modules
-  before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s. At 500
-  ms, 1.7 s against 5.2 s and 2.1 s.
+  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
+  arrive. Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the
+  modules before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s.
+  At 500 ms, 1.7 s against 5.2 s and 2.1 s.
 - **The root comes from the configuration.** An operator may mount the Console at a prefix, which its route strips:
   `consoleUrl`'s path is then the root every module and link starts from, as the pages' links already did.
 - **So does the release.** The configuration names the release of the server that answered (`COBRANCH_RELEASE`, which
