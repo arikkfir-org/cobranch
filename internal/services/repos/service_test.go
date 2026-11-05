@@ -393,7 +393,8 @@ func TestAccessAndRoles(t *testing.T) {
 			t.Errorf("Release manager gives %v on a repository, want its repository permissions alone", r.Permissions)
 		}
 	}
-	if want := []string{"Reader", "Developer", "Maintainer", "Automation", "Secret reader", "Release manager"}; !slices.Equal(names, want) {
+	if want := []string{"Reader", "Developer", "Maintainer", "Automation", "Secret reader", "Artifact viewer", "Artifact editor", "Artifact owner",
+		"Release manager"}; !slices.Equal(names, want) {
 		t.Errorf("Roles() = %v, want %v (Inviter holds no repository permission)", names, want)
 	}
 }

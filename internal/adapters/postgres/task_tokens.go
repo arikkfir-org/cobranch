@@ -39,7 +39,7 @@ func (s *AuthStore) TaskToken(ctx context.Context, tokenHash []byte) (auth.Crede
 		return auth.Credential{}, auth.User{}, err
 	}
 	return auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent.ID, CreatedAt: row.CreatedAt, ExpiresAt: row.ExpiresAt,
-		Task: auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner}}, agent, nil
+		Task: auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner, Private: row.Private, ThreadID: orNil(row.ThreadID)}}, agent, nil
 }
 
 // DeleteExpiredTaskTokens deletes the task tokens that expired before now, and those of tasks that ended.

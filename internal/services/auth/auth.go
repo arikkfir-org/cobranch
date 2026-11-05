@@ -48,6 +48,11 @@ var (
 	RoleAutomation        = uuid.MustParse("00000000-0000-7000-8000-000000000304")
 	// RoleSecretReader holds secrets.read alone: migration 30 adds it, the one role a secret grants.
 	RoleSecretReader = uuid.MustParse("00000000-0000-7000-8000-000000000305")
+	// RoleArtifactViewer, RoleArtifactEditor and RoleArtifactOwner hold the artifact permissions, from viewing to
+	// managing: migration 49 adds them, the roles an artifact grants.
+	RoleArtifactViewer = uuid.MustParse("00000000-0000-7000-8000-000000000306")
+	RoleArtifactEditor = uuid.MustParse("00000000-0000-7000-8000-000000000307")
+	RoleArtifactOwner  = uuid.MustParse("00000000-0000-7000-8000-000000000308")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.
@@ -218,6 +223,10 @@ type Credential struct {
 // the token may do nothing.
 type TaskGrant struct {
 	ID, OrgID, AssignerID uuid.UUID
+	// Private is whether the task was asked in its assigner's private conversation, which its token then reaches, in
+	// ThreadID alone, the thread it talks in; uuid.Nil for a task that talks in none yet.
+	Private  bool
+	ThreadID uuid.UUID
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.

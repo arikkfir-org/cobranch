@@ -42,9 +42,25 @@ func Token(ctx context.Context) (string, bool) {
 // principalID names, an agent's: what the agent does through it, it does for that task. Any other credential answers
 // false.
 func WorkingTask(ctx context.Context, principalID uuid.UUID) (uuid.UUID, bool) {
+	task, ok := TaskOf(ctx, principalID)
+	return task.ID, ok
+}
+
+// TaskOf answers what the request ctx belongs to acts for, its task and the task's assigner, when its credential is
+// a task token of the principal principalID names, an agent's. Any other credential answers false.
+func TaskOf(ctx context.Context, principalID uuid.UUID) (TaskGrant, bool) {
 	a, ok := Viewer(ctx)
 	if !ok || a.Credential.Kind != CredentialTaskToken || a.User.ID != principalID {
-		return uuid.Nil, false
+		return TaskGrant{}, false
 	}
-	return a.Credential.Task.ID, true
+	return a.Credential.Task, true
+}
+
+// PrivateFor answers whose private records the request ctx reads for principalID: principalID's own, or, under the
+// token of a task asked in its assigner's private conversation, that assigner's, for whom the task works there.
+func PrivateFor(ctx context.Context, principalID uuid.UUID) uuid.UUID {
+	if g, ok := TaskOf(ctx, principalID); ok && g.Private {
+		return g.AssignerID
+	}
+	return principalID
 }

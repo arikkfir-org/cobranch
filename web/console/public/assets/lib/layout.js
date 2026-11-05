@@ -6,12 +6,13 @@ import { logo } from "./brand.js";
 import { app, h } from "./dom.js";
 import { avatar, icon } from "./icons.js";
 import { closeMenu, popover } from "./menu.js";
-import { converse, paneElement, paneToggle } from "./pane.js";
+import { converse, leave, paneElement, paneToggle } from "./pane.js";
 import { bareSidebar, sidebar } from "./sidebar.js";
 import { base, config, me } from "./state.js";
 import { setTheme, theme, themes } from "./theme.js";
 
 export function showCard(...children) {
+  leave();
   document.body.className = "centered";
   app.replaceChildren(h("main", { class: "card" }, h("h1", { class: "brand" }, logo()), ...children));
 }
@@ -27,10 +28,12 @@ export function notFound(slug) {
 // themeNames name the themes lib/theme.js knows.
 export const themeNames = { light: "Light", dark: "Dark", system: "System" };
 
-// themeSwitch is the theme as a segmented control (Light, Dark, System), which changes it at once.
-export function themeSwitch() {
+// themeSwitch is the theme as a segmented control (Light, Dark, System), which changes it at once and saves it with
+// the person; saved hears how each save ended, null or its error, which the avatar menu's switch leaves to Preferences
+// to report.
+export function themeSwitch(saved = () => {}) {
   const buttons = themes.map((value) => h("button", { type: "button", "aria-pressed": String(theme() === value), onclick: () => {
-    setTheme(value);
+    setTheme(value).then(() => saved(null), saved);
     buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(themes[i] === value)));
   } }, themeNames[value]));
   return h("div", { class: "segmented", role: "group", "aria-label": "Theme" }, buttons);

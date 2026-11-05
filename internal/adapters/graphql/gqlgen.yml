@@ -25,6 +25,7 @@ models:
       sessions: { resolver: true }
       personalTokens: { resolver: true }
       sshKeys: { resolver: true }
+      preferences: { resolver: true }
       permissions: { resolver: true }
       organizations: { resolver: true }
       invitations: { resolver: true }
@@ -48,8 +49,11 @@ models:
       task: { resolver: true }
       labels: { resolver: true }
       secrets: { resolver: true }
+      artifact: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
+      models: { resolver: true }
+      conversation: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
@@ -71,6 +75,10 @@ models:
     fields:
       assigneeId: { omittable: true }
       repositoryId: { omittable: true }
+  # A null clears an agent's own cap; a field left out keeps it.
+  AgentPatch:
+    fields:
+      cap: { omittable: true }
   Repository:
     fields:
       viewerPermissions: { resolver: true }
@@ -88,6 +96,7 @@ models:
       runs: { resolver: true }
       run: { resolver: true }
       chat: { resolver: true }
+      conversation: { resolver: true }
       branchDiff: { resolver: true }
       commitDiff: { resolver: true }
       environments: { resolver: true }
@@ -95,6 +104,7 @@ models:
       delivery: { resolver: true }
       secrets: { resolver: true }
       jobPrincipals: { resolver: true }
+      artifacts: { resolver: true }
   Environment:
     fields:
       deliveries: { resolver: true }
@@ -102,8 +112,20 @@ models:
       RepositoryID:
         description: The ID of the environment's repository, which its deliveries read.
         type: string
+  Agent:
+    fields:
+      conversation: { resolver: true }
+    extraFields:
+      OrganizationID:
+        description: The ID of the agent's organization, which its conversation reads.
+        type: string
   Secret:
     fields:
+      access: { resolver: true }
+  Artifact:
+    fields:
+      versions: { resolver: true }
+      versionByNumber: { resolver: true }
       access: { resolver: true }
   Task:
     fields:

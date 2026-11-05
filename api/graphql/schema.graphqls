@@ -22,6 +22,8 @@ type Mutation {
   addSSHKey(input: SSHKeyInput!): SSHKey!
   "Deletes one of the viewer's SSH keys; the next connection with it fails; only from a session, never from a token or an API key. False when the viewer has no such key."
   deleteSSHKey(id: ID!): Boolean!
+  "Changes the viewer's preferences input names and answers them as they now are; only a person has them, never an agent, a job or an API key (FORBIDDEN, preferences.people_only). With expectedVersion, 0 before the first change, preferences at another version are refused (CONFLICT, precondition.failed)."
+  updatePreferences(input: PreferencesPatch!, expectedVersion: Int): Preferences!
 }
 
 "A person: a principal of kind user."
@@ -36,6 +38,27 @@ type User {
   personalTokens: [PersonalToken!]!
   "The user's SSH keys, newest first."
   sshKeys: [SSHKey!]!
+  "How Cobranch looks to the user, wherever they sign in: the defaults, at version 0, until they first change one."
+  preferences: Preferences!
+}
+
+"The colours the Console draws in; SYSTEM follows the operating system's."
+enum Theme {
+  SYSTEM
+  LIGHT
+  DARK
+}
+
+"How Cobranch looks to a person, wherever they sign in."
+type Preferences {
+  theme: Theme!
+  "Counts their changes, 0 before the first."
+  version: Int!
+}
+
+"What changes the preferences; a field left out keeps its value."
+input PreferencesPatch {
+  theme: Theme
 }
 
 type Email {

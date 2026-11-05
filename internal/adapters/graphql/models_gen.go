@@ -43,8 +43,14 @@ type Agent struct {
 	Provider *string `json:"provider,omitempty"`
 	// The model it runs on, as its provider names it; null while it runs on none.
 	Model *string `json:"model,omitempty"`
+	// The most a task of it may spend, in US dollars such as 2.00; null for none.
+	Cap *string `json:"cap,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
 	Secrets []*AgentSecret `json:"secrets"`
+	// A page of the viewer's own conversation with the agent, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
+	// The ID of the agent's organization, which its conversation reads.
+	OrganizationID string `json:"-"`
 }
 
 // A role an agent holds, at its organization or, with a repository, on that repository.
@@ -79,6 +85,8 @@ type AgentPatch struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
+	// The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); null for none.
+	Cap graphql.Omittable[*string] `json:"cap,omitempty"`
 }
 
 // A secret an agent's tasks receive, in the environment variable name.
@@ -164,6 +172,110 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
+// A document, a diagram, a report or a page that a repository owns, as its readers see it.
+type Artifact struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// The repository that owns it.
+	Repository *ArtifactRepository `json:"repository"`
+	// 1 to 200 characters.
+	Title string `json:"title"`
+	// At most 500 characters.
+	Summary string       `json:"summary"`
+	Kind    ArtifactKind `json:"kind"`
+	// How far the principals reading its repository reach it.
+	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+	// How far the principals reading its organization reach it.
+	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+	// Its widest audience, as the list's badge names it.
+	Audience ArtifactAudience `json:"audience"`
+	// The agent that wrote it; null when a person or a script wrote it, or once the agent is gone.
+	Agent *ArtifactPrincipal `json:"agent,omitempty"`
+	// The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone.
+	TaskNumber *int64 `json:"taskNumber,omitempty"`
+	// The branch it came from; empty for none.
+	Branch string `json:"branch"`
+	// Its newest version's number, the one it shows.
+	Head int `json:"head"`
+	// The format of its newest version: text/markdown, image/svg+xml or text/html.
+	MediaType string `json:"mediaType"`
+	// Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+	// Who made it; null once they are gone.
+	CreatedBy *ArtifactPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	// Who last changed it or added a version; null once they are gone.
+	UpdatedBy *ArtifactPrincipal `json:"updatedBy,omitempty"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+	// What the viewer holds on it, sorted; Organization.artifact answers it, a list doesn't.
+	Permissions []string `json:"permissions,omitempty"`
+	// Its versions, newest first, without their bodies.
+	Versions []*ArtifactVersion `json:"versions"`
+	// One of its versions with its body, 0 for its newest; null unless it is there.
+	VersionByNumber *ArtifactVersion `json:"versionByNumber,omitempty"`
+	// Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too.
+	Access *ArtifactAccess `json:"access"`
+}
+
+// Who reaches an artifact; grants on its repository and at its organization reach it too.
+type ArtifactAccess struct {
+	RepositoryAccess   ArtifactReach    `json:"repositoryAccess"`
+	OrganizationAccess ArtifactReach    `json:"organizationAccess"`
+	Grants             []*ArtifactGrant `json:"grants"`
+}
+
+// A role a principal holds on an artifact itself.
+type ArtifactGrant struct {
+	PrincipalID string `json:"principalId"`
+	// user, api_key or agent.
+	Kind        string       `json:"kind"`
+	DisplayName string       `json:"displayName"`
+	Role        ArtifactRole `json:"role"`
+}
+
+// The fields of an artifact a change sets; those it leaves out stay as they are.
+type ArtifactPatch struct {
+	Title              *string        `json:"title,omitempty"`
+	Summary            *string        `json:"summary,omitempty"`
+	RepositoryAccess   *ArtifactReach `json:"repositoryAccess,omitempty"`
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+}
+
+// Who wrote an artifact or a version of it, by name.
+type ArtifactPrincipal struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
+// The repository that owns an artifact.
+type ArtifactRepository struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+}
+
+// A version of an artifact, which never changes.
+type ArtifactVersion struct {
+	ID         string `json:"id"`
+	ArtifactID string `json:"artifactId"`
+	// From 1, in the order they were added.
+	Number int `json:"number"`
+	// text/markdown, image/svg+xml or text/html.
+	MediaType string `json:"mediaType"`
+	// Its body's length in bytes.
+	Size int64 `json:"size"`
+	// Who added it; null once they are gone.
+	Author *ArtifactPrincipal `json:"author,omitempty"`
+	// The number of the agent's task it was written in; null for none.
+	TaskNumber *int64 `json:"taskNumber,omitempty"`
+	// Why it was written; empty for no reason given.
+	Note      string    `json:"note"`
+	CreatedAt time.Time `json:"createdAt"`
+	// Its text; Artifact.versionByNumber answers it, a list doesn't.
+	Body *string `json:"body,omitempty"`
+	// A Markdown body rendered and sanitized as the Console shows it; Artifact.versionByNumber answers it, a list doesn't.
+	HTML *string `json:"html,omitempty"`
+}
+
 // One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
 	Kind BranchCheckKind `json:"kind"`
@@ -243,6 +355,12 @@ type ChatMessage struct {
 	TaskID *string `json:"taskId,omitempty"`
 	// That task's number in its organization.
 	TaskNumber *int `json:"taskNumber,omitempty"`
+	// The task it asked an agent for; null for a message that asked nobody, and once the task is deleted.
+	AskedTaskID *string `json:"askedTaskId,omitempty"`
+	// That task's number in its organization.
+	AskedTaskNumber *int `json:"askedTaskNumber,omitempty"`
+	// The agent it asked.
+	AskedAgent *CommitPrincipal `json:"askedAgent,omitempty"`
 	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 }
@@ -253,6 +371,8 @@ type ChatMessageInput struct {
 	ID *string `json:"id,omitempty"`
 	// Its Markdown, at most 20,000 characters.
 	Body string `json:"body"`
+	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there.
+	Ask *string `json:"ask,omitempty"`
 }
 
 // A page of a branch's chat.
@@ -294,6 +414,8 @@ type ChatThreadInput struct {
 	Anchor *ChatAnchorInput `json:"anchor,omitempty"`
 	// Its first message's Markdown, at most 20,000 characters.
 	Body string `json:"body"`
+	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
+	Ask *string `json:"ask,omitempty"`
 }
 
 // A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is.
@@ -337,6 +459,15 @@ type CommitPage struct {
 type CommitPrincipal struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
+}
+
+// Which of the viewer's own conversations a change or a subscription names: the one about the organization, about one of its repositories, or with one of its agents; naming both a repository and an agent is refused (BAD_USER_INPUT, conversation.invalid).
+type ConversationSubject struct {
+	OrganizationID string `json:"organizationId"`
+	// The repository it is about; null for the organization's or an agent's.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The agent it is with, by its principal ID; null for the organization's or a repository's.
+	AgentID *string `json:"agentId,omitempty"`
 }
 
 // The latest deletion of a branch of a name, which keeps what it was at and its merge.
@@ -805,6 +936,37 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
+// One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+type Model struct {
+	Provider string `json:"provider"`
+	// The model's name, as its provider gives it.
+	Name string `json:"name"`
+	// What a million tokens it reads cost, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+	// What a million tokens it writes cost, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+	// Whether a new agent starts on it; the organization has at most one.
+	Default bool `json:"default"`
+	// The agents that run on it, by name.
+	Agents []*CommitPrincipal `json:"agents"`
+	// Who added it; null for one Cobranch added for the agents already on it, and once its adder is gone.
+	CreatedBy *CommitPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What a model costs and whether it is the default; it replaces what the model had.
+type ModelInput struct {
+	// What a million tokens it reads cost, 0 to 10000, such as 3.00.
+	InputPrice string `json:"inputPrice"`
+	// What a million tokens it writes cost, 0 to 10000, such as 15.00.
+	OutputPrice string `json:"outputPrice"`
+	// Whether a new agent starts on it; null for not.
+	Default *bool `json:"default,omitempty"`
+}
+
 // A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
 type ModelProvider struct {
 	// The provider's name, as the installation knows it.
@@ -826,7 +988,7 @@ type ModelProvider struct {
 type Mutation struct {
 }
 
-// The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
+// The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in.
 type MyTask struct {
 	Organization string `json:"organization"`
 	Task         *Task  `json:"task"`
@@ -838,6 +1000,49 @@ type MyTask struct {
 	IssueNumber *int `json:"issueNumber,omitempty"`
 	// The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none.
 	IssueKey *string `json:"issueKey,omitempty"`
+	// The private conversation the task talks in, its assigner's; null for none.
+	Conversation *MyTaskConversation `json:"conversation,omitempty"`
+}
+
+// The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names.
+type MyTaskConversation struct {
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+	AgentID        *string `json:"agentId,omitempty"`
+}
+
+// What makes an artifact with its first version.
+type NewArtifact struct {
+	// The artifact's ID, and its first version's, which the call that makes it picks so that it makes it once; a new one when absent.
+	ID *string `json:"id,omitempty"`
+	// 1 to 200 characters.
+	Title string `json:"title"`
+	// At most 500 characters.
+	Summary *string      `json:"summary,omitempty"`
+	Kind    ArtifactKind `json:"kind"`
+	// NONE when absent.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	// NONE when absent.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+	// The branch it came from; an agent's task names its own when absent.
+	Branch *string `json:"branch,omitempty"`
+	// text/markdown, image/svg+xml or text/html.
+	MediaType string `json:"mediaType"`
+	// Its first version's body, 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+	// Why the version was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
+}
+
+// What adds a version.
+type NewArtifactVersion struct {
+	// The version's ID, which the call that adds it picks so that it adds it once; a new one when absent.
+	ID *string `json:"id,omitempty"`
+	// text/markdown, image/svg+xml or text/html.
+	MediaType string `json:"mediaType"`
+	// 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+	// Why it was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
 }
 
 // What makes a secret.
@@ -884,6 +1089,12 @@ type Organization struct {
 	ModelProviders []*ModelProvider `json:"modelProviders"`
 	// The model providers the installation knows, by name: those the organization may add.
 	AvailableModelProviders []string `json:"availableModelProviders"`
+	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	Models []*Model `json:"models"`
+	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	Artifact *Artifact `json:"artifact,omitempty"`
+	// A page of the viewer's own conversation about the organization, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
 	IssueKey string `json:"issueKey"`
 	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
@@ -965,6 +1176,18 @@ type PersonalTokenInput struct {
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }
 
+// How Cobranch looks to a person, wherever they sign in.
+type Preferences struct {
+	Theme Theme `json:"theme"`
+	// Counts their changes, 0 before the first.
+	Version int `json:"version"`
+}
+
+// What changes the preferences; a field left out keeps its value.
+type PreferencesPatch struct {
+	Theme *Theme `json:"theme,omitempty"`
+}
+
 // The push that first brought a commit.
 type Push struct {
 	ID string `json:"id"`
@@ -999,6 +1222,8 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
+	// The repository's artifacts the viewer reads, of kind when it is given, newest change first; takes repo.read, and leaves out the artifacts the viewer may not read.
+	Artifacts []*Artifact `json:"artifacts"`
 	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
 	Chat *ChatPage `json:"chat,omitempty"`
 	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
@@ -1023,6 +1248,8 @@ type Repository struct {
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
+	// A page of the viewer's own conversation about the repository, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes repo.read. first is 1 to 100.
+	Conversation *ChatPage `json:"conversation"`
 	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
 	Environments []*Environment `json:"environments"`
 	// One of the repository's environments by ID: null unless it is there; takes repo.read.
@@ -1251,8 +1478,10 @@ type Task struct {
 	// Counts the organization's tasks from 1.
 	Number int              `json:"number"`
 	Agent  *CommitPrincipal `json:"agent"`
-	// What it is for: assigned for a task a principal assigned.
+	// What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
 	Kind string `json:"kind"`
+	// Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works.
+	Private bool `json:"private"`
 	// Its assigner, whose permissions cap it; null once they are gone, when it may do nothing.
 	AssignedBy *CommitPrincipal `json:"assignedBy,omitempty"`
 	Title      string           `json:"title"`
@@ -1264,7 +1493,7 @@ type Task struct {
 	// The branch of that repository it works on; null for none.
 	BranchID *string `json:"branchId,omitempty"`
 	Branch   *string `json:"branch,omitempty"`
-	// The thread of that branch's chat it talks in; null for none.
+	// The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none.
 	ThreadID *string `json:"threadId,omitempty"`
 	// The commit it works at, such as the head a review task reviews; null for none.
 	Sha   *string   `json:"sha,omitempty"`
@@ -1281,6 +1510,14 @@ type Task struct {
 	EndedAt *time.Time `json:"endedAt,omitempty"`
 	// Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
+	// What it spent so far, at its organization's prices, in US dollars such as 0.42.
+	Spent string `json:"spent"`
+	// The tokens its model read so far.
+	InputTokens int64 `json:"inputTokens"`
+	// The tokens its model wrote so far.
+	OutputTokens int64 `json:"outputTokens"`
+	// The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it.
+	Cap *string `json:"cap,omitempty"`
 	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
 	Transcript []*TranscriptEntry `json:"transcript"`
 }
@@ -1304,6 +1541,30 @@ type TaskPage struct {
 	Tasks []*Task `json:"tasks"`
 	// Where the next page starts, as tasks' after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that.
+type TaskSpend struct {
+	// In US dollars, at its organization's prices, such as 0.42.
+	Spent        string `json:"spent"`
+	InputTokens  int64  `json:"inputTokens"`
+	OutputTokens int64  `json:"outputTokens"`
+	// The most it may spend, in US dollars; null for none.
+	Cap *string `json:"cap,omitempty"`
+	// Whether it has ended; its token then acts no more.
+	Ended bool `json:"ended"`
+}
+
+// A call of a task's model, as the model proxy of its pod reports it.
+type TaskUsageInput struct {
+	// The call's own ID, which a repeated report repeats, so that it counts once.
+	ID string `json:"id"`
+	// The model the call asked, as its provider names it.
+	Model string `json:"model"`
+	// The tokens the model read, 0 to 100000000.
+	InputTokens int `json:"inputTokens"`
+	// The tokens the model wrote, 0 to 100000000.
+	OutputTokens int `json:"outputTokens"`
 }
 
 // A step of a task's transcript, numbered from 1 in its task; entries never change.
@@ -1370,6 +1631,8 @@ type User struct {
 	PersonalTokens []*PersonalToken `json:"personalTokens"`
 	// The user's SSH keys, newest first.
 	SSHKeys []*SSHKey `json:"sshKeys"`
+	// How Cobranch looks to the user, wherever they sign in: the defaults, at version 0, until they first change one.
+	Preferences *Preferences `json:"preferences"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.
@@ -1602,6 +1865,240 @@ func (e *AnnotationStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e AnnotationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// An artifact's widest audience: the principals reading its organization, those reading its repository, or only those holding a role on it, its repository or its organization.
+type ArtifactAudience string
+
+const (
+	ArtifactAudienceOrganization ArtifactAudience = "ORGANIZATION"
+	ArtifactAudienceRepository   ArtifactAudience = "REPOSITORY"
+	ArtifactAudiencePrivate      ArtifactAudience = "PRIVATE"
+)
+
+var AllArtifactAudience = []ArtifactAudience{
+	ArtifactAudienceOrganization,
+	ArtifactAudienceRepository,
+	ArtifactAudiencePrivate,
+}
+
+func (e ArtifactAudience) IsValid() bool {
+	switch e {
+	case ArtifactAudienceOrganization, ArtifactAudienceRepository, ArtifactAudiencePrivate:
+		return true
+	}
+	return false
+}
+
+func (e ArtifactAudience) String() string {
+	return string(e)
+}
+
+func (e *ArtifactAudience) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ArtifactAudience(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ArtifactAudience", str)
+	}
+	return nil
+}
+
+func (e ArtifactAudience) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ArtifactAudience) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ArtifactAudience) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What an artifact is for, which picks its icon and its filter, never its format.
+type ArtifactKind string
+
+const (
+	ArtifactKindDocument ArtifactKind = "DOCUMENT"
+	ArtifactKindDiagram  ArtifactKind = "DIAGRAM"
+	ArtifactKindReport   ArtifactKind = "REPORT"
+	ArtifactKindPage     ArtifactKind = "PAGE"
+)
+
+var AllArtifactKind = []ArtifactKind{
+	ArtifactKindDocument,
+	ArtifactKindDiagram,
+	ArtifactKindReport,
+	ArtifactKindPage,
+}
+
+func (e ArtifactKind) IsValid() bool {
+	switch e {
+	case ArtifactKindDocument, ArtifactKindDiagram, ArtifactKindReport, ArtifactKindPage:
+		return true
+	}
+	return false
+}
+
+func (e ArtifactKind) String() string {
+	return string(e)
+}
+
+func (e *ArtifactKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ArtifactKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ArtifactKind", str)
+	}
+	return nil
+}
+
+func (e ArtifactKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ArtifactKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ArtifactKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How far an audience reaches an artifact: not at all, to view it, or to view and edit it.
+type ArtifactReach string
+
+const (
+	ArtifactReachNone ArtifactReach = "NONE"
+	ArtifactReachView ArtifactReach = "VIEW"
+	ArtifactReachEdit ArtifactReach = "EDIT"
+)
+
+var AllArtifactReach = []ArtifactReach{
+	ArtifactReachNone,
+	ArtifactReachView,
+	ArtifactReachEdit,
+}
+
+func (e ArtifactReach) IsValid() bool {
+	switch e {
+	case ArtifactReachNone, ArtifactReachView, ArtifactReachEdit:
+		return true
+	}
+	return false
+}
+
+func (e ArtifactReach) String() string {
+	return string(e)
+}
+
+func (e *ArtifactReach) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ArtifactReach(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ArtifactReach", str)
+	}
+	return nil
+}
+
+func (e ArtifactReach) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ArtifactReach) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ArtifactReach) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it.
+type ArtifactRole string
+
+const (
+	ArtifactRoleViewer ArtifactRole = "VIEWER"
+	ArtifactRoleEditor ArtifactRole = "EDITOR"
+	ArtifactRoleOwner  ArtifactRole = "OWNER"
+)
+
+var AllArtifactRole = []ArtifactRole{
+	ArtifactRoleViewer,
+	ArtifactRoleEditor,
+	ArtifactRoleOwner,
+}
+
+func (e ArtifactRole) IsValid() bool {
+	switch e {
+	case ArtifactRoleViewer, ArtifactRoleEditor, ArtifactRoleOwner:
+		return true
+	}
+	return false
+}
+
+func (e ArtifactRole) String() string {
+	return string(e)
+}
+
+func (e *ArtifactRole) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ArtifactRole(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ArtifactRole", str)
+	}
+	return nil
+}
+
+func (e ArtifactRole) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ArtifactRole) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ArtifactRole) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -2973,6 +3470,64 @@ func (e *TaskState) UnmarshalJSON(b []byte) error {
 }
 
 func (e TaskState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// The colours the Console draws in; SYSTEM follows the operating system's.
+type Theme string
+
+const (
+	ThemeSystem Theme = "SYSTEM"
+	ThemeLight  Theme = "LIGHT"
+	ThemeDark   Theme = "DARK"
+)
+
+var AllTheme = []Theme{
+	ThemeSystem,
+	ThemeLight,
+	ThemeDark,
+}
+
+func (e Theme) IsValid() bool {
+	switch e {
+	case ThemeSystem, ThemeLight, ThemeDark:
+		return true
+	}
+	return false
+}
+
+func (e Theme) String() string {
+	return string(e)
+}
+
+func (e *Theme) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Theme(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Theme", str)
+	}
+	return nil
+}
+
+func (e Theme) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Theme) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Theme) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

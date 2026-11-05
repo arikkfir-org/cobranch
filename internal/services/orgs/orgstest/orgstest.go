@@ -24,11 +24,15 @@ var (
 	Manager = orgs.Role{ID: uuid.MustParse("00000000-0000-7000-8000-000000000f01"), Name: "Manager", Permissions: []string{"org.read", "org.members.manage"}}
 	// The built-in repository roles, as migration 2 writes them.
 	Reader     = orgs.Role{ID: auth.RoleReader, Name: "Reader", BuiltIn: true, Permissions: []string{"repo.read"}}
-	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "delivery.run", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
+	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "artifacts.create", "delivery.run", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
 	Maintainer = orgs.Role{ID: auth.RoleMaintainer, Name: "Maintainer", BuiltIn: true, Permissions: slices.Clone(auth.RepositoryPermissions)}
 	Automation = orgs.Role{ID: auth.RoleAutomation, Name: "Automation", BuiltIn: true, Permissions: []string{"annotations.write", "messages.post", "repo.read", "reviews.submit"}}
 	// SecretReader is the built-in role migration 30 writes.
 	SecretReader = orgs.Role{ID: auth.RoleSecretReader, Name: "Secret reader", BuiltIn: true, Permissions: []string{"secrets.read"}}
+	// The built-in artifact roles migration 49 writes.
+	ArtifactViewer = orgs.Role{ID: auth.RoleArtifactViewer, Name: "Artifact viewer", BuiltIn: true, Permissions: []string{"artifacts.read"}}
+	ArtifactEditor = orgs.Role{ID: auth.RoleArtifactEditor, Name: "Artifact editor", BuiltIn: true, Permissions: []string{"artifacts.read", "artifacts.write"}}
+	ArtifactOwner  = orgs.Role{ID: auth.RoleArtifactOwner, Name: "Artifact owner", BuiltIn: true, Permissions: []string{"artifacts.manage", "artifacts.read", "artifacts.write"}}
 	// The installation's roles, which the authorizer reads too.
 	installationAdmin = orgs.Role{ID: auth.RoleInstallationAdmin, Name: "Installation admin", BuiltIn: true, Permissions: auth.InstallationPermissions}
 	installationUser  = orgs.Role{ID: auth.RoleInstallationUser, Name: "Installation user", BuiltIn: true, Permissions: []string{"orgs.create"}}
@@ -62,6 +66,9 @@ type Store struct {
 	// Secrets maps each secret to its organization and its repository (uuid.Nil for the organization's own), so the
 	// authorizer's reads at a secret see the grants on both.
 	Secrets map[uuid.UUID][2]uuid.UUID
+	// Artifacts maps each artifact to where it lives and its audiences, so the authorizer's reads at an artifact see the
+	// grants on it, on its repository and at its organization, and what its audiences give.
+	Artifacts map[uuid.UUID]ArtifactScope
 	// Keys are the API keys by ID; Hashes the hash of each secret, by secret ID, so a test can tell what was kept.
 	Keys   map[uuid.UUID]orgs.APIKey
 	Hashes map[uuid.UUID][]byte
@@ -80,6 +87,12 @@ type Store struct {
 	Fail      error
 }
 
+// ArtifactScope is where an artifact lives and how far its audiences reach it: "none", "view" or "edit".
+type ArtifactScope struct {
+	OrgID, RepoID                        uuid.UUID
+	RepositoryAccess, OrganizationAccess string
+}
+
 // Entry is an administrator's entry into an organization, with its reason.
 type Entry struct {
 	Org, User uuid.UUID
@@ -92,8 +105,9 @@ func NewStore() *Store {
 		Orgs: map[uuid.UUID]orgs.Organization{}, Slugs: map[string]uuid.UUID{}, Memberships: map[uuid.UUID][]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, Emails: map[uuid.UUID][]string{}, Invites: map[uuid.UUID]orgs.Invitation{},
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
-		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation, SecretReader},
-		Repos: map[uuid.UUID]uuid.UUID{}, Secrets: map[uuid.UUID][2]uuid.UUID{},
+		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation, SecretReader,
+			ArtifactViewer, ArtifactEditor, ArtifactOwner},
+		Repos: map[uuid.UUID]uuid.UUID{}, Secrets: map[uuid.UUID][2]uuid.UUID{}, Artifacts: map[uuid.UUID]ArtifactScope{},
 		Keys: map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: admin.StoredSettings{InstallationSettings: auth.InstallationSettings{Version: 1}},
 		Limits:       map[uuid.UUID]admin.OwnLimits{}, GitData: map[uuid.UUID]int64{}, Providers: map[string]auth.StoredProvider{},
@@ -145,9 +159,36 @@ func (s *Store) Permissions(_ context.Context, principal uuid.UUID, scope auth.S
 			out = append(out, s.held(principal, auth.ScopeRepository, at[1])...)
 		}
 		out = slices.DeleteFunc(out, func(p string) bool { return !slices.Contains(auth.SecretPermissions, p) })
+	case auth.ScopeArtifact:
+		out = slices.DeleteFunc(append(out, s.artifactHeld(principal, s.Artifacts[scopeID])...), func(p string) bool {
+			return !slices.Contains(auth.ArtifactPermissions, p)
+		})
 	}
 	slices.Sort(out)
 	return slices.Compact(out), nil
+}
+
+// artifactHeld lists what principal holds on an artifact at a through its repository and its organization: their
+// grants' permissions, and what the audiences give a principal reading the repository or the organization.
+func (s *Store) artifactHeld(principal uuid.UUID, at ArtifactScope) []string {
+	atRepo, atOrg := s.held(principal, auth.ScopeRepository, at.RepoID), s.held(principal, auth.ScopeOrganization, at.OrgID)
+	out := slices.Concat(atRepo, atOrg)
+	reaches := func(access string) []string {
+		switch access {
+		case "edit":
+			return []string{"artifacts.read", "artifacts.write"}
+		case "view":
+			return []string{"artifacts.read"}
+		}
+		return nil
+	}
+	if slices.Contains(out, "repo.read") {
+		out = append(out, reaches(at.RepositoryAccess)...)
+	}
+	if slices.Contains(atOrg, "org.read") {
+		out = append(out, reaches(at.OrganizationAccess)...)
+	}
+	return out
 }
 
 // held lists the permissions of principal's grants at exactly the scope.
@@ -285,6 +326,9 @@ func (s *Store) Member(_ context.Context, org, user uuid.UUID) (orgs.Member, err
 		return orgs.Member{}, orgs.ErrNotFound
 	}
 	m := orgs.Member{UserID: user, DisplayName: s.Names[user]}
+	if emails := s.Emails[user]; len(emails) > 0 {
+		m.Email = emails[0]
+	}
 	for _, g := range s.Grants {
 		if g.Principal == user && g.Scope == auth.ScopeOrganization && g.ScopeID == org {
 			if r, ok := s.role(g.Role); ok {
@@ -305,8 +349,8 @@ func (s *Store) MemberByEmail(_ context.Context, org uuid.UUID, email string) (u
 	return uuid.Nil, orgs.ErrNotFound
 }
 
-// Leave drops the member and their roles at the organization and on its repositories, and what waited for them there;
-// the last Owner can't go.
+// Leave drops the member and their roles at the organization, on its repositories and on its artifacts, and what
+// waited for them there; the last Owner can't go.
 func (s *Store) Leave(_ context.Context, actor, org, user uuid.UUID, _ time.Time) error {
 	if s.Fail != nil {
 		return s.Fail
@@ -317,7 +361,8 @@ func (s *Store) Leave(_ context.Context, actor, org, user uuid.UUID, _ time.Time
 	s.dropPending(org, user)
 	s.Memberships[org] = slices.DeleteFunc(s.Memberships[org], func(u uuid.UUID) bool { return u == user })
 	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool {
-		return g.Principal == user && ((g.Scope == auth.ScopeOrganization && g.ScopeID == org) || (g.Scope == auth.ScopeRepository && s.Repos[g.ScopeID] == org))
+		return g.Principal == user && ((g.Scope == auth.ScopeOrganization && g.ScopeID == org) || (g.Scope == auth.ScopeRepository && s.Repos[g.ScopeID] == org) ||
+			(g.Scope == auth.ScopeArtifact && s.Artifacts[g.ScopeID].OrgID == org))
 	})
 	if actor == user {
 		s.Events = append(s.Events, "member.left")
@@ -495,6 +540,13 @@ func (s *Store) Roles(_ context.Context, org uuid.UUID) ([]orgs.Role, error) {
 	var out []orgs.Role
 	for _, r := range s.RoleList {
 		if r.OrgID == uuid.Nil || r.OrgID == org {
+			holders := map[uuid.UUID]bool{}
+			for _, g := range s.Grants {
+				if org != uuid.Nil && g.Role == r.ID && g.Scope == auth.ScopeOrganization && g.ScopeID == org {
+					holders[g.Principal] = true
+				}
+			}
+			r.Holders = len(holders)
 			out = append(out, r)
 		}
 	}

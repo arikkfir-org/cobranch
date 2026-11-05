@@ -290,11 +290,12 @@ columns that changed; a session's token hash and its mere use never reach the lo
 
 ![The Console’s first pages](sign-in-and-organizations/console-map.svg)
 
-Organization pages live under the organization’s slug, such as `/acme/members`, which is why the Console’s own paths are
-reserved slugs.
+Organization pages live under the organization’s slug, such as `/acme/settings/members`, which is why the Console’s own
+paths are reserved slugs.
 
 The [design system](design-system.md#screens) has drawn Sign in, the organization step of sign-up, the organization's
-home and its members. The roles, settings and API keys pages followed them with the same components: the API keys page
+home and its members. Settings is one page whose tabs are General, Members, Roles, API keys, Secrets, Models and
+Usage, and the old addresses (`/acme/members`) open their tab. The API keys tab
 lists each key's roles and secrets with their state, makes a key, rotates and revokes, and shows a new secret once with
 a copy button. The profile page is drawn there before the Console builds it.
 

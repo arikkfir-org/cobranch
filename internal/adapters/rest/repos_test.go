@@ -78,7 +78,7 @@ func TestRepositoryAccessAPI(t *testing.T) {
 		{name: "the roles it grants", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/roles"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[struct{ Roles []Role }](t, body)
-				if len(got.Roles) != 5 || got.Roles[0].Name != "Reader" || got.Roles[4].Name != "Secret reader" {
+				if len(got.Roles) != 8 || got.Roles[0].Name != "Reader" || got.Roles[4].Name != "Secret reader" || got.Roles[7].Name != "Artifact owner" {
 					t.Errorf("roles = %s", body)
 				}
 			}},

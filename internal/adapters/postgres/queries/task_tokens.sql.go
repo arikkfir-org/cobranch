@@ -42,7 +42,8 @@ func (q *Queries) InsertTaskToken(ctx context.Context, tokenHash []byte, expires
 }
 
 const taskToken = `-- name: TaskToken :one
-SELECT k.task_id, k.created_at, k.expires_at, t.org_id, t.assigned_by, a.suspended AS assigner_suspended, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by
+SELECT k.task_id, k.created_at, k.expires_at, t.org_id, t.assigned_by, a.suspended AS assigner_suspended, t.private, t.thread_id,
+    p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by
 FROM agent_task_tokens k JOIN agent_tasks t ON t.id = k.task_id JOIN principals p ON p.id = t.agent_id
 LEFT JOIN principals a ON a.id = t.assigned_by
 WHERE k.token_hash = $1 AND t.state IN ('queued', 'running', 'waiting')
@@ -55,11 +56,13 @@ type TaskTokenRow struct {
 	OrgID             uuid.UUID
 	AssignedBy        *uuid.UUID
 	AssignerSuspended *bool
+	Private           bool
+	ThreadID          *uuid.UUID
 	Principal         Principal
 }
 
 // TaskToken finds a token of a task that hasn't ended, with the task's organization, its assigner and whether they
-// are suspended, and its agent.
+// are suspended, whether it is private and the thread it talks in, and its agent.
 func (q *Queries) TaskToken(ctx context.Context, tokenHash []byte) (TaskTokenRow, error) {
 	row := q.db.QueryRow(ctx, taskToken, tokenHash)
 	var i TaskTokenRow
@@ -70,6 +73,8 @@ func (q *Queries) TaskToken(ctx context.Context, tokenHash []byte) (TaskTokenRow
 		&i.OrgID,
 		&i.AssignedBy,
 		&i.AssignerSuspended,
+		&i.Private,
+		&i.ThreadID,
 		&i.Principal.ID,
 		&i.Principal.Kind,
 		&i.Principal.DisplayName,

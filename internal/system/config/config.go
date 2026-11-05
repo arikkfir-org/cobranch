@@ -429,13 +429,20 @@ func LoadAgent() (Agent, error) {
 }
 
 // ModelProxy configures model-proxy, which runs beside the harness in a task's pod and sends its model's requests on to
-// the provider with the provider's key, so that the key stays out of the harness's container.
+// the provider with the provider's key, so that the key stays out of the harness's container, and reports what each
+// turn spent to the REST API as the task's token.
 type ModelProxy struct {
 	// HTTPAddr is where it listens: in the pod alone.
 	HTTPAddr string `envconfig:"HTTP_ADDR" default:"127.0.0.1:8090"`
-	// ModelProvider names the provider, and ModelKeyFile holds its API key.
+	// ModelProvider names the provider, Model the task's model, the one it sends turns of, and ModelKeyFile holds the
+	// provider's API key.
 	ModelProvider string `envconfig:"MODEL_PROVIDER" required:"true"`
+	Model         string `envconfig:"MODEL" required:"true"`
 	ModelKeyFile  string `envconfig:"MODEL_KEY_FILE" required:"true"`
+	// REST is the REST server's URL as the pod reaches it, which it reports each turn's spend to, and TokenFile holds
+	// the task's token it reports as, which the controller renews in place.
+	REST      URL    `envconfig:"REST_URL" required:"true"`
+	TokenFile string `envconfig:"TOKEN_FILE" required:"true"`
 	// ModelURL is where the provider's API is when not at its own address; empty for its own.
 	ModelURL URL `envconfig:"MODEL_URL"`
 	// ShutdownTimeout is how long it finishes the requests in flight once told to stop.

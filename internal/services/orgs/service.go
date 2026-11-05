@@ -491,14 +491,21 @@ func (s *Service) RevokeRole(ctx context.Context, v Viewer, orgID, userID, roleI
 	return wrap("revoking the role", s.store.RevokeRole(ctx, v.ID, orgID, userID, role.ID))
 }
 
-// Members lists the organization's members with their roles; it takes org.read.
+// Members lists the organization's members with their roles; it takes org.read. Their emails show only to a viewer
+// with org.members.manage, who invites and removes them: anyone else who reads the organization sees names alone.
 func (s *Service) Members(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Member, error) {
-	if _, _, err := s.require(ctx, v, orgID, PermRead); err != nil {
+	_, held, err := s.require(ctx, v, orgID, PermRead)
+	if err != nil {
 		return nil, err
 	}
 	members, err := s.store.Members(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the members: %w", err)
+	}
+	if !slices.Contains(held, PermMembersManage) {
+		for i := range members {
+			members[i].Email = ""
+		}
 	}
 	return members, nil
 }

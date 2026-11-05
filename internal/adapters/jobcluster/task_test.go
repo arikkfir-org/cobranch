@@ -41,7 +41,7 @@ func taskConfig() Config {
 func taskLaunch(pod int) taskrunner.Launch {
 	return taskrunner.Launch{Task: taskrunner.Task{ID: taskID, OrgID: org, Provider: "anthropic", Model: "test-model"}, Pod: pod,
 		Token: "cba_token", Key: []byte("provider-key"), Timeout: 24 * time.Hour,
-		Env: map[string]string{"COBRANCH_MODEL": "test-model", "API_TOKEN": "s3cret"}}
+		Env: map[string]string{"COBRANCH_MODEL": "test-model", "COBRANCH_REST_URL": "http://cobranch-rest.cobranch:8080", "API_TOKEN": "s3cret"}}
 }
 
 func TestStartTask(t *testing.T) {
@@ -84,8 +84,13 @@ func checkTaskContainers(t *testing.T, s corev1.PodSpec) {
 	}
 	if proxy.Image != "cobranch:v1" || !slices.Equal(proxy.Args, []string{"model-proxy"}) || proxy.RestartPolicy == nil ||
 		*proxy.RestartPolicy != corev1.ContainerRestartPolicyAlways || !hasEnv(proxy.Env, "COBRANCH_MODEL_PROVIDER", "anthropic") ||
-		!hasEnv(proxy.Env, "COBRANCH_HTTP_ADDR", "127.0.0.1:8090") || !hasEnv(proxy.Env, "COBRANCH_MODEL_URL", "https://gateway.example.com/anthropic") {
-		t.Errorf("model proxy = %+v", proxy)
+		!hasEnv(proxy.Env, "COBRANCH_HTTP_ADDR", "127.0.0.1:8090") || !hasEnv(proxy.Env, "COBRANCH_MODEL_URL", "https://gateway.example.com/anthropic") ||
+		!hasEnv(proxy.Env, "COBRANCH_MODEL", "test-model") || !hasEnv(proxy.Env, "COBRANCH_REST_URL", "http://cobranch-rest.cobranch:8080") ||
+		!hasEnv(proxy.Env, "COBRANCH_TOKEN_FILE", "/cobranch/token/token") ||
+		!slices.ContainsFunc(proxy.VolumeMounts, func(m corev1.VolumeMount) bool {
+			return m.Name == volumeToken && m.MountPath == "/cobranch/token" && m.ReadOnly
+		}) {
+		t.Errorf("model proxy = %+v, want it to report each turn's spend as the task's token", proxy)
 	}
 	var fromSecret []string
 	for _, e := range harness.Env {
@@ -95,7 +100,7 @@ func checkTaskContainers(t *testing.T, s corev1.PodSpec) {
 	}
 	if harness.Image != "agents:v1" || !slices.Equal(harness.Command, []string{"/cobranch/bin/cobranch", "agent"}) || harness.WorkingDir != "/workspace" ||
 		!hasEnv(harness.Env, "COBRANCH_MODEL_URL", "http://127.0.0.1:8090") || !hasEnv(harness.Env, "COBRANCH_TOKEN_FILE", "/cobranch/token/token") ||
-		!hasEnv(harness.Env, "HOME", "/home/agent") || !slices.Equal(fromSecret, []string{"API_TOKEN", "COBRANCH_MODEL"}) ||
+		!hasEnv(harness.Env, "HOME", "/home/agent") || !slices.Equal(fromSecret, []string{"API_TOKEN", "COBRANCH_MODEL", "COBRANCH_REST_URL"}) ||
 		!harness.Resources.Requests.Cpu().Equal(resource.MustParse("500m")) {
 		t.Errorf("harness = %+v", harness)
 	}

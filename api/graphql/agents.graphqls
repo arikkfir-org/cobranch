@@ -15,6 +15,8 @@ extend type Organization {
   modelProviders: [ModelProvider!]!
   "The model providers the installation knows, by name: those the organization may add."
   availableModelProviders: [String!]!
+  "The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read."
+  models: [Model!]!
 }
 
 "A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run."
@@ -28,6 +30,27 @@ type ModelProvider {
   "Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another."
   broken: Boolean!
   "Who added it; null once they are gone."
+  createdBy: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
+type Model {
+  provider: String!
+  "The model's name, as its provider gives it."
+  name: String!
+  "What a million tokens it reads cost, such as 3.00."
+  inputPrice: String!
+  "What a million tokens it writes cost, such as 15.00."
+  outputPrice: String!
+  "Whether a new agent starts on it; the organization has at most one."
+  default: Boolean!
+  "The agents that run on it, by name."
+  agents: [CommitPrincipal!]!
+  "Who added it; null for one Cobranch added for the agents already on it, and once its adder is gone."
   createdBy: CommitPrincipal
   createdAt: Time!
   updatedAt: Time!
@@ -63,6 +86,8 @@ type Agent {
   provider: String
   "The model it runs on, as its provider names it; null while it runs on none."
   model: String
+  "The most a task of it may spend, in US dollars such as 2.00; null for none."
+  cap: String
   "The secrets its tasks receive, by the environment variables they go in."
   secrets: [AgentSecret!]!
 }
@@ -101,8 +126,10 @@ type Task {
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
-  "What it is for: assigned for a task a principal assigned."
+  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's."
   kind: String!
+  "Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works."
+  private: Boolean!
   "Its assigner, whose permissions cap it; null once they are gone, when it may do nothing."
   assignedBy: CommitPrincipal
   title: String!
@@ -114,7 +141,7 @@ type Task {
   "The branch of that repository it works on; null for none."
   branchId: ID
   branch: String
-  "The thread of that branch's chat it talks in; null for none."
+  "The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none."
   threadId: ID
   "The commit it works at, such as the head a review task reviews; null for none."
   sha: String
@@ -131,11 +158,19 @@ type Task {
   endedAt: Time
   "Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+  "What it spent so far, at its organization's prices, in US dollars such as 0.42."
+  spent: String!
+  "The tokens its model read so far."
+  inputTokens: Int64!
+  "The tokens its model wrote so far."
+  outputTokens: Int64!
+  "The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it."
+  cap: String
   "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in."
+"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in."
 type MyTask {
   organization: String!
   task: Task!
@@ -147,6 +182,14 @@ type MyTask {
   issueNumber: Int
   "The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none."
   issueKey: String
+  "The private conversation the task talks in, its assigner's; null for none."
+  conversation: MyTaskConversation
+}
+
+"The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names."
+type MyTaskConversation {
+  repositorySlug: String
+  agentId: ID
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
@@ -201,6 +244,42 @@ input AgentPatch {
   name: String
   description: String
   instructions: String
+  "The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); null for none."
+  cap: String
+}
+
+"What a model costs and whether it is the default; it replaces what the model had."
+input ModelInput {
+  "What a million tokens it reads cost, 0 to 10000, such as 3.00."
+  inputPrice: String!
+  "What a million tokens it writes cost, 0 to 10000, such as 15.00."
+  outputPrice: String!
+  "Whether a new agent starts on it; null for not."
+  default: Boolean
+}
+
+"A call of a task's model, as the model proxy of its pod reports it."
+input TaskUsageInput {
+  "The call's own ID, which a repeated report repeats, so that it counts once."
+  id: ID!
+  "The model the call asked, as its provider names it."
+  model: String!
+  "The tokens the model read, 0 to 100000000."
+  inputTokens: Int!
+  "The tokens the model wrote, 0 to 100000000."
+  outputTokens: Int!
+}
+
+"What a task spent so far, the most it may spend, and whether it has ended, as it does once it reaches that."
+type TaskSpend {
+  "In US dollars, at its organization's prices, such as 0.42."
+  spent: String!
+  inputTokens: Int64!
+  outputTokens: Int64!
+  "The most it may spend, in US dollars; null for none."
+  cap: String
+  "Whether it has ended; its token then acts no more."
+  ended: Boolean!
 }
 
 "A secret an agent's tasks receive: the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and one of the organization's secrets or its repositories'."
@@ -226,11 +305,11 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
   "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
-  "Puts an agent on a model of a provider the organization added, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
   "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
   setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
@@ -238,6 +317,12 @@ extend type Mutation {
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
   "Removes a provider from the organization, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model_provider.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   removeModelProvider(organizationId: ID!, provider: String!, expectedVersion: Int): Boolean!
+  "Adds a model of a provider the organization added to its models, with what it costs, or changes one of them, and answers it; takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added is refused (BAD_USER_INPUT, model.provider_invalid), and a price past 10000 (BAD_USER_INPUT, model.price_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
+  setModel(organizationId: ID!, provider: String!, model: String!, input: ModelInput!, expectedVersion: Int): Model!
+  "Removes one of the organization's models, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  removeModel(organizationId: ID!, provider: String!, model: String!, expectedVersion: Int): Boolean!
+  "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
+  recordTaskSpend(input: TaskUsageInput!): TaskSpend!
   "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."

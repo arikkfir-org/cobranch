@@ -60,7 +60,7 @@ func TestReportPageViews(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := sdkmetric.NewManualReader()
-			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
+			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
 			req := httptest.NewRequest("POST", "/v1/page-views", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
@@ -88,6 +88,7 @@ func TestPageViewsNameEveryConsolePage(t *testing.T) {
 	for _, dir := range []struct{ glob, prefix string }{
 		{glob: "../../../web/console/public/assets/pages/*.js", prefix: ""},
 		{glob: "../../../web/console/public/assets/pages/org/*.js", prefix: "organization."},
+		{glob: "../../../web/console/public/assets/pages/org/settings/*.js", prefix: "organization.settings."},
 		{glob: "../../../web/console/public/assets/pages/repo/*.js", prefix: "repository."},
 	} {
 		files, err := filepath.Glob(dir.glob)

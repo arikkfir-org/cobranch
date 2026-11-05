@@ -226,7 +226,8 @@ func parseSecrets(node *yaml.Node) (map[string]uuid.UUID, error) {
 	return out, nil
 }
 
-// parsePermissions reads what a job's runs may do: repository permissions, each once, sorted.
+// parsePermissions reads what a job's runs may do: repository permissions, each once, sorted. A run reaches no
+// artifact, so a job declares no artifact permission.
 func parsePermissions(node *yaml.Node) ([]string, error) {
 	if node.Kind != yaml.SequenceNode {
 		return nil, &SettingsError{Line: node.Line, Message: "permissions must be a list of repository permissions"}
@@ -235,6 +236,9 @@ func parsePermissions(node *yaml.Node) ([]string, error) {
 	for _, n := range node.Content {
 		if n.Kind != yaml.ScalarNode || !slices.Contains(auth.RepositoryPermissions, n.Value) {
 			return nil, &SettingsError{Line: n.Line, Message: fmt.Sprintf("%q is no repository permission", n.Value)}
+		}
+		if n.Value == "artifacts.create" || slices.Contains(auth.ArtifactPermissions, n.Value) {
+			return nil, &SettingsError{Line: n.Line, Message: fmt.Sprintf("%q is no permission a job declares: its runs reach no artifact", n.Value)}
 		}
 		if slices.Contains(out, n.Value) {
 			return nil, &SettingsError{Line: n.Line, Message: "permission " + n.Value + " is listed twice"}

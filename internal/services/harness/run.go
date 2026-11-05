@@ -89,7 +89,7 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 	}
 	slog.InfoContext(ctx, "Working the task", "entries", len(entries), "kind", w.Task.Kind)
 	r := &run{Harness: h, work: w, entries: entries, kit: kit, thread: w.Task.ThreadID}
-	r.toolset = slices.Concat(r.chatTools(), h.tools, kit.Tools)
+	r.toolset = slices.Concat(r.chatTools(), r.tasksTools(), h.tools, kit.Tools)
 	// A task its kind ended has no deadline: it ends as its kind said, however late it resumed.
 	if start := w.Task.StartedAt; kit.Timeout > 0 && kit.End == nil {
 		if start.IsZero() {

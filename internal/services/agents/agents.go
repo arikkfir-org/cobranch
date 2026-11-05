@@ -110,6 +110,8 @@ type Agent struct {
 	// Secrets are the secrets its tasks receive, each an environment variable named by its key from the secret its
 	// value names.
 	Secrets map[string]uuid.UUID
+	// Cap is the most one of its tasks may spend; 0 for none.
+	Cap USD
 }
 
 // Input is what a new agent holds: its name, description, instructions and first grants.
@@ -126,6 +128,8 @@ type Change struct {
 	Name         *string
 	Description  *string
 	Instructions *string
+	// Cap is the agent's own cap; 0 for none.
+	Cap *USD
 }
 
 // TaskState is where a task stands.
@@ -179,8 +183,11 @@ type Task struct {
 	// IssueID is the issue it works on, for a task its assignment to the issue gave it; uuid.Nil for none.
 	IssueID uuid.UUID
 	// SHA is the commit it works at, such as the head a review task reviews; empty for none.
-	SHA   string
-	State TaskState
+	SHA string
+	// Private is whether its assigner asked for it in their private conversation: it shows what it is and where it
+	// works to them alone, and to others only Redacted, as a place in its agent's queue.
+	Private bool
+	State   TaskState
 	// Reason says why it failed or was cancelled; empty otherwise.
 	Reason string
 	// Summary is what the agent said it did, once it ended.
@@ -192,11 +199,31 @@ type Task struct {
 	EndedAt   time.Time
 	// Version counts its changes from 1: it is its ETag.
 	Version int64
+	// Spent is what its model's calls cost so far, at its organization's prices, and InputTokens and OutputTokens the
+	// tokens they read and wrote.
+	Spent        USD
+	InputTokens  int64
+	OutputTokens int64
+	// Cap is the most it may spend, as its agent now caps it; 0 for none.
+	Cap USD
 }
 
 // ByCobranch reports whether Cobranch started the task itself, so its agent's own grants alone cap it.
 func (t Task) ByCobranch() bool {
 	return t.AssignedBy != nil && t.AssignedBy.ID == t.Agent.ID
+}
+
+// HiddenFrom reports whether the task is private to someone other than viewer, the principal whose private records a
+// request reads (auth.PrivateFor): a private task once its assigner is gone is everyone's to keep out of.
+func (t Task) HiddenFrom(viewer uuid.UUID) bool {
+	return t.Private && (t.AssignedBy == nil || t.AssignedBy.ID != viewer)
+}
+
+// Redacted is the task as others than its assigner see a private one: its number, agent, kind, state and times, which
+// place it in its agent's queue, and nothing of who asked for it, what it is, where it works or how it went.
+func (t Task) Redacted() Task {
+	return Task{ID: t.ID, OrgID: t.OrgID, Number: t.Number, Agent: t.Agent, Kind: t.Kind, Private: true, State: t.State,
+		CreatedAt: t.CreatedAt, StartedAt: t.StartedAt, EndedAt: t.EndedAt, Version: t.Version}
 }
 
 // TaskInput is a task to assign: its title and instructions, and perhaps where it works. A branch takes its repository,
@@ -264,7 +291,7 @@ func ValidateInput(in Input) (Input, error) {
 	return in, nil
 }
 
-// ValidateChange normalizes c, or refuses it as ValidateInput refuses an agent's fields.
+// ValidateChange normalizes c, or refuses it as ValidateInput refuses an agent's fields and ValidateCap its cap.
 func ValidateChange(c Change) (Change, error) {
 	in, err := ValidateInput(Input{Name: deref(c.Name, "-"), Description: deref(c.Description, ""), Instructions: deref(c.Instructions, "")})
 	if err != nil {
@@ -278,6 +305,11 @@ func ValidateChange(c Change) (Change, error) {
 	}
 	if c.Instructions != nil {
 		c.Instructions = &in.Instructions
+	}
+	if c.Cap != nil {
+		if err := ValidateCap(*c.Cap); err != nil {
+			return c, err
+		}
 	}
 	return c, nil
 }

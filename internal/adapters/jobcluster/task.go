@@ -112,7 +112,8 @@ func (c *Cluster) StartTask(ctx context.Context, l taskrunner.Launch) (err error
 }
 
 // taskPodOf is the pod numbered l.Pod of the task: the harness in the agents' image, beside the model proxy, which
-// alone holds the provider's key, and after the copy of the cobranch binary it runs.
+// alone holds the provider's key and reports each turn's spend as the task's token, and after the copy of the cobranch
+// binary it runs.
 func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 	name := taskPodName(l.Task.ID, l.Pod)
 	deadline := int64(l.Timeout.Seconds())
@@ -127,8 +128,10 @@ func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 		VolumeMounts: []corev1.VolumeMount{{Name: volumeBin, MountPath: binDir}}, Resources: proxyResources}
 	proxy := corev1.Container{Name: "model-proxy", Image: c.cfg.CheckoutImage, Args: []string{"model-proxy"}, RestartPolicy: new(corev1.ContainerRestartPolicyAlways),
 		Env: []corev1.EnvVar{{Name: "COBRANCH_HTTP_ADDR", Value: proxyAddr}, {Name: "COBRANCH_MODEL_KEY_FILE", Value: keyDir + "/key"},
-			{Name: "COBRANCH_MODEL_PROVIDER", Value: l.Task.Provider}},
-		VolumeMounts: []corev1.VolumeMount{{Name: volumeKey, MountPath: keyDir, ReadOnly: true}}, Resources: proxyResources}
+			{Name: "COBRANCH_MODEL_PROVIDER", Value: l.Task.Provider}, {Name: "COBRANCH_MODEL", Value: l.Task.Model},
+			{Name: "COBRANCH_REST_URL", Value: l.Env["COBRANCH_REST_URL"]}, {Name: "COBRANCH_TOKEN_FILE", Value: tokenDir + "/token"}},
+		VolumeMounts: []corev1.VolumeMount{{Name: volumeKey, MountPath: keyDir, ReadOnly: true}, {Name: volumeToken, MountPath: tokenDir, ReadOnly: true}},
+		Resources:    proxyResources}
 	if u := c.cfg.ProviderURLs[l.Task.Provider]; u != "" {
 		proxy.Env = append(proxy.Env, corev1.EnvVar{Name: "COBRANCH_MODEL_URL", Value: u})
 	}

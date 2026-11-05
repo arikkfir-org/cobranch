@@ -37,9 +37,13 @@ DELETE FROM memberships WHERE org_id = $1 AND user_id = $2;
 -- name: Membership :one
 SELECT * FROM memberships WHERE org_id = $1 AND user_id = $2;
 
--- Members lists an organization's members, by display name.
+-- Members lists an organization's members, by display name, each with an email of theirs: a verified one, the oldest
+-- first, or else their oldest, or none.
 -- name: Members :many
-SELECT m.user_id, m.joined_at, p.display_name FROM memberships m JOIN principals p ON p.id = m.user_id
+SELECT m.user_id, m.joined_at, p.display_name,
+       coalesce((SELECT e.email FROM principal_emails e WHERE e.principal_id = m.user_id
+                 ORDER BY e.verified DESC, e.created_at, e.email LIMIT 1), '')::text AS email
+FROM memberships m JOIN principals p ON p.id = m.user_id
 WHERE m.org_id = $1 ORDER BY p.display_name, m.user_id;
 
 -- MemberByEmail finds the member who holds the email, verified.

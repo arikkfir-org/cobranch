@@ -10,9 +10,9 @@
    colours from the tone class on it or around it. */
 .tone-neutral { --tone-fg: var(--color-status-neutral-fg); --tone-bg: var(--color-status-neutral-bg); --tone-border: var(--color-status-neutral-border); --tone-solid: var(--color-status-neutral-solid); }
 .tone-info, .banner-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); --tone-solid: var(--color-status-info-solid); }
-.tone-success, .banner-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
-.tone-warning, .banner-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
-.tone-danger, .banner-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
+.tone-success, .banner-success, .card-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
+.tone-warning, .banner-warning, .meter-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
+.tone-danger, .banner-danger, .card-danger, .meter-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
 .tone-ai { --tone-fg: var(--color-status-ai-fg); --tone-bg: var(--color-status-ai-bg); --tone-border: var(--color-status-ai-border); --tone-solid: var(--color-status-ai-solid); }
 .tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); --tone-solid: var(--color-bg-inverse); }
 
@@ -122,6 +122,14 @@
 .input:is(:disabled, :has(> input:disabled)) { background: var(--color-bg-sunken); color: var(--color-fg-disabled); }
 .input:is(:disabled, :has(> input:disabled))::placeholder, .input > input:disabled::placeholder { color: var(--color-fg-disabled); }
 .field:has(:disabled) .field-label { color: var(--color-fg-disabled); }
+
+/* Copy field: a read-only value to copy (a key shown once, a clone URL) in Code/Medium, truncating, on bg/sunken, with a
+   Ghost Small copy Icon button inside; never editable. Label and help as on Input. */
+.copy-field {
+  display: flex; align-items: center; gap: var(--space-8); min-width: 0; padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-sunken);
+}
+.copy-field > code { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-medium); text-overflow: ellipsis; white-space: nowrap; }
 
 /* Select: a closed choice, an Input with a chevron; .select holds a native select, whose open list is the browser's. */
 .select { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
@@ -237,9 +245,26 @@
 .table td { height: var(--size-row-sm); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
+/* Table/Row: State=Muted for a row that no longer counts (a revoked key, an archived repository), its cells muted;
+   State=Selected for the row a pane or detail shows. */
+.table tr.row-muted td { background: var(--color-bg-sunken); color: var(--color-fg-muted); }
+.table tr.row-muted .cell-two-lines > :first-child { color: var(--color-fg-muted); }
+.table tr.row-selected td { background: var(--color-bg-selected); }
 .table .cell-muted { color: var(--color-fg-muted); }
 .table .cell-mono { font: var(--text-code-small); }
 .table .cell-person { display: flex; align-items: center; gap: var(--space-8); }
+/* Table/Cell Kind=Number: a count, size or share, right-aligned in tabular figures; Kind=Actions: the row's small ghost
+   buttons, hugging them on the right. */
+.table :is(th, td).cell-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table td.cell-actions { width: 1%; text-align: right; white-space: nowrap; }
+.table td.cell-actions > * + * { margin-left: var(--space-8); }
+.table td.cell-two-lines { padding-block: var(--space-12); }
+.table td a { color: inherit; text-decoration: none; }
+.table td a:hover { text-decoration: underline; }
+.cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
+.cell-two-lines > :first-child { color: var(--color-fg-default); font: var(--text-body-medium); }
+.cell-two-lines > * + * { margin-top: var(--space-2); }
+.cell-two-lines > code, .cell-two-lines > code:first-child { font: var(--text-code-medium); }
 
 /* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
    or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
@@ -249,6 +274,47 @@
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
+/* Card, Tone=Success for a card that announces a thing done and shown once, Tone=Danger for a danger zone: the border
+   takes the tone's colour, and the header its tint, with the title in the tone. */
+.card:is(.card-success, .card-danger) { border-color: var(--tone-border); }
+.card:is(.card-success, .card-danger) > .card-header { border-bottom-color: var(--tone-border); background: var(--tone-bg); }
+.card:is(.card-success, .card-danger) > .card-header :is(.card-title, .icon) { color: var(--tone-fg); }
+/* Card/Row: one object in a card: a 16px icon, its title over its meta, and trailing small ghost buttons; Hover and
+   Selected tint it. A row may lead with a 200px label column (a group of permissions) instead of the icon. Rows divide
+   with border/subtle. */
+.card-row {
+  display: flex; align-items: center; gap: var(--space-16); min-width: 0;
+  padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-surface);
+}
+.card-row:last-child { border-bottom: 0; }
+.card-row:hover { background: var(--color-bg-hover); }
+.card-row[aria-selected="true"], .card-row[aria-current="true"] { background: var(--color-bg-selected); }
+.card-row > .icon { color: var(--color-fg-muted); }
+.card-row-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.card-row-title { display: flex; align-items: center; gap: var(--space-8); min-width: 0; color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.card-row-meta { overflow: hidden; color: var(--color-fg-muted); font: var(--text-body-small); text-overflow: ellipsis; white-space: nowrap; }
+.card-row-actions { display: flex; align-items: center; gap: var(--space-8); flex: none; }
+.card-row-label { flex: none; align-self: flex-start; width: 200px; color: var(--color-fg-muted); font: var(--text-label-small); }
+.card-row-picks { display: grid; gap: var(--space-8); flex: 1; min-width: 0; }
+/* Card/Footer: a form's or an editor's actions under its card, on the sunken background, on the right with the primary
+   last. */
+.card-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8);
+  padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
+}
+
+/* Meter: a share of a quota or a cap. Kind=Full is its label and value over a 6px track; Kind=Share (.meter-share) the
+   4px track alone, for a table cell that says the value. The bar's width is the share, set by the page; Tone=Warning
+   from 80%, Tone=Danger at or over the cap, when the value turns the tone's colour too. */
+.meter { display: grid; flex: 1; gap: var(--space-6); min-width: 0; }
+.meter-head { display: flex; align-items: center; gap: var(--space-8); }
+.meter-label { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.meter-value { margin-left: auto; color: var(--color-fg-muted); font: var(--text-body-small); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meter-danger .meter-value { color: var(--tone-fg); }
+.meter-track, .meter-share { overflow: hidden; height: var(--space-6); border-radius: var(--radius-full); background: var(--color-bg-sunken); }
+.meter-share { height: var(--space-4); }
+.meter-bar { display: block; height: 100%; border-radius: var(--radius-full); background: var(--color-action-primary-bg); }
+:is(.meter-warning, .meter-danger) .meter-bar { background: var(--tone-solid); }
 
 /* Dialog: a modal dialog over the scrim, 480px wide: a title with a close button, the body, and a sunken footer with
    the actions on the right, primary last. Esc closes it, and so does a click on the scrim, which the page wires. */
@@ -302,6 +368,23 @@
 .page-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-large); letter-spacing: var(--text-heading-large-tracking); }
 .page-header-description { color: var(--color-fg-muted); font: var(--text-body-medium); }
 .page-header-actions { display: flex; align-items: center; gap: var(--space-8); flex: none; }
+
+/* Section header: a section of a page, a Heading/Small title over a muted line on what it holds, and an optional
+   secondary action on the right. */
+.section-header { display: flex; align-items: flex-start; gap: var(--space-16); }
+.section-header-text { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; }
+.section-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.section-header-description { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
+
+/* Filters: the row over a list or table: a 320px search Input on the left, then its controls, and its count in Caption on
+   the right. */
+.filters { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.filters > .input { flex: 0 1 320px; }
+.filters-count { margin-left: auto; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+@media (max-width: 768px) {
+  .filters { flex-wrap: wrap; }
+  .filters > .input { flex-basis: 100%; }
+}
 
 /* Rows, the Patterns page's components: lists of rich rows on the surface, in a card with border/default and radius/lg,
    each row divided from the next by border/subtle. A row's text is a title over its metadata. */

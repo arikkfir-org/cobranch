@@ -157,7 +157,7 @@ async function showIssueList(org, main, can) {
   main.replaceChildren(h("div", { class: "row" }, h("h1", {}, "Issues"), h("div", {},
     h("a", { class: "button small", href: base + org.slug + "/issues/labels", "data-nav": "" }, "Labels"), " ",
     can("issues.write") ? h("a", { class: "button small primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null)),
-  error, h("div", { class: "filters" }, assignee, repository, label, text, switcher), groups, h("div", {}, more));
+  error, h("div", { class: "issue-filters" }, assignee, repository, label, text, switcher), groups, h("div", {}, more));
   await load("/orgs/" + org.slug + "/issues?" + query);
 }
 

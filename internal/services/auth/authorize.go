@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Scope is where a grant applies: the installation, an organization, a repository, or one secret, for secret
-// permissions only.
+// Scope is where a grant applies: the installation, an organization, a repository, or one secret or one artifact, for
+// its own permissions only.
 type Scope string
 
 // The scopes.
@@ -19,6 +19,7 @@ const (
 	ScopeOrganization Scope = "organization"
 	ScopeRepository   Scope = "repository"
 	ScopeSecret       Scope = "secret"
+	ScopeArtifact     Scope = "artifact"
 )
 
 // ErrForbidden is a principal that lacks a permission it needs.
@@ -28,7 +29,7 @@ var ErrForbidden = errors.New("forbidden")
 // has there. scopeID is uuid.Nil at the installation. A grant reaches its scope and everything inside it: at a
 // repository, Permissions answers the permissions of the grants on it and the repository permissions of the roles at
 // its organization; at a secret, the secret permissions of the grants on it, on its repository and at its
-// organization.
+// organization; at an artifact, the artifact permissions of those grants and of its audiences.
 type Grants interface {
 	Permissions(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error)
 	// Repositories lists the IDs of the organization's repositories where the principal holds permission, through a
@@ -170,6 +171,32 @@ func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.U
 		}
 	}
 	return kept, nil
+}
+
+// Among lists those of the objects list answers where principalID holds permission, as Holds would answer for each:
+// list gives the IDs where a principal's grants give it. None under a personal token of theirs that doesn't list it,
+// and under a task token of theirs only those where the task's assigner holds it too. A run's or a delivery's token
+// widens nothing here. The services list objects that are scopes of their own, such as artifacts, with it.
+func (a *Authorizer) Among(ctx context.Context, principalID uuid.UUID, permission string, list func(ctx context.Context, principalID uuid.UUID) ([]uuid.UUID, error)) ([]uuid.UUID, error) {
+	if len(narrowed(ctx, principalID, []string{permission})) == 0 {
+		return nil, nil
+	}
+	ids, err := list(ctx, principalID)
+	if err != nil {
+		return nil, fmt.Errorf("listing where %s holds %s: %w", principalID, permission, err)
+	}
+	assigner, capped := assignedBy(ctx, principalID)
+	switch {
+	case !capped:
+		return ids, nil
+	case assigner == uuid.Nil:
+		return nil, nil
+	}
+	theirs, err := list(ctx, assigner)
+	if err != nil {
+		return nil, fmt.Errorf("listing where %s, who assigned the task, holds %s: %w", assigner, permission, err)
+	}
+	return slices.DeleteFunc(ids, func(id uuid.UUID) bool { return !slices.Contains(theirs, id) }), nil
 }
 
 // Renders reports whether the request comes with the token of delivery deliveryID, the one credential that may upload

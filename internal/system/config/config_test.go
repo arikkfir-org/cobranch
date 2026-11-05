@@ -19,7 +19,7 @@ var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "BLOB_MOVE_FROM", 
 	"JOBS_SCRIPT_IMAGE", "JOBS_CHECKOUT_IMAGE", "JOBS_REST_URL", "JOBS_GIT_URL", "JOBS_LOGS_MAX_BYTES", "JOBS_NAMESPACE_PREFIX",
 	"JOBS_INSTALLATION", "JOBS_POD_SECURITY", "JOBS_NAMESPACE_LABELS", "JOBS_HOME", "JOBS_SERVICE_ACCOUNT", "JOBS_RELEASE",
 	"JOBS_RUNNER_ROLE", "JOBS_OWNER_ROLE", "JOBS_LOGS_ROLE", "JOBS_LOGS_READER", "JOBS_LOGS_RETENTION", "JOBS_WEBHOOKS_ALLOWED_CIDRS", "JOBS_EGRESS_EXCEPT", "JOBS_EGRESS_DNS", "JOBS_RESOURCES", "JOBS_QUOTA", "JOBS_NODE_SELECTOR", "JOBS_TOLERATIONS", "JOBS_AFFINITY",
-	"JOBS_IMAGE_PULL_SECRETS", "GIT_URL", "TOKEN", "SHA", "WORKSPACE", "TOKEN_FILE", "MODEL_PROVIDER", "MODEL", "MODEL_KEY_FILE", "MODEL_URL",
+	"JOBS_IMAGE_PULL_SECRETS", "REST_URL", "GIT_URL", "TOKEN", "SHA", "WORKSPACE", "TOKEN_FILE", "MODEL_PROVIDER", "MODEL", "MODEL_KEY_FILE", "MODEL_URL",
 	"MODEL_MAX_TOKENS", "MAX_TURNS", "SHELL_TIMEOUT", "AGENTS_IMAGE", "AGENTS_RESOURCES", "AGENTS_TIMEOUT", "AGENTS_IDLE", "AGENTS_MAX_TURNS",
 	"AGENTS_SHELL_TIMEOUT", "AGENTS_MODEL_MAX_TOKENS", "AGENTS_PROVIDER_URLS"}
 
@@ -551,9 +551,16 @@ func TestLoadModelProxy(t *testing.T) {
 		want    ModelProxy
 		wantErr bool
 	}{
-		{name: "defaults", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL_KEY_FILE": "/cobranch/key/key"},
-			want: ModelProxy{HTTPAddr: "127.0.0.1:8090", ModelProvider: "google", ModelKeyFile: "/cobranch/key/key", ShutdownTimeout: 5 * time.Second}},
-		{name: "no key", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google"}, wantErr: true},
+		{name: "defaults", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL": "test-model", "COBRANCH_MODEL_KEY_FILE": "/cobranch/key/key",
+			"COBRANCH_REST_URL": "http://rest:8080", "COBRANCH_TOKEN_FILE": "/cobranch/token/token"},
+			want: ModelProxy{HTTPAddr: "127.0.0.1:8090", ModelProvider: "google", Model: "test-model", ModelKeyFile: "/cobranch/key/key",
+				REST: mustURL(t, "http://rest:8080"), TokenFile: "/cobranch/token/token", ShutdownTimeout: 5 * time.Second}},
+		{name: "no key", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL": "test-model", "COBRANCH_REST_URL": "http://rest:8080",
+			"COBRANCH_TOKEN_FILE": "/cobranch/token/token"}, wantErr: true},
+		{name: "nowhere to report spend", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL": "test-model",
+			"COBRANCH_MODEL_KEY_FILE": "/cobranch/key/key", "COBRANCH_TOKEN_FILE": "/cobranch/token/token"}, wantErr: true},
+		{name: "no model", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL_KEY_FILE": "/cobranch/key/key",
+			"COBRANCH_REST_URL": "http://rest:8080", "COBRANCH_TOKEN_FILE": "/cobranch/token/token"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -48,6 +48,8 @@ type Store struct {
 	providers map[uuid.UUID]map[string]agents.ModelProvider
 	secrets   map[uuid.UUID]Secret
 	entries   map[uuid.UUID][]agents.Entry
+	models    map[modelKey]agents.Model
+	calls     map[uuid.UUID][]uuid.UUID
 	// OrgSlugs are the organizations' slugs, by ID.
 	OrgSlugs map[uuid.UUID]string
 	// IssueOf answers the key and number that name an issue a task works on, by its ID; nil names none.
@@ -65,7 +67,8 @@ func NewStore() *Store {
 		RepoRoles: []orgs.Role{orgstest.Reader, orgstest.Developer, orgstest.Maintainer, orgstest.Automation},
 		Repos:     map[uuid.UUID]Repository{}, Branches: map[uuid.UUID]Branch{}, Threads: map[uuid.UUID]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{},
-		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}}
+		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}, models: map[modelKey]agents.Model{},
+		calls: map[uuid.UUID][]uuid.UUID{}}
 }
 
 // AddAgent records a, as CreateAgent would without checking its name, and answers it as the store keeps it.
@@ -164,6 +167,11 @@ func (s *Store) CreateAgent(_ context.Context, actor uuid.UUID, a agents.Agent) 
 		return agents.ErrNameTaken
 	}
 	a.CreatedAt, a.UpdatedAt, a.Version = s.Now, s.Now, 1
+	for k, m := range s.models {
+		if k.org == a.OrgID && m.Default {
+			a.Provider, a.Model = m.Provider, m.Name
+		}
+	}
 	slices.SortStableFunc(a.Grants, func(x, y agents.Grant) int { return cmp.Compare(x.RepoSlug, y.RepoSlug) })
 	s.agents[a.ID] = a
 	s.Names[a.ID] = a.Name
@@ -188,6 +196,9 @@ func (s *Store) UpdateAgent(_ context.Context, actor, orgID, id uuid.UUID, versi
 		if value != nil {
 			*field = *value
 		}
+	}
+	if c.Cap != nil {
+		a.Cap = *c.Cap
 	}
 	a.UpdatedAt = s.Now
 	a.Version++
@@ -249,7 +260,7 @@ func (s *Store) Tasks(_ context.Context, orgID uuid.UUID, f agents.TaskFilter, r
 			(t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && !slices.Contains(hidden, t.Kind) &&
 			(f.Before == 0 || t.Number < f.Before)
 		if match && len(out) < limit {
-			out = append(out, t)
+			out = append(out, s.spending(t))
 		}
 	}
 	return out, nil
@@ -268,7 +279,7 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 	if i < 0 {
 		return agents.Task{}, orgs.ErrNotFound
 	}
-	return s.tasks[i], nil
+	return s.spending(s.tasks[i]), nil
 }
 
 // TaskByID finds a task by its ID, with its organization's slug from OrgSlugs, its agent's instructions and email, and
@@ -346,6 +357,18 @@ func (s *Store) Assign(_ context.Context, actor uuid.UUID, t agents.Task) (agent
 	s.tasks = append(s.tasks, t)
 	s.Events = append(s.Events, "task.assigned "+t.Title+" by "+s.Names[actor])
 	return t, nil
+}
+
+// ActiveTask answers the number of a task that talks in the thread and has yet to end, or orgs.ErrNotFound.
+func (s *Store) ActiveTask(_ context.Context, threadID uuid.UUID) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.tasks {
+		if t.ThreadID == threadID && t.State.Active() {
+			return t.Number, nil
+		}
+	}
+	return 0, orgs.ErrNotFound
 }
 
 // Cancel cancels one of the organization's active tasks at version.
