@@ -285,8 +285,8 @@ screen](design-system.md#screens) draws it.
 Each property saves as soon as it changes, naming the version it was made from; a change someone else made first reloads
 the page instead of overwriting it.
 
-- **The list** at `/<org>/issues` is a table with its header row, under the tabs Open, Closed and All with their
-  counts, and filters by text, repository, assignee (Me and Nobody among them) and label; a filtered list counts what
+- **The list** at `/<org>/issues` is a table with its header row, under the tabs Open and Closed with their
+  counts and All, and filters by text, repository, assignee (Me and Nobody among them) and label; a filtered list counts what
   it shows of the tab's issues. Each row is the issue's state icon, identifier, title and labels, then its repository,
   assignee, branch and when it last changed.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered

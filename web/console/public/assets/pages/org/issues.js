@@ -158,7 +158,8 @@ async function showIssueList(org, main, can, head) {
       more.hidden = !next;
       const state = stateOf(params);
       const of = (c, s = state) => (s === "all" ? c.open + c.closed : s === "open" ? c.open : c.closed);
-      count.textContent = filtered ? of(counts) + " of " + of(totals) : of(counts) + " " + (state === "all" ? "issues" : state);
+      const word = state === "all" ? "issues" : state;
+      count.textContent = (filtered ? of(counts) + " of " + of(totals) : of(counts)) + " " + word;
       table.hidden = !tbody.children.length;
       none.hidden = !table.hidden;
       none.replaceChildren(noIssues(org, can, params, totals, choices));
