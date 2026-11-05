@@ -216,6 +216,10 @@ own ([artifacts](artifacts.md#access)).
   nobody else but the organization's Owners can reach it. The inference never counts the Owners, who reach everything.
 - **Internal** once another of the organization's users, besides its creator and the Owners, holds a grant that reaches
   it.
+- **Who reaches it, listed.** A repository's Settings · Access lists every role that reaches it, a row each with when it
+  was granted: the grants on the repository, Direct, then the organization's roles that give any repository permission,
+  through the organization, the Owners' included. Only the direct ones are granted and revoked there; the organization's
+  change on its Members page.
 - **Public** once *Anonymous*, the built-in principal that stands for every caller, holds any role on the repository or
   its organization. Anonymous can hold any repository role, even one with `repo.push` or `repo.merge`, the one exception
   to grants staying inside an organization. An installation can forbid grants to Anonymous, and an organization can

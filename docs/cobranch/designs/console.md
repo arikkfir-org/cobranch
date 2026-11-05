@@ -70,7 +70,7 @@ Console loads no more modules: every page’s is already in.
 
 - **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
   and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/`, each tabbed page's directory
-  (`pages/org/settings/`, `pages/org/agents/`) and `fonts/` (its `templates`,
+  (`pages/org/settings/`, `pages/org/agents/`, `pages/repo/settings/`) and `fonts/` (its `templates`,
   at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
   the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
   REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
@@ -124,11 +124,13 @@ own paths are the organization slugs no organization may take.
   which a test holds.
 - **A page's tabs are files too.** A page whose views are tabs keeps them in a directory of its own name:
   `pages/org/settings/` holds Settings' General (`index.js`, at `/acme/settings`), Members, Roles, API keys,
-  Agents, Secrets, Models and Usage, each at `/acme/settings/<file>`, and `pages/org/agents/` the Agents page's Agents,
-  Activity and Quotas. The shell names each such directory, one entry in `index.html` (a new tabbed page adds its own), and Caddy writes its files'
+  Agents, Secrets, Models and Usage, each at `/acme/settings/<file>`, `pages/org/agents/` the Agents page's Agents,
+  Activity and Quotas, and `pages/repo/settings/` a repository's Settings' General, Access and Secrets, at
+  `/acme/website/settings` and `/acme/website/settings/<file>`. The shell names each such directory, one entry in `index.html` (a new tabbed page adds its own), and Caddy writes its files'
   names in beside the others; `lib/tabs.js` draws the tab bar from the modules' `tab` (`{ label, order }`),
   `allowed` and `count`. A slice that adds a tab adds a file there, and no organization slug: the old addresses of
-  Members, Roles, API keys and Secrets (`/acme/members`) stay files of `pages/org/` that open their tab.
+  Members, Roles, API keys and Secrets (`/acme/members`) stay files of `pages/org/` that open their tab, as a
+  repository's Access and Secrets (`/acme/website/access`) do of `pages/repo/`.
   **Rejected: each tab a page `under` Settings** (`pages/org/members.js`): every new tab would take an organization
   slug, and a tab named like a page of the organization, such as Agents, would clash with it (`/acme/agents`).
 
