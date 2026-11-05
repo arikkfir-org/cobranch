@@ -38,12 +38,13 @@ export async function repositoryRun({ org, repo, path, at, rest, can, root, fail
   }
   recrumb([{ label: org.name, href: base + org.slug }, { label: repo.slug, href: root }, { label: r.job.displayName + " #" + r.number }]);
   const ran = r.definition.kind !== "webhook" && Boolean(r.startedAt);
-  // A commit or a first attempt that can't be read leaves the line without its subject or its pusher's name; logs
-  // that can't be read leave the log card saying why.
+  // A commit or a first attempt that can't be read leaves the line without its subject or its pusher's name; steps
+  // that can't be read, as from a rest-server of the release before while a rollout replaces it, leave those its logs
+  // name; logs that can't be read leave the log card saying why.
   const [commit, first, steps, logs] = await Promise.all([
     api("GET", path + "/commits/" + r.sha).catch(() => null),
     r.rerunOf ? api("GET", path + "/runs/" + r.rerunOf).catch(() => null) : r,
-    ran ? api("GET", runPath + "/steps").then((d) => d.steps) : [],
+    ran ? api("GET", runPath + "/steps").then((d) => d.steps, () => []) : [],
     ran ? api("GET", runPath + "/logs").then((d) => d.logs, (err) => err) : [],
   ]);
   const view = { r, commit, first, steps, logs };
