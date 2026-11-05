@@ -20,6 +20,7 @@ func giveReviewerModel(t *testing.T, f *jobsFixture, orgID uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
 	exec(ctx, t, f.pool, "INSERT INTO model_providers (org_id, provider) VALUES ($1, 'acme-models')", orgID)
+	exec(ctx, t, f.pool, "INSERT INTO models (org_id, provider, model) VALUES ($1, 'acme-models', 'review-1')", orgID)
 	exec(ctx, t, f.pool, "UPDATE agents SET provider = 'acme-models', model = 'review-1' WHERE org_id = $1 AND purpose = 'review'", orgID)
 }
 

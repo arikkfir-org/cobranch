@@ -83,6 +83,12 @@ func TestAgentModelStore(t *testing.T) {
 	if _, err := f.a.SetModel(ctx, f.olivia, f.acme.ID, f.scout.ID, 1, "openai", "a-model"); !errors.As(err, &verr) || verr.Code != "agent.provider_invalid" {
 		t.Errorf("SetModel(openai) = %v, want agent.provider_invalid", err)
 	}
+	if _, err := f.a.SetModel(ctx, f.olivia, f.acme.ID, f.scout.ID, 1, "anthropic", "a-model"); !errors.As(err, &verr) || verr.Code != "agent.model_invalid" {
+		t.Errorf("SetModel() of a model the organization hasn't added = %v, want agent.model_invalid", err)
+	}
+	if _, _, err := f.a.PutModel(ctx, f.olivia, f.acme.ID, "anthropic", "a-model", agents.ModelInput{}, agents.NoVersion); err != nil {
+		t.Fatal(err)
+	}
 	a, err := f.a.SetModel(ctx, f.olivia, f.acme.ID, f.scout.ID, 1, "anthropic", "a-model")
 	if err != nil || a.Provider != "anthropic" || a.Model != "a-model" || a.Version != 2 || len(a.Grants) != 2 {
 		t.Fatalf("SetModel() = %+v, %v", a, err)
