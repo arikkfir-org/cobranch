@@ -289,6 +289,7 @@ the page instead of overwriting it.
   counts and All, and filters by text, repository, assignee (Me and Nobody among them) and label; a filtered list counts what
   it shows of the tab's issues. Each row is the issue's state icon, identifier, title and labels, then its repository,
   assignee, branch and when it last changed.
+- **A repository's Issues tab** at `/<org>/<repo>/issues` is the same list, of the issues about that repository, without the repository filter and column, its tab counting the open ones. New issue from it starts one about the repository.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
   description, its branches with their status as branch rows, its activity, newest first; its [comments](#comments)
   are the conversation pane's, live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the

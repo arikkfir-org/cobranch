@@ -836,6 +836,7 @@ const (
 	PageViewPageRepositoryCommits          PageViewPage = "repository.commits"
 	PageViewPageRepositoryEnvironments     PageViewPage = "repository.environments"
 	PageViewPageRepositoryFile             PageViewPage = "repository.file"
+	PageViewPageRepositoryIssues           PageViewPage = "repository.issues"
 	PageViewPageRepositoryRuns             PageViewPage = "repository.runs"
 	PageViewPageRepositorySecrets          PageViewPage = "repository.secrets"
 	PageViewPageRepositorySettings         PageViewPage = "repository.settings"
@@ -902,6 +903,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageRepositoryEnvironments:
 		return true
 	case PageViewPageRepositoryFile:
+		return true
+	case PageViewPageRepositoryIssues:
 		return true
 	case PageViewPageRepositoryRuns:
 		return true
