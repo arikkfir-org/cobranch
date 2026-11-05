@@ -76,6 +76,14 @@ func principal(p *code.Principal) *Principal {
 	return &Principal{Id: p.ID, DisplayName: p.DisplayName}
 }
 
+// actor is who did something, with their kind, as the API shows them; nil for nobody.
+func actor(a *code.Actor) *Actor {
+	if a == nil {
+		return nil
+	}
+	return &Actor{Id: a.ID, DisplayName: a.DisplayName, Kind: a.Kind}
+}
+
 func person(p code.Person) Person {
 	return Person{Name: p.Name, Email: p.Email, At: p.At.UTC(), Zone: p.Zone, Principal: principal(p.Principal)}
 }

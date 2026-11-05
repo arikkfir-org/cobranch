@@ -17,7 +17,7 @@ import (
 // gives them.
 func run(r code.Run) (Run, error) {
 	out := Run{Id: r.ID, Number: r.Number, Job: Principal{Id: r.Job.ID, DisplayName: r.Job.DisplayName}, Sha: r.SHA, Ref: r.Ref,
-		State: RunState(r.State), Reason: r.Reason, StartedBy: principal(r.StartedBy), CausedBy: principal(r.CausedBy), QueuedAt: r.QueuedAt.UTC(),
+		State: RunState(r.State), Reason: r.Reason, StartedBy: principal(r.StartedBy), CausedBy: actor(r.CausedBy), QueuedAt: r.QueuedAt.UTC(),
 		StartedAt: utc(r.StartedAt), EndedAt: utc(r.EndedAt), Version: r.Version}
 	if r.CauseRun != 0 {
 		out.CauseRun = &r.CauseRun

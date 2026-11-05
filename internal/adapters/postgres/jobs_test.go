@@ -432,7 +432,7 @@ func TestCodeStoreReadsRuns(t *testing.T) {
 	if err != nil || run.Trigger.Kind != jobs.EventPush || run.Trigger.ActorID != f.olivia || run.Definition.Script != "make" || run.Job.DisplayName != "ci/build" {
 		t.Errorf("Run(#1) = %+v, %v", run, err)
 	}
-	if run.CausedBy == nil || run.CausedBy.ID != f.olivia || run.CausedBy.DisplayName == "" {
+	if run.CausedBy == nil || run.CausedBy.ID != f.olivia || run.CausedBy.DisplayName == "" || run.CausedBy.Kind != "user" {
 		t.Errorf("Run(#1) caused by %+v, want Olivia, who pushed it", run.CausedBy)
 	}
 }
@@ -482,7 +482,7 @@ func TestCodeStoreFiltersRuns(t *testing.T) {
 		})
 	}
 	list, err := f.c.Runs(t.Context(), repo, code.RunsQuery{Limit: 10})
-	if err != nil || len(list) != 2 || list[0].CausedBy == nil || list[0].CausedBy.ID != f.nia {
+	if err != nil || len(list) != 2 || list[0].CausedBy == nil || list[0].CausedBy.ID != f.nia || list[0].CausedBy.Kind != "user" {
 		t.Errorf("Runs() = %+v, %v, want #2 caused by Nia, who pushed it", list, err)
 	}
 }

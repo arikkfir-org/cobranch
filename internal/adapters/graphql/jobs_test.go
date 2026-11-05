@@ -31,7 +31,7 @@ func withRuns(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *aut
 			r.Job, r.Ref = code.Principal{ID: uuid.New(), DisplayName: r.Definition.Name}, "refs/heads/main"
 			r.QueuedAt = time.Date(2026, 11, 1, 9, 0, 0, 0, time.FixedZone("IST", 2*3600))
 			r.Trigger = jobs.Event{Kind: jobs.EventPush, SHA: r.SHA, Ref: r.Ref, ActorID: actor}
-			r.CausedBy = &code.Principal{ID: actor, DisplayName: "Max"}
+			r.CausedBy = &code.Actor{ID: actor, DisplayName: "Max", Kind: "user"}
 			f.codeStore.AddRun(f.website.ID, r)
 		}
 		return next(f)
@@ -53,8 +53,8 @@ func TestRunQueries(t *testing.T) {
 		{name: "at a commit", viewer: withRuns(maxHolding(auth.RoleReader)), document: repo(`runs(sha: "` + shaOf("b") + `") { runs { number } }`),
 			want: []string{`"runs":[{"number":1}]`}},
 		{name: "by job, branch and state, counted, with who caused them", viewer: withRuns(maxHolding(auth.RoleReader)),
-			document: repo(`runs(job: "ci/build", branch: "main", states: [WAITING, QUEUED]) { total runs { number causedBy { displayName } } }`),
-			want:     []string{`"runs":{"total":1,"runs":[{"number":2,"causedBy":{"displayName":"Max"}}]}`}},
+			document: repo(`runs(job: "ci/build", branch: "main", states: [WAITING, QUEUED]) { total runs { number causedBy { displayName kind } } }`),
+			want:     []string{`"runs":{"total":1,"runs":[{"number":2,"causedBy":{"displayName":"Max","kind":"user"}}]}`}},
 		{name: "a query a job's name holds, ignoring case", viewer: withRuns(maxHolding(auth.RoleReader)),
 			document: repo(`runs(query: "DEP") { total runs { number } }`), want: []string{`"runs":{"total":1,"runs":[{"number":3}]}`}},
 		{name: "a query's later page, uncounted", viewer: withRuns(maxHolding(auth.RoleReader)),

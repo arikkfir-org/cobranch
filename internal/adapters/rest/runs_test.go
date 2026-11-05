@@ -23,7 +23,8 @@ func withRuns(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *a
 		at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.FixedZone("IST", 2*3600))
 		for _, r := range []code.Run{
 			{SHA: shaOf("b"), State: jobs.StateSucceeded},
-			{SHA: shaOf("c"), State: jobs.StateWaiting, Reason: "waits for a member to start it"},
+			{SHA: shaOf("c"), State: jobs.StateWaiting, Reason: "waits for a member to start it",
+				CausedBy: &code.Actor{ID: uuid.New(), DisplayName: "ci/test", Kind: "job"}},
 			{SHA: shaOf("c"), State: jobs.StateQueued},
 		} {
 			r.Job, r.Ref, r.Definition, r.QueuedAt = job, "refs/heads/main", def, at
@@ -119,8 +120,8 @@ func TestRunAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "one by number", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"), wantStatus: 200,
 			wantHeader: http.Header{"Etag": {`"1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if r := decode[Run](t, body); r.Number != 2 || r.State != RunStateWaiting {
-					t.Errorf("run = %s", body)
+				if r := decode[Run](t, body); r.Number != 2 || r.State != RunStateWaiting || r.CausedBy == nil || r.CausedBy.Kind != "job" {
+					t.Errorf("run = %s, want #2, waiting, caused by a job", body)
 				}
 			}},
 		{name: "one the caller holds", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"),

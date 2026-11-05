@@ -56,8 +56,9 @@ type Run struct {
 	Reason string
 	// StartedBy is who started it from Waiting, or re-ran it; nil for any other run.
 	StartedBy *Principal
-	// CausedBy is who caused it: StartedBy, or else its trigger's actor; nil for a schedule's run, or once they are gone.
-	CausedBy  *Principal
+	// CausedBy is who caused it, with their kind: StartedBy, or else its trigger's actor; nil for a schedule's run, or
+	// once they are gone.
+	CausedBy  *Actor
 	QueuedAt  time.Time
 	StartedAt *time.Time
 	EndedAt   *time.Time

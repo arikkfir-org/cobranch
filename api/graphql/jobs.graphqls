@@ -62,8 +62,8 @@ type Run {
   reason: String!
   "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
-  "Who caused it: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it; null for a schedule's run, or once they are gone."
-  causedBy: CommitPrincipal
+  "Who caused it, with their kind: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it, such as a person, an agent, a job or an API key; null for a schedule's run, or once they are gone."
+  causedBy: Actor
   queuedAt: Time!
   startedAt: Time
   endedAt: Time

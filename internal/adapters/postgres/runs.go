@@ -114,8 +114,8 @@ func insertRun(ctx context.Context, q *queries.Queries, r newRun, jobID uuid.UUI
 	return nil
 }
 
-// Runs lists at most limit of the repository's runs, newest first, numbered before before (0 for the newest), at
-// commit sha unless it is empty (code.Store).
+// Runs lists a page of the repository's runs that q's filters keep, newest first: at most q.Limit, numbered before
+// q.Before unless it is 0 (code.Store).
 func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery) ([]code.Run, error) {
 	rows, err := s.q.RunsOf(ctx, queries.RunsOfParams{RepoID: repoID, Before: q.Before, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch),
 		States: statesOf(q.States), Query: q.Query, Lim: int32(q.Limit)})
@@ -128,7 +128,7 @@ func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery
 		if err != nil {
 			return nil, err
 		}
-		run.CausedBy = principalOf(r.CausedByID, r.CausedByName)
+		run.CausedBy = actorOf(r.CausedByID, r.CausedByName, r.CausedByKind)
 		out = append(out, run)
 	}
 	return out, nil
@@ -174,7 +174,7 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 	if err != nil {
 		return code.Run{}, err
 	}
-	run.CausedBy = principalOf(row.CausedByID, row.CausedByName)
+	run.CausedBy = actorOf(row.CausedByID, row.CausedByName, row.CausedByKind)
 	return run, nil
 }
 

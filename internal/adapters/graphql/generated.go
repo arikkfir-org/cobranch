@@ -9800,8 +9800,8 @@ type Run {
   reason: String!
   "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
-  "Who caused it: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it; null for a schedule's run, or once they are gone."
-  causedBy: CommitPrincipal
+  "Who caused it, with their kind: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it, such as a person, an agent, a job or an API key; null for a schedule's run, or once they are gone."
+  causedBy: Actor
   queuedAt: Time!
   startedAt: Time
   endedAt: Time
@@ -37782,8 +37782,8 @@ func (ec *executionContext) _Run_causedBy(ctx context.Context, field graphql.Col
 			return obj.CausedBy, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
-			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *Actor) graphql.Marshaler {
+			return ec.marshalOActor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐActor(ctx, selections, v)
 		},
 		true,
 		false,
@@ -37796,7 +37796,7 @@ func (ec *executionContext) fieldContext_Run_causedBy(_ context.Context, field g
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_CommitPrincipal(ctx, field)
+			return ec.childFields_Actor(ctx, field)
 		},
 	}
 	return fc, nil
@@ -55026,6 +55026,13 @@ func (ec *executionContext) marshalOActivityDelivery2ᚖcobranchᚗdevᚋinterna
 		return graphql.Null
 	}
 	return ec._ActivityDelivery(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOActor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐActor(ctx context.Context, sel ast.SelectionSet, v *Actor) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Actor(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOAgent2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgent(ctx context.Context, sel ast.SelectionSet, v *Agent) graphql.Marshaler {

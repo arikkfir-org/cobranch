@@ -127,7 +127,7 @@ DELETE FROM schedule_slots WHERE slot < @before;
 -- every run: the commit, the job's name, the ref, the states, and a query that the job's name or the branch or tag
 -- holds, ignoring case, or that the commit starts with.
 -- name: RunsOf :many
-SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name
+SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = @repo_id AND (@before::bigint = 0 OR r.number < @before::bigint)
@@ -156,7 +156,7 @@ WHERE r.repo_id = @repo_id
 
 -- RunByNumber finds one of a repository's runs by number, as RunsOf lists it.
 -- name: RunByNumber :one
-SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name
+SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = @repo_id AND r.number = @number;

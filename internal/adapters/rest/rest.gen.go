@@ -3421,8 +3421,8 @@ type Run struct {
 	// CauseRun The number of the run whose annotation triggered it; absent for any other.
 	CauseRun *int64 `json:"causeRun,omitempty"`
 
-	// CausedBy Who caused it: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it; absent for a schedule's run, or once they are gone.
-	CausedBy *Principal `json:"causedBy,omitempty"`
+	// CausedBy Who caused it, with their kind: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it, such as a person, an agent, a job or an API key; absent for a schedule's run, or once they are gone.
+	CausedBy *Actor `json:"causedBy,omitempty"`
 
 	// Definition A job as /cobranch.yaml declared it.
 	Definition Job                `json:"definition"`
