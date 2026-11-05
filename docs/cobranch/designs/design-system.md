@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 55 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 57 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 58 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -333,7 +333,7 @@ only cue.
 
 ## Screens
 
-Fifty-seven screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Fifty-eight screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -356,6 +356,7 @@ Researcher waits for a task.
 | [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
 | [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open, a resolved thread and a file marked Viewed, folded and checked off, beside it |
+| [Branch · Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14769) | Its pushes, newest first, each a card of its jobs' runs as Annotation rows, the head's with Re-run all, and a link that opens the earlier pushes |
 | [Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15120) | A repository's runs as a table: job, branch, commit, status, when, how long and who caused it, under a filter, Any job, Any branch, Any status and the count; empty, no-match and status menu states beside it |
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
 | [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
@@ -397,7 +398,7 @@ Researcher waits for a task.
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-The repository's other screens (a branch's Jobs and Environment, Run and Delivery) are drawn, and join this table as the Console takes them on ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)). Error states are drawn beside the screen they belong to.
+The repository's other screens (a branch's Environment, Run and Delivery) are drawn, and join this table as the Console takes them on ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)). Error states are drawn beside the screen they belong to.
 
 ### Sign in
 

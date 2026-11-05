@@ -14,7 +14,7 @@ import { issueBadge } from "../../lib/issues.js";
 import { popover } from "../../lib/menu.js";
 import { commitReviews, reviewDrafting } from "../../lib/reviews.js";
 import { go, render } from "../../lib/router.js";
-import { manualJobs, runsAt } from "../../lib/runs.js";
+import { branchJobs } from "../../lib/runs.js";
 import { base, me, setCarried } from "../../lib/state.js";
 import { mergeCard, repositoryBranches } from "./index.js";
 
@@ -72,7 +72,7 @@ async function tabContent(ctx, b, tab) {
     return [...await diffView(branch + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can), me ? branch + "/viewed" : null),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
-  if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsAt(path, at, fail, b.head)];
+  if (tab === "jobs") return branchJobs(path, at, b, can, fail);
   if (tab === "environment") return [await environmentsPanel(path, at, b.name)];
   if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
   return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,

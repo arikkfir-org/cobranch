@@ -3,8 +3,8 @@ pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding
 .logs { display: grid; gap: var(--space-12); }
 
 /* The Jobs screen: its filters over its table, and the table's columns at the widths the screen draws them; the
-   components draw everything else. A branch's Jobs tab shows the same table, in a list of its own. */
-.runs-page, .runs-list { display: flex; flex-direction: column; gap: var(--space-24); container-type: inline-size; }
+   components draw everything else. */
+.runs-page { display: flex; flex-direction: column; gap: var(--space-24); container-type: inline-size; }
 .runs-table { table-layout: fixed; }
 .runs-table th:nth-child(2) { width: 240px; }
 .runs-table th:nth-child(3) { width: 90px; }
@@ -24,3 +24,11 @@ pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding
   .runs-table :is(th, td):is(:nth-child(2), :nth-child(5)) { display: none; }
   .runs-filters > .filters-count { flex-basis: 100%; }
 }
+
+/* A branch's Jobs tab: a card per push, a job its head starts by hand in a row of the Annotation row's box around a
+   Small button, a head nothing ran on in a line, and the link that opens the earlier pushes. */
+.push-card .manual-job { padding-block: var(--space-8); }
+.manual-job-icon { color: var(--color-fg-muted); }
+.push-card > .card-note { padding-block: var(--space-12); }
+.earlier-pushes { font: var(--text-body-small); text-decoration: none; }
+.earlier-pushes:hover { text-decoration: underline; }
