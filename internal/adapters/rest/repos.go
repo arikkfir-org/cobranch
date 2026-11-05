@@ -12,7 +12,7 @@ import (
 // Repositories is what the API needs of the repositories' service.
 type Repositories interface {
 	Create(ctx context.Context, v repos.Viewer, orgID uuid.UUID, in repos.Input) (repos.Repository, error)
-	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Repository, error)
+	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Listed, error)
 	Usage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (repos.Usage, error)
 	Get(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (repos.Repository, []string, error)
 	Locate(ctx context.Context, v repos.Viewer, orgSlug, slug string) (repos.Repository, []string, error)
@@ -31,6 +31,15 @@ func repository(r repos.Repository, held []string) Repository {
 		ViewerPermissions: nonNil(held)}
 	if r.CreatedBy != uuid.Nil {
 		out.CreatedBy = &r.CreatedBy
+	}
+	return out
+}
+
+// summary is s as the API shows it.
+func summary(s repos.Summary) *RepositorySummary {
+	out := &RepositorySummary{OpenBranches: s.OpenBranches, ReadyBranches: s.ReadyBranches, Main: RepositorySummaryMain(s.Main)}
+	if !s.LastPushAt.IsZero() {
+		out.LastPushAt = &s.LastPushAt
 	}
 	return out
 }
@@ -74,7 +83,9 @@ func (a api) ListRepositories(ctx context.Context, req ListRepositoriesRequestOb
 		if err != nil {
 			return nil, fail(err, "repository")
 		}
-		out = append(out, repository(r, held))
+		listed := repository(r.Repository, held)
+		listed.Summary = summary(r.Summary)
+		out = append(out, listed)
 	}
 	return ListRepositories200JSONResponse{Repositories: out}, nil
 }

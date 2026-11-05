@@ -213,8 +213,11 @@ func (s *Service) Activity(ctx context.Context, v Viewer, orgID uuid.UUID, numbe
 }
 
 // hideRepositories blanks the slugs of the repositories outside readable in events' changes, and the branches of
-// theirs that links name.
+// theirs that links name, and leaves out the starts of their tasks, which only their readers see.
 func hideRepositories(events []Event, readable []uuid.UUID) []Event {
+	events = slices.DeleteFunc(events, func(e Event) bool {
+		return e.Task != nil && e.Task.RepoID != uuid.Nil && !slices.Contains(readable, e.Task.RepoID)
+	})
 	for i, e := range events {
 		if b := e.Branch; b != nil && !slices.Contains(readable, b.RepositoryID) {
 			events[i].Branch = &EventBranch{RepositoryID: b.RepositoryID, LinkedBy: b.LinkedBy}

@@ -17,7 +17,7 @@ import (
 )
 
 // Store is an issues.Store in memory. Repos are the repositories issues may be about, by ID, Live their live branches,
-// by ID, each with its link, and Labels the organizations' labels, by ID. Agents are the organizations' agents, whom
+// by ID, each with its link, which an issue shows the newest of, and Labels the organizations' labels, by ID. Agents are the organizations' agents, whom
 // issues may be assigned to too, by ID, each with its organization, and TaskOf, when set, finds the task an agent works
 // on an issue in. Fail, when set, fails every write.
 type Store struct {
@@ -30,6 +30,9 @@ type Store struct {
 	Agents map[uuid.UUID]uuid.UUID
 	TaskOf func(issueID, agentID uuid.UUID) *issues.Task
 	last   map[uuid.UUID]int
+	// linked orders the live branches' links, by branch ID, the higher the newer, up to links.
+	linked map[uuid.UUID]int
+	links  int
 	Fail   error
 }
 
@@ -38,7 +41,7 @@ var _ issues.Store = (*Store)(nil)
 // NewStore returns an empty Store over o.
 func NewStore(o *orgstest.Store) *Store {
 	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Events: map[uuid.UUID][]issues.Event{},
-		Live: map[uuid.UUID]issues.Branch{}, Kept: map[uuid.UUID]issues.Label{}, Agents: map[uuid.UUID]uuid.UUID{}, last: map[uuid.UUID]int{}}
+		Live: map[uuid.UUID]issues.Branch{}, Kept: map[uuid.UUID]issues.Label{}, Agents: map[uuid.UUID]uuid.UUID{}, last: map[uuid.UUID]int{}, linked: map[uuid.UUID]int{}}
 }
 
 // TasksOf is a TaskOf over the tasks kept answers, oldest first, as an agents' fake keeps them: the newest task the
@@ -95,6 +98,7 @@ func (s *Store) filled(issue issues.Issue) issues.Issue {
 		r := s.Repos[issue.Repository.ID]
 		issue.Repository = &issues.Repository{ID: r.ID, Slug: r.Slug, Name: r.Name}
 	}
+	issue.Branch = s.lastBranch(issue.ID)
 	var labels []issues.IssueLabel
 	for _, l := range issue.Labels {
 		if kept, ok := s.Kept[l.ID]; ok {
@@ -119,8 +123,8 @@ func (s *Store) linkEvent(actor, issueID uuid.UUID, kind string, b issues.Branch
 		Branch: &issues.EventBranch{RepositoryID: b.Repository.ID, Repository: b.Repository.Slug, Name: b.Name, LinkedBy: issues.LinkedByHand}})
 }
 
-// Create numbers and records the issue.
-func (s *Store) Create(_ context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
+// Create numbers and records the issue, and links the branches that name it.
+func (s *Store) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
 	if s.Fail != nil {
 		return issues.Issue{}, s.Fail
 	}
@@ -128,7 +132,15 @@ func (s *Store) Create(_ context.Context, actor uuid.UUID, issue issues.Issue) (
 	issue.Number = s.last[issue.OrgID]
 	s.Issues = append(s.Issues, issue)
 	s.event(actor, issue.ID, "issue.created", nil)
-	return s.filled(issue), nil
+	// As the database does, the organization's live branches with no link whose names name the issue link to it.
+	for _, b := range s.Live {
+		if n, ok := issues.Named(b.Name, s.Orgs.Orgs[issue.OrgID].IssueKey); ok && n == issue.Number && b.IssueID == uuid.Nil {
+			if err := s.Link(ctx, actor, b, &issue.ID); err != nil {
+				return issues.Issue{}, err
+			}
+		}
+	}
+	return s.filled(s.Issues[len(s.Issues)-1]), nil
 }
 
 func (s *Store) index(orgID uuid.UUID, number int) int {
@@ -157,6 +169,22 @@ func (s *Store) List(_ context.Context, orgID uuid.UUID, q issues.Query) ([]issu
 		return out[:q.Limit], true, nil
 	}
 	return out, false, nil
+}
+
+// Counts counts the organization's issues that q matches in any state and on any page: open, then closed.
+func (s *Store) Counts(_ context.Context, orgID uuid.UUID, q issues.Query) (int, int, error) {
+	q.States, q.Below = issues.States, 0
+	var open, closed int
+	for _, i := range s.Issues {
+		switch {
+		case i.OrgID != orgID || !matches(i, q):
+		case slices.Contains(issues.OpenStates, i.State):
+			open++
+		default:
+			closed++
+		}
+	}
+	return open, closed, nil
 }
 
 func matches(i issues.Issue, q issues.Query) bool {
@@ -283,6 +311,20 @@ func (s *Store) Branches(_ context.Context, issueID uuid.UUID) ([]issues.LinkedB
 	return out, nil
 }
 
+// lastBranch is the live branch linked to the issue last, as an issue shows it; nil for none.
+func (s *Store) lastBranch(issueID uuid.UUID) *issues.LiveBranch {
+	var last *issues.Branch
+	for _, b := range s.Live {
+		if b.IssueID == issueID && (last == nil || s.linked[b.ID] > s.linked[last.ID] || s.linked[b.ID] == s.linked[last.ID] && b.Name < last.Name) {
+			last = &b
+		}
+	}
+	if last == nil {
+		return nil
+	}
+	return &issues.LiveBranch{Repository: issues.Repository{ID: last.Repository.ID, Slug: last.Repository.Slug}, Name: last.Name}
+}
+
 // Branch finds a live branch by name.
 func (s *Store) Branch(_ context.Context, orgID, repoID uuid.UUID, name string) (issues.Branch, error) {
 	for _, b := range s.Live {
@@ -312,6 +354,10 @@ func (s *Store) Link(_ context.Context, actor uuid.UUID, branch issues.Branch, i
 	was := cur.IssueID
 	cur.IssueID, cur.LinkedBy = to, issues.LinkedByHand
 	s.Live[branch.ID] = cur
+	if was != to {
+		s.links++
+		s.linked[branch.ID] = s.links
+	}
 	if to == uuid.Nil || was == to {
 		return nil
 	}

@@ -94,3 +94,22 @@ SELECT sqlc.embed(r) FROM repositories r
 JOIN repository_slugs rs ON rs.repo_id = r.id
 JOIN organization_slugs os ON os.org_id = r.org_id
 WHERE os.slug = @org_slug AND rs.slug = @repo_slug;
+
+-- RepositorySummaries sums up each of those of ids that are the organization's repositories: its open branches (the
+-- live ones but main and those merged already) and how many of them are Ready, when its last push was recorded, and
+-- how its main's head stands by its annotations: failing when one failed, running when one is pending or in
+-- progress, passing when every one succeeded, none without any.
+-- name: RepositorySummaries :many
+SELECT r.id AS repo_id,
+    count(b.id) FILTER (WHERE b.name <> 'main' AND b.status IS DISTINCT FROM 'merged')::integer AS open_branches,
+    count(b.id) FILTER (WHERE b.name <> 'main' AND b.status = 'ready')::integer AS ready_branches,
+    lp.committed_at AS last_push_at,
+    (SELECT CASE WHEN count(a.id) = 0 THEN 'none' WHEN bool_or(a.status = 'failed') THEN 'failing'
+            WHEN bool_or(a.status IN ('pending', 'in_progress')) THEN 'running' ELSE 'passing' END
+        FROM branches m JOIN annotations a ON a.repo_id = m.repo_id AND a.sha = m.head
+        WHERE m.repo_id = r.id AND m.name = 'main' AND m.deleted_at IS NULL)::text AS main_status
+FROM repositories r
+LEFT JOIN branches b ON b.repo_id = r.id AND b.deleted_at IS NULL
+LEFT JOIN pushes lp ON lp.id = (SELECT p.id FROM pushes p WHERE p.repo_id = r.id ORDER BY p.committed_at DESC LIMIT 1)
+WHERE r.org_id = @org_id AND r.id = ANY (@ids::uuid[])
+GROUP BY r.id, lp.committed_at;

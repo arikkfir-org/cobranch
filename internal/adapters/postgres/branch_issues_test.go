@@ -84,6 +84,29 @@ func (f *linkFixture) linked(t *testing.T, issueID uuid.UUID) []string {
 	return out
 }
 
+// shows fails t unless the issue, read alone and in Acme's list, shows branch as its live branch, "repository/name",
+// or none for "".
+func (f *linkFixture) shows(t *testing.T, issueID uuid.UUID, branch string) {
+	t.Helper()
+	list, _, err := f.is.List(context.Background(), f.acme.ID, issues.Query{States: issues.States, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := slices.IndexFunc(list, func(i issues.Issue) bool { return i.ID == issueID })
+	for how, issue := range map[string]issues.Issue{"ByID": f.issue(t, issueID), "List": list[listed]} {
+		got := ""
+		if b := issue.Branch; b != nil {
+			if b.Repository.ID != f.website.ID {
+				t.Errorf("%s: ACME-%d's branch is in repository %s, want website's", how, issue.Number, b.Repository.ID)
+			}
+			got = b.Repository.Slug + "/" + b.Name
+		}
+		if got != branch {
+			t.Errorf("%s: ACME-%d's branch = %q, want %q", how, issue.Number, got, branch)
+		}
+	}
+}
+
 func (f *linkFixture) events(t *testing.T, issueID uuid.UUID) []issues.Event {
 	t.Helper()
 	events, err := f.is.Activity(context.Background(), issueID)
@@ -149,6 +172,7 @@ func TestBranchLinksByHand(t *testing.T) {
 	if got := f.issue(t, f.second.ID); got.State != issues.StateInProgress || !slices.Equal(f.linked(t, f.second.ID), []string{"website/feature by hand"}) {
 		t.Fatalf("ACME-2 after the link = %s, %v", got.State, f.linked(t, f.second.ID))
 	}
+	f.shows(t, f.second.ID, "website/feature")
 	// Relinking a branch linked by its name unlinks it from that issue, and doesn't move an issue that has started.
 	login, err := f.is.Branch(ctx, f.acme.ID, f.website.ID, "acme-1-login")
 	if err != nil || login.IssueID != f.first.ID || login.LinkedBy != issues.LinkedByName {
@@ -163,6 +187,9 @@ func TestBranchLinksByHand(t *testing.T) {
 	if got := f.linked(t, f.second.ID); !slices.Equal(got, []string{"website/acme-1-login by hand", "website/feature by hand"}) {
 		t.Fatalf("ACME-2's branches = %v", got)
 	}
+	// An issue shows the live branch linked to it last.
+	f.shows(t, f.first.ID, "")
+	f.shows(t, f.second.ID, "website/acme-1-login")
 	if n := len(f.events(t, f.second.ID)); n != 4 {
 		t.Fatalf("ACME-2 has %d events, want created, two links and one change", n)
 	}
@@ -179,6 +206,7 @@ func TestBranchLinksByHand(t *testing.T) {
 	if got := f.linked(t, f.second.ID); !slices.Equal(got, []string{"website/feature by hand, deleted"}) {
 		t.Fatalf("ACME-2's branches after the delete = %v", got)
 	}
+	f.shows(t, f.second.ID, "")
 	if _, err := f.is.Branch(ctx, f.acme.ID, f.website.ID, "feature"); !errors.Is(err, issues.ErrBranchNotFound) {
 		t.Fatalf("Branch() of a deleted branch = %v", err)
 	}

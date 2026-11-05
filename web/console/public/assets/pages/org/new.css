@@ -1,0 +1,3 @@
+/* New repository: its form as a card three sidebars wide, as the New repository screen lays it out. Layout only; the
+   card and its fields are components.css's. */
+.new-repository { max-width: calc(3 * var(--size-sidebar)); }

@@ -31,6 +31,8 @@ type Store interface {
 	Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]Repository, error)
 	// Update writes the repository's settings, claiming its slug when it changed, or ErrSlugTaken.
 	Update(ctx context.Context, actor uuid.UUID, repo Repository) error
+	// Summaries sums up those of ids that are the organization's repositories, by ID.
+	Summaries(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]Summary, error)
 	// Usage counts the organization's repositories and sums its Git data, and lists those of ids that are its
 	// repositories, by slug, each with its Git data.
 	Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []RepositoryUsage, error)
@@ -177,8 +179,8 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	return created, nil
 }
 
-// List lists the organization's repositories v reads, by slug; it takes org.read.
-func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Repository, error) {
+// List lists the organization's repositories v reads, by slug, each with its summary; it takes org.read.
+func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Listed, error) {
 	if _, err := s.orgHolds(ctx, v, orgID); err != nil {
 		return nil, err
 	}
@@ -193,7 +195,19 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Reposi
 	if err != nil {
 		return nil, fmt.Errorf("listing the repositories: %w", err)
 	}
-	return repos, nil
+	summaries, err := s.store.Summaries(ctx, orgID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("summing up the repositories: %w", err)
+	}
+	out := make([]Listed, 0, len(repos))
+	for _, r := range repos {
+		summary, ok := summaries[r.ID]
+		if !ok {
+			summary.Main = MainNone
+		}
+		out = append(out, Listed{Repository: r, Summary: summary})
+	}
+	return out, nil
 }
 
 // Usage returns what the organization takes of what its limits cap, each against the limit that applies, with the Git

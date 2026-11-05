@@ -13,7 +13,7 @@ import (
 // Repositories is what the API needs of the repositories' service.
 type Repositories interface {
 	Create(ctx context.Context, v repos.Viewer, orgID uuid.UUID, in repos.Input) (repos.Repository, error)
-	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Repository, error)
+	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Listed, error)
 	Usage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (repos.Usage, error)
 	Get(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (repos.Repository, []string, error)
 	ByID(ctx context.Context, v repos.Viewer, repoID uuid.UUID) (repos.Repository, []string, error)
@@ -32,6 +32,16 @@ func repository(r repos.Repository) *Repository {
 	if r.CreatedBy != uuid.Nil {
 		id := r.CreatedBy.String()
 		out.CreatedBy = &id
+	}
+	return out
+}
+
+// repositorySummary is s as the API shows it.
+func repositorySummary(s repos.Summary) *RepositorySummary {
+	out := &RepositorySummary{OpenBranches: s.OpenBranches, ReadyBranches: s.ReadyBranches, Main: MainStatus(strings.ToUpper(string(s.Main)))}
+	if !s.LastPushAt.IsZero() {
+		at := s.LastPushAt.UTC()
+		out.LastPushAt = &at
 	}
 	return out
 }

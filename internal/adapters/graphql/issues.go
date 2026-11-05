@@ -80,6 +80,9 @@ func issueOf(i issues.Issue) *Issue {
 	if t := i.Task; t != nil {
 		out.Task = &IssueTask{Number: int(t.Number), State: TaskState(strings.ToUpper(string(t.State)))}
 	}
+	if b := i.Branch; b != nil {
+		out.Branch = &IssueLiveBranch{RepositoryID: b.Repository.ID.String(), RepositorySlug: b.Repository.Slug, Name: b.Name}
+	}
 	out.Labels = mapAll(i.Labels, func(l issues.IssueLabel) *IssueLabel {
 		return &IssueLabel{ID: l.ID.String(), Name: l.Name, Color: labelColors[l.Color]}
 	})
@@ -106,6 +109,12 @@ func issueEvent(e issues.Event) *IssueEvent {
 		out.Branch = &IssueEventBranch{LinkedBy: linkedBy[b.LinkedBy]}
 		if b.Name != "" {
 			out.Branch.Repository, out.Branch.Name = &b.Repository, &b.Name
+		}
+	}
+	if t := e.Task; t != nil {
+		out.Task = &IssueEventTask{Number: int(t.Number)}
+		if t.Branch != "" {
+			out.Task.Branch = &t.Branch
 		}
 	}
 	return out

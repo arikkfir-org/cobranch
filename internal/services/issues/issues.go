@@ -99,6 +99,13 @@ type Repository struct {
 	Name string
 }
 
+// LiveBranch is the live branch linked to an issue last, as the organization's list of issues shows it: its
+// repository, by ID and slug, and its name.
+type LiveBranch struct {
+	Repository Repository
+	Name       string
+}
+
 // Issue is a piece of an organization's work.
 type Issue struct {
 	ID    uuid.UUID
@@ -120,6 +127,8 @@ type Issue struct {
 	Task *Task
 	// Repository is the repository it is about; nil for none, or for a viewer who doesn't read it.
 	Repository *Repository
+	// Branch is the live branch linked to it last; nil for none, or for a viewer who doesn't read its repository.
+	Branch *LiveBranch
 	// Labels are the organization's labels it carries, by name.
 	Labels []IssueLabel
 	// CreatedBy is who created it; nil once they are gone.
@@ -192,6 +201,8 @@ const (
 type Page struct {
 	Issues []Issue
 	Next   string
+	// Open and Closed count the issues the filter matches in every state, open and closed: those its tabs offer.
+	Open, Closed int
 }
 
 // Query is a Filter as the store runs it: its states and text resolved, and its cursor decoded into the number the
@@ -219,8 +230,8 @@ type Change struct {
 	ToID   uuid.UUID
 }
 
-// Event is something that happened to an issue, by whom and when: issue.created, issue.changed with its changes, or
-// issue.branch_linked and issue.branch_unlinked with the branch.
+// Event is something that happened to an issue, by whom and when: issue.created, issue.changed with its changes,
+// issue.branch_linked and issue.branch_unlinked with the branch, or issue.task_started, by an agent, with its task.
 type Event struct {
 	ID   uuid.UUID
 	Kind string
@@ -230,6 +241,16 @@ type Event struct {
 	Changes []Change
 	// Branch is the branch a link or an unlink names; nil for the other kinds.
 	Branch *EventBranch
+	// Task is the task an issue.task_started names; nil for the other kinds.
+	Task *EventTask
+}
+
+// EventTask is the task an agent assignee started on an issue: its number, the repository it works in (uuid.Nil for
+// none), whose readers alone see it, and the name of the branch it works on, once it has one.
+type EventTask struct {
+	Number int64
+	RepoID uuid.UUID
+	Branch string
 }
 
 // The errors the domain answers; an adapter maps each to its status.

@@ -30,13 +30,16 @@ type Store interface {
 	Get(ctx context.Context, orgID uuid.UUID, number int) (Issue, error)
 	// List lists a page of the organization's issues that q matches, newest first, and whether more follow.
 	List(ctx context.Context, orgID uuid.UUID, q Query) ([]Issue, bool, error)
+	// Counts counts the organization's issues that q matches in any state and on any page: those in OpenStates, then
+	// the rest.
+	Counts(ctx context.Context, orgID uuid.UUID, q Query) (open, closed int, err error)
 	// Update writes issue's fields over the one at version, records event issue.changed with its changes, and answers
 	// it as kept, or ErrChanged when it is at another version now, or ErrNotFound when it is gone.
 	Update(ctx context.Context, actor uuid.UUID, issue Issue, version int64, changes []Change) (Issue, error)
 	// Delete deletes the issue at version with its events and records event issue.deleted at the organization, or
 	// ErrChanged when it is at another version now, or ErrNotFound when it is gone.
 	Delete(ctx context.Context, actor uuid.UUID, issue Issue, version int64) error
-	// Activity lists the issue's events, oldest first.
+	// Activity lists the issue's events, its tasks' starts among them, oldest first.
 	Activity(ctx context.Context, issueID uuid.UUID) ([]Event, error)
 	// Assignee finds whom an issue of the organization may be assigned to, one of its members or of its agents, or
 	// ErrNotFound.
@@ -133,11 +136,14 @@ func shown(issue Issue, readable []uuid.UUID) Issue {
 	if issue.Task != nil && issue.Task.RepoID != uuid.Nil && !slices.Contains(readable, issue.Task.RepoID) {
 		issue.Task = nil
 	}
+	if issue.Branch != nil && !slices.Contains(readable, issue.Branch.Repository.ID) {
+		issue.Branch = nil
+	}
 	return issue
 }
 
-// List lists a page of the organization's issues that f matches, newest first; it takes issues.read. Filtering by a
-// repository v doesn't read finds none.
+// List lists a page of the organization's issues that f matches, newest first, with how many it matches open and
+// closed; it takes issues.read. Filtering by a repository v doesn't read finds none.
 func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter) (Page, error) {
 	ctx, span := tracer.Start(ctx, "issues.Service.List")
 	defer span.End()
@@ -161,6 +167,9 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter)
 		return Page{}, failed(span, "listing the issues", err)
 	}
 	page := Page{Issues: make([]Issue, 0, len(list))}
+	if page.Open, page.Closed, err = s.store.Counts(ctx, orgID, q); err != nil {
+		return Page{}, failed(span, "counting the issues", err)
+	}
 	for _, i := range list {
 		page.Issues = append(page.Issues, shown(i, readable))
 	}
@@ -290,7 +299,12 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 		return Issue{}, failed(span, "creating the issue", err)
 	}
 	span.SetAttributes(attribute.Int("cobranch.issue.number", created.Number))
-	return s.rendered(ctx, created)
+	// Creating it links branches named after it in any of the organization's repositories, readable or not.
+	readable, err := s.readable(ctx, v, orgID)
+	if err != nil {
+		return Issue{}, failed(span, "creating the issue", err)
+	}
+	return s.rendered(ctx, shown(created, readable))
 }
 
 // assignee is the member or the agent of the organization id names, or nil for uuid.Nil; anyone else is a

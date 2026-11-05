@@ -3499,7 +3499,7 @@ paths:
   /orgs/{org}/issues:
     get:
       operationId: listIssues
-      summary: A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+      summary: A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: state
@@ -3558,12 +3558,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [issues]
+                required: [issues, counts]
                 properties:
                   issues:
                     type: array
                     items:
                       $ref: "#/components/schemas/Issue"
+                  counts:
+                    $ref: "#/components/schemas/IssueCounts"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -4279,7 +4281,7 @@ paths:
   /orgs/{org}/repos:
     get:
       operationId: listRepositories
-      summary: The organization's repositories the viewer reads, by slug; takes org.read.
+      summary: The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
       parameters:
         - $ref: "#/components/parameters/org"
       responses:
@@ -7534,6 +7536,27 @@ components:
           description: The permissions the viewer holds on the repository.
           items:
             type: string
+        summary:
+          $ref: "#/components/schemas/RepositorySummary"
+    RepositorySummary:
+      type: object
+      description: A repository summed up for its organization's list, which alone answers it.
+      required: [openBranches, readyBranches, main]
+      properties:
+        openBranches:
+          type: integer
+          description: Its live branches but main and those merged already.
+        readyBranches:
+          type: integer
+          description: Those of its open branches that are Ready.
+        lastPushAt:
+          type: string
+          format: date-time
+          description: When its last push was recorded; absent before its first.
+        main:
+          type: string
+          enum: [none, running, failing, passing]
+          description: How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
     Usage:
       type: object
       description: What a user or an organization takes of what one limit caps, against the limit that applies.
@@ -8001,6 +8024,8 @@ components:
           $ref: "#/components/schemas/IssueTask"
         repository:
           $ref: "#/components/schemas/IssueRepository"
+        branch:
+          $ref: "#/components/schemas/IssueLiveBranch"
         labels:
           type: array
           description: The organization's labels it carries, by name.
@@ -8044,6 +8069,31 @@ components:
           type: string
         name:
           type: string
+    IssueLiveBranch:
+      type: object
+      description: The live branch linked to an issue last; absent for none, and for a viewer who doesn't read its repository.
+      required: [repository, name]
+      properties:
+        repository:
+          type: object
+          required: [id, slug]
+          properties:
+            id:
+              type: string
+              format: uuid
+            slug:
+              type: string
+        name:
+          type: string
+    IssueCounts:
+      type: object
+      description: How many of the organization's issues a list's filters match in any state, open and closed, whichever states it shows.
+      required: [open, closed]
+      properties:
+        open:
+          type: integer
+        closed:
+          type: integer
     IssueInput:
       type: object
       description: What creates an issue.
@@ -8175,7 +8225,7 @@ components:
           format: uuid
         kind:
           type: string
-          description: issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+          description: issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
         actor:
           $ref: "#/components/schemas/Principal"
         at:
@@ -8188,6 +8238,22 @@ components:
             $ref: "#/components/schemas/IssueChange"
         branch:
           $ref: "#/components/schemas/IssueEventBranch"
+        task:
+          $ref: "#/components/schemas/IssueEventTask"
+    IssueEventTask:
+      type: object
+      description: >-
+        The task an issue.task_started names, which its agent assignee started on it; the event is left out for a
+        viewer who doesn't read the task's repository.
+      required: [number]
+      properties:
+        number:
+          type: integer
+          format: int64
+          description: Its number in the organization's tasks.
+        branch:
+          type: string
+          description: The name of the branch it works on, without refs/heads/, once it has one.
     IssueEventBranch:
       type: object
       description: >-

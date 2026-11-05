@@ -2,8 +2,10 @@ package graphql
 
 import (
 	"testing"
+	"time"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/repos"
 )
 
 func TestRepositoryQueries(t *testing.T) {
@@ -12,6 +14,16 @@ func TestRepositoryQueries(t *testing.T) {
 			document: fixed(`{ organization(slug: "acme") { repositories { slug name visibility objectFormat viewerPermissions access { displayName kind roles { name } } roles { name } } } }`),
 			want: []string{`"slug":"website"`, `"visibility":"PRIVATE"`, `"objectFormat":"sha1"`, `"repo.manage"`,
 				`"access":[{"displayName":"Olivia","kind":"user","roles":[{"name":"Maintainer"}]}]`, `{"name":"Reader"},{"name":"Developer"}`}},
+		{name: "a repository summed up", viewer: func(f *orgFixture) *auth.Authenticated {
+			f.repoStore.RepoSummaries[f.website.ID] = repos.Summary{OpenBranches: 4, ReadyBranches: 2, LastPushAt: time.Date(2026, 11, 5, 1, 2, 3, 0, time.UTC), Main: repos.MainFailing}
+			return &f.olivia
+		},
+			document: fixed(`{ organization(slug: "acme") { repositories { slug summary { openBranches readyBranches lastPushAt main } } } }`),
+			want:     []string{`"summary":{"openBranches":4,"readyBranches":2,"lastPushAt":"2026-11-05T01:02:03Z","main":"FAILING"}`}},
+		{name: "one never pushed", viewer: olivia, document: fixed(`{ organization(slug: "acme") { repositories { summary { lastPushAt main } } } }`),
+			want: []string{`"summary":{"lastPushAt":null,"main":"NONE"}`}},
+		{name: "one alone carries no summary", viewer: olivia, document: fixed(`{ organization(slug: "acme") { repository(slug: "website") { summary { main } } } }`),
+			want: []string{`"repository":{"summary":null}`}},
 		{name: "a Member reads none", viewer: maxim, document: fixed(`{ organization(slug: "acme") { repositories { slug } } }`),
 			want: []string{`"repositories":[]`}},
 		{name: "a repository by slug", viewer: olivia, document: fixed(`{ organization(slug: "acme") { repository(slug: "website") { id name } } }`),

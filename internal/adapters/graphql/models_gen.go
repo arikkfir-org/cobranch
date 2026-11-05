@@ -752,6 +752,8 @@ type Issue struct {
 	Task *IssueTask `json:"task,omitempty"`
 	// The repository it is about; null for none, and for a viewer who doesn't read it.
 	Repository *IssueRepository `json:"repository,omitempty"`
+	// The live branch linked to it last, which the list shows; null for none, and for a viewer who doesn't read its repository.
+	Branch *IssueLiveBranch `json:"branch,omitempty"`
 	// The organization's labels it carries, by name.
 	Labels []*IssueLabel `json:"labels"`
 	// Who created it; null once they are gone.
@@ -792,10 +794,16 @@ type IssueChange struct {
 	To    *string `json:"to,omitempty"`
 }
 
+// How many issues are open and how many closed.
+type IssueCounts struct {
+	Open   int `json:"open"`
+	Closed int `json:"closed"`
+}
+
 // Something that happened to an issue.
 type IssueEvent struct {
 	ID string `json:"id"`
-	// issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+	// issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
 	Kind string `json:"kind"`
 	// Who did it; null once they are gone.
 	Actor *IssuePrincipal `json:"actor,omitempty"`
@@ -804,6 +812,8 @@ type IssueEvent struct {
 	Changes []*IssueChange `json:"changes"`
 	// The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds.
 	Branch *IssueEventBranch `json:"branch,omitempty"`
+	// The task an issue.task_started names; null for the other kinds. The event is left out for a viewer who doesn't read the task's repository.
+	Task *IssueEventTask `json:"task,omitempty"`
 }
 
 // The branch an issue.branch_linked or issue.branch_unlinked names.
@@ -813,6 +823,14 @@ type IssueEventBranch struct {
 	// Its name, without refs/heads/; null for a viewer who doesn't read the repository.
 	Name     *string  `json:"name,omitempty"`
 	LinkedBy LinkedBy `json:"linkedBy"`
+}
+
+// The task an agent assignee started on an issue.
+type IssueEventTask struct {
+	// Its number among the organization's tasks.
+	Number int `json:"number"`
+	// The name of the branch it works on, without refs/heads/; null until it has one.
+	Branch *string `json:"branch,omitempty"`
 }
 
 // Which of an organization's issues a list shows.
@@ -854,12 +872,21 @@ type IssueLabel struct {
 	Color LabelColor `json:"color"`
 }
 
+// The live branch linked to an issue last: its repository, by ID and slug, and its name.
+type IssueLiveBranch struct {
+	RepositoryID   string `json:"repositoryId"`
+	RepositorySlug string `json:"repositorySlug"`
+	Name           string `json:"name"`
+}
+
 // A page of an organization's issues.
 type IssuePage struct {
 	// The page's issues, newest first, without their rendered descriptions.
 	Issues []*Issue `json:"issues"`
 	// Where the next page starts, for after; null after the last.
 	NextCursor *string `json:"nextCursor,omitempty"`
+	// How many of the organization's issues the filter matches in any state, open and closed, whichever states it shows.
+	Counts *IssueCounts `json:"counts"`
 }
 
 // What changes an issue: a field left out keeps its value, and null clears an assignee or a repository.
@@ -1325,6 +1352,8 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
+	// The repository summed up, as Organization.repositories lists it; null elsewhere.
+	Summary *RepositorySummary `json:"summary,omitempty"`
 	// The artifacts attached to the repository that the viewer may list or read, of kind when it is given, newest change first; takes repo.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
 	Artifacts []*Artifact `json:"artifacts"`
 	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
@@ -1392,6 +1421,17 @@ type RepositoryInput struct {
 	// The slug when null or empty.
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// A repository summed up for its organization's list, which alone answers it.
+type RepositorySummary struct {
+	// Its live branches but main and those merged already.
+	OpenBranches int `json:"openBranches"`
+	// Those of its open branches that are Ready.
+	ReadyBranches int `json:"readyBranches"`
+	// When its last push was recorded; null before its first.
+	LastPushAt *time.Time `json:"lastPushAt,omitempty"`
+	Main       MainStatus `json:"main"`
 }
 
 // One repository's share of its organization's Git data.
@@ -3241,6 +3281,70 @@ func (e *LinkedBy) UnmarshalJSON(b []byte) error {
 }
 
 func (e LinkedBy) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How a repository's main stands by the annotations on its head.
+type MainStatus string
+
+const (
+	// No annotations on its head, or no main yet.
+	MainStatusNone MainStatus = "NONE"
+	// An annotation pending or in progress, and none failed.
+	MainStatusRunning MainStatus = "RUNNING"
+	// An annotation failed.
+	MainStatusFailing MainStatus = "FAILING"
+	// Every annotation succeeded.
+	MainStatusPassing MainStatus = "PASSING"
+)
+
+var AllMainStatus = []MainStatus{
+	MainStatusNone,
+	MainStatusRunning,
+	MainStatusFailing,
+	MainStatusPassing,
+}
+
+func (e MainStatus) IsValid() bool {
+	switch e {
+	case MainStatusNone, MainStatusRunning, MainStatusFailing, MainStatusPassing:
+		return true
+	}
+	return false
+}
+
+func (e MainStatus) String() string {
+	return string(e)
+}
+
+func (e *MainStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MainStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MainStatus", str)
+	}
+	return nil
+}
+
+func (e MainStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MainStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MainStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
