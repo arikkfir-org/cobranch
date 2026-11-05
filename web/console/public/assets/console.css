@@ -133,7 +133,6 @@ dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .why { display: flex; gap: var(--space-8); align-items: flex-start; padding: var(--space-12); border-radius: var(--radius-lg); border: 1px solid var(--tone-border); background: var(--tone-bg); color: var(--tone-fg); }
 .why p { color: inherit; }
 .why strong { font-weight: 600; }
-select.ref { width: auto; max-width: 240px; }
 .spacer { flex: 1; }
 .tabs { display: flex; gap: var(--space-4); }
 .tabs button[aria-pressed="true"] { border-color: var(--color-fg-link); color: var(--color-fg-link); }

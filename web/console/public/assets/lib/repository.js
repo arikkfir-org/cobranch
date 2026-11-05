@@ -77,13 +77,13 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
 }
 
 // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-// parents, to a branch's page and to one of its tabs (lib/branches.js branchTabs), to a commit, to a run, to an
+// parents, or of a path in it, to a branch's page and to one of its tabs (lib/branches.js branchTabs), to a commit, to a run, to an
 // environment, to a directory or a file at a ref, and to a file's bytes, which the REST API serves.
 export function repoLinks(org, repo) {
   const root = base + org.slug + "/" + repo.slug;
   const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
   return {
-    history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
+    history: (ref, first, path) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : path ? "?" + new URLSearchParams({ path }) : ""),
     branchPage: (name, tab) => root + "/branches/" + parts(name) + (tab ? "?tab=" + tab : ""),
     changes: (name) => root + "/branches/" + parts(name) + "?tab=changes",
     commit: (sha) => root + "/commit/" + sha,
