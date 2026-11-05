@@ -1,9 +1,10 @@
 /* A repository's code: its path, clone URLs, files, source, images, READMEs and line threads. */
 code.crumbs { overflow-wrap: anywhere; }
-details.clone { position: relative; }
-details.clone summary { list-style: none; }
-details.clone summary::-webkit-details-marker { display: none; }
-details.clone[open] > section { position: absolute; right: 0; z-index: 1; width: min(560px, calc(100vw - var(--space-48))); margin-top: var(--space-6); background: var(--color-bg-surface); }
+/* The Clone popover, until components.css draws it. */
+.clone-menu { display: grid; gap: var(--space-12); width: min(400px, calc(100vw - var(--space-32))); padding: var(--space-12); }
+.clone-menu h2 { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.clone-url { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-6) var(--space-6) var(--space-6) var(--space-12); border-radius: var(--radius-md); background: var(--color-bg-sunken); }
+.clone-url code { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-small); text-overflow: ellipsis; white-space: nowrap; }
 .files td.name { width: 60%; overflow-wrap: anywhere; }
 .files td.size { text-align: right; white-space: nowrap; }
 .source { display: grid; grid-template-columns: max-content 1fr; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }

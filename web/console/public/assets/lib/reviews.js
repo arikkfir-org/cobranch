@@ -1,15 +1,16 @@
 import { api } from "./api.js";
 import { messageBody } from "./chat.js";
 import { h } from "./dom.js";
-import { plural, shortSha, whenExactly } from "./format.js";
-import { icon } from "./icons.js";
+import { fromNow, plural, shortSha, whenExactly } from "./format.js";
+import { icon, principalAvatar } from "./icons.js";
 import { render } from "./router.js";
+import { agents } from "./state.js";
 
 // The review states as the design system draws them, the same way.
 export const reviewStates = {
-  approved: { word: "Approved", icon: "badge-check", tone: "success" },
-  changes_requested: { word: "Changes requested", icon: "circle-alert", tone: "warning" },
-  neutral: { word: "Neutral", icon: "message-square", tone: "neutral" },
+  approved: { word: "Approved", icon: "badge-check", tone: "success", count: "approval" },
+  changes_requested: { word: "Changes requested", icon: "circle-alert", tone: "warning", count: "change request" },
+  neutral: { word: "Neutral", icon: "message-square", tone: "neutral", count: "comment" },
 };
 // reviewBadge is a review's state as a badge, the same way.
 function reviewBadge(state) {
@@ -74,9 +75,9 @@ function draftsOf(path, branch, head) {
   return reviewDrafts.get(key);
 }
 
-// commitReviews lists a commit's reviews, their bodies rendered as Markdown: each reviewer's latest, the one that
-// counts, in the order they first reviewed it, with their earlier ones folded beneath; and, for a viewer holding
-// reviews.submit, a form to submit one, with the comments drafting holds.
+// commitReviews is the card of a commit's reviews (Review), their bodies rendered as Markdown: each reviewer's latest,
+// the one that counts, in the order they first reviewed it, with their earlier ones folded beneath; and, for a viewer
+// holding reviews.submit, a form to submit one, with the comments drafting holds.
 export function commitReviews(path, c, can, fail, drafting) {
   const latest = [];
   for (const r of c.reviews) {
@@ -85,19 +86,30 @@ export function commitReviews(path, c, can, fail, drafting) {
     else latest.push(r);
   }
   const earlier = c.reviews.filter((r) => !latest.includes(r)).reverse();
-  const item = (r, cls) => h("li", { class: cls || null },
-    h("div", { class: "who" }, reviewBadge(r.state), h("strong", {}, r.reviewer ? r.reviewer.displayName : "A principal since gone"),
-      r.person ? null : h("span", { class: "chip", title: "Only people's approvals count towards required approvals" }, "not a person"),
-      h("span", { class: "muted" }, whenExactly(r.submittedAt))),
-    r.html ? h("div", { class: "message" }, h("div", { class: "body" }, messageBody(r.html)))
-      : r.body ? h("pre", { class: "message" }, r.body) : null);
-  const panel = h("section", { class: "panel" }, h("h3", {}, "Reviews"));
-  if (!c.reviews.length) panel.append(h("p", {}, "No reviews yet."));
-  else panel.append(h("ul", { class: "reviews" }, latest.map((r) => item(r))));
-  if (earlier.length) panel.append(h("details", {}, h("summary", { class: "muted" }, plural(earlier.length, "earlier review")),
-    h("ul", { class: "reviews" }, earlier.map((r) => item(r, "earlier")))));
-  if (can("reviews.submit")) panel.append(reviewForm(path, c, fail, drafting));
-  return panel;
+  const tally = Object.entries(reviewStates).map(([state, s]) => [latest.filter((r) => r.state === state).length, s.count]).filter(([n]) => n)
+    .map(([n, word]) => plural(n, word)).join(" · ");
+  const card = h("section", { class: "card", id: "reviews" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Reviews"),
+    tally ? h("span", { class: "card-meta" }, tally) : null));
+  if (!c.reviews.length) card.append(h("div", { class: "card-body" }, h("p", { class: "muted" }, "No reviews of " + shortSha(c.sha) + " yet.")));
+  else card.append(h("ul", { class: "list" }, latest.map((r) => reviewItem(c, r))));
+  if (earlier.length) card.append(h("details", { class: "earlier-reviews" }, h("summary", {}, plural(earlier.length, "earlier review")),
+    h("ul", { class: "list" }, earlier.map((r) => reviewItem(c, r, true)))));
+  if (can("reviews.submit")) card.append(reviewForm(path, c, fail, drafting));
+  return card;
+}
+
+// reviewItem is a review (Review): its reviewer, Agent for an agent and Not a person for a key, the commit and when,
+// its state, and its body beneath.
+function reviewItem(c, r, older) {
+  const reviewer = r.reviewer;
+  const agent = reviewer && agents.has(reviewer.id);
+  const kind = agent ? h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent")
+    : r.person ? null : h("span", { class: "tag", title: "Only people's approvals count towards required approvals" }, "Not a person");
+  return h("li", { class: "review" + (older ? " earlier" : "") },
+    h("div", { class: "review-header" }, reviewer ? principalAvatar(reviewer, 24) : null,
+      h("strong", { class: "review-who" }, reviewer ? reviewer.displayName : "A principal since gone"), kind,
+      h("span", { class: "review-when", title: whenExactly(r.submittedAt) }, "on " + shortSha(c.sha) + " · " + fromNow(r.submittedAt)), reviewBadge(r.state)),
+    r.html ? h("div", { class: "review-body chat-message-body" }, messageBody(r.html)) : r.body ? h("pre", { class: "review-body" }, r.body) : null);
 }
 
 // reviewForm submits the viewer's review of commit c: Approve, Request changes or Comment, with what they write and
@@ -105,9 +117,9 @@ export function commitReviews(path, c, can, fail, drafting) {
 // another replaces the viewer's verdict on c.
 function reviewForm(path, c, fail, drafting) {
   const states = [["approved", "Approve"], ["changes_requested", "Request changes"], ["neutral", "Comment"]];
-  const body = h("textarea", { name: "body", maxlength: "65536", placeholder: "What you found, in Markdown" });
-  const button = h("button", { class: "button primary", type: "submit" }, "Submit review");
-  const drafted = h("span", { class: "muted" });
+  const body = h("textarea", { class: "textarea", name: "body", maxlength: "65536", placeholder: "What you found, in Markdown" });
+  const button = h("button", { class: "btn btn-primary", type: "submit" }, "Submit review");
+  const drafted = h("span", { class: "field-help" });
   if (drafting) {
     drafting.shown = () => { drafted.textContent = drafting.comments.length ? "With " + plural(drafting.comments.length, "comment") + " on the changes." : ""; };
     drafting.shown();
@@ -127,9 +139,9 @@ function reviewForm(path, c, fail, drafting) {
       })
       .catch((err) => { button.disabled = false; fail(err); });
   };
-  return h("form", { class: "review", onsubmit: submit },
-    h("label", {}, "Your review of " + shortSha(c.sha), body),
-    h("fieldset", { class: "states" }, h("legend", { class: "muted" }, "Verdict"),
-      states.map(([value, label], i) => h("label", {}, h("input", { type: "radio", name: "state", value, checked: i === 2, required: true }), label))),
-    h("div", { class: "row" }, button, drafted));
+  return h("form", { class: "card-body review-form", onsubmit: submit },
+    h("label", { class: "field" }, h("span", { class: "field-label" }, "Your review of " + shortSha(c.sha)), body),
+    h("div", { class: "review-form-actions" }, h("div", { class: "review-states", role: "radiogroup", "aria-label": "Verdict" },
+      states.map(([value, label], i) => h("label", { class: "radio" }, h("input", { type: "radio", name: "state", value, checked: i === 2, required: true }), label))),
+    drafted, button));
 }

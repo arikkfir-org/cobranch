@@ -6,7 +6,7 @@ import { shortSha, whenExactly, who } from "../../lib/format.js";
 import { commitDrafting, commitReviews } from "../../lib/reviews.js";
 import { runsPanel } from "../../lib/runs.js";
 
-export const under = "";
+export const under = "tree";
 export const accepts = (rest) => rest.length === 1;
 export const heading = false;
 export const crumbs = ({ rest }) => [{ label: "Commit" }, { label: shortSha(rest[0]) }];

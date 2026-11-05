@@ -1,11 +1,18 @@
-/* A branch's reviews and the form that submits one. */
-.reviews { list-style: none; margin: 0; padding: 0; display: grid; }
-.reviews li { display: grid; gap: var(--space-6); padding: var(--space-8) 0; border-top: 1px solid var(--color-border-default); min-width: 0; }
-.reviews li:first-child { border-top: 0; }
-.reviews li.earlier { opacity: 0.7; }
-.reviews .who { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
-form.review .states { display: flex; gap: var(--space-6) var(--space-16); flex-wrap: wrap; border: 0; margin: 0; padding: 0; }
-form.review .states label { display: flex; gap: var(--space-6); align-items: center; font: var(--text-body-medium); }
-form.review .states input { width: auto; }
-form.review textarea { min-height: 96px; resize: vertical; }
-form.review .row { justify-content: flex-start; }
+/* A commit's reviews, each a Review (until the Patterns page draws it: the design thread adds Pattern/Review), and the
+   form that submits one. */
+.review { display: grid; gap: var(--space-8); min-width: 0; padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.review:last-child { border-bottom: 0; }
+.review.earlier { opacity: 0.7; }
+.review-header { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.review-who { color: var(--color-fg-default); font: var(--text-body-small-strong); white-space: nowrap; }
+.review-when { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-muted); font: var(--text-caption); text-overflow: ellipsis; white-space: nowrap; }
+.review-body { min-width: 0; padding-left: var(--space-32); color: var(--color-fg-default); font: var(--text-body-medium); }
+pre.review-body { margin: 0; white-space: pre-wrap; font: var(--text-code-small); }
+.earlier-reviews { border-top: 1px solid var(--color-border-subtle); }
+.earlier-reviews > summary { padding: var(--space-8) var(--space-16); color: var(--color-fg-muted); font: var(--text-caption); cursor: pointer; }
+.earlier-reviews > .list { border: 0; border-radius: 0; }
+.review-form { border-top: 1px solid var(--color-border-subtle); }
+.review-form .textarea { min-height: 96px; }
+.review-form-actions { display: flex; align-items: center; gap: var(--space-16); flex-wrap: wrap; }
+.review-states { display: flex; gap: var(--space-16); flex-wrap: wrap; flex: 1; }
+.review-form-actions .field-help:empty { display: none; }

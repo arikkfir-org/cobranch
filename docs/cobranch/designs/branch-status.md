@@ -2,7 +2,7 @@
 
 > **Snapshot.** This design lives in its [branch status and merges
 > page](https://claude.ai/artifact/2NuiCJYpPVGGqX78b47dMH), linked with Cobranch's other designs; this file is generated
-> from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
+> from it, with its diagrams, as of 2026-11-05, and synced again once Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-01, deletion 2026-11-02 · [ENG-199](https://linear.app/arikkfir/issue/ENG-199) ·
 [ENG-241](https://linear.app/arikkfir/issue/ENG-241) · Builds the [product’s branches](product.md#branches) on [Git
@@ -331,13 +331,15 @@ A branch of that name pushed again later is a new branch, and its page shows it 
 
 Branch names carry `/`; the Console takes the rest of the path after `branches/` as the name.
 
-- **A repository's branches** show each branch's status badge, and how many commits it is ahead of and behind `main`; a
-  panel names `main`'s merge requirements, from `/cobranch.yaml`.
+- **A repository's branches**, the tab it opens on, list each branch with its status badge, what it would merge, when it
+  moved and by whose head, and what holds it back, `main` above them; filters pick Ready, Blocked or the viewer's own.
+  Beside them a card names `main`'s merge requirements, from `/cobranch.yaml`, and another the environments the branches
+  deliver to.
 - **A branch's page** says who wants to merge how many commits into `main`, why it is Blocked, requirement by
-  requirement, its commits, and the annotations on its head. Its **Merge** button merges it for a principal with
-  `repo.merge` once it is Ready, and offers a principal with `repo.bypass` to merge it anyway, by a merge commit or a
-  fast-forward, whichever its base allows; it sends the head the page shows, so a branch that moved meanwhile isn't
-  merged.
+  requirement, its commits, and the annotations on its head; its tabs show its Files changed, Jobs and Environment
+  (`…/branches/<branch>?tab=…`). Its **Merge** button merges it for a principal with `repo.merge` once it is Ready, and
+  its menu offers a principal with `repo.bypass` to merge it anyway, by a merge commit or a fast-forward, whichever its
+  base allows; it sends the head the page shows, so a branch that moved meanwhile isn't merged.
 - **A commit's page** lists its annotations, each with its status, summary, link, principal and how long it ran, and
   offers to delete those the viewer may delete. History rows show their commits' annotations as icons.
 - **The status language** is the design system's: one word, one icon, one tone for each branch and annotation status, as

@@ -6,10 +6,12 @@
 
 **Status**: Proposed 2026-11-05 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252) · [ENG-255](https://linear.app/arikkfir/issue/ENG-255) ·
-Restructures the Console of [the architecture](architecture.md#components), [code browsing](code-browsing.md) and every
-page since · Served as before: Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its
-first load sped up by [ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
-[ENG-255](https://linear.app/arikkfir/issue/ENG-255)
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · Restructures the Console of [the
+architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
+Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
+[ENG-255](https://linear.app/arikkfir/issue/ENG-255), a repository’s tabs by
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258)
 
 The Console was one 3,700-line index.html: its styles, router and every page in one file, which every slice that touched
 a page changed, so their pull requests conflicted and fell out of the merge queue. It becomes a shell and native ES
@@ -49,7 +51,7 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | `assets/lib/` | The router, the app shell (`layout.js`, `sidebar.js`, `pane.js`, `menu.js`, `shell.css`), the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges, dialogs), each with its stylesheet when it has one |
 | `assets/pages/` | The Console's own pages: `sign-in.js` and `welcome.js`, which the router names, and every other module with a default export, which draws in the app shell at `/<part>` (`settings.js`: Account and Preferences; `help.js`) |
 | `assets/pages/org/` | An organization's pages, `<part>.js` for `/acme/<part>/…`; `index.js` its home |
-| `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its code |
+| `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its branches |
 
 ## A load
 
@@ -186,7 +188,8 @@ exports `default`, `tab`, `allowed`, `count` and `view`; its `default` draws int
 | `count(ctx)` | Tab | A promise of the number its tab shows | No number |
 | `allowed(can)` | Both | Whether the viewer may open it, from the permissions they hold there | Anyone who reads the organization or repository |
 | `view` | Both | The name its page views report, or a function of the rest of the path that returns one | `organization.<part>` or `repository.<part>` |
-| `under` | Repository | The tab it lights, as a file and a commit light Code (`""`) | Its own tab |
+| `under` | Repository | The tab it lights, as a file and a commit light Files (`"tree"`) | Its own tab |
+| `count(ctx)` | Repository | The number its tab shows beside its label, or a promise of one: Branches counts the branches besides main | No number |
 | `accepts(rest)` | Repository | Which rests of the path it shows; any other sends the viewer to the repository's root | Every rest |
 
 ## Styles
