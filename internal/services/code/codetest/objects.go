@@ -25,6 +25,7 @@ type Objects struct {
 	Refs      map[string]string
 	Logs      map[string][]code.LogEntry
 	Last      map[string]code.LastCommits
+	Blames    map[string][]code.BlameRange
 	Fail      error
 	Merges    []code.MergeRequest
 	Deletions []code.DeleteRequest
@@ -41,7 +42,7 @@ const (
 // NewObjects returns an Objects without commits.
 func NewObjects() *Objects {
 	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}, Logs: map[string][]code.LogEntry{},
-		Last: map[string]code.LastCommits{}}
+		Last: map[string]code.LastCommits{}, Blames: map[string][]code.BlameRange{}}
 }
 
 // at is the key of what Objects holds for path at the commit named sha, beside the commit's own.
@@ -73,6 +74,11 @@ func (o *Objects) PathHistory(sha, path string, log []code.LogEntry) {
 // LastChanged records what last changed the directory at last.Path in the commit last.Commit names.
 func (o *Objects) LastChanged(last code.LastCommits) {
 	o.Last[at(last.Commit, last.Path)] = last
+}
+
+// Blamed records the runs of lines git blame tells for the file at path in the commit named sha.
+func (o *Objects) Blamed(sha, path string, ranges []code.BlameRange) {
+	o.Blames[at(sha, path)] = ranges
 }
 
 // resolve finds the commit ref names: a commit's full name, or a branch or a tag.
@@ -174,6 +180,38 @@ func (o *Objects) LastCommits(ctx context.Context, repoID uuid.UUID, ref, path s
 		return last, nil
 	}
 	return code.LastCommits{Commit: tree.Commit, Path: path, Entries: map[string]string{}}, nil
+}
+
+// Blame answers the runs Blamed recorded for the file at path in the commit ref names, or one run of all its lines
+// that names the commit itself.
+func (o *Objects) Blame(_ context.Context, _ uuid.UUID, ref, path string) (code.Blame, error) {
+	commit, content, err := o.file(ref, path)
+	if err != nil {
+		return code.Blame{}, err
+	}
+	if ranges, ok := o.Blames[at(commit, path)]; ok {
+		return code.Blame{Commit: commit, Path: path, Ranges: slices.Clone(ranges)}, nil
+	}
+	blame := code.Blame{Commit: commit, Path: path, Ranges: []code.BlameRange{}}
+	if lines := strings.Count(strings.TrimSuffix(content, "\n"), "\n") + 1; content != "" {
+		blame.Ranges = append(blame.Ranges, code.BlameRange{SHA: commit, Start: 1, Lines: lines})
+	}
+	return blame, nil
+}
+
+// Paths answers the path of every file and symlink in the commit ref names, in path order, up to code.MaxPaths.
+func (o *Objects) Paths(_ context.Context, _ uuid.UUID, ref string) (code.Paths, error) {
+	commit, files, err := o.resolve(ref)
+	if err != nil {
+		return code.Paths{}, err
+	}
+	paths := []string{}
+	for _, p := range slices.Sorted(maps.Keys(files)) {
+		if kind(p) != code.KindSubmodule {
+			paths = append(paths, p)
+		}
+	}
+	return code.Paths{Commit: commit, Paths: paths[:min(len(paths), code.MaxPaths)], Truncated: len(paths) > code.MaxPaths}, nil
 }
 
 // file finds the file at path of the commit ref names.

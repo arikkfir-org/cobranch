@@ -35,6 +35,8 @@ type Code interface {
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	TreeCommits(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.TreeCommits, error)
+	Paths(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref string) (code.Paths, error)
+	Blame(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.FileBlame, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)

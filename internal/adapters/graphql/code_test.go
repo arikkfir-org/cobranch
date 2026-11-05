@@ -8,6 +8,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
 )
 
 func TestCodeQueries(t *testing.T) {
@@ -59,7 +60,8 @@ func TestCodeQueries(t *testing.T) {
 	})
 }
 
-// TestPathQueries checks a path's history and what last changed a directory and each of its entries.
+// TestPathQueries checks a path's history, what last changed a directory and each of its entries, a tree's paths and a
+// file's blame.
 func TestPathQueries(t *testing.T) {
 	repo := func(fields string) func(*orgFixture) string {
 		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
@@ -83,6 +85,17 @@ func TestPathQueries(t *testing.T) {
 			want: []string{`"treeCommits":{"count":0,"latest":null,"entries":[]}`}},
 		{name: "what last changed a file's path", viewer: olivia, document: repo(`treeCommits(path: "README.md") { count }`),
 			wantCode: notFound, wantReason: "path.file"},
+		{name: "every file and symlink's path", viewer: olivia, document: repo(`paths { commit paths truncated }`),
+			want: []string{`"paths":{"commit":"` + shaOf("c") + `","paths":["README.md","docs/deep/notes.txt","docs/guide.md","latest` + codetest.Symlink +
+				`","logo.png"],"truncated":false}`}},
+		{name: "a file's blame, each run with its commit when a push recorded it",
+			document: repo(`blame(path: "docs/guide.md") { commit path ranges { start lines sha commit { sha } } }`),
+			viewer: oliviaAfter(func(f *orgFixture) {
+				f.objects.Blamed(shaOf("c"), "docs/guide.md", []code.BlameRange{{SHA: shaOf("b"), Start: 1, Lines: 2}, {SHA: shaOf("z"), Start: 3, Lines: 1}})
+			}),
+			want: []string{`"blame":{"commit":"` + shaOf("c") + `","path":"docs/guide.md","ranges":[{"start":1,"lines":2,"sha":"` + shaOf("b") +
+				`","commit":{"sha":"` + shaOf("b") + `"}},{"start":3,"lines":1,"sha":"` + shaOf("z") + `","commit":null}]}`}},
+		{name: "a binary file's blame", viewer: olivia, document: repo(`blame(path: "logo.png") { commit }`), wantCode: badUserInput, wantReason: "path.text"},
 	})
 }
 

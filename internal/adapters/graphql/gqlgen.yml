@@ -96,6 +96,8 @@ models:
       tags: { resolver: true }
       tree: { resolver: true }
       treeCommits: { resolver: true }
+      paths: { resolver: true }
+      blame: { resolver: true }
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }

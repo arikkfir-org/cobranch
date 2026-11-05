@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/google/uuid"
@@ -62,7 +63,7 @@ func (s *Service) recordedLast(ctx context.Context, repoID uuid.UUID, last LastC
 	if err != nil {
 		return TreeCommits{}, fmt.Errorf("reading the commits that last changed %q: %w", last.Path, err)
 	}
-	out := TreeCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Entries: map[string]string{}, Commits: []Commit{}}
+	out := TreeCommits{Commit: last.Commit, Path: last.Path, Count: last.Count, Entries: map[string]string{}}
 	if _, ok := recorded[last.Latest]; ok {
 		out.Latest = last.Latest
 	}
@@ -71,11 +72,17 @@ func (s *Service) recordedLast(ctx context.Context, repoID uuid.UUID, last LastC
 			out.Entries[name] = sha
 		}
 	}
-	for _, c := range recorded {
-		out.Commits = append(out.Commits, c)
-	}
-	slices.SortFunc(out.Commits, func(a, b Commit) int {
+	out.Commits = newestFirst(recorded)
+	return out, nil
+}
+
+// newestFirst is commits, the most recently committed first, and by name among those committed at once.
+func newestFirst(commits map[string]Commit) []Commit {
+	out := slices.SortedFunc(maps.Values(commits), func(a, b Commit) int {
 		return cmp.Or(b.Committer.At.Compare(a.Committer.At), cmp.Compare(a.SHA, b.SHA))
 	})
-	return out, nil
+	if out == nil {
+		out = []Commit{}
+	}
+	return out
 }

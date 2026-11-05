@@ -299,6 +299,28 @@ type ArtifactVersion struct {
 	HTML *string `json:"html,omitempty"`
 }
 
+// Which commit last changed each line of a file at a commit.
+type Blame struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// The file's path from the repository's root.
+	Path string `json:"path"`
+	// The file's lines in runs, in order, each the lines one commit last changed.
+	Ranges []*BlameRange `json:"ranges"`
+}
+
+// A run of a file's lines that one commit last changed.
+type BlameRange struct {
+	// The run's first line, counted from 1.
+	Start int `json:"start"`
+	// How many lines the run holds.
+	Lines int `json:"lines"`
+	// The commit's full name.
+	Sha string `json:"sha"`
+	// The commit, with the push that first brought it: null when no push recorded it.
+	Commit *Commit `json:"commit,omitempty"`
+}
+
 // One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
 	Kind BranchCheckKind `json:"kind"`
@@ -1205,6 +1227,16 @@ type OrganizationUsage struct {
 	ByRepository []*RepositoryUsage `json:"byRepository"`
 }
 
+// The path of every file and symlink in a commit's tree, without its submodules'.
+type Paths struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// The paths from the repository's root, in the order Git keeps them, up to 50,000 of them.
+	Paths []string `json:"paths"`
+	// Whether the tree holds more paths than paths lists.
+	Truncated bool `json:"truncated"`
+}
+
 // A commit's author or committer as the commit writes them.
 type Person struct {
 	Name  string    `json:"name"`
@@ -1315,8 +1347,12 @@ type Repository struct {
 	Tree *Tree `json:"tree,omitempty"`
 	// What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree.
 	TreeCommits *TreeCommits `json:"treeCommits,omitempty"`
+	// The path of every file and symlink of the commit ref names, as tree takes it, in the order Git keeps them, up to 50,000 of them, for a viewer to find a file by its path; takes repo.read. A ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found; an installation without a Git server answers UNAVAILABLE.
+	Paths *Paths `json:"paths,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
+	// Which commit last changed each line of the file at path of the commit ref names, as tree takes them, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a BAD_USER_INPUT error whose reason is path.text. A ref or a path that finds nothing is an error, as for blob.
+	Blame *Blame `json:"blame,omitempty"`
 	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
