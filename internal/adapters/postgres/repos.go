@@ -168,6 +168,23 @@ func (s *RepoStore) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 	return out, nil
 }
 
+// Summaries sums up those of ids that are the organization's repositories, by ID.
+func (s *RepoStore) Summaries(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]repos.Summary, error) {
+	rows, err := s.q.RepositorySummaries(ctx, orgID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("summing up the repositories: %w", err)
+	}
+	out := make(map[uuid.UUID]repos.Summary, len(rows))
+	for _, r := range rows {
+		summary := repos.Summary{OpenBranches: int(r.OpenBranches), ReadyBranches: int(r.ReadyBranches), Main: repos.MainStatus(r.MainStatus)}
+		if r.LastPushAt != nil {
+			summary.LastPushAt = *r.LastPushAt
+		}
+		out[r.RepoID] = summary
+	}
+	return out, nil
+}
+
 // Usage counts the organization's repositories and sums the bytes of their active packs, and lists those of ids that
 // are its repositories, by slug, each with the bytes of its own.
 func (s *RepoStore) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []repos.RepositoryUsage, error) {

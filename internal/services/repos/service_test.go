@@ -222,6 +222,9 @@ func TestList(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)
+			// website is summed up; secret isn't, so it sums up as none.
+			busy := repos.Summary{OpenBranches: 3, ReadyBranches: 1, LastPushAt: now, Main: repos.MainFailing}
+			f.store.RepoSummaries[f.website.ID] = busy
 			list, err := f.service.List(t.Context(), tt.viewer(f), f.acme.ID)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("List() error = %v, want %v", err, tt.wantErr)
@@ -232,6 +235,7 @@ func TestList(t *testing.T) {
 			var slugs, want []string
 			for _, r := range list {
 				slugs = append(slugs, r.Slug)
+				checkSummary(t, r, f.website.ID, busy)
 			}
 			for _, r := range tt.want(f) {
 				want = append(want, r.Slug)
@@ -240,6 +244,18 @@ func TestList(t *testing.T) {
 				t.Errorf("List() = %v, want %v", slugs, want)
 			}
 		})
+	}
+}
+
+// checkSummary fails t unless the listed repository sums up as busy if it is busyID, or as none.
+func checkSummary(t *testing.T, r repos.Listed, busyID uuid.UUID, busy repos.Summary) {
+	t.Helper()
+	want := repos.Summary{Main: repos.MainNone}
+	if r.ID == busyID {
+		want = busy
+	}
+	if r.Summary != want {
+		t.Errorf("List() summary of %s = %+v, want %+v", r.Slug, r.Summary, want)
 	}
 }
 

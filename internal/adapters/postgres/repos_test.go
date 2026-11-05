@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -202,4 +204,69 @@ func TestRepoStorePrincipalsAndRoles(t *testing.T) {
 		auth.RoleArtifactViewer, auth.RoleArtifactEditor, auth.RoleArtifactOwner}; !slices.Equal(ids, want) {
 		t.Errorf("Roles() = %v, want the built-in repository roles in order", ids)
 	}
+}
+
+func TestRepoStoreSummaries(t *testing.T) {
+	t.Parallel()
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	// Of website's live branches but main, feature is Ready and stray merged already, so only feature is open.
+	for name, status := range map[string]string{"feature": "ready", "stray": "merged"} {
+		if _, err := f.pool.Exec(ctx, "UPDATE branches SET status = $1 WHERE repo_id = $2 AND name = $3 AND deleted_at IS NULL", status, f.website.ID, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var lastPush time.Time
+	if err := f.pool.QueryRow(ctx, "SELECT max(committed_at) FROM pushes WHERE repo_id = $1", f.website.ID).Scan(&lastPush); err != nil {
+		t.Fatal(err)
+	}
+	// Each step replaces the annotations on main's head, so they run in order.
+	for _, tt := range []struct {
+		name        string
+		annotations map[string]string
+		want        repos.MainStatus
+	}{
+		{name: "none without annotations", want: repos.MainNone},
+		{name: "running while one is in progress", annotations: map[string]string{"ci/build": "in_progress", "ci/lint": "successful"}, want: repos.MainRunning},
+		{name: "running while one is pending", annotations: map[string]string{"ci/build": "pending"}, want: repos.MainRunning},
+		{name: "failing once one failed", annotations: map[string]string{"ci/build": "pending", "ci/lint": "failed"}, want: repos.MainFailing},
+		{name: "passing once every one succeeded", annotations: map[string]string{"ci/build": "successful", "ci/lint": "successful"}, want: repos.MainPassing},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f.annotateMain(ctx, t, tt.annotations)
+			got, err := f.r.Summaries(ctx, f.acme.ID, []uuid.UUID{f.website.ID, f.secret.ID, uuid.New()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := map[uuid.UUID]repos.Summary{
+				f.website.ID: {OpenBranches: 1, ReadyBranches: 1, LastPushAt: lastPush, Main: tt.want},
+				f.secret.ID:  {Main: repos.MainNone},
+			}
+			if !maps.EqualFunc(got, want, sameSummary) {
+				t.Errorf("Summaries() = %+v, want %+v", got, want)
+			}
+		})
+	}
+	if got, err := f.r.Summaries(ctx, uuid.New(), []uuid.UUID{f.website.ID}); err != nil || len(got) != 0 {
+		t.Errorf("another organization's Summaries() = %v, %v; want none", got, err)
+	}
+}
+
+// annotateMain replaces the annotations on the head of website's main, shaD, with annotations, by name.
+func (f *codeFixture) annotateMain(ctx context.Context, t *testing.T, annotations map[string]string) {
+	t.Helper()
+	if _, err := f.pool.Exec(ctx, "DELETE FROM annotations WHERE repo_id = $1", f.website.ID); err != nil {
+		t.Fatal(err)
+	}
+	for name, status := range annotations {
+		if _, err := f.pool.Exec(ctx, "INSERT INTO annotations (id, org_id, repo_id, sha, name, status) VALUES ($1, $2, $3, $4, $5, $6)",
+			uuid.New(), f.acme.ID, f.website.ID, f.shaD, name, status); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// sameSummary is whether two summaries match, their last pushes as instants.
+func sameSummary(a, b repos.Summary) bool {
+	return a.LastPushAt.Equal(b.LastPushAt) && a.Main == b.Main && a.OpenBranches == b.OpenBranches && a.ReadyBranches == b.ReadyBranches
 }

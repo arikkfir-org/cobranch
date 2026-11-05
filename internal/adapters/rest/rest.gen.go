@@ -929,6 +929,30 @@ func (e RepositoryAccessKind) Valid() bool {
 	}
 }
 
+// Defines values for RepositorySummaryMain.
+const (
+	RepositorySummaryMainFailing RepositorySummaryMain = "failing"
+	RepositorySummaryMainNone    RepositorySummaryMain = "none"
+	RepositorySummaryMainPassing RepositorySummaryMain = "passing"
+	RepositorySummaryMainRunning RepositorySummaryMain = "running"
+)
+
+// Valid indicates whether the value is a known member of the RepositorySummaryMain enum.
+func (e RepositorySummaryMain) Valid() bool {
+	switch e {
+	case RepositorySummaryMainFailing:
+		return true
+	case RepositorySummaryMainNone:
+		return true
+	case RepositorySummaryMainPassing:
+		return true
+	case RepositorySummaryMainRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReviewState.
 const (
 	ReviewStateApproved         ReviewState = "approved"
@@ -2804,6 +2828,9 @@ type Repository struct {
 	// Slug The current slug; a request by an old one gets the repository with this one.
 	Slug string `json:"slug"`
 
+	// Summary A repository summed up for its organization's list, which alone answers it.
+	Summary *RepositorySummary `json:"summary,omitempty"`
+
 	// ViewerPermissions The permissions the viewer holds on the repository.
 	ViewerPermissions []string `json:"viewerPermissions"`
 
@@ -2847,6 +2874,24 @@ type RepositorySettings struct {
 	Name        *string `json:"name,omitempty"`
 	Slug        *string `json:"slug,omitempty"`
 }
+
+// RepositorySummary A repository summed up for its organization's list, which alone answers it.
+type RepositorySummary struct {
+	// LastPushAt When its last push was recorded; absent before its first.
+	LastPushAt *time.Time `json:"lastPushAt,omitempty"`
+
+	// Main How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
+	Main RepositorySummaryMain `json:"main"`
+
+	// OpenBranches Its live branches but main and those merged already.
+	OpenBranches int `json:"openBranches"`
+
+	// ReadyBranches Those of its open branches that are Ready.
+	ReadyBranches int `json:"readyBranches"`
+}
+
+// RepositorySummaryMain How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
+type RepositorySummaryMain string
 
 // RepositoryUsage One repository's share of its organization's Git data.
 type RepositoryUsage struct {
@@ -4687,7 +4732,7 @@ type ServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
-	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
@@ -35609,7 +35654,7 @@ type StrictServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
-	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.

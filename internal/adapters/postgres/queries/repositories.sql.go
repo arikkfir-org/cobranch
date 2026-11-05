@@ -357,6 +357,60 @@ func (q *Queries) RepositoryRoles(ctx context.Context, orgID uuid.UUID) ([]Role,
 	return items, nil
 }
 
+const repositorySummaries = `-- name: RepositorySummaries :many
+SELECT r.id AS repo_id,
+    count(b.id) FILTER (WHERE b.name <> 'main' AND b.status IS DISTINCT FROM 'merged')::integer AS open_branches,
+    count(b.id) FILTER (WHERE b.name <> 'main' AND b.status = 'ready')::integer AS ready_branches,
+    lp.committed_at AS last_push_at,
+    (SELECT CASE WHEN count(a.id) = 0 THEN 'none' WHEN bool_or(a.status = 'failed') THEN 'failing'
+            WHEN bool_or(a.status IN ('pending', 'in_progress')) THEN 'running' ELSE 'passing' END
+        FROM branches m JOIN annotations a ON a.repo_id = m.repo_id AND a.sha = m.head
+        WHERE m.repo_id = r.id AND m.name = 'main' AND m.deleted_at IS NULL)::text AS main_status
+FROM repositories r
+LEFT JOIN branches b ON b.repo_id = r.id AND b.deleted_at IS NULL
+LEFT JOIN pushes lp ON lp.id = (SELECT p.id FROM pushes p WHERE p.repo_id = r.id ORDER BY p.committed_at DESC LIMIT 1)
+WHERE r.org_id = $1 AND r.id = ANY ($2::uuid[])
+GROUP BY r.id, lp.committed_at
+`
+
+type RepositorySummariesRow struct {
+	RepoID        uuid.UUID
+	OpenBranches  int32
+	ReadyBranches int32
+	LastPushAt    *time.Time
+	MainStatus    string
+}
+
+// RepositorySummaries sums up each of those of ids that are the organization's repositories: its open branches (the
+// live ones but main and those merged already) and how many of them are Ready, when its last push was recorded, and
+// how its main's head stands by its annotations: failing when one failed, running when one is pending or in
+// progress, passing when every one succeeded, none without any.
+func (q *Queries) RepositorySummaries(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]RepositorySummariesRow, error) {
+	rows, err := q.db.Query(ctx, repositorySummaries, orgID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RepositorySummariesRow
+	for rows.Next() {
+		var i RepositorySummariesRow
+		if err := rows.Scan(
+			&i.RepoID,
+			&i.OpenBranches,
+			&i.ReadyBranches,
+			&i.LastPushAt,
+			&i.MainStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sharedRepositories = `-- name: SharedRepositories :many
 SELECT rp.id FROM repositories rp WHERE rp.org_id = $1 AND EXISTS (
     SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id JOIN principals p ON p.id = g.principal_id AND p.kind = 'user'

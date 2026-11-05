@@ -64,7 +64,7 @@ func (r *organizationResolver) Repositories(ctx context.Context, obj *Organizati
 	if err != nil {
 		return nil, err
 	}
-	return mapAll(list, repository), nil
+	return mapAll(list, func(l repos.Listed) *Repository { return repository(l.Repository) }), nil
 }
 
 // Repository is the resolver for the repository field.

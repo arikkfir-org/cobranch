@@ -74,6 +74,39 @@ type RepositoryUsage struct {
 	GitData int64
 }
 
+// Listed is a repository as its organization's list shows it: the repository and its summary.
+type Listed struct {
+	Repository
+	Summary Summary
+}
+
+// Summary sums up a repository for its organization's list: its open branches and how many of them are Ready, when
+// its last push was recorded, and how its main stands.
+type Summary struct {
+	// OpenBranches counts its live branches but main and those merged already.
+	OpenBranches int
+	// ReadyBranches counts those of them that are Ready.
+	ReadyBranches int
+	// LastPushAt is when its last push was recorded; zero before its first.
+	LastPushAt time.Time
+	Main       MainStatus
+}
+
+// MainStatus is how a repository's main stands by the annotations on its head.
+type MainStatus string
+
+// The ways main stands.
+const (
+	// MainNone is a head with no annotations, or a repository without main yet.
+	MainNone MainStatus = "none"
+	// MainRunning is a head with an annotation pending or in progress and none failed.
+	MainRunning MainStatus = "running"
+	// MainFailing is a head with an annotation failed.
+	MainFailing MainStatus = "failing"
+	// MainPassing is a head whose every annotation succeeded.
+	MainPassing MainStatus = "passing"
+)
+
 // Principal is who may hold grants on an organization's repositories: one of its members, or one of its API keys.
 type Principal struct {
 	ID          uuid.UUID

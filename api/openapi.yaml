@@ -4078,7 +4078,7 @@ paths:
   /orgs/{org}/repos:
     get:
       operationId: listRepositories
-      summary: The organization's repositories the viewer reads, by slug; takes org.read.
+      summary: The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
       parameters:
         - $ref: "#/components/parameters/org"
       responses:
@@ -7191,6 +7191,27 @@ components:
           description: The permissions the viewer holds on the repository.
           items:
             type: string
+        summary:
+          $ref: "#/components/schemas/RepositorySummary"
+    RepositorySummary:
+      type: object
+      description: A repository summed up for its organization's list, which alone answers it.
+      required: [openBranches, readyBranches, main]
+      properties:
+        openBranches:
+          type: integer
+          description: Its live branches but main and those merged already.
+        readyBranches:
+          type: integer
+          description: Those of its open branches that are Ready.
+        lastPushAt:
+          type: string
+          format: date-time
+          description: When its last push was recorded; absent before its first.
+        main:
+          type: string
+          enum: [none, running, failing, passing]
+          description: How main stands by the annotations on its head. Failing when one failed, running when one is pending or in progress, passing when every one succeeded, none without any or without main.
     Usage:
       type: object
       description: What a user or an organization takes of what one limit caps, against the limit that applies.
