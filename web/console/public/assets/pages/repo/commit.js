@@ -33,7 +33,7 @@ async function repositoryCommit(path, at, sha, can, fail) {
     h("div", { class: "commit-title-line" }, h("h1", { class: "commit-title" }, first || "(no message)"),
       h("a", { class: "btn", href: at.tree(c.sha, ""), "data-nav": "" }, icon("folder"), "Browse files"), shaButton(c.sha)),
     body ? h("p", { class: "commit-body" }, body) : null, commitMeta(at, c), commitJobs(path, at, c, can, fail));
-  const branch = c.push.branches[0];
+  const branch = (c.push.branches || [])[0]; // a REST server of the release before answers none, mid-upgrade
   const reviews = c.reviews.length ? commitReviews(path, c, (p) => p !== "reviews.submit" && can(p), fail, null) : null;
   if (reviews && branch) reviews.querySelector(".card-header").append(h("a", { class: "card-meta", href: at.changes(branch), "data-nav": "" }, "Review on " + branch));
   return [header, ...await diffView(path + "/commits/" + c.sha + "/diff", at), reviews].filter(Boolean);
@@ -60,7 +60,7 @@ function shaButton(sha) {
 function commitMeta(at, c) {
   const name = (p) => (p.principal ? p.principal.displayName : p.name);
   const samePerson = (a, b) => (a.principal && b.principal ? a.principal.id === b.principal.id : a.name === b.name && a.email === b.email);
-  const branches = c.push.branches.map((b, i) => [i ? ", " : null, h("a", { href: at.branchPage(b), "data-nav": "" }, b)]);
+  const branches = (c.push.branches || []).map((b, i) => [i ? ", " : null, h("a", { href: at.branchPage(b), "data-nav": "" }, b)]);
   const parents = c.parents.map((p, i) => [i ? ", " : null, h("a", { href: at.commit(p), "data-nav": "" }, shortSha(p))]);
   const pusher = c.push.pusher ? c.push.pusher.displayName : "a user since gone";
   const how = c.push.transport === "api" ? " through the API" : " over " + c.push.transport.toUpperCase();
