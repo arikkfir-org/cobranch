@@ -56,26 +56,50 @@ LEFT JOIN principals m ON m.id = c.committer_id
 WHERE c.repo_id = @repo_id AND c.sha = ANY (@shas::text[]);
 
 -- FirstParents walks a repository's history from a commit along each commit's first parent, as git log
--- --first-parent does, for at most max commits, nearest first, with the display names of the principals behind
--- their authors and committers.
+-- --first-parent does, for at most max commits whose message holds grep, ignoring case (every commit's does when grep
+-- is empty), nearest first, with the display names of the principals behind their authors and committers. The walk
+-- stops once it found max of them.
 -- name: FirstParents :many
-WITH RECURSIVE line (sha, next, depth) AS (
-    SELECT s.sha, s.parents[1], 1 FROM commits s WHERE s.repo_id = @repo_id AND s.sha = @sha
+WITH RECURSIVE line (sha, next, depth, matched, found) AS (
+    SELECT s.sha, s.parents[1], 1, m.matched, m.matched::int
+    FROM commits s CROSS JOIN LATERAL (SELECT strpos(lower(s.message), lower(@grep::text)) > 0 AS matched) m
+    WHERE s.repo_id = @repo_id AND s.sha = @sha
     UNION ALL
-    SELECT p.sha, p.parents[1], line.depth + 1
+    SELECT p.sha, p.parents[1], line.depth + 1, m.matched, line.found + m.matched::int
     FROM line JOIN commits p ON p.repo_id = @repo_id AND p.sha = line.next
-    WHERE line.depth < @max::int
+    CROSS JOIN LATERAL (SELECT strpos(lower(p.message), lower(@grep::text)) > 0 AS matched) m
+    WHERE line.found < @max::int
 )
 SELECT sqlc.embed(c), a.display_name AS author_display_name, m.display_name AS committer_display_name
 FROM line
 JOIN commits c ON c.repo_id = @repo_id AND c.sha = line.sha
 LEFT JOIN principals a ON a.id = c.author_id
 LEFT JOIN principals m ON m.id = c.committer_id
+WHERE line.matched
 ORDER BY line.depth;
 
--- PushOf finds one of a repository's pushes, with its pusher's display name.
+-- CountFirstParents counts the commits of a repository's history from a commit along each commit's first parent whose
+-- message holds grep, ignoring case (every commit's does when grep is empty), as git rev-list --first-parent --count
+-- -i -F --grep does.
+-- name: CountFirstParents :one
+WITH RECURSIVE line (sha, next, message) AS (
+    SELECT s.sha, s.parents[1], s.message FROM commits s WHERE s.repo_id = @repo_id AND s.sha = @sha
+    UNION ALL
+    SELECT p.sha, p.parents[1], p.message
+    FROM line JOIN commits p ON p.repo_id = @repo_id AND p.sha = line.next
+)
+SELECT count(*)::int FROM line WHERE strpos(lower(line.message), lower(@grep::text)) > 0;
+
+-- PushOf finds one of a repository's pushes, with its pusher's display name and the branches it moved, without
+-- refs/heads/, in the order it moved them; a branch it deleted isn't one.
 -- name: PushOf :one
-SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at
+SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at,
+    ARRAY(
+        SELECT substr(r.u ->> 'name', length('refs/heads/') + 1)
+        FROM jsonb_array_elements(p.ref_updates) WITH ORDINALITY AS r (u, n)
+        WHERE starts_with(r.u ->> 'name', 'refs/heads/') AND r.u ->> 'new' <> '0000000000000000000000000000000000000000'
+        ORDER BY r.n
+    )::text[] AS branches
 FROM pushes p LEFT JOIN principals u ON u.id = p.pusher_id
 WHERE p.repo_id = $1 AND p.id = $2;
 

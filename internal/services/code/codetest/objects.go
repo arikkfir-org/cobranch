@@ -15,7 +15,8 @@ import (
 )
 
 // Objects is a code.Objects in memory, the Git server's objects for tests: the files of each commit, by path, the
-// branches and tags that name commits, and the walk of history from each commit, newest first. A path ending in
+// branches and tags that name commits, the walk of history from each commit, newest first, and the messages of the
+// commits a walk's query searches, by name. A path ending in
 // Symlink holds a symlink, and one in Submodule a submodule. Every repository holds the same objects. Fail, when set,
 // fails every read, merge and deletion. Merges lists the merges asked for; each answers its head as the commit its base
 // is at. Deletions lists the branch deletions asked for; OnDelete, when set, answers each first, and one it fails isn't
@@ -24,6 +25,7 @@ type Objects struct {
 	Files     map[string]map[string]string
 	Refs      map[string]string
 	Logs      map[string][]code.LogEntry
+	Messages  map[string]string
 	Last      map[string]code.LastCommits
 	Blames    map[string][]code.BlameRange
 	Fail      error
@@ -42,7 +44,7 @@ const (
 // NewObjects returns an Objects without commits.
 func NewObjects() *Objects {
 	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}, Logs: map[string][]code.LogEntry{},
-		Last: map[string]code.LastCommits{}, Blames: map[string][]code.BlameRange{}}
+		Messages: map[string]string{}, Last: map[string]code.LastCommits{}, Blames: map[string][]code.BlameRange{}}
 }
 
 // at is the key of what Objects holds for path at the commit named sha, beside the commit's own.
@@ -156,17 +158,25 @@ func (o *Objects) Raw(_ context.Context, _ uuid.UUID, ref, path string) (code.Ra
 
 // Log lists at most limit of the walk of history from the commit ref names, after the first skip: of path's, as
 // PathHistory recorded it, when it names one.
-func (o *Objects) Log(_ context.Context, _ uuid.UUID, ref, path string, skip, limit int) (code.Log, error) {
-	commit, _, err := o.resolve(ref)
+func (o *Objects) Log(_ context.Context, _ uuid.UUID, q code.LogQuery) (code.Log, error) {
+	commit, _, err := o.resolve(q.Ref)
 	if err != nil {
 		return code.Log{}, err
 	}
 	log := o.Logs[commit]
-	if path != "" {
-		log = o.Logs[at(commit, path)]
+	if q.Path != "" {
+		log = o.Logs[at(commit, q.Path)]
 	}
-	log = log[min(skip, len(log)):]
-	return code.Log{Commit: commit, Entries: slices.Clone(log[:min(limit, len(log))])}, nil
+	if q.Grep != "" {
+		log = slices.DeleteFunc(slices.Clone(log), func(e code.LogEntry) bool { return !Holds(o.Messages[e.SHA], q.Grep) })
+	}
+	out := code.Log{Commit: commit}
+	if q.Count {
+		out.Total = len(log)
+	}
+	log = log[min(q.Skip, len(log)):]
+	out.Entries = slices.Clone(log[:min(q.Limit, len(log))])
+	return out, nil
 }
 
 // LastCommits answers what LastChanged recorded for the directory at path in the commit ref names, or nothing changed

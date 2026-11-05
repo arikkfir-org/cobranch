@@ -31,8 +31,12 @@ type Store interface {
 	// repos.ErrNotFound when no branch of that name was deleted, or one is live.
 	DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (DeletedBranch, error)
 	// FirstParents lists at most limit of the repository's commits, from sha along each one's first parent, nearest
-	// first: none when the repository recorded no commit sha.
-	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
+	// first, only those whose message holds grep, ignoring case, when it is set: none when the repository recorded no
+	// commit sha.
+	FirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string, limit int) ([]Commit, error)
+	// CountFirstParents counts the repository's commits from sha along each one's first parent, only those whose
+	// message holds grep, ignoring case, when it is set.
+	CountFirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string) (int, error)
 	// CommitsAt finds those of the repository's commits that shas name, by name: none for a name no push recorded as
 	// a commit.
 	CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]Commit, error)

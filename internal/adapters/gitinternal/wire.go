@@ -68,6 +68,7 @@ type LogEntry struct {
 type Log struct {
 	Commit  string     `json:"commit"`
 	Entries []LogEntry `json:"entries"`
+	Total   int        `json:"total,omitempty"`
 }
 
 // LastCommits is what last changed a directory at a commit, as the internal call carries it: code.LastCommits.
@@ -153,7 +154,7 @@ func LogOf(log code.Log) Log {
 	for _, e := range log.Entries {
 		entries = append(entries, LogEntry{SHA: e.SHA, Parents: e.Parents})
 	}
-	return Log{Commit: log.Commit, Entries: entries}
+	return Log{Commit: log.Commit, Entries: entries, Total: log.Total}
 }
 
 // Domain is the domain's log.
@@ -162,7 +163,7 @@ func (l Log) Domain() code.Log {
 	for _, e := range l.Entries {
 		entries = append(entries, code.LogEntry{SHA: e.SHA, Parents: e.Parents})
 	}
-	return code.Log{Commit: l.Commit, Entries: entries}
+	return code.Log{Commit: l.Commit, Entries: entries, Total: l.Total}
 }
 
 // DiffLine is a line of a hunk as the internal call carries it: code.DiffLine.

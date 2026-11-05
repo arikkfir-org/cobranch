@@ -1,7 +1,9 @@
 package code_test
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"cobranch.dev/internal/services/code"
@@ -26,6 +28,9 @@ func withLogs(f *fixture) *fixture {
 	f.objects.History(sha(4), tail, "v1")
 	f.objects.History(sha(8), append([]code.LogEntry{entry(8, 5), entry(5, 4, 6), entry(6, 2)}, tail...), "fresh")
 	f.objects.PathHistory(sha(5), "docs", []code.LogEntry{entry(6, 2), entry(2), entry(77)})
+	for _, n := range []int{1, 2, 3, 4, 5, 6, 8, 77} {
+		f.objects.Messages[sha(n)] = fmt.Sprintf("Commit %d\n", n)
+	}
 	return f
 }
 
@@ -143,4 +148,65 @@ func TestHistoryDefaultPage(t *testing.T) {
 	if len(got.Commits) != code.DefaultPageSize || got.Next == "" {
 		t.Errorf("got %d commits and next %q, want %d and a next page", len(got.Commits), got.Next, code.DefaultPageSize)
 	}
+}
+
+// TestHistoryQueryAndTotal follows a query through both walks, and the count each first page carries.
+func TestHistoryQueryAndTotal(t *testing.T) {
+	none := 0
+	total := func(n int) *int { return &n }
+	tests := []struct {
+		name      string
+		q         code.HistoryQuery
+		want      []string
+		wantNext  string
+		wantTotal *int
+		wantErr   error
+	}{
+		{name: "first parents, counted", q: code.HistoryQuery{Branch: "main", Limit: 2}, want: []string{"5", "4"}, wantNext: sha(3), wantTotal: total(5)},
+		{name: "first parents' later page, uncounted", q: code.HistoryQuery{Branch: "main", Cursor: sha(3), Limit: 2}, want: []string{"3", "2"}, wantNext: sha(1)},
+		{name: "first parents whose message holds a query, ignoring case", q: code.HistoryQuery{Branch: "main", Query: "COMMIT 3"}, want: []string{"3"},
+			wantTotal: total(1)},
+		{name: "a query's page and where its next starts", q: code.HistoryQuery{Branch: "main", Query: "commit", Limit: 2}, want: []string{"5", "4"},
+			wantNext: sha(3), wantTotal: total(5)},
+		{name: "a query's next page", q: code.HistoryQuery{Branch: "main", Query: "commit 1", Cursor: sha(3)}, want: []string{"1"}},
+		{name: "a query nothing holds", q: code.HistoryQuery{Branch: "main", Query: "nothing like it"}, wantTotal: &none},
+		{name: "a query from a commit no push recorded", q: code.HistoryQuery{Ref: sha(77), Query: "commit"}, wantErr: code.ErrRefNotFound},
+		{name: "a query's cursor of nothing", q: code.HistoryQuery{Branch: "main", Query: "commit", Cursor: sha(77)}, wantErr: invalid("cursor.invalid")},
+		{name: "a branch at no recorded commit counts none", q: code.HistoryQuery{Branch: "stray"}, wantTotal: &none},
+		{name: "every parent, counted", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll}, want: []string{"5", "6", "4", "3", "2", "1"},
+			wantTotal: total(6)},
+		{name: "every parent whose message holds a query", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll, Query: "commit 6"},
+			want: []string{"6"}, wantTotal: total(1)},
+		{name: "every parent's query, a page and where its next starts", q: code.HistoryQuery{Branch: "main", Parents: code.ParentsAll, Query: "commit", Limit: 2},
+			want: []string{"5", "6"}, wantNext: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwNToy", wantTotal: total(6)},
+		{name: "a path's, counted as git counts it", q: code.HistoryQuery{Branch: "main", Path: "docs"}, want: []string{"6", "2"}, wantTotal: total(3)},
+		{name: "a path's whose message holds a query", q: code.HistoryQuery{Branch: "main", Path: "docs", Query: "commit 2"}, want: []string{"2"},
+			wantTotal: total(1)},
+		{name: "a query too long", q: code.HistoryQuery{Branch: "main", Query: strings.Repeat("a", code.MaxQuery+1)}, wantErr: invalid("q.invalid")},
+		{name: "a query of the longest", q: code.HistoryQuery{Branch: "main", Query: strings.Repeat("ä", code.MaxQuery)}, wantTotal: &none},
+		{name: "a query over two lines", q: code.HistoryQuery{Branch: "main", Query: "commit\n3"}, wantErr: invalid("q.invalid")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := withLogs(newFixture())
+			got, err := f.service.History(t.Context(), f.max, f.repo, tt.q)
+			if !sameError(err, tt.wantErr) {
+				t.Fatalf("got error %v, want %v", err, tt.wantErr)
+			}
+			if !slices.Equal(shas(got.Commits), tt.want) || got.Next != tt.wantNext {
+				t.Errorf("got %v next %q, want %v next %q", shas(got.Commits), got.Next, tt.want, tt.wantNext)
+			}
+			if (got.Total == nil) != (tt.wantTotal == nil) || got.Total != nil && *got.Total != *tt.wantTotal {
+				t.Errorf("got a total of %v, want %v", deref(got.Total), deref(tt.wantTotal))
+			}
+		})
+	}
+}
+
+// deref is what n points at, or "none".
+func deref(n *int) any {
+	if n == nil {
+		return "none"
+	}
+	return *n
 }

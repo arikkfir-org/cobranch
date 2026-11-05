@@ -203,10 +203,10 @@ func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 	return out, nil
 }
 
-// FirstParents lists at most limit of the repository's commits from sha along first parents, nearest first, with
-// their annotations and reviews (code.Store).
-func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]code.Commit, error) {
-	rows, err := s.q.FirstParents(ctx, repoID, sha, int32(min(limit, code.MaxPageSize+1)))
+// FirstParents lists at most limit of the repository's commits from sha along first parents whose message holds grep,
+// nearest first, with their annotations and reviews (code.Store).
+func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string, limit int) ([]code.Commit, error) {
+	rows, err := s.q.FirstParents(ctx, queries.FirstParentsParams{RepoID: repoID, Sha: sha, Grep: grep, Max: int32(min(limit, code.MaxPageSize+1))})
 	if err != nil {
 		return nil, fmt.Errorf("walking the first parents of %s: %w", sha, err)
 	}
@@ -231,6 +231,16 @@ func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha stri
 	return out, nil
 }
 
+// CountFirstParents counts the repository's commits from sha along first parents whose message holds grep
+// (code.Store).
+func (s *CodeStore) CountFirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string) (int, error) {
+	n, err := s.q.CountFirstParents(ctx, grep, repoID, sha)
+	if err != nil {
+		return 0, fmt.Errorf("counting the first parents of %s: %w", sha, err)
+	}
+	return int(n), nil
+}
+
 // Commit finds one of the repository's commits with the push that first brought it, or repos.ErrNotFound
 // (code.Store).
 func (s *CodeStore) Commit(ctx context.Context, repoID uuid.UUID, sha string) (code.Commit, code.Push, error) {
@@ -249,7 +259,8 @@ func (s *CodeStore) Commit(ctx context.Context, repoID uuid.UUID, sha string) (c
 	if err != nil {
 		return code.Commit{}, code.Push{}, fmt.Errorf("finding push %s, which brought commit %s: %w", c.FirstPush, sha, err)
 	}
-	return c, code.Push{ID: p.ID, Pusher: principalOf(p.PusherID, p.PusherDisplayName), Transport: git.Transport(p.Transport), At: p.CommittedAt}, nil
+	return c, code.Push{ID: p.ID, Pusher: principalOf(p.PusherID, p.PusherDisplayName), Transport: git.Transport(p.Transport), At: p.CommittedAt,
+		Branches: p.Branches}, nil
 }
 
 // commitOf is the domain's view of a commits row, with the display names of the principals behind its author and

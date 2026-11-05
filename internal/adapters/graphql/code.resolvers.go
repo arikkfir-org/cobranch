@@ -151,7 +151,7 @@ func (r *repositoryResolver) DeletedBranch(ctx context.Context, obj *Repository,
 }
 
 // History is the resolver for the history field.
-func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) (*CommitPage, error) {
+func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, query *string, parents *HistoryParents, first int, after *string) (*CommitPage, error) {
 	v, repoID, err := repoOf(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -162,6 +162,9 @@ func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branc
 	}
 	if path != nil {
 		q.Path = *path
+	}
+	if query != nil {
+		q.Query = *query
 	}
 	if parents != nil {
 		q.Parents = historyParents[*parents]
@@ -176,7 +179,7 @@ func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branc
 	case err != nil:
 		return nil, codeFail(ctx, err, "listing the history")
 	}
-	out := &CommitPage{Commits: mapAll(page.Commits, commit)}
+	out := &CommitPage{Commits: mapAll(page.Commits, commit), Total: page.Total}
 	if page.Next != "" {
 		out.NextCursor = &page.Next
 	}
@@ -197,7 +200,7 @@ func (r *repositoryResolver) Commit(ctx context.Context, obj *Repository, sha st
 		return nil, fail(ctx, err, "commit", "reading the commit")
 	}
 	out := commit(c)
-	out.Push = &Push{ID: p.ID.String(), Pusher: commitPrincipal(p.Pusher), Transport: string(p.Transport), At: p.At.UTC()}
+	out.Push = &Push{ID: p.ID.String(), Pusher: commitPrincipal(p.Pusher), Transport: string(p.Transport), At: p.At.UTC(), Branches: nonNil(p.Branches)}
 	return out, nil
 }
 

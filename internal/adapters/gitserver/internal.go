@@ -233,35 +233,67 @@ const maxLog = 1000
 // git rev-list --date-order: no commit before its children, and among those the graph leaves free, the newest first,
 // so a commit whose clock ran ahead stays beneath the ones that build on it; after skipping as many as the request
 // asks, each with its parents. With a path, it answers only the commits that changed what is there, as git log --
-// path simplifies history, each with the parents that simplification leaves it.
+// path simplifies history, each with the parents that simplification leaves it; with grep, only those whose message
+// holds it, ignoring case, as git log -i -F --grep keeps them. With count, it also counts the whole walk.
 func (s *Server) readLog(w http.ResponseWriter, r *http.Request, o objects) error {
-	skip, skipErr := strconv.Atoi(r.URL.Query().Get("skip"))
-	limit, limitErr := strconv.Atoi(r.URL.Query().Get("limit"))
+	query := r.URL.Query()
+	skip, skipErr := strconv.Atoi(query.Get("skip"))
+	limit, limitErr := strconv.Atoi(query.Get("limit"))
 	if skipErr != nil || limitErr != nil || skip < 0 || limit < 0 || limit > maxLog {
 		problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "skip must be a number of commits, and limit one up to 1000"})
 		return nil
 	}
+	walk := logWalk(o, query.Get("grep"))
 	log := code.Log{Commit: o.commit, Entries: []code.LogEntry{}}
 	if limit > 0 {
-		args := []string{"rev-list", "--date-order", "--parents", "--skip=" + strconv.Itoa(skip), "--max-count=" + strconv.Itoa(limit), o.commit, "--"}
-		if o.path != "" {
-			args = append(args, o.path)
-		}
+		args := append([]string{"rev-list", "--date-order", "--parents", "--skip=" + strconv.Itoa(skip), "--max-count=" + strconv.Itoa(limit)}, walk...)
 		out, err := s.read(r.Context(), o.dir, nil, args...)
 		if err != nil {
 			return err
 		}
-		for line := range strings.Lines(string(out)) {
-			fields := strings.Fields(line)
-			if len(fields) == 0 {
-				return fmt.Errorf("walking the history of %s: git rev-list printed %q", o.commit, line)
-			}
-			log.Entries = append(log.Entries, code.LogEntry{SHA: fields[0], Parents: fields[1:]})
+		if log.Entries, err = parseLog(out, o.commit); err != nil {
+			return err
+		}
+	}
+	if query.Get("count") == "true" {
+		out, err := s.read(r.Context(), o.dir, nil, append([]string{"rev-list", "--count"}, walk...)...)
+		if err != nil {
+			return err
+		}
+		if log.Total, err = strconv.Atoi(strings.TrimSpace(string(out))); err != nil {
+			return fmt.Errorf("counting the history of %s: git rev-list printed %q: %w", o.commit, out, err)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(gitinternal.LogOf(log)) // a caller gone away gets nothing more
 	return nil
+}
+
+// logWalk is what git rev-list walks for a read of history: the read's commit, the commits whose message holds grep
+// when it is set, and the read's path when it names one.
+func logWalk(o objects, grep string) []string {
+	var args []string
+	if grep != "" {
+		args = append(args, "--regexp-ignore-case", "--fixed-strings", "--grep="+grep)
+	}
+	args = append(args, o.commit, "--")
+	if o.path != "" {
+		args = append(args, o.path)
+	}
+	return args
+}
+
+// parseLog reads the commits git rev-list --parents printed, each its name and its parents'.
+func parseLog(out []byte, commit string) ([]code.LogEntry, error) {
+	entries := []code.LogEntry{}
+	for line := range strings.Lines(string(out)) {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("walking the history of %s: git rev-list printed %q", commit, line)
+		}
+		entries = append(entries, code.LogEntry{SHA: fields[0], Parents: fields[1:]})
+	}
+	return entries, nil
 }
 
 // resolve finds the commit ref names in the repository at dir: a full commit name, a branch or a tag, in that order,

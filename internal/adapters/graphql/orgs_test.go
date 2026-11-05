@@ -106,7 +106,8 @@ func newOrgFixture() *orgFixture {
 	f.artifactStore = artifactstest.NewStore(store)
 	f.artifactStore.Now, f.artifactStore.RepoSlugs[f.website.ID] = now, "website"
 	f.artifacts = artifacts.NewService(f.artifactStore, auth.NewAuthorizer(store), markdown.New(nil, nil))
-	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
+	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now,
+		Branches: []string{"main"}}
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
 	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))

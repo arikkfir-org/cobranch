@@ -72,11 +72,16 @@ func (c *Client) Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (c
 		Body: resp.Body}, nil
 }
 
-// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, after the first
-// skip; with a path, only those that changed what is there (code.Objects).
-func (c *Client) Log(ctx context.Context, repoID uuid.UUID, ref, path string, skip, limit int) (code.Log, error) {
+// Log lists the page of history q asks for, counting the whole walk when it asks (code.Objects).
+func (c *Client) Log(ctx context.Context, repoID uuid.UUID, q code.LogQuery) (code.Log, error) {
 	var log Log
-	query := url.Values{"ref": {ref}, "path": {path}, "skip": {strconv.Itoa(skip)}, "limit": {strconv.Itoa(limit)}}
+	query := url.Values{"ref": {q.Ref}, "path": {q.Path}, "skip": {strconv.Itoa(q.Skip)}, "limit": {strconv.Itoa(q.Limit)}}
+	if q.Grep != "" {
+		query.Set("grep", q.Grep)
+	}
+	if q.Count {
+		query.Set("count", "true")
+	}
 	if err := c.getJSON(ctx, repoID, "log", query, &log); err != nil {
 		return code.Log{}, err
 	}

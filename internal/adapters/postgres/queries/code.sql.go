@@ -69,6 +69,26 @@ func (q *Queries) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string
 	return items, nil
 }
 
+const countFirstParents = `-- name: CountFirstParents :one
+WITH RECURSIVE line (sha, next, message) AS (
+    SELECT s.sha, s.parents[1], s.message FROM commits s WHERE s.repo_id = $2 AND s.sha = $3
+    UNION ALL
+    SELECT p.sha, p.parents[1], p.message
+    FROM line JOIN commits p ON p.repo_id = $2 AND p.sha = line.next
+)
+SELECT count(*)::int FROM line WHERE strpos(lower(line.message), lower($1::text)) > 0
+`
+
+// CountFirstParents counts the commits of a repository's history from a commit along each commit's first parent whose
+// message holds grep, ignoring case (every commit's does when grep is empty), as git rev-list --first-parent --count
+// -i -F --grep does.
+func (q *Queries) CountFirstParents(ctx context.Context, grep string, repoID uuid.UUID, sha string) (int32, error) {
+	row := q.db.QueryRow(ctx, countFirstParents, grep, repoID, sha)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deletedBranch = `-- name: DeletedBranch :one
 SELECT b.id, b.name, b.head, b.created_at, b.deleted_at, b.deleted_by, d.display_name AS deleted_by_name,
     b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
@@ -117,20 +137,31 @@ func (q *Queries) DeletedBranch(ctx context.Context, repoID uuid.UUID, name stri
 }
 
 const firstParents = `-- name: FirstParents :many
-WITH RECURSIVE line (sha, next, depth) AS (
-    SELECT s.sha, s.parents[1], 1 FROM commits s WHERE s.repo_id = $1 AND s.sha = $2
+WITH RECURSIVE line (sha, next, depth, matched, found) AS (
+    SELECT s.sha, s.parents[1], 1, m.matched, m.matched::int
+    FROM commits s CROSS JOIN LATERAL (SELECT strpos(lower(s.message), lower($2::text)) > 0 AS matched) m
+    WHERE s.repo_id = $1 AND s.sha = $3
     UNION ALL
-    SELECT p.sha, p.parents[1], line.depth + 1
+    SELECT p.sha, p.parents[1], line.depth + 1, m.matched, line.found + m.matched::int
     FROM line JOIN commits p ON p.repo_id = $1 AND p.sha = line.next
-    WHERE line.depth < $3::int
+    CROSS JOIN LATERAL (SELECT strpos(lower(p.message), lower($2::text)) > 0 AS matched) m
+    WHERE line.found < $4::int
 )
 SELECT c.repo_id, c.sha, c.org_id, c.tree, c.parents, c.message, c.author_id, c.author_name, c.author_email, c.authored_at, c.author_zone, c.committer_id, c.committer_name, c.committer_email, c.committed_at, c.committer_zone, c.signature, c.first_push, a.display_name AS author_display_name, m.display_name AS committer_display_name
 FROM line
 JOIN commits c ON c.repo_id = $1 AND c.sha = line.sha
 LEFT JOIN principals a ON a.id = c.author_id
 LEFT JOIN principals m ON m.id = c.committer_id
+WHERE line.matched
 ORDER BY line.depth
 `
+
+type FirstParentsParams struct {
+	RepoID uuid.UUID
+	Grep   string
+	Sha    string
+	Max    int32
+}
 
 type FirstParentsRow struct {
 	Commit               Commit
@@ -139,10 +170,16 @@ type FirstParentsRow struct {
 }
 
 // FirstParents walks a repository's history from a commit along each commit's first parent, as git log
-// --first-parent does, for at most max commits, nearest first, with the display names of the principals behind
-// their authors and committers.
-func (q *Queries) FirstParents(ctx context.Context, repoID uuid.UUID, sha string, max int32) ([]FirstParentsRow, error) {
-	rows, err := q.db.Query(ctx, firstParents, repoID, sha, max)
+// --first-parent does, for at most max commits whose message holds grep, ignoring case (every commit's does when grep
+// is empty), nearest first, with the display names of the principals behind their authors and committers. The walk
+// stops once it found max of them.
+func (q *Queries) FirstParents(ctx context.Context, arg FirstParentsParams) ([]FirstParentsRow, error) {
+	rows, err := q.db.Query(ctx, firstParents,
+		arg.RepoID,
+		arg.Grep,
+		arg.Sha,
+		arg.Max,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +384,13 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 }
 
 const pushOf = `-- name: PushOf :one
-SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at
+SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at,
+    ARRAY(
+        SELECT substr(r.u ->> 'name', length('refs/heads/') + 1)
+        FROM jsonb_array_elements(p.ref_updates) WITH ORDINALITY AS r (u, n)
+        WHERE starts_with(r.u ->> 'name', 'refs/heads/') AND r.u ->> 'new' <> '0000000000000000000000000000000000000000'
+        ORDER BY r.n
+    )::text[] AS branches
 FROM pushes p LEFT JOIN principals u ON u.id = p.pusher_id
 WHERE p.repo_id = $1 AND p.id = $2
 `
@@ -358,9 +401,11 @@ type PushOfRow struct {
 	PusherDisplayName *string
 	Transport         string
 	CommittedAt       time.Time
+	Branches          []string
 }
 
-// PushOf finds one of a repository's pushes, with its pusher's display name.
+// PushOf finds one of a repository's pushes, with its pusher's display name and the branches it moved, without
+// refs/heads/, in the order it moved them; a branch it deleted isn't one.
 func (q *Queries) PushOf(ctx context.Context, repoID uuid.UUID, iD uuid.UUID) (PushOfRow, error) {
 	row := q.db.QueryRow(ctx, pushOf, repoID, iD)
 	var i PushOfRow
@@ -370,6 +415,7 @@ func (q *Queries) PushOf(ctx context.Context, repoID uuid.UUID, iD uuid.UUID) (P
 		&i.PusherDisplayName,
 		&i.Transport,
 		&i.CommittedAt,
+		&i.Branches,
 	)
 	return i, err
 }

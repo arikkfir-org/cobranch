@@ -358,7 +358,7 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 		return nil, codeFail(err)
 	}
 	out := ListCommits200JSONResponse{}
-	out.Body.Commits = mapAll(page.Commits, commit)
+	out.Body.Commits, out.Body.Total = mapAll(page.Commits, commit), page.Total
 	if page.Next != "" {
 		next := url.Values{"branch": {q.Branch}, "cursor": {page.Next}}
 		if q.Ref != "" {
@@ -366,6 +366,9 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 		}
 		if q.Path != "" {
 			next.Set("path", q.Path)
+		}
+		if q.Query != "" {
+			next.Set("q", q.Query)
 		}
 		if q.Parents != "" {
 			next.Set("parents", string(q.Parents))
@@ -398,6 +401,9 @@ func historyQuery(p ListCommitsParams) code.HistoryQuery {
 	}
 	if p.Path != nil {
 		q.Path = *p.Path
+	}
+	if p.Q != nil {
+		q.Query = *p.Q
 	}
 	if p.Parents != nil {
 		q.Parents = code.Parents(*p.Parents)
@@ -441,7 +447,7 @@ func (a api) GetCommit(ctx context.Context, req GetCommitRequestObject) (GetComm
 		return nil, fail(err, "commit")
 	}
 	out := commit(c)
-	out.Push = &Push{Id: p.ID, Pusher: principal(p.Pusher), Transport: PushTransport(p.Transport), At: p.At.UTC()}
+	out.Push = &Push{Id: p.ID, Pusher: principal(p.Pusher), Transport: PushTransport(p.Transport), At: p.At.UTC(), Branches: nonNil(p.Branches)}
 	return GetCommit200JSONResponse(out), nil
 }
 
