@@ -7,7 +7,7 @@ import { shortSha, subject as messageSubject, whenExactly, who } from "../../lib
 import { go } from "../../lib/router.js";
 import { base } from "../../lib/state.js";
 
-export const under = "";
+export const under = "tree";
 export const heading = false;
 export const crumbs = ({ root, rest }) => [{ label: "Commits", href: root + "/commits/" + (rest.join("/") || "main") }, { label: rest.join("/") || "main" }];
 // subject is the branch's conversation, on its history; a tag's or a commit's has none.

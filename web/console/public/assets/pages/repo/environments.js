@@ -6,10 +6,10 @@ import { capitalized, shortSha, whenExactly } from "../../lib/format.js";
 import { badgeOf } from "../../lib/icons.js";
 import { render } from "../../lib/router.js";
 
-export const nav = { label: "Environments", order: 30 };
+export const nav = { label: "Delivery", order: 30 };
 export const accepts = (rest) => rest.length <= 1;
 export const heading = (rest) => !rest.length;
-export const crumbs = ({ root, rest }) => [{ label: "Environments", href: root + "/environments" }, ...(rest.length ? [{ label: "Environment" }] : [])];
+export const crumbs = ({ root, rest }) => [{ label: "Delivery", href: root + "/environments" }, ...(rest.length ? [{ label: "Environment" }] : [])];
 // subject is an environment's branch's conversation, on the environment's page.
 export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/environments/" + encodeURIComponent(rest[0]))
   .then((e) => (e.branch ? branchSubject(org, repo, path, at, e.branch, can) : null)) : null;

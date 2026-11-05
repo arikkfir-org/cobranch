@@ -1,4 +1,5 @@
 import { h } from "./dom.js";
+import { agents } from "./state.js";
 
 const iconPaths = {
   "clock": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -49,6 +50,8 @@ const iconPaths = {
   "pin": '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
   "file": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
   "file-code": '<path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
+  "history": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  "unlink": '<path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><line x1="8" x2="8" y1="2" y2="5"/><line x1="2" x2="5" y1="8" y2="8"/><line x1="16" x2="16" y1="19" y2="22"/><line x1="19" x2="22" y1="16" y2="16"/>',
   "menu": '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
 };
 // icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone.
@@ -67,6 +70,17 @@ export function badgeOf(table, value) {
 const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
 // avatar is a principal's avatar (B's Avatar): a person's initials in a circle, or an agent's sparkles in a violet
-// square; size is 20 (the default), 24, 32 or 40.
-export const avatar = (name, agent, size = 20) => h("span", { class: "avatar" + (agent ? " avatar-agent" : "") + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true" },
+// square; size is 20 (the default), 24, 32 or 40. Its name shows on hover.
+export const avatar = (name, agent, size = 20) => h("span", { class: "avatar" + (agent ? " avatar-agent" : "") + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: name },
   agent ? icon("sparkles") : initials(name));
+// machineAvatar is a machine's avatar, the ink square with a cog: a principal Cobranch can't tell for a person or an
+// agent, such as the CI system an annotation came from.
+export const machineAvatar = (name, size = 20) => h("span", { class: "avatar avatar-machine" + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: name }, icon("cog"));
+// principalAvatar is a principal's avatar, an agent's when the organization's agents (state.js) count it among them,
+// a person's otherwise, or machine's when it is neither, as a key's.
+export const principalAvatar = (p, size = 20, machine = false) => agents.has(p.id) ? avatar(p.displayName, true, size)
+  : machine ? machineAvatar(p.displayName, size) : avatar(p.displayName, false, size);
+// authorAvatar is a commit author's or committer's avatar: their user's, or the dashed one of an author no account
+// holds.
+export const authorAvatar = (person, size = 20) => person.principal ? principalAvatar(person.principal, size)
+  : h("span", { class: "avatar avatar-unclaimed" + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: person.name }, initials(person.name));
