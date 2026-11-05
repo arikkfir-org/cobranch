@@ -80,6 +80,9 @@ func issueOf(i issues.Issue) *Issue {
 	if t := i.Task; t != nil {
 		out.Task = &IssueTask{Number: int(t.Number), State: TaskState(strings.ToUpper(string(t.State)))}
 	}
+	if b := i.Branch; b != nil {
+		out.Branch = &IssueLiveBranch{RepositoryID: b.Repository.ID.String(), RepositorySlug: b.Repository.Slug, Name: b.Name}
+	}
 	out.Labels = mapAll(i.Labels, func(l issues.IssueLabel) *IssueLabel {
 		return &IssueLabel{ID: l.ID.String(), Name: l.Name, Color: labelColors[l.Color]}
 	})

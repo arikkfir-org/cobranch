@@ -41,10 +41,13 @@ func onAcme(document string) func(*orgFixture) string {
 func TestIssues(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "the open ones, newest first", viewer: withIssues(maxim),
-			document: fixed(`{ organization(slug: "acme") { issueKey issues { issues { identifier state priority assignee { displayName } repository { slug } descriptionHtml } nextCursor } } }`),
-			want: []string{`"issueKey":"ACME"`, `{"identifier":"ACME-3","state":"TODO","priority":"NONE","assignee":null,"repository":null,"descriptionHtml":null}`,
-				`{"identifier":"ACME-1","state":"BACKLOG","priority":"HIGH","assignee":{"displayName":"Max"},"repository":{"slug":"website"},"descriptionHtml":null}`,
-				`"nextCursor":null`}},
+			document: fixed(`{ organization(slug: "acme") { issueKey issues { issues { identifier state priority assignee { displayName } repository { slug } descriptionHtml branch { name } } nextCursor counts { open closed } } } }`),
+			want: []string{`"issueKey":"ACME"`, `{"identifier":"ACME-3","state":"TODO","priority":"NONE","assignee":null,"repository":null,"descriptionHtml":null,"branch":null}`,
+				`{"identifier":"ACME-1","state":"BACKLOG","priority":"HIGH","assignee":{"displayName":"Max"},"repository":{"slug":"website"},"descriptionHtml":null,"branch":null}`,
+				`"nextCursor":null`, `"counts":{"open":2,"closed":1}`}},
+		{name: "the closed ones, counted with the open", viewer: withIssues(maxim),
+			document: fixed(`{ organization(slug: "acme") { issues(filter: {states: [DONE, CANCELED], text: "o"}) { issues { identifier } counts { open closed } } } }`),
+			want:     []string{`"issues":[{"identifier":"ACME-2"}]`, `"counts":{"open":2,"closed":1}`}},
 		{name: "a page and its cursor", viewer: withIssues(maxim),
 			document: fixed(`{ organization(slug: "acme") { issues(filter: {states: [BACKLOG, DONE]}, first: 1) { issues { identifier } nextCursor } } }`),
 			want:     []string{`"issues":[{"identifier":"ACME-2"}]`, `"nextCursor":"`}},
@@ -135,6 +138,14 @@ func TestBranchLinks(t *testing.T) {
 		}),
 			document: fixed(`{ organization(slug: "acme") { issue(number: 1) { activity { kind task { number branch } } } } }`),
 			want:     []string{`{"kind":"issue.task_started","task":{"number":318,"branch":"feature/push-worker"}}`}},
+		{name: "an issue shows the live branch linked to it last", viewer: withLinks(maxim),
+			document: fixed(`{ organization(slug: "acme") { issues { issues { identifier branch { repositoryId repositorySlug name } } } } }`),
+			check: func(t *testing.T, f *orgFixture, body string) {
+				want := `{"identifier":"ACME-1","branch":{"repositoryId":"` + f.website.ID.String() + `","repositorySlug":"website","name":"feature"}}`
+				if !strings.Contains(body, want) {
+					t.Errorf("body = %s, want %s", body, want)
+				}
+			}},
 		{name: "a branch shows its issue", viewer: withLinks(olivia),
 			document: fixed(`{ organization(slug: "acme") { repository(slug: "website") { feature: branch(name: "feature") { issue { issue { identifier } linkedBy } } main: branch(name: "main") { issue { linkedBy } } } } }`),
 			want:     []string{`"feature":{"issue":{"issue":{"identifier":"ACME-1"},"linkedBy":"HAND"}}`, `"main":{"issue":null}`}},

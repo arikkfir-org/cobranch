@@ -201,7 +201,7 @@ func (r *organizationResolver) Issues(ctx context.Context, obj *Organization, fi
 	if err != nil {
 		return nil, issueFail(ctx, err, "listing the issues")
 	}
-	out := &IssuePage{Issues: mapAll(page.Issues, issueOf)}
+	out := &IssuePage{Issues: mapAll(page.Issues, issueOf), Counts: &IssueCounts{Open: page.Open, Closed: page.Closed}}
 	if page.Next != "" {
 		out.NextCursor = &page.Next
 	}

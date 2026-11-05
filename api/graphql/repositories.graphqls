@@ -47,6 +47,31 @@ type Repository {
   access: [RepositoryAccess!]!
   "The roles the repository grants, each with the permissions it gives there; takes repo.read."
   roles: [Role!]!
+  "The repository summed up, as Organization.repositories lists it; null elsewhere."
+  summary: RepositorySummary
+}
+
+"A repository summed up for its organization's list, which alone answers it."
+type RepositorySummary {
+  "Its live branches but main and those merged already."
+  openBranches: Int!
+  "Those of its open branches that are Ready."
+  readyBranches: Int!
+  "When its last push was recorded; null before its first."
+  lastPushAt: Time
+  main: MainStatus!
+}
+
+"How a repository's main stands by the annotations on its head."
+enum MainStatus {
+  "No annotations on its head, or no main yet."
+  NONE
+  "An annotation pending or in progress, and none failed."
+  RUNNING
+  "An annotation failed."
+  FAILING
+  "Every annotation succeeded."
+  PASSING
 }
 
 "A principal's grants on a repository."

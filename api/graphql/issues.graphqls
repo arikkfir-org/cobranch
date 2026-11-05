@@ -33,6 +33,21 @@ type IssuePage {
   issues: [Issue!]!
   "Where the next page starts, for after; null after the last."
   nextCursor: String
+  "How many of the organization's issues the filter matches in any state, open and closed, whichever states it shows."
+  counts: IssueCounts!
+}
+
+"How many issues are open and how many closed."
+type IssueCounts {
+  open: Int!
+  closed: Int!
+}
+
+"The live branch linked to an issue last: its repository, by ID and slug, and its name."
+type IssueLiveBranch {
+  repositoryId: ID!
+  repositorySlug: String!
+  name: String!
 }
 
 "Where an issue stands: DONE and CANCELED close it."
@@ -81,6 +96,8 @@ type Issue {
   task: IssueTask
   "The repository it is about; null for none, and for a viewer who doesn't read it."
   repository: IssueRepository
+  "The live branch linked to it last, which the list shows; null for none, and for a viewer who doesn't read its repository."
+  branch: IssueLiveBranch
   "The organization's labels it carries, by name."
   labels: [IssueLabel!]!
   "Who created it; null once they are gone."

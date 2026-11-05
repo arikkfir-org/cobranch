@@ -36,6 +36,16 @@ func repository(r repos.Repository) *Repository {
 	return out
 }
 
+// repositorySummary is s as the API shows it.
+func repositorySummary(s repos.Summary) *RepositorySummary {
+	out := &RepositorySummary{OpenBranches: s.OpenBranches, ReadyBranches: s.ReadyBranches, Main: MainStatus(strings.ToUpper(string(s.Main)))}
+	if !s.LastPushAt.IsZero() {
+		at := s.LastPushAt.UTC()
+		out.LastPushAt = &at
+	}
+	return out
+}
+
 func repositoryAccess(a repos.Access) *RepositoryAccess {
 	return &RepositoryAccess{PrincipalID: a.Principal.ID.String(), Kind: string(a.Principal.Kind), DisplayName: a.Principal.DisplayName,
 		Roles: mapAll(a.Roles, role)}
