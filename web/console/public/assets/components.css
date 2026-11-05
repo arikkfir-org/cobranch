@@ -1,17 +1,18 @@
-/* The Console's components: one class for each component on the Components page of the design system's Figma file,
-   with the same variants and states, drawn from the tokens in tokens.css alone, so both themes follow. A page composes
-   these classes and styles no component of its own; a component changes in Figma first, then here, and the change
-   reaches every page (docs/cobranch/designs/design-system.md). Each block names its Figma component; the shell's own
-   components (App/*, Nav item, Nav/Sub item, Chat message) are in lib/shell.css. The page /help/components draws every
-   one of them, and Figma's Code Connect points each component at its class here. */
+/* The Console's components: one class for each component on the Components page of the design system's Figma file, with
+   the same variants and states, drawn from the tokens in tokens.css alone, so both themes follow; the few sizes a
+   component keeps as its own in Figma (an avatar's, a textarea's, a dialog's width) are custom properties on it. A page
+   composes these classes and styles no component of its own; a component changes in Figma first, then here, and the
+   change reaches every page (docs/cobranch/designs/design-system.md). Each block names its Figma component; the shell's
+   own components (App/*, Nav item, Nav/Sub item, Chat message) are in lib/shell.css. The page /help/components draws
+   every one of them, and Figma's Code Connect points each component at its class here. */
 
-/* Tones: the status language's six tones, and inverse for Merged. A badge, quiet badge, tag or icon takes its colours
-   from the tone class on it or around it. */
+/* Tones: the status language's six tones, and inverse for Merged. A badge, quiet badge, tag, icon or banner takes its
+   colours from the tone class on it or around it. */
 .tone-neutral { --tone-fg: var(--color-status-neutral-fg); --tone-bg: var(--color-status-neutral-bg); --tone-border: var(--color-status-neutral-border); --tone-solid: var(--color-status-neutral-solid); }
-.tone-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); --tone-solid: var(--color-status-info-solid); }
-.tone-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
-.tone-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
-.tone-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
+.tone-info, .banner-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); --tone-solid: var(--color-status-info-solid); }
+.tone-success, .banner-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); --tone-solid: var(--color-status-success-solid); }
+.tone-warning, .banner-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); --tone-solid: var(--color-status-warning-solid); }
+.tone-danger, .banner-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); --tone-solid: var(--color-status-danger-solid); }
 .tone-ai { --tone-fg: var(--color-status-ai-fg); --tone-bg: var(--color-status-ai-bg); --tone-border: var(--color-status-ai-border); --tone-solid: var(--color-status-ai-solid); }
 .tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); --tone-solid: var(--color-bg-inverse); }
 
@@ -20,7 +21,8 @@
 .icon svg { width: var(--size-icon-sm); height: var(--size-icon-sm); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .icon svg * { vector-effect: non-scaling-stroke; }
 
-/* Button: Secondary unless a style says otherwise (Primary, Ghost, Danger); Medium unless Small. One Primary per view. */
+/* Button: Secondary unless a style says otherwise (Primary, Ghost, Danger); Medium unless Small. One Primary per view.
+   Secondary is .btn alone, so .btn-secondary, which says so, changes nothing. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-6);
   height: var(--size-control-md); padding: 0 var(--space-12);
@@ -54,7 +56,7 @@
 
 /* Disabled controls fade to 40% and take no clicks; keyboard focus shows Focus/Ring. */
 :is(.btn, .icon-btn, .menu-item, .tab, .segmented > button):is(:disabled, [aria-disabled="true"]) { opacity: 0.4; cursor: default; pointer-events: none; }
-:is(.btn, .icon-btn, .menu-item, .tab, .segmented > button):focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+:is(.btn, .icon-btn, .menu-item, .tab, .segmented > button, .checkbox > input, .radio > input):focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
 
 /* Badge/Branch status, Badge/Annotation, Badge/Review: a status as a tinted pill, its icon, its word and its tone
    (lib/icons.js badgeOf). Merged is the inverse tone. */
@@ -102,7 +104,7 @@
 
 /* Input: a label above a 32px field, then helper text, or the error in its place. The field is .input, on an input
    itself or on a box around an icon and an input (Show icon, for search). */
-.field { display: grid; gap: var(--space-6); justify-items: stretch; min-width: 0; }
+.field { display: grid; align-content: start; gap: var(--space-6); justify-items: stretch; min-width: 0; }
 .field-label { color: var(--color-fg-default); font: var(--text-label-small); }
 .field-help { color: var(--color-fg-muted); font: var(--text-caption); }
 .input {
@@ -116,10 +118,56 @@
 .input .icon { color: var(--color-fg-muted); }
 .input:focus-visible, .input:focus-within { outline: none; border-color: var(--color-border-focus); box-shadow: var(--shadow-focus-ring); }
 .input:is([aria-invalid="true"], :has(> input[aria-invalid="true"])) { border-color: var(--color-status-danger-solid); }
-.field:has(.input[aria-invalid="true"], .input > input[aria-invalid="true"]) .field-help { color: var(--color-status-danger-fg); }
+.field:has([aria-invalid="true"]) .field-help { color: var(--color-status-danger-fg); }
 .input:is(:disabled, :has(> input:disabled)) { background: var(--color-bg-sunken); color: var(--color-fg-disabled); }
 .input:is(:disabled, :has(> input:disabled))::placeholder, .input > input:disabled::placeholder { color: var(--color-fg-disabled); }
-.field:has(.input:disabled, .input > input:disabled) .field-label { color: var(--color-fg-disabled); }
+.field:has(:disabled) .field-label { color: var(--color-fg-disabled); }
+
+/* Select: a closed choice, an Input with a chevron; .select holds a native select, whose open list is the browser's. */
+.select { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
+.select > select {
+  appearance: none; width: 100%; min-width: 0; height: var(--size-control-md);
+  padding: 0 calc(var(--space-12) + var(--size-icon-sm) + var(--space-8)) 0 var(--space-12);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+  background: var(--color-bg-surface); color: var(--color-fg-default); font: var(--text-body-medium); text-overflow: ellipsis; cursor: pointer;
+}
+.select::after {
+  content: ""; position: absolute; right: var(--space-12); width: var(--size-icon-sm); height: var(--size-icon-sm);
+  background: var(--color-fg-muted); pointer-events: none;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.select > select:focus-visible, .textarea:focus-visible { outline: none; border-color: var(--color-border-focus); box-shadow: var(--shadow-focus-ring); }
+.select > select[aria-invalid="true"], .textarea[aria-invalid="true"] { border-color: var(--color-status-danger-solid); }
+.select > select:disabled, .textarea:disabled { background: var(--color-bg-sunken); color: var(--color-fg-disabled); cursor: default; }
+.select:has(> select:disabled)::after { background: var(--color-fg-disabled); }
+
+/* Textarea: a multi-line Input (instructions, descriptions, comments) that grows with its content from 96px. */
+.textarea {
+  --textarea-min-height: 96px;
+  display: block; width: 100%; min-width: 0; min-height: var(--textarea-min-height); field-sizing: content;
+  padding: var(--space-8) var(--space-12); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+  background: var(--color-bg-surface); color: var(--color-fg-default); font: var(--text-body-medium); resize: vertical;
+}
+.textarea::placeholder { color: var(--color-fg-subtle); }
+.textarea:disabled::placeholder { color: var(--color-fg-disabled); }
+
+/* Checkbox and Radio: a 16px box (any number on) or circle (one of a group on), filled with action/primary when on,
+   beside its label; .checkbox and .radio are the label around the native input. */
+.checkbox, .radio { display: inline-flex; align-items: center; gap: var(--space-8); color: var(--color-fg-default); font: var(--text-body-medium); cursor: pointer; }
+.checkbox > input, .radio > input {
+  appearance: none; display: grid; place-content: center; flex: none; width: var(--size-icon-sm); height: var(--size-icon-sm); margin: 0; padding: 0;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-surface); cursor: inherit;
+}
+.radio > input { border-radius: var(--radius-full); }
+.checkbox > input:checked, .radio > input:checked { border-color: transparent; background: var(--color-action-primary-bg); }
+.checkbox > input:checked::before {
+  content: ""; width: var(--space-12); height: var(--space-12); background: var(--color-action-primary-fg);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.radio > input:checked::before { content: ""; width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: var(--color-action-primary-fg); }
+.checkbox:has(> input:disabled), .radio:has(> input:disabled) { color: var(--color-fg-disabled); cursor: default; }
+.checkbox > input:disabled, .radio > input:disabled { background: var(--color-bg-sunken); }
+.checkbox > input:disabled:checked, .radio > input:disabled:checked { background: var(--color-fg-disabled); }
 
 /* Tab: one view of an object, in a .tab-bar over a bottom border; the selected tab is ink with a 2px underline, and a
    count says how many wait behind it. */
@@ -158,29 +206,102 @@
 }
 .menu-divider { height: 1px; margin: var(--space-4) 0; border: 0; background: var(--color-border-subtle); }
 
-/* Segmented control: one choice of a few, side by side (the theme in the user menu); the chosen one is pressed. */
-.segmented { display: flex; height: var(--size-control-sm); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); overflow: hidden; }
-.segmented > button { flex: 1; min-width: 0; padding: 0 var(--space-8); border: 0; background: none; color: var(--color-fg-muted); font: var(--text-caption); cursor: pointer; }
-.segmented > button:hover { background: var(--color-bg-hover); }
-.segmented > button[aria-pressed="true"] { background: var(--color-bg-selected); color: var(--color-fg-default); font: var(--text-label-small); }
+/* Segmented control: two to four exclusive options side by side (the theme in the user menu) on a sunken track; the
+   chosen one is pressed, a raised surface segment. The borders are drawn inside, as Figma's strokes are. */
+.segmented {
+  display: flex; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-md);
+  background: var(--color-bg-sunken); box-shadow: inset 0 0 0 1px var(--color-border-default);
+}
+.segmented > button {
+  flex: 1; min-width: 0; padding: var(--space-4) var(--space-12); border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--color-fg-muted); font: var(--text-body-small-strong); white-space: nowrap; cursor: pointer;
+}
+.segmented > button:hover { color: var(--color-fg-default); }
+.segmented > button[aria-pressed="true"] {
+  background: var(--color-bg-surface); color: var(--color-fg-default);
+  box-shadow: inset 0 0 0 1px var(--color-border-default), var(--shadow-elevation-1);
+}
 
-/* Table/Header cell and Table/Cell: objects of one kind, in a table that is its own card. Header cells sit on the
-   sunken background in Label/Small; body rows are divided by border/subtle and hovered; a cell holds text, Muted
-   metadata, Mono names (SHAs, paths, branches), or a badge, an avatar or a button. */
+/* Table/Header cell and Table/Cell: objects of one kind, in a table that is its own card. Header cells are 36px on the
+   sunken background in Label/Small; body cells are at least 32px, a second line grows them; body rows are divided by
+   border/subtle and hovered; a cell holds text, Muted metadata, Mono names (SHAs, paths, branches), or a badge, an
+   avatar or a button. */
 .table {
   width: 100%; border-collapse: separate; border-spacing: 0;
   border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden;
 }
 .table th {
-  height: var(--size-row); padding: 0 var(--space-12); border-bottom: 1px solid var(--color-border-default);
+  height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-sunken); color: var(--color-fg-muted); font: var(--text-label-small); text-align: left; white-space: nowrap;
 }
-.table td { height: 44px; padding: 0 var(--space-12); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
+.table td { height: var(--size-row-sm); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
 .table .cell-muted { color: var(--color-fg-muted); }
 .table .cell-mono { font: var(--text-code-small); }
 .table .cell-person { display: flex; align-items: center; gap: var(--space-8); }
+
+/* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
+   or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
+.card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }
+.card-header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.card-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
+.card > :is(.table, .list) { border: 0; border-radius: 0; }
+
+/* Dialog: a modal dialog over the scrim, 480px wide: a title with a close button, the body, and a sunken footer with
+   the actions on the right, primary last. Esc closes it, and so does a click on the scrim, which the page wires. */
+.dialog {
+  --dialog-width: 480px;
+  width: min(var(--dialog-width), 100% - 2 * var(--space-16)); max-height: calc(100% - 2 * var(--space-16)); padding: 0;
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-xl);
+  background: var(--color-bg-surface); color: var(--color-fg-default); box-shadow: var(--shadow-elevation-3);
+}
+.dialog::backdrop { background: var(--color-bg-overlay); }
+.dialog-header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-16) var(--space-20); }
+.dialog-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); }
+.dialog-body { display: grid; gap: var(--space-12); padding: 0 var(--space-20) var(--space-20); color: var(--color-fg-default); font: var(--text-body-medium); }
+.dialog-body p { color: inherit; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-20); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
+
+/* Banner: an inline message in a page or a dialog, in its tone's colours (Info unless Success, Warning or Danger): an
+   icon, a title over the message, then an optional ghost action and a dismiss button. */
+.banner {
+  display: flex; align-items: flex-start; gap: var(--space-8); padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--tone-border, var(--color-status-info-border)); border-radius: var(--radius-md);
+  background: var(--tone-bg, var(--color-status-info-bg)); color: var(--color-fg-default); font: var(--text-body-medium);
+}
+.banner > .icon { margin-top: var(--space-2); color: var(--tone-fg, var(--color-status-info-fg)); vertical-align: 0; }
+.banner-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.banner-title { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.banner-text p { color: inherit; }
+
+/* Empty state: what a list, table or page shows with nothing in it: an icon in a sunken circle, a title, a sentence on
+   what would fill it, and the action that does, centred. */
+.empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); padding: var(--space-40) var(--space-32); text-align: center; }
+.empty-icon { display: grid; place-items: center; width: var(--space-48); height: var(--space-48); border-radius: var(--radius-full); background: var(--color-bg-sunken); color: var(--color-fg-muted); }
+.empty-icon .icon svg { width: var(--space-24); height: var(--space-24); }
+.empty-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.empty-description { color: var(--color-fg-muted); font: var(--text-body-medium); }
+
+/* Tooltip: a one-line label on hover or focus, for an icon button or a truncated value. .tooltip draws one; an element
+   with data-tooltip shows its value below itself. */
+.tooltip, [data-tooltip]:is(:hover, :focus-visible)::after {
+  padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm);
+  background: var(--color-bg-inverse); color: var(--color-fg-inverse); font: var(--text-body-small); white-space: nowrap; pointer-events: none;
+}
+.tooltip { display: inline-block; }
+[data-tooltip] { position: relative; }
+[data-tooltip]:is(:hover, :focus-visible)::after { content: attr(data-tooltip); position: absolute; top: calc(100% + var(--space-4)); left: 50%; z-index: 1; translate: -50% 0; }
+
+/* Page header: the top of a content area: the title, an optional line on what the page holds, and the page's actions on
+   the right, primary last. Tabs or filters sit below it. */
+.page-header { display: flex; align-items: flex-start; gap: var(--space-16); }
+.page-header-text { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; }
+.page-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-large); letter-spacing: var(--text-heading-large-tracking); }
+.page-header-description { color: var(--color-fg-muted); font: var(--text-body-medium); }
+.page-header-actions { display: flex; align-items: center; gap: var(--space-8); flex: none; }
 
 /* Rows, the Patterns page's components: lists of rich rows on the surface, in a card with border/default and radius/lg,
    each row divided from the next by border/subtle. A row's text is a title over its metadata. */

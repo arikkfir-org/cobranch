@@ -44,13 +44,13 @@ const toneName = (t) => t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1);
 function components() {
   return [h("h1", {}, "Components"),
     h("p", {}, "Every component of the design system's Figma file, drawn by the Console's own classes in both themes. Hover a control to see its hover state and Tab to it to see its focus ring; the user menu switches the theme."),
-    buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), tabs(), menus(), segmented(), tables(), patterns()];
+    buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), patterns()];
 }
 
 function buttons() {
   const styles = [["Primary", "btn btn-primary"], ["Secondary", "btn"], ["Ghost", "btn btn-ghost"], ["Danger", "btn btn-danger"]];
   return section("Buttons", "One primary action per view. Secondary for the other actions, Ghost for toolbars and dense rows, Danger only for destructive, irreversible actions. Medium (32px) is the default; Small (28px) sits in tables and headers.",
-    [["Button", ".btn"], ["Style", ".btn-primary .btn-ghost .btn-danger"], ["Size=Small", ".btn-sm"]],
+    [["Button", ".btn"], ["Style", ".btn-primary .btn-secondary .btn-ghost .btn-danger"], ["Size=Small", ".btn-sm"]],
     grid(["Style", "Medium", "Medium, disabled", "Small", "Small, disabled", "With icons"], styles.map(([name, cls]) => [name,
       h("button", { class: cls, type: "button" }, "Button"), h("button", { class: cls, type: "button", disabled: true }, "Button"),
       h("button", { class: cls + " btn-sm", type: "button" }, "Button"), h("button", { class: cls + " btn-sm", type: "button", disabled: true }, "Button"),
@@ -102,6 +102,28 @@ function inputs() {
       field("Search", h("span", { class: "input" }, icon("search"), h("input", { type: "search", placeholder: "Filter issues" })), "Show icon, for search")));
 }
 
+function forms() {
+  const field = (label, control, help) => h("label", { class: "field" }, h("span", { class: "field-label" }, label), control, help ? h("span", { class: "field-help" }, help) : null);
+  const select = (attrs = {}) => h("span", { class: "select" }, h("select", attrs, ["Anthropic", "OpenAI", "A local model"].map((m) => h("option", {}, m))));
+  const textarea = (attrs = {}) => h("textarea", { class: "textarea", ...attrs }, "Work the issue or the branch you are given. Open a branch named after the issue, keep commits small, and ask in the chat before changing an API.");
+  const check = (cls, type, label, attrs) => h("label", { class: cls }, h("input", { type, name: cls, ...attrs }), label);
+  const choices = ["Light", "Dark", "System"].map((label, i) => h("button", { type: "button", "aria-pressed": i ? "false" : "true", onclick: (e) => {
+    for (const c of choices) c.setAttribute("aria-pressed", c === e.currentTarget ? "true" : "false");
+  } }, label));
+  return section("Forms", "Select, Checkbox, Radio, Textarea and Segmented control follow Input: label above the control, 32px controls, radius/md, border/strong at rest, border/focus with the Focus/Ring effect when focused, status/danger when in error. The segmented control is the theme switch and any short exclusive choice.",
+    [["Select", ".select"], ["Textarea", ".textarea"], ["Checkbox", ".checkbox"], ["Radio", ".radio"], ["Segmented control", ".segmented"]],
+    h("div", { class: "specimens-fields" },
+      field("Label", select()), field("Focus it", select()), field("Label", select({ "aria-invalid": "true" }), "Say what to do about the error"), field("Label", select({ disabled: true }))),
+    h("div", { class: "specimens-fields" },
+      field("Label", textarea()), field("Focus it", textarea()), field("Label", textarea({ "aria-invalid": "true" }), "Say what to do about the error"), field("Label", textarea({ disabled: true }))),
+    h("div", { class: "specimens-row" },
+      h("div", { class: "specimens-stack" }, check("checkbox", "checkbox", "Label", {}), check("checkbox", "checkbox", "Label", { disabled: true }),
+        check("checkbox", "checkbox", "Label", { checked: true }), check("checkbox", "checkbox", "Label", { checked: true, disabled: true })),
+      h("div", { class: "specimens-stack" }, check("radio", "radio", "Option", {}), check("radio", "radio", "Option", { disabled: true }),
+        check("radio", "radio", "Option", { checked: true }), h("label", { class: "radio" }, h("input", { type: "radio", name: "radio-disabled", checked: true, disabled: true }), "Option")),
+      h("div", { class: "segmented specimens-segmented", role: "group", "aria-label": "Theme" }, choices)));
+}
+
 function tabs() {
   const tab = (label, selected, count) => h("button", { class: "tab", type: "button", role: "tab", "aria-selected": selected ? "true" : "false" }, label, count ? h("span", { class: "tab-count" }, count) : null);
   return section("Tabs", "Tabs switch between views of the same object (a branch's Overview, Commits, Files, Chat). The selected tab is ink with a 2px underline; the others are muted. A count says how many items wait behind a tab.",
@@ -120,15 +142,6 @@ function menus() {
         item("user", "Guest", { role: "menuitemradio", "aria-checked": "false", disabled: true }))));
 }
 
-function segmented() {
-  const choices = ["Light", "Dark", "System"].map((label) => h("button", { type: "button", "aria-pressed": label === "System" ? "true" : "false", onclick: () => {
-    for (const c of choices) c.setAttribute("aria-pressed", c === choices.find((b) => b.textContent === label) ? "true" : "false");
-  } }, label));
-  return section("Segmented control", "One choice of a few, side by side, as the user menu picks the theme. The chosen segment is pressed.",
-    [["Segmented (in App/User menu)", ".segmented"]],
-    h("div", { class: "segmented specimens-segmented", role: "group", "aria-label": "Theme" }, choices));
-}
-
 function tables() {
   const rows = [["feature/push-worker", branchStatuses.processing, h("span", { class: "avatar" }, "NL"), "Noa Levi", "2 minutes ago"],
     ["agent/eng-212-annotations", branchStatuses.ready, h("span", { class: "avatar avatar-agent" }, icon("sparkles")), "Reviewer", "1 hour ago"],
@@ -138,6 +151,39 @@ function tables() {
     h("table", { class: "table" }, h("thead", {}, h("tr", {}, ["Branch", "Status", "Author", "Updated"].map((t) => h("th", {}, t)))),
       h("tbody", {}, rows.map(([branch, status, avatar, who, when]) => h("tr", {}, h("td", { class: "cell-mono" }, branch), h("td", {}, badge(status)),
         h("td", {}, h("span", { class: "cell-person" }, avatar, who)), h("td", { class: "cell-muted" }, when))))));
+}
+
+function surfaces() {
+  const close = () => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Close", title: "Close" }, icon("x"));
+  const dialog = (title, body, action, attrs = {}) => h("dialog", { class: "dialog", ...attrs },
+    h("div", { class: "dialog-header" }, h("h2", { class: "dialog-title" }, title), close()), h("div", { class: "dialog-body" }, h("p", {}, body)),
+    h("div", { class: "dialog-footer" }, h("button", { class: "btn", type: "button" }, "Cancel"), action));
+  const modal = dialog("Delete repository?", "website, its 12 branches and its 48 issues are deleted for everyone in the organization. This cannot be undone.",
+    h("button", { class: "btn btn-danger", type: "button" }, "Delete"));
+  for (const b of modal.querySelectorAll("button")) b.addEventListener("click", () => modal.close());
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.close(); });
+  const banners = [["info", "info"], ["success", "circle-check"], ["warning", "triangle-alert"], ["danger", "circle-x"]].map(([tone, glyph]) =>
+    h("div", { class: "banner banner-" + tone, role: tone === "danger" ? "alert" : "status" }, icon(glyph),
+      h("div", { class: "banner-text" }, h("span", { class: "banner-title" }, "Banner title"), h("p", {}, "What happened and what to do about it, in a sentence.")),
+      tone === "warning" ? h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Action") : null, close()));
+  return section("Surfaces", "Containers and overlays: the card every list and table sits in, the dialog, banners for inline messages, the empty state, the tooltip and the page header. Spacing, radius and colour are tokens; a page composes these and writes no surface CSS of its own.",
+    [["Card", ".card .card-header .card-title .card-meta .card-body"], ["Dialog", ".dialog .dialog-header .dialog-title .dialog-body .dialog-footer"], ["Banner", ".banner .banner-info .banner-success .banner-warning .banner-danger"],
+      ["Empty state", ".empty .empty-icon .empty-title .empty-description"], ["Tooltip", ".tooltip [data-tooltip]"], ["Page header", ".page-header .page-header-title .page-header-description .page-header-actions"]],
+    h("div", { class: "specimens-row" },
+      h("div", { class: "card specimens-card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Card title"), h("span", { class: "card-meta" }, "12 items"),
+        h("button", { class: "btn btn-sm", type: "button" }, "Action")),
+        h("div", { class: "card-body" }, "The card holds a table, a list of rows or a form. When the card holds only a table, the table is the card: no header, no padding.")),
+      dialog("Dialog title", "What the dialog asks or shows. Keep it to a sentence or two; a form goes here as fields with labels above them.",
+        h("button", { class: "btn btn-primary", type: "button" }, "Save"), { open: true })),
+    h("div", { class: "specimens-row" }, h("button", { class: "btn", type: "button", onclick: () => modal.showModal() }, "Open a dialog over the scrim"), modal),
+    h("div", { class: "specimens-stack specimens-banners" }, banners),
+    h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("folder-git-2")), h("h2", { class: "empty-title" }, "Nothing here yet"),
+      h("p", { class: "empty-description" }, "Say what would fill this, and how. One or two sentences, centred."), h("button", { class: "btn btn-primary", type: "button" }, icon("plus"), "Add one")),
+    h("div", { class: "specimens-row" }, h("span", { class: "tooltip" }, "Tooltip"),
+      h("button", { class: "icon-btn", type: "button", "aria-label": "Copy the SHA", "data-tooltip": "Copy the SHA" }, icon("copy")), h("span", { class: "specimens-head" }, "Hover or focus the button")),
+    h("header", { class: "page-header" }, h("div", { class: "page-header-text" }, h("h1", { class: "page-header-title" }, "Page title"),
+      h("p", { class: "page-header-description" }, "One line on what the page holds or where it stands.")),
+      h("div", { class: "page-header-actions" }, h("button", { class: "btn", type: "button" }, "Secondary"), h("button", { class: "btn btn-primary", type: "button" }, icon("plus"), "Primary"))));
 }
 
 function patterns() {

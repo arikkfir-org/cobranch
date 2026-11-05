@@ -6,6 +6,10 @@
 .specimens-head { color: var(--color-fg-muted); font: var(--text-label-small); }
 .specimens-row { display: flex; flex-wrap: wrap; gap: var(--space-12); align-items: center; }
 .specimens-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--size-sidebar), 1fr)); gap: var(--space-24); width: 100%; }
-.specimens .list, .specimens .table { width: 100%; }
+.specimens .list, .specimens .table, .specimens .page-header { width: 100%; }
 .specimens-menu { width: var(--size-sidebar); }
 .specimens-segmented { width: var(--size-sidebar); }
+.specimens-stack { display: flex; flex-direction: column; gap: var(--space-12); align-items: flex-start; }
+.specimens-banners { width: 100%; max-width: calc(2 * var(--size-sidebar)); align-items: stretch; }
+.specimens-card { width: calc(1.5 * var(--size-sidebar)); }
+.specimens .dialog[open]:not(:modal) { position: static; margin: 0; }
