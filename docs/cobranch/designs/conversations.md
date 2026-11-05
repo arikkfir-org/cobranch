@@ -210,9 +210,13 @@ person’s private task shows as a place in the queue, nothing more.
 - **Private tasks in lists.** Another person's private task shows as "Asked in private", with the agent, its number,
   state and times, and no link.
 - **Artifacts in the pane.** An artifact an agent generates in a conversation shows in that conversation's pane as a
-  card that opens it. It belongs to the chat's repository unless the chat is an issue's or the organization's, and one
-  generated in a private conversation stays private to its person until they share it; the artifact's records are the
-  [artifacts](artifacts.md) design's ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)).
+  card under the message that names it (the message's `artifact`): its title, then its format and who reads it ("Markdown
+  · only you", "SVG · members of website"), and Open to its page. It belongs to the chat's repository unless the chat is
+  an issue's or the organization's, and one generated in a private conversation stays private to its person until they
+  share it; the artifact's records are the [artifacts](artifacts.md) design's
+  ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)). Everyone who reads the thread sees the card, but the pane
+  reads the artifact itself, once per card, for the format and audience: a viewer the artifact's grants keep out gets
+  its kind alone and no Open.
 - **Built on the new shell** ([ENG-255](https://linear.app/arikkfir/issue/ENG-255)): the organization's and
   repositories' pages hand their conversations to the pane as they move onto it.
 

@@ -155,8 +155,8 @@ at a phone’s width the sidebar goes off-canvas.
   folds into one row until Show opens it; a deleted branch's conversation stays, read-only; and while the pane can't
   follow, a banner says it is reconnecting. A subject is an object or a promise of one, so a file's page can ask which
   branch its ref is first. Following, the pane changes subject as the viewer moves; Pinned, it keeps the one it shows.
-  A viewer who may assign tasks asks an agent from the composer or a reply, with Ask or by typing @
-  ([conversations](conversations.md#the-console)).
+  A viewer who may assign tasks asks an agent from the composer or a reply, with Ask or by typing @, and an artifact an
+  agent generates shows as a card under the message that names it ([conversations](conversations.md#the-console)).
 - **Narrow screens:** below 1100px the pane opens over the content instead of beside it, with a close button of its own;
   at a phone's width the sidebar goes off-canvas behind a menu button and opens over a scrim, and a page's header stacks
   its actions under its title.

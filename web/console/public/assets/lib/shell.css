@@ -154,6 +154,17 @@ a.app-thread-lines:hover code { text-decoration: underline; }
 .chat-message-asked a { color: var(--color-fg-link); text-decoration: none; }
 .chat-message-asked a:hover { text-decoration: underline; }
 .chat-message-text { white-space: pre-wrap; }
+.chat-message:has(> .artifact-card) { flex-wrap: wrap; }
+.artifact-card { display: flex; flex-basis: 100%; min-width: 0; align-items: center; gap: var(--space-8); margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md); background: var(--color-bg-surface); }
+.artifact-card > .icon { color: var(--color-fg-muted); }
+.artifact-card > .icon svg { width: var(--size-icon-md); height: var(--size-icon-md); }
+.artifact-card-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.artifact-card-name, .artifact-card-meta { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.artifact-card-name { color: var(--color-fg-default); font: var(--text-body-medium); }
+.artifact-card-meta { color: var(--color-fg-muted); font: var(--text-body-small); }
+.artifact-card-actions { flex: none; display: flex; }
+.artifact-card-actions:empty { display: none; }
 
 /* The composer, which starts a thread: Enter sends, Shift+Enter starts a new line. */
 .app-pane-composer { display: flex; align-items: flex-end; gap: var(--space-8); flex: none; margin: var(--space-8) var(--space-12) var(--space-12);

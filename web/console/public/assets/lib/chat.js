@@ -1,4 +1,5 @@
 import { api, apiPage } from "./api.js";
+import { orgPages } from "./assets.js";
 import { ask } from "./dialog.js";
 import { h } from "./dom.js";
 import { ago, shortSha, whenExactly } from "./format.js";
@@ -42,6 +43,15 @@ export function messageBody(html) {
   };
   return [...new DOMParser().parseFromString(html, "text/html").body.childNodes].map(copy).flat(Infinity).filter(Boolean);
 }
+
+// kinds and formats name an artifact's kind and the format its versions are written in, as its card shows them.
+const kinds = { document: "Document", diagram: "Diagram", report: "Report", page: "Page" };
+const formats = { "text/markdown": "Markdown", "image/svg+xml": "SVG", "text/html": "HTML" };
+// audienceOf says who reads an artifact, beside its format on its card: only its owner, whose conversation's
+// artifacts stay theirs until they share them; someone who shared it; or its repository's or organization's readers.
+const audienceOf = (a) => a.audience === "organization" ? "everyone in the organization"
+  : a.audience === "repository" ? "members of " + (a.repository ? a.repository.slug : "the repository")
+    : a.owner && a.owner.id === me.id ? "only you" : "shared with you";
 
 // branchSubject is a branch's conversation, as the pane shows it on the branch's pages and those of its commits,
 // files and runs (lib/pane.js): its chat, shared with everyone who reads the repository, agents included, to which a
@@ -109,6 +119,26 @@ export async function conversation(s, signal) {
   const keepDown = (was) => { if (was) messages.scrollTop = messages.scrollHeight; };
   let roster = null; // the organization's agents, read once Ask first opens them
   const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => d.agents, (err) => { roster = null; throw err; }));
+
+  const artifacts = new Map(); // the artifacts the thread's cards name, by ID, read once each
+
+  // artifactCard is the card of an artifact a message names (Figma "Pane · Artifact card"), under the message across
+  // its row: its title, then its format and who reads it, which the artifact itself answers, and Open to its page. Anyone who reads the thread
+  // sees the card, but only those its grants let in read the artifact, so for the others it shows the kind alone and
+  // opens nothing.
+  const artifactCard = (a) => {
+    const meta = h("span", { class: "artifact-card-meta" }, kinds[a.kind] || "Artifact");
+    const actions = h("div", { class: "artifact-card-actions" });
+    const card = h("div", { class: "artifact-card" }, icon("file"),
+      h("div", { class: "artifact-card-text" }, h("span", { class: "artifact-card-name", title: a.title }, a.title), meta), actions);
+    if (!artifacts.has(a.id)) artifacts.set(a.id, api("GET", "/orgs/" + org + "/artifacts/" + a.id).catch(() => null));
+    artifacts.get(a.id).then((full) => {
+      if (!full) return;
+      meta.textContent = [formats[full.mediaType], audienceOf(full)].filter(Boolean).join(" · ");
+      if (orgPages.has("artifacts")) actions.append(h("a", { class: "btn btn-sm", href: base + org + "/artifacts/" + a.id, "data-nav": "" }, "Open"));
+    });
+    return card;
+  };
 
   // asker picks the agent a message asks, beside its text: Ask opens the organization's agents in a menu above form,
   // as typing @ at the start of a word does, which then writes the agent's name after it. The agent picked shows as
@@ -200,7 +230,8 @@ export async function conversation(s, signal) {
           h("time", { datetime: m.createdAt, title: whenExactly(m.createdAt) }, ago(m.createdAt)),
           m.editedAt ? h("span", { title: "Edited " + whenExactly(m.editedAt) }, "edited") : null,
           actions.length ? h("span", { class: "chat-message-actions" }, actions) : null),
-        content, asked));
+        content, asked),
+      m.artifact && !m.deletedAt ? artifactCard(m.artifact) : null);
   };
   // head is a thread's anchor, when it has one: the lines it is on, whether a review opened it, and whether it is
   // resolved or the branch has moved on from them, which a line under it explains.
