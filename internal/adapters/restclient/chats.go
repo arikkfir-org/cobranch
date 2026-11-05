@@ -71,10 +71,10 @@ func (c *API) thread(ctx context.Context, org string, chat harness.Chat, id uuid
 	return reply[ChatThread]{r.JSON200, r.StatusCode(), r.Body}, nil
 }
 
-// StartThread starts thread id of one of the organization's chats with its first message; starting it again changes
-// nothing (harness.Cobranch).
-func (c *API) StartThread(ctx context.Context, org string, chat harness.Chat, id uuid.UUID, body string) error {
-	r, err := c.start(ctx, org, chat, ChatThreadInput{Id: &id, Body: body})
+// StartThread starts thread id of one of the organization's chats with its first message, which names the artifact as
+// its card unless it is uuid.Nil; starting it again changes nothing (harness.Cobranch).
+func (c *API) StartThread(ctx context.Context, org string, chat harness.Chat, id uuid.UUID, body string, artifact uuid.UUID) error {
+	r, err := c.start(ctx, org, chat, ChatThreadInput{Id: &id, Body: body, ArtifactId: card(artifact)})
 	if err != nil {
 		return fmt.Errorf("starting thread %s: %w", id, err)
 	}
@@ -119,10 +119,10 @@ func (c *API) start(ctx context.Context, org string, chat harness.Chat, in ChatT
 	return reply[ChatThread]{r.JSON201, r.StatusCode(), r.Body}, nil
 }
 
-// Post posts message id to a thread of one of the organization's chats; posting it again changes nothing
-// (harness.Cobranch).
-func (c *API) Post(ctx context.Context, org string, chat harness.Chat, threadID, id uuid.UUID, body string) error {
-	r, err := c.post(ctx, org, chat, threadID, ChatMessageInput{Id: &id, Body: body})
+// Post posts message id to a thread of one of the organization's chats, naming the artifact as its card unless it is
+// uuid.Nil; posting it again changes nothing (harness.Cobranch).
+func (c *API) Post(ctx context.Context, org string, chat harness.Chat, threadID, id uuid.UUID, body string, artifact uuid.UUID) error {
+	r, err := c.post(ctx, org, chat, threadID, ChatMessageInput{Id: &id, Body: body, ArtifactId: card(artifact)})
 	if err != nil {
 		return fmt.Errorf("posting message %s: %w", id, err)
 	}
@@ -165,6 +165,14 @@ func (c *API) post(ctx context.Context, org string, chat harness.Chat, threadID 
 		return reply[ChatMessage]{}, err //nolint:wrapcheck // Post wraps it
 	}
 	return reply[ChatMessage]{r.JSON201, r.StatusCode(), r.Body}, nil
+}
+
+// card is the artifact a message names as its card; nil for uuid.Nil.
+func card(artifact uuid.UUID) *uuid.UUID {
+	if artifact == uuid.Nil {
+		return nil
+	}
+	return &artifact
 }
 
 // chatMessage is m as the harness reads it.

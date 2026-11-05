@@ -23,12 +23,12 @@ func (f *agentFixture) ask(ctx context.Context, subj chats.Subject, thread uuid.
 	var number int64
 	err := f.s.Transact(ctx, f.max, func(ctx context.Context) error {
 		if thread == uuid.Nil {
-			th, _, err := f.s.StartThread(ctx, by, subj, v7(), v7(), nil, "@Scout, have a look")
+			th, _, err := f.s.StartThread(ctx, by, subj, v7(), v7(), nil, chats.Said{Body: "@Scout, have a look"})
 			if err != nil {
 				return err
 			}
 			thread = th.ID
-		} else if _, _, err := f.s.Post(ctx, by, subj, thread, v7(), "@Scout, again"); err != nil {
+		} else if _, _, err := f.s.Post(ctx, by, subj, thread, v7(), chats.Said{Body: "@Scout, again"}); err != nil {
 			return err
 		}
 		if fail != nil {
@@ -70,7 +70,7 @@ func TestChatStoreAsk(t *testing.T) {
 		t.Fatalf("ask(failing) = %v, want %v", err, boom)
 	}
 	err = f.s.Transact(ctx, f.max, func(ctx context.Context) error {
-		_, _, err := f.s.Post(ctx, chats.Poster{ID: f.max, Asks: uuid.New()}, f.feature, thread, v7(), "@Scout?")
+		_, _, err := f.s.Post(ctx, chats.Poster{ID: f.max, Asks: uuid.New()}, f.feature, thread, v7(), chats.Said{Body: "@Scout?"})
 		return err
 	})
 	if err == nil {

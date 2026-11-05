@@ -76,6 +76,9 @@ func chatMessage(m chats.Message) ChatMessage {
 	if m.Asked != nil {
 		out.AskedTaskId, out.AskedTaskNumber, out.AskedAgent = &m.Asked.ID, &m.Asked.Number, principal(&m.Asked.Agent)
 	}
+	if a := m.Artifact; a != nil {
+		out.Artifact = &ChatArtifact{Id: a.ID, Title: a.Title, Kind: ArtifactKind(a.Kind)}
+	}
 	return out
 }
 
@@ -196,6 +199,9 @@ func (a api) startThread(ctx context.Context, v chats.Viewer, subj chats.Subject
 	if req.Ask != nil {
 		in.Ask = *req.Ask
 	}
+	if req.ArtifactId != nil {
+		in.ArtifactID = *req.ArtifactId
+	}
 	if an := req.Anchor; an != nil {
 		in.Anchor = &chats.Anchor{SHA: an.Sha, Path: an.Path, StartLine: an.StartLine, EndLine: an.EndLine}
 	}
@@ -238,6 +244,9 @@ func (a api) postMessage(ctx context.Context, v chats.Viewer, subj chats.Subject
 	}
 	if req.Ask != nil {
 		in.Ask = *req.Ask
+	}
+	if req.ArtifactId != nil {
+		in.ArtifactID = *req.ArtifactId
 	}
 	m, err := a.chats.Post(ctx, v, subj, threadID, in)
 	if err != nil {

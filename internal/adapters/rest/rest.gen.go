@@ -239,6 +239,7 @@ func (e ArtifactReach) Valid() bool {
 // Defines values for ArtifactRole.
 const (
 	Editor ArtifactRole = "editor"
+	Lister ArtifactRole = "lister"
 	Owner  ArtifactRole = "owner"
 	Viewer ArtifactRole = "viewer"
 )
@@ -247,6 +248,8 @@ const (
 func (e ArtifactRole) Valid() bool {
 	switch e {
 	case Editor:
+		return true
+	case Lister:
 		return true
 	case Owner:
 		return true
@@ -1380,55 +1383,58 @@ type ApiKeySecret struct {
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
 }
 
-// Artifact A document, a diagram, a report or a page that a repository owns, as its readers see it: its versions' bodies come from getArtifactVersion.
+// Artifact A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it: its versions' bodies come from getArtifactVersion. One a list shows to a caller who may list it but not read it has only its id, orgId, title, kind, owner and permissions.
 type Artifact struct {
 	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Agent *Principal `json:"agent,omitempty"`
 
 	// Audience Its widest audience, as the list's badge names it.
-	Audience ArtifactAudience `json:"audience"`
+	Audience *ArtifactAudience `json:"audience,omitempty"`
 
 	// Branch The branch it came from; empty for none.
-	Branch    string    `json:"branch"`
-	CreatedAt time.Time `json:"createdAt"`
+	Branch    *string    `json:"branch,omitempty"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CreatedBy *Principal `json:"createdBy,omitempty"`
 
 	// Head Its newest version's number, the one it shows.
-	Head int32              `json:"head"`
+	Head *int32             `json:"head,omitempty"`
 	Id   openapi_types.UUID `json:"id"`
 
 	// Kind What an artifact is for, which picks its icon and its filter, never its format.
 	Kind ArtifactKind `json:"kind"`
 
 	// MediaType The format a version is written in.
-	MediaType ArtifactMediaType  `json:"mediaType"`
+	MediaType *ArtifactMediaType `json:"mediaType,omitempty"`
 	OrgId     openapi_types.UUID `json:"orgId"`
 
 	// OrganizationAccess How far an audience reaches an artifact.
-	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
 
-	// Permissions What the caller holds on it, sorted; getArtifact alone answers it.
+	// Owner Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Owner *Principal `json:"owner,omitempty"`
+
+	// Permissions What the caller holds on it, sorted; getArtifact answers it all, a list which of artifacts.list and artifacts.read.
 	Permissions *[]string `json:"permissions,omitempty"`
 
-	// Repository The repository that owns an artifact.
-	Repository ArtifactRepository `json:"repository"`
+	// Repository The repository an artifact is attached to; absent for none.
+	Repository *ArtifactRepository `json:"repository,omitempty"`
 
 	// RepositoryAccess How far an audience reaches an artifact.
-	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
-	Summary          string        `json:"summary"`
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	Summary          *string        `json:"summary,omitempty"`
 
 	// TaskNumber The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
-	TaskNumber *int64    `json:"taskNumber,omitempty"`
-	Title      string    `json:"title"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	TaskNumber *int64     `json:"taskNumber,omitempty"`
+	Title      string     `json:"title"`
+	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
 
 	// UpdatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	UpdatedBy *Principal `json:"updatedBy,omitempty"`
 
 	// Version Its version, which every change and every new version bumps, and its ETag carries.
-	Version int64 `json:"version"`
+	Version *int64 `json:"version,omitempty"`
 }
 
 // ArtifactAudience Its widest audience, as the list's badge names it.
@@ -1451,7 +1457,7 @@ type ArtifactGrant struct {
 	Kind        ArtifactGrantKind  `json:"kind"`
 	PrincipalId openapi_types.UUID `json:"principalId"`
 
-	// Role A role an artifact grants, from viewing to managing.
+	// Role A role an artifact grants, from viewing to managing, or one a person grants on themselves, lister or viewer, which lists or reads every artifact they own.
 	Role ArtifactRole `json:"role"`
 }
 
@@ -1483,20 +1489,20 @@ type ArtifactPatch struct {
 // ArtifactReach How far an audience reaches an artifact.
 type ArtifactReach string
 
-// ArtifactRepository The repository that owns an artifact.
+// ArtifactRepository The repository an artifact is attached to; absent for none.
 type ArtifactRepository struct {
 	Id   openapi_types.UUID `json:"id"`
 	Slug string             `json:"slug"`
 }
 
-// ArtifactRole A role an artifact grants, from viewing to managing.
+// ArtifactRole A role an artifact grants, from viewing to managing, or one a person grants on themselves, lister or viewer, which lists or reads every artifact they own.
 type ArtifactRole string
 
 // ArtifactShare Who an artifact is shared with, and as what.
 type ArtifactShare struct {
 	PrincipalId openapi_types.UUID `json:"principalId"`
 
-	// Role A role an artifact grants, from viewing to managing.
+	// Role A role an artifact grants, from viewing to managing, or one a person grants on themselves, lister or viewer, which lists or reads every artifact they own.
 	Role ArtifactRole `json:"role"`
 }
 
@@ -1654,8 +1660,20 @@ type ChatAnchor struct {
 	StartLine int    `json:"startLine"`
 }
 
+// ChatArtifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+type ChatArtifact struct {
+	Id openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind  ArtifactKind `json:"kind"`
+	Title string       `json:"title"`
+}
+
 // ChatMessage One of a thread's messages, in Markdown.
 type ChatMessage struct {
+	// Artifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+	Artifact *ChatArtifact `json:"artifact,omitempty"`
+
 	// AskedAgent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	AskedAgent *Principal `json:"askedAgent,omitempty"`
 
@@ -1698,6 +1716,9 @@ type ChatMessage struct {
 
 // ChatMessageInput A message to post.
 type ChatMessageInput struct {
+	// ArtifactId An artifact of the organization that the poster reads, which the message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
+
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused with ask.busy while another task talks in the thread, which reads what is posted there.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`
 
@@ -1747,6 +1768,9 @@ type ChatThread struct {
 type ChatThreadInput struct {
 	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
+
+	// ArtifactId An artifact of the organization that the poster reads, which its first message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
 
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`
@@ -2602,7 +2626,7 @@ type NewArtifact struct {
 	// OrganizationAccess How far an audience reaches an artifact.
 	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
 
-	// RepositoryAccess How far an audience reaches an artifact.
+	// RepositoryAccess How far the repository's readers reach it, none when absent; an artifact attached to no repository has none.
 	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
 
 	// Summary At most 500 characters.
@@ -3644,6 +3668,18 @@ type SetAgentSecretsParams struct {
 	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
 }
 
+// ListOrganizationArtifactsParams defines parameters for ListOrganizationArtifacts.
+type ListOrganizationArtifactsParams struct {
+	// Kind Only the artifacts of this kind.
+	Kind *ArtifactKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// RepositoryId Only the artifacts attached to this repository.
+	RepositoryId *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Mine Only the caller's own artifacts.
+	Mine *bool `form:"mine,omitempty" json:"mine,omitempty"`
+}
+
 // DeleteArtifactParams defines parameters for DeleteArtifact.
 type DeleteArtifactParams struct {
 	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -4262,6 +4298,9 @@ type ListBuiltInRolesParams struct {
 // ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
 type ListBuiltInRolesParamsScope string
 
+// ShareMyArtifactsJSONRequestBody defines body for ShareMyArtifacts for application/json ContentType.
+type ShareMyArtifactsJSONRequestBody = ArtifactShare
+
 // UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody defines body for UpdateMyPreferences for application/merge-patch+json ContentType.
 type UpdateMyPreferencesApplicationMergePatchPlusJSONRequestBody = PreferencesPatch
 
@@ -4309,6 +4348,9 @@ type CreateAPIKeyJSONRequestBody = ApiKeyInput
 
 // RotateAPIKeyJSONRequestBody defines body for RotateAPIKey for application/json ContentType.
 type RotateAPIKeyJSONRequestBody = SecretInput
+
+// CreateOrganizationArtifactJSONRequestBody defines body for CreateOrganizationArtifact for application/json ContentType.
+type CreateOrganizationArtifactJSONRequestBody = NewArtifact
 
 // UpdateArtifactApplicationMergePatchPlusJSONRequestBody defines body for UpdateArtifact for application/merge-patch+json ContentType.
 type UpdateArtifactApplicationMergePatchPlusJSONRequestBody = ArtifactPatch
@@ -4456,6 +4498,15 @@ type ServerInterface interface {
 	// GetMe Who the request's credential signs in.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// ListMyArtifactAccess Who lists or reads every artifact the user owns, in each organization both belong to; the roles they hold on the user, by name.
+	// (GET /me/artifact-access)
+	ListMyArtifactAccess(w http.ResponseWriter, r *http.Request)
+	// ShareMyArtifacts Gives a member of one of the user's organizations, or an agent of one, lister or viewer on the user, in place of any role it held there: it then lists, or reads, every artifact the user owns in each organization both belong to. Only from a session, never from a token or an API key.
+	// (POST /me/artifact-access)
+	ShareMyArtifacts(w http.ResponseWriter, r *http.Request)
+	// UnshareMyArtifacts Takes every role a principal holds on the user; only from a session, never from a token or an API key.
+	// (DELETE /me/artifact-access/{principal})
+	UnshareMyArtifacts(w http.ResponseWriter, r *http.Request, principalID PrincipalID)
 	// ListMyInvitations The invitations waiting for the user's verified emails, oldest first.
 	// (GET /me/invitations)
 	ListMyInvitations(w http.ResponseWriter, r *http.Request)
@@ -4582,6 +4633,12 @@ type ServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, secretID SecretID)
+	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open.
+	// (GET /orgs/{org}/artifacts)
+	ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationArtifactsParams)
+	// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	// (POST /orgs/{org}/artifacts)
+	CreateOrganizationArtifact(w http.ResponseWriter, r *http.Request, org Org)
 	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/artifacts/{id})
 	DeleteArtifact(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteArtifactParams)
@@ -4783,10 +4840,10 @@ type ServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
-	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
 	// (GET /orgs/{org}/repos/{repo}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams)
-	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
 	// (POST /orgs/{org}/repos/{repo}/artifacts)
 	CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
@@ -5065,6 +5122,60 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyArtifactAccess operation middleware
+func (siw *ServerInterfaceWrapper) ListMyArtifactAccess(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyArtifactAccess(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShareMyArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ShareMyArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShareMyArtifacts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnshareMyArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) UnshareMyArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnshareMyArtifacts(w, r, principalID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6611,6 +6722,100 @@ func (siw *ServerInterfaceWrapper) RevokeAPIKeySecret(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeAPIKeySecret(w, r, org, keyID, secretID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationArtifactsParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "repositoryId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repositoryId", r.URL.Query(), &params.RepositoryId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "mine" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mine", r.URL.Query(), &params.Mine, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mine"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mine", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationArtifacts(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOrganizationArtifact operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrganizationArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrganizationArtifact(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14891,6 +15096,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/decline", wrapper.DeclineInvitation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/artifact-access", wrapper.ListMyArtifactAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/artifact-access", wrapper.ShareMyArtifacts)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/artifact-access/{principal}", wrapper.UnshareMyArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/join-requests", wrapper.ListMyJoinRequests)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/roles", wrapper.ListBuiltInRoles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/permissions", wrapper.ListPermissions)
@@ -14920,6 +15128,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.ListSecretAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.GrantSecret)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access/{principal}", wrapper.RevokeSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts", wrapper.ListOrganizationArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts", wrapper.CreateOrganizationArtifact)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.GetArtifact)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/artifacts/{id}", wrapper.UpdateArtifact)
@@ -15118,6 +15328,244 @@ type GetMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyArtifactAccessRequestObject struct {
+}
+
+type ListMyArtifactAccessResponseObject interface {
+	VisitListMyArtifactAccessResponse(w http.ResponseWriter) error
+}
+
+type ListMyArtifactAccess200JSONResponse struct {
+	Grants []ArtifactGrant `json:"grants"`
+}
+
+func (response ListMyArtifactAccess200JSONResponse) VisitListMyArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyArtifactAccess401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMyArtifactAccess401ApplicationProblemPlusJSONResponse) VisitListMyArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyArtifactAccess403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMyArtifactAccess403ApplicationProblemPlusJSONResponse) VisitListMyArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyArtifactAccessdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMyArtifactAccessdefaultApplicationProblemPlusJSONResponse) VisitListMyArtifactAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareMyArtifactsRequestObject struct {
+	Body *ShareMyArtifactsJSONRequestBody
+}
+
+type ShareMyArtifactsResponseObject interface {
+	VisitShareMyArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ShareMyArtifacts204Response struct {
+}
+
+func (response ShareMyArtifacts204Response) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ShareMyArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ShareMyArtifacts400ApplicationProblemPlusJSONResponse) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareMyArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareMyArtifacts401ApplicationProblemPlusJSONResponse) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareMyArtifacts403ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareMyArtifacts403ApplicationProblemPlusJSONResponse) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareMyArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ShareMyArtifacts404ApplicationProblemPlusJSONResponse) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShareMyArtifactsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ShareMyArtifactsdefaultApplicationProblemPlusJSONResponse) VisitShareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareMyArtifactsRequestObject struct {
+	PrincipalID PrincipalID `json:"principal"`
+}
+
+type UnshareMyArtifactsResponseObject interface {
+	VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error
+}
+
+type UnshareMyArtifacts204Response struct {
+}
+
+func (response UnshareMyArtifacts204Response) VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UnshareMyArtifacts401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UnshareMyArtifacts401ApplicationProblemPlusJSONResponse) VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareMyArtifacts403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareMyArtifacts403ApplicationProblemPlusJSONResponse) VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareMyArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnshareMyArtifacts404ApplicationProblemPlusJSONResponse) VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnshareMyArtifactsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnshareMyArtifactsdefaultApplicationProblemPlusJSONResponse) VisitUnshareMyArtifactsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -19060,6 +19508,236 @@ type RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeAPIKeySecretdefaultApplicationProblemPlusJSONResponse) VisitRevokeAPIKeySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationArtifactsRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListOrganizationArtifactsParams
+}
+
+type ListOrganizationArtifactsResponseObject interface {
+	VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListOrganizationArtifacts200JSONResponse ArtifactList
+
+func (response ListOrganizationArtifacts200JSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationArtifacts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrganizationArtifacts400ApplicationProblemPlusJSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationArtifacts401ApplicationProblemPlusJSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOrganizationArtifacts404ApplicationProblemPlusJSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationArtifactsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOrganizationArtifactsdefaultApplicationProblemPlusJSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifactRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateOrganizationArtifactJSONRequestBody
+}
+
+type CreateOrganizationArtifactResponseObject interface {
+	VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error
+}
+
+type CreateOrganizationArtifact200ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateOrganizationArtifact200JSONResponse struct {
+	Body    Artifact
+	Headers CreateOrganizationArtifact200ResponseHeaders
+}
+
+func (response CreateOrganizationArtifact200JSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateOrganizationArtifact201JSONResponse struct {
+	Body    Artifact
+	Headers CreateOrganizationArtifact201ResponseHeaders
+}
+
+func (response CreateOrganizationArtifact201JSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrganizationArtifact400ApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateOrganizationArtifact401ApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateOrganizationArtifact403ApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateOrganizationArtifact404ApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateOrganizationArtifact409ApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrganizationArtifactdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateOrganizationArtifactdefaultApplicationProblemPlusJSONResponse) VisitCreateOrganizationArtifactResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -35380,6 +36058,15 @@ type StrictServerInterface interface {
 	// GetMe Who the request's credential signs in.
 	// (GET /me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// ListMyArtifactAccess Who lists or reads every artifact the user owns, in each organization both belong to; the roles they hold on the user, by name.
+	// (GET /me/artifact-access)
+	ListMyArtifactAccess(ctx context.Context, request ListMyArtifactAccessRequestObject) (ListMyArtifactAccessResponseObject, error)
+	// ShareMyArtifacts Gives a member of one of the user's organizations, or an agent of one, lister or viewer on the user, in place of any role it held there: it then lists, or reads, every artifact the user owns in each organization both belong to. Only from a session, never from a token or an API key.
+	// (POST /me/artifact-access)
+	ShareMyArtifacts(ctx context.Context, request ShareMyArtifactsRequestObject) (ShareMyArtifactsResponseObject, error)
+	// UnshareMyArtifacts Takes every role a principal holds on the user; only from a session, never from a token or an API key.
+	// (DELETE /me/artifact-access/{principal})
+	UnshareMyArtifacts(ctx context.Context, request UnshareMyArtifactsRequestObject) (UnshareMyArtifactsResponseObject, error)
 	// ListMyInvitations The invitations waiting for the user's verified emails, oldest first.
 	// (GET /me/invitations)
 	ListMyInvitations(ctx context.Context, request ListMyInvitationsRequestObject) (ListMyInvitationsResponseObject, error)
@@ -35506,6 +36193,12 @@ type StrictServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(ctx context.Context, request RevokeAPIKeySecretRequestObject) (RevokeAPIKeySecretResponseObject, error)
+	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open.
+	// (GET /orgs/{org}/artifacts)
+	ListOrganizationArtifacts(ctx context.Context, request ListOrganizationArtifactsRequestObject) (ListOrganizationArtifactsResponseObject, error)
+	// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	// (POST /orgs/{org}/artifacts)
+	CreateOrganizationArtifact(ctx context.Context, request CreateOrganizationArtifactRequestObject) (CreateOrganizationArtifactResponseObject, error)
 	// DeleteArtifact Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/artifacts/{id})
 	DeleteArtifact(ctx context.Context, request DeleteArtifactRequestObject) (DeleteArtifactResponseObject, error)
@@ -35707,10 +36400,10 @@ type StrictServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
-	// ListArtifacts The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
 	// (GET /orgs/{org}/repos/{repo}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
-	// CreateArtifact Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
 	// (POST /orgs/{org}/repos/{repo}/artifacts)
 	CreateArtifact(ctx context.Context, request CreateArtifactRequestObject) (CreateArtifactResponseObject, error)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
@@ -36031,6 +36724,87 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyArtifactAccess operation middleware
+func (sh *strictHandler) ListMyArtifactAccess(w http.ResponseWriter, r *http.Request) {
+	var request ListMyArtifactAccessRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyArtifactAccess(ctx, request.(ListMyArtifactAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyArtifactAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyArtifactAccessResponseObject); ok {
+		if err := validResponse.VisitListMyArtifactAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShareMyArtifacts operation middleware
+func (sh *strictHandler) ShareMyArtifacts(w http.ResponseWriter, r *http.Request) {
+	var request ShareMyArtifactsRequestObject
+
+	var body ShareMyArtifactsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShareMyArtifacts(ctx, request.(ShareMyArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShareMyArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShareMyArtifactsResponseObject); ok {
+		if err := validResponse.VisitShareMyArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnshareMyArtifacts operation middleware
+func (sh *strictHandler) UnshareMyArtifacts(w http.ResponseWriter, r *http.Request, principalID PrincipalID) {
+	var request UnshareMyArtifactsRequestObject
+
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnshareMyArtifacts(ctx, request.(UnshareMyArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnshareMyArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnshareMyArtifactsResponseObject); ok {
+		if err := validResponse.VisitUnshareMyArtifactsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -37255,6 +38029,66 @@ func (sh *strictHandler) RevokeAPIKeySecret(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeAPIKeySecretResponseObject); ok {
 		if err := validResponse.VisitRevokeAPIKeySecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrganizationArtifacts operation middleware
+func (sh *strictHandler) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationArtifactsParams) {
+	var request ListOrganizationArtifactsRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrganizationArtifacts(ctx, request.(ListOrganizationArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrganizationArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrganizationArtifactsResponseObject); ok {
+		if err := validResponse.VisitListOrganizationArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateOrganizationArtifact operation middleware
+func (sh *strictHandler) CreateOrganizationArtifact(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateOrganizationArtifactRequestObject
+
+	request.Org = org
+
+	var body CreateOrganizationArtifactJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOrganizationArtifact(ctx, request.(CreateOrganizationArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOrganizationArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOrganizationArtifactResponseObject); ok {
+		if err := validResponse.VisitCreateOrganizationArtifactResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

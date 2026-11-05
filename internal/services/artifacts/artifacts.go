@@ -1,6 +1,7 @@
-// Package artifacts keeps the documents, diagrams, reports and pages that agents write when asked: each a
-// repository's, kept in versions that never change, and reached through grants on it, on its repository and at its
-// organization, and through its two audiences (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
+// Package artifacts keeps the documents, diagrams, reports and pages that agents write when asked: each the person's
+// who asked for it, attached to a repository or to none, kept in versions that never change, and reached through grants
+// on it, on its owner, on its repository and at its organization, and through its two audiences
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
 // An artifact's body is untrusted: nothing here runs it, and the adapters serve it only as something that runs nothing.
 package artifacts
 
@@ -8,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -67,8 +69,10 @@ const AnyVersion int64 = -1
 
 // The permissions this package checks.
 const (
-	// PermCreate creates artifacts in a repository.
+	// PermCreate creates artifacts attached to a repository.
 	PermCreate = "artifacts.create"
+	// PermList shows an artifact in lists, without opening it.
+	PermList = "artifacts.list"
 	// PermRead views an artifact, its versions and who reaches it.
 	PermRead = "artifacts.read"
 	// PermWrite adds an artifact's versions and changes its title and summary.
@@ -77,24 +81,27 @@ const (
 	PermManage = "artifacts.manage"
 )
 
-// Role is a role an artifact grants, by its name in the API.
+// Role is a role an artifact or a person grants, by its name in the API.
 type Role string
 
-// The roles an artifact grants, from viewing to managing.
+// The roles an artifact grants, from viewing to managing, and the role that lists a person's artifacts.
 const (
 	RoleViewer Role = "viewer"
 	RoleEditor Role = "editor"
 	RoleOwner  Role = "owner"
+	RoleLister Role = "lister"
 )
 
 // roleIDs are the built-in roles behind the API's role names.
-var roleIDs = map[Role]uuid.UUID{RoleViewer: auth.RoleArtifactViewer, RoleEditor: auth.RoleArtifactEditor, RoleOwner: auth.RoleArtifactOwner}
+var roleIDs = map[Role]uuid.UUID{RoleViewer: auth.RoleArtifactViewer, RoleEditor: auth.RoleArtifactEditor, RoleOwner: auth.RoleArtifactOwner,
+	RoleLister: auth.RoleArtifactLister}
 
-// rolePermissions are what each role holds, as migration 49 defines it.
+// rolePermissions are what each role holds, as migrations 49 and 55 define them.
 var rolePermissions = map[Role][]string{
 	RoleViewer: {PermRead},
 	RoleEditor: {PermRead, PermWrite},
 	RoleOwner:  {PermRead, PermWrite, PermManage},
+	RoleLister: {PermList},
 }
 
 // RoleID is the built-in role behind r, and whether r names one.
@@ -134,14 +141,18 @@ type Principal struct {
 
 // Artifact is an artifact as its readers see it: everything but its versions' bodies.
 type Artifact struct {
-	ID       uuid.UUID
-	OrgID    uuid.UUID
-	OrgSlug  string
+	ID      uuid.UUID
+	OrgID   uuid.UUID
+	OrgSlug string
+	// RepoID and RepoSlug are the repository it is attached to; zero for none.
 	RepoID   uuid.UUID
 	RepoSlug string
-	Title    string
-	Summary  string
-	Kind     Kind
+	// Owner is whose it is: the person who asked for it, or the agent of a task Cobranch started; zero once they are
+	// gone.
+	Owner   Principal
+	Title   string
+	Summary string
+	Kind    Kind
 	// RepositoryAccess and OrganizationAccess are its audiences: the principals reading its repository, and those
 	// reading its organization.
 	RepositoryAccess   Reach
@@ -162,8 +173,20 @@ type Artifact struct {
 	CreatedAt time.Time
 	UpdatedBy Principal
 	UpdatedAt time.Time
-	// Permissions are those the viewer holds on it, sorted; Get answers them alone.
+	// Permissions are those the viewer holds on it, sorted: Get answers them all, a list which of artifacts.list and
+	// artifacts.read, so that one listed without artifacts.read shows as one that doesn't open.
 	Permissions []string
+}
+
+// Listed is a as a list shows it to a viewer who may list it but not read it: its ID, organization, title, kind and
+// owner, with what they hold on it. The rest of it, its summary and repository among them, is for its readers.
+func (a Artifact) Listed() Artifact {
+	return Artifact{ID: a.ID, OrgID: a.OrgID, OrgSlug: a.OrgSlug, Owner: a.Owner, Title: a.Title, Kind: a.Kind, Permissions: a.Permissions}
+}
+
+// Withheld reports whether a is listed to a viewer who may not read it, and so holds only what Listed keeps.
+func (a Artifact) Withheld() bool {
+	return a.Permissions != nil && !slices.Contains(a.Permissions, PermRead)
 }
 
 // Audience is the widest audience it has, as the list's badge names it: "organization", "repository" or "private".
@@ -195,7 +218,7 @@ type Version struct {
 	HTML string
 }
 
-// Grant is a role a principal holds on an artifact itself.
+// Grant is a role a principal holds on an artifact itself, or on a person.
 type Grant struct {
 	Principal Principal
 	Role      Role
@@ -257,6 +280,16 @@ type New struct {
 	Artifact Artifact
 	First    VersionInput
 	Owners   []NewGrant
+}
+
+// Filter narrows a list of the organization's artifacts.
+type Filter struct {
+	// RepoID keeps those attached to the repository; uuid.Nil keeps all.
+	RepoID uuid.UUID
+	// Kind keeps those of the kind; "" keeps all.
+	Kind Kind
+	// Mine keeps the viewer's own.
+	Mine bool
 }
 
 // NewGrant is a role a principal gets on a new artifact.
@@ -355,15 +388,15 @@ func validMediaType(t string) bool {
 // Store is what the database keeps for artifacts. Each write is one transaction, which acts for actor, so the audit
 // log records who changed each row, and records the organization's event.
 type Store interface {
-	// With lists the IDs of the repository's artifacts where the principal's grants and the artifacts' audiences give
-	// it permission, artifacts.read or artifacts.write.
-	With(ctx context.Context, principalID, repoID uuid.UUID, permission string) ([]uuid.UUID, error)
+	// With lists the IDs of the organization's artifacts, or of those attached to the repository when repoID isn't
+	// uuid.Nil, where the principal's grants, its own and the artifacts' audiences give it permission.
+	With(ctx context.Context, principalID, orgID, repoID uuid.UUID, permission string) ([]uuid.UUID, error)
 	// List reads the artifacts ids names, newest change first.
 	List(ctx context.Context, ids []uuid.UUID) ([]Artifact, error)
 	// Get finds an artifact, or ErrNotFound.
 	Get(ctx context.Context, id uuid.UUID) (Artifact, error)
-	// Create writes the artifact, its first version and its makers' roles: ErrNotFound when its repository isn't its
-	// organization's, ErrExists when its ID or its version's is taken.
+	// Create writes the artifact, its first version and its makers' roles: ErrNotFound when its repository, if any,
+	// isn't its organization's, ErrExists when its ID or its version's is taken.
 	Create(ctx context.Context, actor uuid.UUID, n New) (Artifact, error)
 	// Update changes the artifact's row if it is still at version (any with AnyVersion): ErrChanged otherwise,
 	// ErrNotFound when it's gone.
@@ -389,4 +422,13 @@ type Store interface {
 	// Unshare takes every role the principal holds on the artifact itself and records it, or ErrNotFound when it holds
 	// none.
 	Unshare(ctx context.Context, actor uuid.UUID, a Artifact, principalID uuid.UUID) error
+	// PersonGrants lists the roles principals hold on the user, by display name: those that reach the artifacts the
+	// user owns.
+	PersonGrants(ctx context.Context, userID uuid.UUID) ([]Grant, error)
+	// Colleague finds a user who is a member of one of the user's organizations, or an agent of one, or ErrNotFound.
+	Colleague(ctx context.Context, userID, principalID uuid.UUID) (Principal, error)
+	// SharePerson gives the principal the role on actor, a user, in place of any role it held there.
+	SharePerson(ctx context.Context, actor, principalID, roleID uuid.UUID) error
+	// UnsharePerson takes every role the principal holds on actor, a user, or ErrNotFound when it holds none.
+	UnsharePerson(ctx context.Context, actor, principalID uuid.UUID) error
 }

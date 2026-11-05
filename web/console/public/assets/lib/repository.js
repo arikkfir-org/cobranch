@@ -1,6 +1,9 @@
 import { api } from "./api.js";
 import { repoPages } from "./assets.js";
+import { privateSubject } from "./chat.js";
+import { cloneMenu } from "./code.js";
 import { h } from "./dom.js";
+import { icon } from "./icons.js";
 import { frame, pageHeading } from "./layout.js";
 import { crumbsOf, subjectOf, visibilities } from "./organization.js";
 import { go } from "./router.js";
@@ -12,18 +15,19 @@ import { base, carried, config, setCarried } from "./state.js";
 export const repoSlugInput = (value) => h("input", { name: "slug", required: true, value, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100 });
 
 // repoSubject is a repository's conversation, which every page of the repository that names no other has: each
-// viewer's own, private to them, which no page has yet.
-const repoSubject = (org, repo) => ({ key: "repo:" + org.slug + "/" + repo.slug, title: repo.slug, code: true, scope: "Nothing to follow on this page", chat: null });
+// viewer's own, private to them, where the agents they ask work in the repository.
+const repoSubject = (org, repo, orgCan) => privateSubject("repo:" + org.slug + "/" + repo.slug, repo.slug, true, "/orgs/" + org.slug + "/repos/" + repo.slug + "/conversation", orgCan);
 
-// A repository's pages, each a module of pages/repo/ (its code index.js), in the app shell, under the repository's
-// heading and its tabs. A page's module answers the sections it shows from its default export, given the
-// organization, the repository, its API path, its links, the route's parts after the page's own (rest), can, orgCan
-// and fail; its nav ({ label, order }) makes it a tab, its under names the tab it shows under instead ("" for Code),
-// its allowed(can), when it has one, says whether the viewer may open it, and its accepts(rest), when it has one,
+// A repository's pages, each a module of pages/repo/ (its branches index.js), in the app shell, under the
+// repository's heading and its tabs. A page's module answers the sections it shows from its default export, given the
+// organization, the repository, its API path, its links, the route's parts after the page's own (rest), can, orgCan,
+// the repository's root and fail; its nav ({ label, order }) makes it a tab, its under names the tab it shows under
+// instead ("" for Branches), its allowed(can), when it has one, says whether the viewer may open it, and its accepts(rest), when it has one,
 // which parts it shows. Its heading, true or a function of rest, says whether the repository's heading and tabs show
 // above it (a page about one branch, commit or run shows its own instead); its crumbs name it in the breadcrumbs after
-// the repository, and its subject the conversation the pane shows (lib/pane.js). Any other route opens the
-// repository's code. Opening one of its pages puts the repository first in the sidebar's Repositories.
+// the repository, and its subject the conversation the pane shows (lib/pane.js); its count(ctx), when it has one,
+// answers how many its tab holds, which the tab shows once it arrives. Any other route opens the repository's
+// branches, its first tab. Opening one of its pages puts the repository first in the sidebar's Repositories.
 export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, sub, rest) {
   let repo;
   try {
@@ -39,7 +43,8 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   const shown = repoPages.get(sub);
   const allowed = (m) => !m.allowed || m.allowed(can);
   const tabs = [...repoPages].filter(([, m]) => m.nav && allowed(m)).sort(([, a], [, b]) => a.nav.order - b.nav.order);
-  // A page shown under another's tab lights that tab, as a directory, a file, a history and a commit light Code.
+  // A page shown under another's tab lights that tab, as a branch lights Branches and a file, a history and a commit
+  // Files.
   const tabOf = shown && shown.under !== undefined ? shown.under : sub;
   if (!tabs.some(([t]) => t === tabOf) || (shown.accepts && !shown.accepts(rest))) return go("/" + org.slug + "/" + repo.slug, true);
   const root = base + org.slug + "/" + repo.slug;
@@ -47,33 +52,40 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
   const at = repoLinks(org, repo);
   const ctx = { org, repo, path, at, rest, can, orgCan, root };
-  const tab = ([t, m]) => h("a", { class: "tab", href: root + (t ? "/" + t : ""), "data-nav": "", "aria-current": t === tabOf ? "page" : null }, m.nav.label);
+  const tab = ([t, m]) => {
+    const el = h("a", { class: "tab", href: root + (t ? "/" + t : ""), "data-nav": "", "aria-current": t === tabOf ? "page" : null }, m.nav.label);
+    // A count that fails to arrive leaves its tab without one.
+    if (m.count) Promise.resolve(m.count(ctx)).then((n) => { if (n) el.append(h("span", { class: "tab-count" }, String(n))); }, () => {});
+    return el;
+  };
   const visibility = visibilities[repo.visibility];
   const headed = shown.heading === undefined || (typeof shown.heading === "function" ? shown.heading(rest) : shown.heading);
+  const clone = h("button", { class: "btn", type: "button", "aria-haspopup": "dialog", onclick: () => cloneMenu(clone, org, repo, can("repo.push")) },
+    "Clone", icon("chevron-down"));
   const head = headed ? pageHeading({ title: repo.name, tag: h("span", { class: "tag tone-neutral", title: visibility.title }, visibility.name),
-    description: repo.description, tabs: tabs.map(tab) }) : null;
+    description: repo.description, actions: clone, tabs: tabs.map(tab) }) : null;
   const main = frame({ org, can: orgCan, part: "repos", crumbs: [orgCrumb, { label: repo.slug, href: root }, ...crumbsOf(shown, ctx)],
-    subject: subjectOf(shown, ctx, repoSubject(org, repo)), head });
+    subject: subjectOf(shown, ctx, repoSubject(org, repo, orgCan)), head });
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
   if (carried) {
     fail(carried);
     setCarried(null);
   }
-  const sections = await shown.default({ org, repo, path, at, rest, can, orgCan, fail });
+  const sections = await shown.default({ ...ctx, fail });
   main.replaceChildren(error, ...sections);
 }
 
 // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-// parents, to a branch's page and its changes, to a commit, to a run, to an environment, to a directory or a file
-// at a ref, and to a file's bytes, which the REST API serves.
+// parents, to a branch's page and to one of its tabs (lib/branches.js branchTabs), to a commit, to a run, to an
+// environment, to a directory or a file at a ref, and to a file's bytes, which the REST API serves.
 export function repoLinks(org, repo) {
   const root = base + org.slug + "/" + repo.slug;
   const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
   return {
     history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
-    branchPage: (name) => root + "/branches/" + parts(name),
-    changes: (name) => root + "/changes/" + parts(name),
+    branchPage: (name, tab) => root + "/branches/" + parts(name) + (tab ? "?tab=" + tab : ""),
+    changes: (name) => root + "/branches/" + parts(name) + "?tab=changes",
     commit: (sha) => root + "/commit/" + sha,
     run: (number) => root + "/runs/" + number,
     environment: (id) => root + "/environments/" + id,

@@ -23,9 +23,10 @@ const (
 // tasksSpec describes tasks, the tool of a task asked in a conversation with its own agent, to the model.
 var tasksSpec = Spec{
 	Name: "tasks",
-	Description: "Lists your tasks, for the person who talks with you here: what you work on now, your queue in the " +
-		"order you will take it, and what you ended last. Each names its number, state, title, who asked for it and " +
-		"where it works; one that someone else asked for in private shows only its number, state and times.",
+	Description: "Lists your tasks, for the person who talks with you here: what you work on now, the head of your " +
+		"queue in the order you will take it and how many follow, and what you ended last. Each names its number, " +
+		"state, title, who asked for it and where it works; one that someone else asked for in private shows only its " +
+		"number, state and times.",
 	Parameters: json.RawMessage(`{"type":"object","properties":{},"required":[]}`),
 }
 
@@ -38,8 +39,8 @@ func (r *run) tasksTools() []Tool {
 	return []Tool{chatTool{spec: tasksSpec, run: r.listTasks}}
 }
 
-// listTasks answers the agent's tasks: those it works on and those queued, oldest first, as it takes them, and those it
-// ended last.
+// listTasks answers the agent's tasks: those it works on, oldest first, the head of its queue, as it takes them, with
+// how many follow, and those it ended last.
 func (r *run) listTasks(ctx context.Context, c Call) (string, error) {
 	if err := decode(c.Arguments, &struct{}{}); err != nil {
 		return "", err
@@ -49,7 +50,7 @@ func (r *run) listTasks(ctx context.Context, c Call) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("listing the tasks you work on: %w", err)
 	}
-	queued, err := r.cobranch.Tasks(ctx, org, agent, []agents.TaskState{agents.TaskQueued}, tasksActive)
+	queued, waiting, err := r.cobranch.Queue(ctx, org, agent, tasksActive)
 	if err != nil {
 		return "", fmt.Errorf("listing your queue: %w", err)
 	}
@@ -58,17 +59,16 @@ func (r *run) listTasks(ctx context.Context, c Call) (string, error) {
 		return "", fmt.Errorf("listing the tasks you ended: %w", err)
 	}
 	slices.Reverse(active)
-	slices.Reverse(queued)
 	var b strings.Builder
-	r.writeTasks(&b, "Working on now", active, false)
-	r.writeTasks(&b, "Your queue, in the order you will take it", queued, true)
-	r.writeTasks(&b, "Ended last", ended, false)
+	r.writeTasks(&b, "Working on now", active, false, 0)
+	r.writeTasks(&b, "Your queue, in the order you will take it", queued, true, waiting-len(queued))
+	r.writeTasks(&b, "Ended last", ended, false, 0)
 	return strings.TrimSpace(b.String()), nil
 }
 
 // writeTasks writes a section of the tasks tool's output: its heading and a line per task, numbered with places for a
-// queue; or that it holds none.
-func (r *run) writeTasks(b *strings.Builder, heading string, tasks []agents.Task, places bool) {
+// queue, then how many more follow those listed; or that it holds none.
+func (r *run) writeTasks(b *strings.Builder, heading string, tasks []agents.Task, places bool, more int) {
 	b.WriteString(heading + ":\n")
 	if len(tasks) == 0 {
 		b.WriteString("none\n\n")
@@ -80,6 +80,9 @@ func (r *run) writeTasks(b *strings.Builder, heading string, tasks []agents.Task
 			b.WriteString(strconv.Itoa(i+1) + ". ")
 		}
 		b.WriteString(r.showTask(t) + "\n")
+	}
+	if more > 0 {
+		b.WriteString("- and " + strconv.Itoa(more) + " more after them\n")
 	}
 	b.WriteString("\n")
 }

@@ -4,12 +4,14 @@
 // organization's or its repository's. The pane draws a subject's conversation (lib/chat.js) only while it is open,
 // and keeps following it, live, while the viewer moves between pages of the same subject.
 //
-// A subject is { key, title, code, scope, chat, post, moderate, placeholder, gone, at }: two pages whose subjects
-// have the same key share the conversation the pane shows; title names it in the header, in code type when code is
-// set, and scope says under it who sees it. chat is the REST API's path of its conversation, or null while the
-// subject has none yet; post and moderate are what the viewer may do there; placeholder is the composer's text; gone
-// shows the conversation to be read, as it was; at holds the repository's links, for threads on lines of its files;
-// none says, under the pane's empty state, what would start the subject's conversation.
+// A subject is { key, title, code, scope, chat, post, moderate, ask, asks, placeholder, gone, at }: two pages whose
+// subjects have the same key share the conversation the pane shows; title names it in the header, in code type when
+// code is set, and scope says under it who sees it. chat is the REST API's path of its conversation, or null for a
+// page that has none; post and moderate are what the viewer may do there, and ask whether they may ask the
+// organization's agents there (the page's agents.assign, unless the subject says); asks is the agent of an agent's
+// conversation, whose name heads the pane and which every thread asks; placeholder is the composer's text; gone shows
+// the conversation to be read, as it was; at holds the repository's links, for threads on lines of its files; none
+// says, under the pane's empty state, what would start the subject's conversation.
 
 import { conversation, emptyState } from "./chat.js";
 import { h } from "./dom.js";
@@ -51,11 +53,12 @@ export const leave = () => stop();
 
 let given = 0; // numbers the subjects pages give, so that one a page works out late never replaces a later page's
 
-// converse gives the pane the page's subject, or a promise of it: it shows it, unless it is pinned to another, and a
-// link to one of the subject's threads opens it.
-export function converse(subject) {
+// converse gives the pane the page's subject, or a promise of it, and whether the viewer may ask the organization's
+// agents on the page (ask): it shows it, unless it is pinned to another, and a link to one of the subject's threads
+// opens it.
+export function converse(subject, ask) {
   const n = ++given;
-  Promise.resolve(subject).catch(() => null).then((s) => {
+  Promise.resolve(subject).catch(() => null).then((p) => (p && p.ask === undefined ? { ...p, ask: !!ask } : p)).then((s) => {
     if (n !== given || !s) return;
     page = s;
     if (!pinned || !shown) shown = s;
@@ -81,7 +84,8 @@ function header(s) {
       draw();
     } }, icon(m === "pinned" ? "pin" : "message-square"), h("span", {}, word)))));
   return h("header", { class: "app-pane-header" },
-    h("div", { class: "app-pane-title" }, h("strong", {}, "Conversation"), s.title ? h(s.code ? "code" : "span", { class: "app-pane-subject" }, s.title) : null, mode,
+    h("div", { class: "app-pane-title" }, h("strong", {}, s.asks ? s.title : "Conversation"),
+      s.title && !s.asks ? h(s.code ? "code" : "span", { class: "app-pane-subject" }, s.title) : null, mode,
       h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm app-pane-close", type: "button", "aria-label": "Close the conversation", title: "Close", onclick: () => setOpen(false) }, icon("x"))),
     h("p", { class: "app-pane-scope" }, s.scope || ""));
 }

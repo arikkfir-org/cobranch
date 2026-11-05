@@ -2,7 +2,9 @@ import { api } from "./api.js";
 import { lineLabel, linesAnchor } from "./chat.js";
 import { h } from "./dom.js";
 import { shortSha, size, subject, whenExactly, who } from "./format.js";
+import { icon } from "./icons.js";
 import { rendered } from "./markdown.js";
+import { popover } from "./menu.js";
 import { go } from "./router.js";
 import { base, config } from "./state.js";
 
@@ -37,7 +39,7 @@ export async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
     h("p", {}, "Nothing has been pushed yet: push ", h("code", {}, "main"), " to see its files."))];
   const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
   const toolbar = h("div", { class: "row" }, refPicker(branches, tags, ref, (r) => go((isFile ? at.blob(r, file) : at.tree(r, file)).slice(base.length - 1))),
-    breadcrumb(repo, at, ref, file), h("span", { class: "spacer" }), clone(org, repo, push));
+    breadcrumb(repo, at, ref, file));
   const onBranch = branches.some((b) => b.name === ref) ? ref : null;
   const shown = isFile ? await repositoryFile(path, at, ref, file, onBranch, can) : await repositoryTree(path, at, ref, file, branches);
   return [toolbar, ...shown];
@@ -79,9 +81,40 @@ function breadcrumb(repo, at, ref, path) {
   return h("code", { class: "crumbs" }, crumbs);
 }
 
-// clone is the Clone button, which opens the repository's clone URLs.
-function clone(org, repo, push) {
-  return h("details", { class: "clone" }, h("summary", { class: "button small" }, "Clone"), repositoryCode(org, repo, push));
+// cloneMenu opens the Clone popover under anchor, the heading's Clone button: the repository's URLs over HTTPS and
+// over SSH, each with a button that copies it, and how each signs in. An installation that names no Git server says
+// it has nothing to clone yet.
+export function cloneMenu(anchor, org, repo, push) {
+  const path = "/" + org.slug + "/" + repo.slug + ".git";
+  const settings = (text) => h("a", { href: base + "settings", "data-nav": "" }, text);
+  const way = (label, url) => h("div", { class: "field" }, h("span", { class: "field-label" }, label),
+    h("div", { class: "clone-url" }, h("code", { title: url }, url), copyButton(url)));
+  const ways = [config.gitUrl ? way("HTTPS", config.gitUrl + path) : null, config.gitSshUrl ? way("SSH", config.gitSshUrl + path) : null].filter(Boolean);
+  popover(anchor, "end", () => [h("div", { class: "clone-menu" }, h("h2", {}, "Clone " + repo.slug),
+    ways.length ? ways : h("p", {}, "This installation's Git server has no address yet, so its repositories can't be cloned. Its operator gives it one."),
+    ways.length ? h("p", { class: "field-help" }, config.gitUrl ? ["Over HTTPS, sign in with a ", settings("personal token"), " as the password. "] : null,
+      config.gitSshUrl ? ["SSH uses the ", settings("keys on your account"), ". "] : null, push ? null : "You may read this repository, but not push to it.") : null)])
+    ?.setAttribute("role", "dialog");
+}
+
+// copyButton copies text, and says Copied for two seconds once it has.
+export function copyButton(text, label = "Copy") {
+  const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", title: label }, "Copy");
+  button.onclick = () => navigator.clipboard.writeText(text).then(() => {
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy"; }, 2000);
+  }, () => {});
+  return button;
+}
+
+// copyIcon copies text from a ghost icon button, as a Commit row's, and shows a check for two seconds once it has.
+export function copyIcon(text, label) {
+  const button = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label }, icon("copy"));
+  button.onclick = () => navigator.clipboard.writeText(text).then(() => {
+    button.replaceChildren(icon("check"));
+    setTimeout(() => button.replaceChildren(icon("copy")), 2000);
+  }, () => {});
+  return button;
 }
 
 // unreadable is what a page shows when the API couldn't read a directory or a file: what a ref or a path found

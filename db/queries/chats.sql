@@ -92,25 +92,30 @@ LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid OR t.conversation_id = @subject_id::uuid) AND t.id = ANY (@ids::uuid[]);
 
 -- ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were
--- posted, with the display names of their authors and deleters, the number of the task each came from, and the number
--- and agent of the task each asked for.
+-- posted, with the display names of their authors and deleters, the number of the task each came from, the number and
+-- agent of the task each asked for, and the title and kind of the artifact each names.
 -- name: ChatMessagesOf :many
 SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
-    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name
+    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name,
+    ar.title AS artifact_title, ar.kind AS artifact_kind
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
     LEFT JOIN agent_tasks tk ON tk.id = m.task_id
     LEFT JOIN agent_tasks ak ON ak.id = m.asked_task_id LEFT JOIN agents ag ON ag.principal_id = ak.agent_id
+    LEFT JOIN artifacts ar ON ar.id = m.artifact_id
 WHERE m.thread_id = ANY (@thread_ids::uuid[])
 ORDER BY m.thread_id, m.created_at, m.id;
 
 -- ChatMessagesByID finds the messages that ids name, with the display names of their authors and deleters, the
--- number of the task each came from, and the number and agent of the task each asked for.
+-- number of the task each came from, the number and agent of the task each asked for, and the title and kind of the
+-- artifact each names.
 -- name: ChatMessagesByID :many
 SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
-    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name
+    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name,
+    ar.title AS artifact_title, ar.kind AS artifact_kind
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
     LEFT JOIN agent_tasks tk ON tk.id = m.task_id
     LEFT JOIN agent_tasks ak ON ak.id = m.asked_task_id LEFT JOIN agents ag ON ag.principal_id = ak.agent_id
+    LEFT JOIN artifacts ar ON ar.id = m.artifact_id
 WHERE m.id = ANY (@ids::uuid[]);
 
 -- InsertChatThread starts a thread of a branch's chat, in its repository, of an issue's or of a conversation, perhaps a
@@ -122,11 +127,11 @@ VALUES (@id, @org_id, sqlc.narg(repo_id), sqlc.narg(branch_id), sqlc.narg(issue_
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
--- InsertChatMessage posts a message, perhaps from an agent's task, perhaps asking an agent for a task: none when one of
--- its ID is there already.
+-- InsertChatMessage posts a message, perhaps from an agent's task, perhaps asking an agent for a task, perhaps naming
+-- an artifact: none when one of its ID is there already.
 -- name: InsertChatMessage :one
-INSERT INTO chat_messages (id, thread_id, org_id, author_id, body, task_id, asked_task_id)
-VALUES (@id, @thread_id, @org_id, @author_id, @body, sqlc.narg(task_id), sqlc.narg(asked_task_id))
+INSERT INTO chat_messages (id, thread_id, org_id, author_id, body, task_id, asked_task_id, artifact_id)
+VALUES (@id, @thread_id, @org_id, @author_id, @body, sqlc.narg(task_id), sqlc.narg(asked_task_id), sqlc.narg(artifact_id))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -175,3 +180,7 @@ SELECT (deleted_at IS NOT NULL)::boolean AS deleted FROM branches WHERE id = $1;
 -- doesn't race its deletion.
 -- name: HoldIssue :one
 SELECT id FROM issues WHERE id = $1 FOR KEY SHARE;
+
+-- ChatArtifact finds an artifact as a message's card names it: its organization, title and kind.
+-- name: ChatArtifact :one
+SELECT id, org_id, title, kind FROM artifacts WHERE id = @id;

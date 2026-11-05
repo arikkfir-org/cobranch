@@ -34,6 +34,9 @@ type api struct {
 	chats []string
 	// conversation is the private conversation the token's task talks in; nil for none.
 	conversation *MyTaskConversation
+	// queued is how many tasks Scout's queue holds, #1 the oldest, which a list of its queued tasks alone pages through
+	// newest first; 0 lists the tasks of tasks.
+	queued int
 }
 
 var agentID, assignerID = uuid.New(), uuid.New()
@@ -58,6 +61,8 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.chat(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/orgs/acme/tasks":
 		a.tasks(w, r)
+	case strings.Contains(r.URL.Path, "/artifacts"):
+		a.artifact(w, r)
 	case r.URL.Path != "/v1/orgs/acme/tasks/7/transcript":
 		problem(w, http.StatusNotFound, "task.not_found", "No such task.")
 	case r.Method == http.MethodGet:
@@ -264,16 +269,16 @@ func TestChats(t *testing.T) {
 		messages[1].Task != 7 || !messages[2].Deleted || messages[2].Author != "" {
 		t.Errorf("Thread() = %+v, %v", messages, err)
 	}
-	if err := c.StartThread(ctx, "acme", branch, message, "Starting."); err != nil {
+	if err := c.StartThread(ctx, "acme", branch, message, "Starting.", uuid.Nil); err != nil {
 		t.Errorf("StartThread() = %v", err)
 	}
-	if err := c.Post(ctx, "acme", issue, threadID, message, "Swept."); err != nil {
+	if err := c.Post(ctx, "acme", issue, threadID, message, "Swept.", planID); err != nil {
 		t.Errorf("Post() = %v", err)
 	}
 	if _, err := c.Thread(ctx, "acme", issue, threadID); err != nil {
 		t.Errorf("Thread() of an issue's chat = %v", err)
 	}
-	if err := c.Post(ctx, "acme", branch, forbiddenID, message, "Hi."); err == nil || !strings.Contains(err.Error(), "403") ||
+	if err := c.Post(ctx, "acme", branch, forbiddenID, message, "Hi.", uuid.Nil); err == nil || !strings.Contains(err.Error(), "403") ||
 		!strings.Contains(err.Error(), "You may not post here.") || errors.Is(err, harness.ErrRefused) {
 		t.Errorf("Post() where it may not = %v", err)
 	}
@@ -281,7 +286,7 @@ func TestChats(t *testing.T) {
 	want := []string{
 		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads/" + threadID.String() + " ",
 		`POST /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads {"body":"Starting.","id":"` + message.String() + `"}`,
-		"POST /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + `/messages {"body":"Swept.","id":"` + message.String() + `"}`,
+		"POST /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + `/messages {"artifactId":"` + planID.String() + `","body":"Swept.","id":"` + message.String() + `"}`,
 		"GET /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + " ",
 		"POST /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads/" + forbiddenID.String() + `/messages {"body":"Hi.","id":"` + message.String() + `"}`,
 		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat ",

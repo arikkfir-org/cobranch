@@ -6,10 +6,12 @@
 
 **Status**: Proposed 2026-11-05 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252) · [ENG-255](https://linear.app/arikkfir/issue/ENG-255) ·
-Restructures the Console of [the architecture](architecture.md#components), [code browsing](code-browsing.md) and every
-page since · Served as before: Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its
-first load sped up by [ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
-[ENG-255](https://linear.app/arikkfir/issue/ENG-255)
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · Restructures the Console of [the
+architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
+Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
+[ENG-255](https://linear.app/arikkfir/issue/ENG-255), a repository’s tabs by
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258)
 
 The Console was one 3,700-line index.html: its styles, router and every page in one file, which every slice that touched
 a page changed, so their pull requests conflicted and fell out of the merge queue. It becomes a shell and native ES
@@ -49,7 +51,7 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | `assets/lib/` | The router, the app shell (`layout.js`, `sidebar.js`, `pane.js`, `menu.js`, `shell.css`), the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges, dialogs), each with its stylesheet when it has one |
 | `assets/pages/` | The Console's own pages: `sign-in.js` and `welcome.js`, which the router names, and every other module with a default export, which draws in the app shell at `/<part>` (`settings.js`: Account and Preferences; `help.js`) |
 | `assets/pages/org/` | An organization's pages, `<part>.js` for `/acme/<part>/…`; `index.js` its home |
-| `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its code |
+| `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its branches |
 
 ## A load
 
@@ -149,12 +151,14 @@ at a phone’s width the sidebar goes off-canvas.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and
-  environments; an issue's comments on the issue; otherwise the organization's, which has nothing to follow yet. A
+  environments; an issue's comments on the issue; beside an agent's tasks, the viewer's conversation with the agent;
+  otherwise the viewer's own conversation about the repository or the organization, private to them. A
   thread on lines of a file shows them above its messages, with Resolved or Outdated beside them; a resolved thread
   folds into one row until Show opens it; a deleted branch's conversation stays, read-only; and while the pane can't
   follow, a banner says it is reconnecting. A subject is an object or a promise of one, so a file's page can ask which
   branch its ref is first. Following, the pane changes subject as the viewer moves; Pinned, it keeps the one it shows.
-  Slice G ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)) gives every other page a conversation.
+  A viewer who may assign tasks asks an agent from the composer or a reply, with Ask or by typing @, and an artifact an
+  agent generates shows as a card under the message that names it ([conversations](conversations.md#the-console)).
 - **Narrow screens:** below 1100px the pane opens over the content instead of beside it, with a close button of its own;
   at a phone's width the sidebar goes off-canvas behind a menu button and opens over a scrim, and a page's header stacks
   its actions under its title.
@@ -184,7 +188,8 @@ exports `default`, `tab`, `allowed`, `count` and `view`; its `default` draws int
 | `count(ctx)` | Tab | A promise of the number its tab shows | No number |
 | `allowed(can)` | Both | Whether the viewer may open it, from the permissions they hold there | Anyone who reads the organization or repository |
 | `view` | Both | The name its page views report, or a function of the rest of the path that returns one | `organization.<part>` or `repository.<part>` |
-| `under` | Repository | The tab it lights, as a file and a commit light Code (`""`) | Its own tab |
+| `under` | Repository | The tab it lights, as a file and a commit light Files (`"tree"`) | Its own tab |
+| `count(ctx)` | Repository | The number its tab shows beside its label, or a promise of one: Branches counts the branches besides main | No number |
 | `accepts(rest)` | Repository | Which rests of the path it shows; any other sends the viewer to the repository's root | Every rest |
 
 ## Styles

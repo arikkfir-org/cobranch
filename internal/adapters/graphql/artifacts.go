@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 // Artifacts is what the API needs of the artifacts' service.
 type Artifacts interface {
 	List(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, kind artifacts.Kind) ([]artifacts.Artifact, error)
+	ListOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) ([]artifacts.Artifact, error)
 	Get(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Artifact, error)
 	Create(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, in artifacts.Input) (artifacts.Artifact, bool, error)
 	Update(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID, version int64, p artifacts.Patch) (artifacts.Artifact, error)
@@ -23,6 +25,9 @@ type Artifacts interface {
 	Access(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Access, error)
 	Share(ctx context.Context, v artifacts.Viewer, orgID, id, principalID uuid.UUID, role artifacts.Role) error
 	Unshare(ctx context.Context, v artifacts.Viewer, orgID, id, principalID uuid.UUID) error
+	MyAccess(ctx context.Context, v artifacts.Viewer) ([]artifacts.Grant, error)
+	ShareMine(ctx context.Context, v artifacts.Viewer, principalID uuid.UUID, role artifacts.Role) error
+	UnshareMine(ctx context.Context, v artifacts.Viewer, principalID uuid.UUID) error
 }
 
 // artifactPrincipal is p as the API names it, nil for nobody.
@@ -41,14 +46,30 @@ func taskNumber(n int64) *int64 {
 	return &n
 }
 
-// artifact is a as the API shows it; its versions and who reaches it resolve on their own.
+// artifact is a as the API shows it, to a viewer who may only list it its ID, organization, title, kind and owner; its
+// versions and who reaches it resolve on their own.
 func artifact(a artifacts.Artifact) *Artifact {
-	return &Artifact{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Repository: &ArtifactRepository{ID: a.RepoID.String(), Slug: a.RepoSlug},
-		Title: a.Title, Summary: a.Summary, Kind: ArtifactKind(strings.ToUpper(string(a.Kind))),
-		RepositoryAccess: reach(a.RepositoryAccess), OrganizationAccess: reach(a.OrganizationAccess),
-		Audience: ArtifactAudience(strings.ToUpper(a.Audience())), Agent: artifactPrincipal(a.Agent), TaskNumber: taskNumber(a.TaskNumber),
-		Branch: a.Branch, Head: int(a.Head), MediaType: a.MediaType, Version: int(a.Version), CreatedBy: artifactPrincipal(a.CreatedBy),
-		CreatedAt: a.CreatedAt.UTC(), UpdatedBy: artifactPrincipal(a.UpdatedBy), UpdatedAt: a.UpdatedAt.UTC(), Permissions: a.Permissions}
+	out := &Artifact{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Owner: artifactPrincipal(a.Owner), Title: a.Title,
+		Kind: ArtifactKind(strings.ToUpper(string(a.Kind))), Permissions: a.Permissions}
+	if a.Withheld() {
+		return out
+	}
+	if a.RepoID != uuid.Nil {
+		out.Repository = &ArtifactRepository{ID: a.RepoID.String(), Slug: a.RepoSlug}
+	}
+	repoAccess, orgAccess, audience := reach(a.RepositoryAccess), reach(a.OrganizationAccess), ArtifactAudience(strings.ToUpper(a.Audience()))
+	head, version, created, updated := int(a.Head), int(a.Version), a.CreatedAt.UTC(), a.UpdatedAt.UTC()
+	out.Summary, out.RepositoryAccess, out.OrganizationAccess, out.Audience = &a.Summary, &repoAccess, &orgAccess, &audience
+	out.Agent, out.TaskNumber, out.Branch, out.Head, out.MediaType = artifactPrincipal(a.Agent), taskNumber(a.TaskNumber), &a.Branch, &head, &a.MediaType
+	out.Version, out.CreatedBy, out.CreatedAt, out.UpdatedBy, out.UpdatedAt = &version, artifactPrincipal(a.CreatedBy), &created,
+		artifactPrincipal(a.UpdatedBy), &updated
+	return out
+}
+
+// listedOnly reports whether a list shows a to a viewer who may only list it, for whom its versions and who reaches it
+// are null rather than an error that would null the whole list.
+func listedOnly(a *Artifact) bool {
+	return a.Permissions != nil && !slices.Contains(a.Permissions, artifacts.PermRead)
 }
 
 // artifactVersion is ver as the API shows it, with its body and HTML only when it has them.

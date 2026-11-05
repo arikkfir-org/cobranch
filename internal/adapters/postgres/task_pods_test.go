@@ -219,7 +219,7 @@ func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
 		t.Errorf("Stop() while the task runs = %t, %v; want false", stopped, err)
 	}
 	chat := f.agentFixture.s
-	thread, _, err := chat.StartThread(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, v7(), v7(), nil, "Which branch?")
+	thread, _, err := chat.StartThread(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, v7(), v7(), nil, chats.Said{Body: "Which branch?"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,11 +234,11 @@ func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
 		}
 	}
 	f.checkIdle(t, "once its pod stopped", true, 1, false)
-	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, thread.ID, v7(), "Still here."); err != nil {
+	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, thread.ID, v7(), chats.Said{Body: "Still here."}); err != nil {
 		t.Fatal(err)
 	}
 	f.checkIdle(t, "after its own message", true, 1, false)
-	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.olivia}, f.feature, thread.ID, v7(), "Main."); err != nil {
+	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.olivia}, f.feature, thread.ID, v7(), chats.Said{Body: "Main."}); err != nil {
 		t.Fatal(err)
 	}
 	f.checkIdle(t, "after an answer", true, 1, true)

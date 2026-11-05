@@ -106,11 +106,11 @@ func TestChatStoreConversationThreads(t *testing.T) {
 func (f *conversationFixture) startConversation(t *testing.T, maxs chats.Subject) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
-	thread, created, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), nil, "Where does the push worker start?")
+	thread, created, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), nil, chats.Said{Body: "Where does the push worker start?"})
 	if err != nil || !created || len(thread.Messages) != 1 {
 		t.Fatalf("StartThread() = %+v, %v, %v", thread, created, err)
 	}
-	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), nil, "And another"); err != nil {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), nil, chats.Said{Body: "And another"}); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM conversations WHERE id = $1 AND owner_id = $2 AND org_id = $3", maxs.ConversationID, f.max,
@@ -122,7 +122,7 @@ func (f *conversationFixture) startConversation(t *testing.T, maxs chats.Subject
 		t.Errorf("the threads' rows name the conversation alone: %d rows, want 2", n)
 	}
 	reply := v7()
-	if _, created, err := f.s.Post(ctx, chats.Poster{ID: f.max}, maxs, thread.ID, reply, "In cmd/cobranch"); err != nil || !created {
+	if _, created, err := f.s.Post(ctx, chats.Poster{ID: f.max}, maxs, thread.ID, reply, chats.Said{Body: "In cmd/cobranch"}); err != nil || !created {
 		t.Fatalf("Post() = %v, %v", created, err)
 	}
 	if page, after, err := f.s.Threads(ctx, maxs, uuid.Nil, 10); err != nil || len(page) != 2 || after == 0 {
@@ -141,7 +141,7 @@ func (f *conversationFixture) checkApart(t *testing.T, maxs, nias chats.Subject,
 	if _, err := f.s.Message(ctx, nias, reply); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Message() through Nia's conversation = %v, want %v", err, repos.ErrNotFound)
 	}
-	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, nias, thread, v7(), "Hi"); !errors.Is(err, repos.ErrNotFound) {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, nias, thread, v7(), chats.Said{Body: "Hi"}); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Post() to Max's thread through Nia's conversation = %v, want %v", err, repos.ErrNotFound)
 	}
 	if none, _, err := f.s.Threads(ctx, f.feature, uuid.Nil, 10); err != nil || len(none) != 0 {
@@ -170,7 +170,7 @@ func (f *conversationFixture) checkRecords(t *testing.T, maxs chats.Subject) {
 	}
 	// A conversation's thread points at no file, whatever asks the store.
 	anchor := &chats.Anchor{SHA: shaC, Path: "src/main.go", StartLine: 1, EndLine: 1}
-	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), anchor, "Here"); err == nil {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, maxs, v7(), v7(), anchor, chats.Said{Body: "Here"}); err == nil {
 		t.Error("StartThread(anchored, in a conversation) started a thread")
 	}
 }
@@ -183,7 +183,7 @@ func TestChatStoreConversationGone(t *testing.T) {
 			f := newConversationFixture(t)
 			ctx := context.Background()
 			subj := f.conversation(t, f.max, kind)
-			thread, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, subj, v7(), v7(), nil, "Before")
+			thread, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, subj, v7(), v7(), nil, chats.Said{Body: "Before"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,10 +191,10 @@ func TestChatStoreConversationGone(t *testing.T) {
 			if n := count(t, f.pool, "SELECT count(*) FROM chat_threads WHERE conversation_id = $1", subj.ConversationID); n != 0 {
 				t.Errorf("the conversation's threads once its subject is gone = %d, want none", n)
 			}
-			if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, subj, thread.ID, v7(), "After"); !errors.Is(err, repos.ErrNotFound) {
+			if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, subj, thread.ID, v7(), chats.Said{Body: "After"}); !errors.Is(err, repos.ErrNotFound) {
 				t.Errorf("Post() once its subject is gone = %v, want %v", err, repos.ErrNotFound)
 			}
-			if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, subj, v7(), v7(), nil, "After"); !errors.Is(err, repos.ErrNotFound) {
+			if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, subj, v7(), v7(), nil, chats.Said{Body: "After"}); !errors.Is(err, repos.ErrNotFound) {
 				t.Errorf("StartThread() once its subject is gone = %v, want %v", err, repos.ErrNotFound)
 			}
 		})

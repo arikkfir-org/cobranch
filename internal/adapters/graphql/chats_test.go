@@ -107,6 +107,36 @@ func TestChats(t *testing.T) {
 	}
 }
 
+func TestChatCards(t *testing.T) {
+	const target = `repositoryId: "{repo}", branch: "feature/login"`
+	const card = `artifact { id title kind }`
+	steps := []chatStep{
+		{name: "an Owner starts a thread with her plan's card", viewer: olivia,
+			document: `mutation { startChatThread(` + target + `, input: {body: "Wrote the plan.", artifactId: "` + planID.String() + `"}) { id messages { ` + card + ` } } }`,
+			want:     []string{`"artifact":{"id":"` + planID.String() + `","title":"Plan","kind":"DOCUMENT"}`}},
+		{name: "a Developer names the chart its readers view", viewer: maxim,
+			document: `mutation { postChatMessage(` + target + `, thread: "{thread}", input: {body: "And this.", artifactId: "` + chartID.String() + `"}) { id ` + card + ` } }`,
+			want:     []string{`"artifact":{"id":"` + chartID.String() + `","title":"Chart","kind":"DIAGRAM"}`}},
+		{name: "a message names no card", viewer: maxim,
+			document: `mutation { postChatMessage(` + target + `, thread: "{thread}", input: {body: "Thanks."}) { ` + card + ` } }`,
+			want:     []string{`"artifact":null`}},
+		{name: "the plan doesn't open for the Developer", viewer: maxim,
+			document: `mutation { postChatMessage(` + target + `, thread: "{thread}", input: {body: "See this.", artifactId: "` + planID.String() + `"}) { id } }`,
+			wantCode: badUserInput, wantReason: "message.artifact_invalid"},
+		{name: "an ID that is no UUID", viewer: olivia,
+			document: `mutation { startChatThread(` + target + `, input: {body: "See this.", artifactId: "plan"}) { id } }`,
+			wantCode: badUserInput, wantReason: "message.artifact_invalid"},
+	}
+	f := newOrgFixture()
+	f.withArtifacts()
+	f.chatStore.Artifacts[planID] = chats.ArtifactRef{ID: planID, OrgID: f.acme.ID, Title: "Plan", Kind: "document"}
+	f.chatStore.Artifacts[chartID] = chats.ArtifactRef{ID: chartID, OrgID: f.acme.ID, Title: "Chart", Kind: "diagram"}
+	var ids chatIDs
+	for _, s := range steps {
+		s.run(t, f, &ids)
+	}
+}
+
 // chatIDs are the last thread started and message posted.
 type chatIDs struct{ thread, message string }
 

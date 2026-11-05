@@ -45,11 +45,12 @@ type Cobranch interface {
 	Append(ctx context.Context, org string, number int64, e agents.Entry) (agents.Entry, error)
 	// Thread lists the messages of a thread of one of the organization's chats, in the order they were posted.
 	Thread(ctx context.Context, org string, chat Chat, threadID uuid.UUID) ([]ChatMessage, error)
-	// StartThread starts thread id of one of the organization's chats with its first message; starting it again
-	// changes nothing.
-	StartThread(ctx context.Context, org string, chat Chat, id uuid.UUID, body string) error
-	// Post posts message id to a thread of one of the organization's chats; posting it again changes nothing.
-	Post(ctx context.Context, org string, chat Chat, threadID, id uuid.UUID, body string) error
+	// StartThread starts thread id of one of the organization's chats with its first message, which names the
+	// artifact as its card unless it is uuid.Nil; starting it again changes nothing.
+	StartThread(ctx context.Context, org string, chat Chat, id uuid.UUID, body string, artifact uuid.UUID) error
+	// Post posts message id to a thread of one of the organization's chats, naming the artifact as its card unless it
+	// is uuid.Nil; posting it again changes nothing.
+	Post(ctx context.Context, org string, chat Chat, threadID, id uuid.UUID, body string, artifact uuid.UUID) error
 	// ChatCursor answers where the updates of one of the organization's chats stand now.
 	ChatCursor(ctx context.Context, org string, chat Chat) (string, error)
 	// ChatUpdates waits a while for updates of one of the organization's chats after the cursor, and answers the threads
@@ -58,6 +59,56 @@ type Cobranch interface {
 	// Tasks lists the tasks of one of the organization's agents in the states named, newest first, at most limit of
 	// them: those private to another than the task's assigner redacted (agents.Task.Redacted).
 	Tasks(ctx context.Context, org string, agent uuid.UUID, states []agents.TaskState, limit int) ([]agents.Task, error)
+	// CreateArtifact makes an artifact of the organization with its first version, both named a.ID, attached to a.Repo
+	// or to none, and answers it; making it again answers it as it is.
+	CreateArtifact(ctx context.Context, org string, a NewArtifact) (Artifact, error)
+	// Artifact reads one of the organization's artifacts with its version number n, 0 for its newest.
+	Artifact(ctx context.Context, org string, id uuid.UUID, n int) (Artifact, error)
+	// AddArtifactVersion adds the next version of one of the organization's artifacts, made from the artifact as etag
+	// names it, and answers its number and the artifact's ETag now; adding it again answers it as it is.
+	// ErrArtifactChanged when the artifact changed since etag.
+	AddArtifactVersion(ctx context.Context, org string, id uuid.UUID, etag string, v ArtifactVersion) (int, string, error)
+	// Queue answers the head of the queue of one of the organization's agents: its oldest queued tasks, at most limit,
+	// oldest first as it takes them, redacted as Tasks does, and how many tasks the queue holds in all.
+	Queue(ctx context.Context, org string, agent uuid.UUID, limit int) ([]agents.Task, int, error)
+}
+
+// ErrArtifactChanged is an artifact that changed since the version a new one was made from.
+var ErrArtifactChanged = errors.New("the artifact changed since it was read")
+
+// NewArtifact is an artifact the agent writes, with its first version.
+type NewArtifact struct {
+	// ID names the artifact and its first version: the call's key, so that the call run again makes nothing more.
+	ID uuid.UUID
+	// Repo is the slug of the repository it is attached to; empty for none.
+	Repo string
+	// Branch is the branch the task works on, which it came from; empty for none.
+	Branch                       string
+	Title, Summary, Kind, Format string
+	Body, Note                   string
+}
+
+// Artifact is one of the organization's artifacts as the harness reads it.
+type Artifact struct {
+	ID          uuid.UUID
+	Title, Kind string
+	// Repo is the slug of the repository it is attached to; empty for none.
+	Repo string
+	// Head is its newest version's number.
+	Head int
+	// ETag names it as it is, for a version made from it.
+	ETag string
+	// Version is the version read, with its body; zero when none was.
+	Version ArtifactVersion
+}
+
+// ArtifactVersion is a version of an artifact.
+type ArtifactVersion struct {
+	// ID names it: for a new one, the call's key.
+	ID     uuid.UUID
+	Number int
+	// Format is its media type: text/markdown, image/svg+xml or text/html.
+	Format, Body, Note string
 }
 
 // Chat names one of an organization's chats: a branch's, by its repository and name; an issue's, by its number; or,

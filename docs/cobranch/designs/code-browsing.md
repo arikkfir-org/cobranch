@@ -1,7 +1,7 @@
 # Cobranch code browsing
 
 > **Snapshot.** This design lives in its [code browsing page](https://claude.ai/artifact/8VJGfvZ8WDMyvu6iSC88qB), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-05, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Agreed 2026-11-01 · [ENG-228](https://linear.app/arikkfir/issue/ENG-228) · Builds on [Git hosting’s
@@ -214,14 +214,15 @@ on.
 
 ## The Console
 
-**The Code tab opens on main’s root; every directory, file, history page and commit links the others**
+**The Files tab opens on main’s root; every directory, file, history page and commit links the others**
 
-![The Code tab opens on main’s root; every directory, file, history page and commit links the others](code-browsing/console.svg)
+![The Files tab opens on main’s root; every directory, file, history page and commit links the others](code-browsing/console.svg)
 
 The ref picker lists branches and tags; a file links its permanent URL at the commit its ref resolved to.
 
-- **The Code tab** opens on `main`'s root: the ref picker with branches and tags, the clone URLs behind a Clone button,
-  the listing, the latest commit with a link to the history, and the README.
+- **The Files tab** (`…/tree`) opens on `main`'s root: the ref picker with branches and tags, the listing, the latest
+  commit with a link to the history, and the README. The repository itself opens on its Branches tab
+  ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)), and its heading's Clone button holds the clone URLs.
 - **A directory** shows its breadcrumb, its listing and its README; **a file** its size, Raw and Download, and its
   content: Markdown rendered with a switch to its source, text with line numbers, an image, or for anything else its
   size and a download.

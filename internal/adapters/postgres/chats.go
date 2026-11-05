@@ -369,11 +369,11 @@ func touchThread(ctx context.Context, q *queries.Queries, id uuid.UUID) error {
 // thread of id that is there and false, and chats.ErrIDTaken when it isn't the subject's. A thread an agent's task
 // starts in its branch's chat, or its issue's, becomes the one the task talks in, when it talks in none yet
 // (chats.Store).
-func (s *ChatStore) StartThread(ctx context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
+func (s *ChatStore) StartThread(ctx context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, said chats.Said) (chats.Thread, bool, error) {
 	var out chats.Thread
 	created := false
 	err := s.changeChat(ctx, by.ID, subj, "starting the thread", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
-		inserted, err := insertThread(ctx, q, by, subj, id, messageID, anchor, nil, body)
+		inserted, err := insertThread(ctx, q, by, subj, id, messageID, anchor, nil, said)
 		if err != nil {
 			return "", chatEvent{}, err
 		}
@@ -398,7 +398,7 @@ func (s *ChatStore) StartThread(ctx context.Context, by chats.Poster, subj chats
 
 // insertThread inserts the subject's thread id for by, anchored when anchor is set and a comment of the review
 // reviewID names when it is set, with its first message, and reports whether it did: not when a thread of id is there.
-func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
+func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, said chats.Said) (bool, error) {
 	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &by.ID, ReviewID: reviewID}
 	switch {
 	case subj.Private():
@@ -416,7 +416,7 @@ func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj
 		return false, fmt.Errorf("inserting thread %s: %w", id, err)
 	}
 	if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &by.ID,
-		Body: body, TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks)}); err != nil {
+		Body: said.Body, TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks), ArtifactID: idOrNil(said.ArtifactID)}); err != nil {
 		return false, fmt.Errorf("inserting message %s: %w", messageID, err)
 	}
 	return true, nil
@@ -424,7 +424,7 @@ func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj
 
 // Post posts message id to one of the subject's threads for by, and answers it and true; or answers the message of id
 // that is there and false, and chats.ErrIDTaken when it isn't the thread's (chats.Store).
-func (s *ChatStore) Post(ctx context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
+func (s *ChatStore) Post(ctx context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, said chats.Said) (chats.Message, bool, error) {
 	var out chats.Message
 	created := false
 	err := s.changeChat(ctx, by.ID, subj, "posting the message", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
@@ -435,8 +435,8 @@ func (s *ChatStore) Post(ctx context.Context, by chats.Poster, subj chats.Subjec
 		if _, found := threads[threadID]; !found {
 			return "", chatEvent{}, repos.ErrNotFound
 		}
-		_, err = q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: id, ThreadID: threadID, OrgID: subj.OrgID, AuthorID: &by.ID, Body: body,
-			TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks)})
+		_, err = q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: id, ThreadID: threadID, OrgID: subj.OrgID, AuthorID: &by.ID, Body: said.Body,
+			TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks), ArtifactID: idOrNil(said.ArtifactID)})
 		if errors.Is(err, pgx.ErrNoRows) { // one of its ID is there
 			out, err = chatMessage(ctx, q, subj, id)
 			if errors.Is(err, repos.ErrNotFound) || err == nil && out.ThreadID != threadID {
@@ -582,11 +582,12 @@ func chatThreadOf(t queries.ChatThread, starter, resolver, reviewed *string) cha
 }
 
 // chatMessageOf is the domain's view of a chat_messages row, with the display names of its author and deleter, the
-// number of the task it came from, and the number and agent of the task it asked for.
+// number of the task it came from, the number and agent of the task it asked for, and the artifact it names.
 func chatMessageOf(r queries.ChatMessagesByIDRow) chats.Message {
 	m := r.ChatMessage
 	out := chats.Message{ID: m.ID, ThreadID: m.ThreadID, Body: m.Body, Author: principalOf(m.AuthorID, r.AuthorName), CreatedAt: m.CreatedAt,
-		EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: principalOf(m.DeletedBy, r.DeleterName), Version: m.Version}
+		EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: principalOf(m.DeletedBy, r.DeleterName),
+		Artifact: cardOf(m, r.ArtifactTitle, r.ArtifactKind), Version: m.Version}
 	if m.TaskID != nil && r.TaskNumber != nil {
 		out.Task = &chats.TaskRef{ID: *m.TaskID, Number: *r.TaskNumber}
 	}
@@ -595,6 +596,26 @@ func chatMessageOf(r queries.ChatMessagesByIDRow) chats.Message {
 			Agent: chats.Principal{ID: *r.AskedAgentID, DisplayName: orEmpty(r.AskedAgentName)}}
 	}
 	return out
+}
+
+// cardOf is the artifact a message names, with its title and kind; nil for none, and once it is deleted.
+func cardOf(m queries.ChatMessage, title, kind *string) *chats.ArtifactRef {
+	if m.ArtifactID == nil || title == nil || kind == nil {
+		return nil
+	}
+	return &chats.ArtifactRef{ID: *m.ArtifactID, OrgID: m.OrgID, Title: *title, Kind: *kind}
+}
+
+// Artifact finds an artifact as a card names it, or repos.ErrNotFound (chats.Store).
+func (s *ChatStore) Artifact(ctx context.Context, id uuid.UUID) (chats.ArtifactRef, error) {
+	a, err := s.q.ChatArtifact(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return chats.ArtifactRef{}, repos.ErrNotFound
+	}
+	if err != nil {
+		return chats.ArtifactRef{}, fmt.Errorf("finding artifact %s: %w", id, err)
+	}
+	return chats.ArtifactRef{ID: a.ID, OrgID: a.OrgID, Title: a.Title, Kind: a.Kind}, nil
 }
 
 // taskOf is the task by works, for a chat_messages row; nil for none.

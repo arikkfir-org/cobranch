@@ -1,13 +1,48 @@
-/* The branches and a branch's page: its merge requirements, its merge and the issue it works on. */
-.branches td.counts { white-space: nowrap; }
-.checks { list-style: none; margin: 0; padding: 0; display: grid; }
-.checks li { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) 0; border-top: 1px solid var(--color-border-default); }
-.checks li:first-child { border-top: 0; }
-.checks li .detail { margin-left: auto; color: var(--color-fg-muted); font: var(--text-body-small); text-align: right; }
-section.panel.blocked { border-color: var(--color-status-danger-border); }
-section.panel.blocked pre { margin: 0; white-space: pre-wrap; font: var(--text-code-medium); }
-form.merge { justify-content: flex-start; }
-form.merge select { width: auto; }
-.works-on { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin: var(--space-12) 0 0; }
-.works-on form { display: flex; gap: var(--space-8); align-items: center; }
-.works-on input { width: 9em; }
+/* The repository's branches (index.js) and a branch's page (branches.js), as the Repository and Branch screens draw
+   them. Their fact, check and environment rows are the screens' own until the Patterns page draws them as components
+   (Pattern/Fact row, Pattern/Check row, Pattern/Environment row), whose classes they already take. */
+.branches-page { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-24); align-items: start; }
+.branches-main, .branches-side { display: grid; gap: var(--space-24); min-width: 0; }
+@media (max-width: 1100px) { .branches-page { grid-template-columns: minmax(0, 1fr); } }
+.branch-filters { display: flex; align-items: center; gap: var(--space-12); flex-wrap: wrap; }
+.branch-filter { width: 280px; max-width: 100%; }
+.branch-groups { display: flex; gap: var(--space-4); margin-left: auto; }
+:is(.branch-row, .commit-row) a.row-title, .commit-row a.row-mono { text-decoration: none; }
+:is(.branch-row, .commit-row) a.row-title:hover { text-decoration: underline; }
+.card-header a.card-meta { color: var(--color-fg-link); font: var(--text-body-small); text-decoration: none; }
+
+.fact-rows { margin: 0; padding: var(--space-4) 0; }
+.fact-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-16); }
+.fact-row dt { color: var(--color-fg-muted); font: var(--text-body-small); }
+.fact-row dd { min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-body-small); }
+.fact-row-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.fact-row-mono { display: block; overflow: hidden; color: var(--color-fg-muted); font: var(--text-code-small); text-overflow: ellipsis; white-space: nowrap; }
+
+.environment-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.environment-row:last-child { border-bottom: 0; }
+.environment-row .row-mono { overflow: hidden; color: var(--color-fg-default); text-decoration: none; text-overflow: ellipsis; }
+
+.branch-title { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.branch-title > .icon { color: var(--color-fg-muted); }
+.branch-title h1 { min-width: 0; margin: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-large); text-overflow: ellipsis; white-space: nowrap; }
+.branch-meta { color: var(--color-fg-muted); font: var(--text-body-small); }
+.branch-meta strong { color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.branch-header .page-header-text { gap: var(--space-8); }
+.branch-meta .avatar { margin-right: var(--space-6); vertical-align: middle; }
+.branch-meta code { color: var(--color-fg-default); font: var(--text-code-small); }
+.branch-meta a { text-decoration: none; }
+.settings-error { margin: var(--space-4) 0 0; white-space: pre-wrap; font: var(--text-code-small); }
+
+.merge-status { border-color: var(--tone-border); }
+.merge-status-reason { display: flex; align-items: flex-start; gap: var(--space-8); padding: var(--space-12) var(--space-16); background: var(--tone-bg); }
+.merge-status-reason:not(:last-child) { border-bottom: 1px solid var(--tone-border); }
+.merge-status-reason > .icon { margin-top: var(--space-2); color: var(--tone-fg); }
+.merge-status .banner-title { color: var(--tone-fg); }
+.merge-status .banner-text p { color: var(--color-fg-default); font: var(--text-body-small); }
+.check-row { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); }
+.check-row:last-child { border-bottom: 0; }
+.check-row-label { flex: 1; min-width: 0; color: var(--color-fg-default); font: var(--text-body-small); }
+.check-row-detail { color: var(--color-fg-muted); font: var(--text-body-small); text-align: right; }
+.branch-menu { width: 240px; }
+.linked-issue { display: flex; align-items: center; gap: var(--space-8); color: var(--color-fg-default); font: var(--text-body-small); }
+.linked-issue > span:first-child { flex: 1; min-width: 0; }

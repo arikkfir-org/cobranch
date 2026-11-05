@@ -6,10 +6,10 @@ import { render } from "../../lib/router.js";
 import { refName, runActions, runBadge, runsPanel, triggered } from "../../lib/runs.js";
 import { follows } from "../../lib/state.js";
 
-export const nav = { label: "Runs", order: 20 };
+export const nav = { label: "Jobs", order: 20 };
 export const accepts = (rest) => rest.length <= 1;
 export const heading = (rest) => !rest.length;
-export const crumbs = ({ root, rest }) => [{ label: "Runs", href: root + "/runs" }, ...(rest.length ? [{ label: "#" + rest[0] }] : [])];
+export const crumbs = ({ root, rest }) => [{ label: "Jobs", href: root + "/runs" }, ...(rest.length ? [{ label: "#" + rest[0] }] : [])];
 // subject is a run's branch's conversation, on the run's page; a tag's run has none.
 export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/runs/" + encodeURIComponent(rest[0]))
   .then((r) => (r.ref.startsWith("refs/heads/") ? branchSubject(org, repo, path, at, r.ref.slice("refs/heads/".length), can) : null)) : null;

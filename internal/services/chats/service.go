@@ -52,10 +52,12 @@ type Store interface {
 	// or, when a thread of id is there, answers it and false, and ErrIDTaken when it isn't the subject's. A thread an
 	// agent's task starts in its branch's chat, or its issue's, becomes the one the task talks in, when it talks in
 	// none yet.
-	StartThread(ctx context.Context, by Poster, subj Subject, id, messageID uuid.UUID, anchor *Anchor, body string) (Thread, bool, error)
+	StartThread(ctx context.Context, by Poster, subj Subject, id, messageID uuid.UUID, anchor *Anchor, said Said) (Thread, bool, error)
 	// Post posts message id to one of the subject's threads for by, and answers it and true; or, when a message of id
 	// is there, answers it and false, and ErrIDTaken when it isn't the thread's.
-	Post(ctx context.Context, by Poster, subj Subject, threadID, id uuid.UUID, body string) (Message, bool, error)
+	Post(ctx context.Context, by Poster, subj Subject, threadID, id uuid.UUID, said Said) (Message, bool, error)
+	// Artifact finds an artifact as a card names it, or repos.ErrNotFound.
+	Artifact(ctx context.Context, id uuid.UUID) (ArtifactRef, error)
 	// Edit changes the body of a live message of the subject's, at version or at any version for AnyVersion, or
 	// ErrChanged.
 	Edit(ctx context.Context, actor uuid.UUID, subj Subject, id uuid.UUID, version int64, body string) (Message, error)
@@ -374,8 +376,9 @@ func (s *Service) Message(ctx context.Context, v Viewer, subj Subject, threadID,
 // StartThread starts a thread on the chat for the viewer with its first message, perhaps anchored to lines of a file at
 // one of the repository's commits, perhaps asking one of the organization's agents, whose task then talks in the
 // thread; it takes messages.post, or issues.write for an issue's, whose threads have no anchor, and agents.assign to
-// ask. In an agent's conversation, a thread asks that agent unless it asks another. Starting the viewer's thread again
-// by its ID answers it as it is; an ID of another thread is ErrIDTaken.
+// ask. In an agent's conversation, a thread asks that agent unless it asks another. Its first message may name one of
+// the organization's artifacts the viewer reads as its card. Starting the viewer's thread again by its ID answers it
+// as it is; an ID of another thread is ErrIDTaken.
 func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in ThreadInput) (Thread, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.StartThread", trace.WithAttributes(on(subj)...))
 	defer span.End()
@@ -396,6 +399,9 @@ func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in Th
 	if err != nil {
 		return Thread{}, failed(span, "starting the thread", err)
 	}
+	if err := s.card(ctx, v, subj, in.ArtifactID); err != nil {
+		return Thread{}, failed(span, "starting the thread", err)
+	}
 	id, err := orNew(in.ID)
 	if err != nil {
 		return Thread{}, failed(span, "starting the thread", err)
@@ -409,7 +415,7 @@ func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in Th
 	err = s.record(ctx, v, task, func(ctx context.Context) (uuid.UUID, bool, error) {
 		var created bool
 		var err error
-		t, created, err = s.store.StartThread(ctx, asker(ctx, v, task), subj, id, messageID, in.Anchor, in.Body)
+		t, created, err = s.store.StartThread(ctx, asker(ctx, v, task), subj, id, messageID, in.Anchor, Said{Body: in.Body, ArtifactID: in.ArtifactID})
 		if err == nil && !created && (t.StartedBy == nil || t.StartedBy.ID != v.ID) {
 			err = ErrIDTaken
 		}
@@ -455,10 +461,37 @@ func (s *Service) validateThread(ctx context.Context, subj Subject, in ThreadInp
 	return nil
 }
 
+// card reports whether a new message may name the artifact id as its card: one of the subject's organization's, which
+// the viewer reads, since the card shows its title to everyone who reads the thread. uuid.Nil names none.
+func (s *Service) card(ctx context.Context, v Viewer, subj Subject, id uuid.UUID) error {
+	if id == uuid.Nil {
+		return nil
+	}
+	refused := &orgs.ValidationError{Field: "artifactId", Code: "message.artifact_invalid",
+		Message: "a message names an artifact of its organization that its poster reads"}
+	a, err := s.store.Artifact(ctx, id)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return refused
+	case err != nil:
+		return fmt.Errorf("finding artifact %s: %w", id, err)
+	case a.OrgID != subj.OrgID:
+		return refused
+	}
+	switch err := s.authz.Can(ctx, v.ID, "artifacts.read", auth.ScopeArtifact, id); {
+	case errors.Is(err, auth.ErrForbidden):
+		return refused
+	case err != nil:
+		return fmt.Errorf("reading the viewer's permissions on artifact %s: %w", id, err)
+	}
+	return nil
+}
+
 // Post posts a message to one of the chat's threads for the viewer, perhaps asking one of the organization's agents,
 // whose task then talks in the thread, once no other task talks there; it takes messages.post, or issues.write for an
-// issue's, and agents.assign to ask. Posting the viewer's message to the thread again by its ID answers it as it is;
-// an ID of another message is ErrIDTaken.
+// issue's, and agents.assign to ask. It may name one of the organization's artifacts the viewer reads as its card.
+// Posting the viewer's message to the thread again by its ID answers it as it is; an ID of another message is
+// ErrIDTaken.
 func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uuid.UUID, in MessageInput) (Message, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.Post", trace.WithAttributes(on(subj)...))
 	defer span.End()
@@ -480,6 +513,9 @@ func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uui
 	if err != nil {
 		return Message{}, failed(span, "posting the message", err)
 	}
+	if err := s.card(ctx, v, subj, in.ArtifactID); err != nil {
+		return Message{}, failed(span, "posting the message", err)
+	}
 	id, err := orNew(in.ID)
 	if err != nil {
 		return Message{}, failed(span, "posting the message", err)
@@ -488,7 +524,7 @@ func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uui
 	err = s.record(ctx, v, task, func(ctx context.Context) (uuid.UUID, bool, error) {
 		var created bool
 		var err error
-		m, created, err = s.store.Post(ctx, asker(ctx, v, task), subj, threadID, id, in.Body)
+		m, created, err = s.store.Post(ctx, asker(ctx, v, task), subj, threadID, id, Said{Body: in.Body, ArtifactID: in.ArtifactID})
 		if err == nil && !created && (m.Author == nil || m.Author.ID != v.ID) {
 			err = ErrIDTaken
 		}
