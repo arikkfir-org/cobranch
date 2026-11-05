@@ -94,14 +94,14 @@ func TestAgentTaskPosts(t *testing.T) {
 	task := f.assigned(t, "Look around", true, uuid.Nil)
 	scout := chats.Poster{ID: f.scout.ID, Task: task.ID}
 	want := chats.TaskRef{ID: task.ID, Number: task.Number}
-	first, _, err := f.s.StartThread(ctx, scout, f.feature, v7(), v7(), nil, "Starting.")
+	first, _, err := f.s.StartThread(ctx, scout, f.feature, v7(), v7(), nil, chats.Said{Body: "Starting."})
 	if err != nil || first.Messages[0].Task == nil || *first.Messages[0].Task != want || first.Messages[0].Author.ID != f.scout.ID {
 		t.Fatalf("StartThread() = %+v, %v", first, err)
 	}
 	if got, err := f.a.Task(ctx, f.acme.ID, task.Number); err != nil || got.ThreadID != first.ID {
 		t.Errorf("the task talks in %v, %v; want the thread it started", got.ThreadID, err)
 	}
-	second, _, err := f.s.StartThread(ctx, scout, f.feature, v7(), v7(), nil, "And another.")
+	second, _, err := f.s.StartThread(ctx, scout, f.feature, v7(), v7(), nil, chats.Said{Body: "And another."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestAgentTaskPosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := f.assigned(t, "Look elsewhere", true, uuid.Nil)
-	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.scout.ID, Task: other.ID}, main, v7(), v7(), nil, "Over here."); err != nil {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.scout.ID, Task: other.ID}, main, v7(), v7(), nil, chats.Said{Body: "Over here."}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -122,11 +122,11 @@ func TestAgentTaskPosts(t *testing.T) {
 			t.Errorf("after %s, the task talks in %v, %v; want %v", c.name, got.ThreadID, err, c.want)
 		}
 	}
-	posted, _, err := f.s.Post(ctx, scout, f.feature, second.ID, v7(), "Done.")
+	posted, _, err := f.s.Post(ctx, scout, f.feature, second.ID, v7(), chats.Said{Body: "Done."})
 	if err != nil || posted.Task == nil || *posted.Task != want {
 		t.Errorf("Post() = %+v, %v", posted, err)
 	}
-	theirs, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, f.feature, second.ID, v7(), "Thanks.")
+	theirs, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, f.feature, second.ID, v7(), chats.Said{Body: "Thanks."})
 	if err != nil || theirs.Task != nil {
 		t.Errorf("a person's Post() = %+v, %v", theirs, err)
 	}

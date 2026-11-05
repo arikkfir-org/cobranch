@@ -88,8 +88,8 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 		}
 	}
 	slog.InfoContext(ctx, "Working the task", "entries", len(entries), "kind", w.Task.Kind)
-	r := &run{Harness: h, work: w, entries: entries, kit: kit, thread: w.Task.ThreadID}
-	r.toolset = slices.Concat(r.chatTools(), r.tasksTools(), h.tools, kit.Tools)
+	r := &run{Harness: h, work: w, entries: entries, kit: kit, thread: w.Task.ThreadID, artifactTags: map[uuid.UUID]string{}}
+	r.toolset = slices.Concat(r.chatTools(), r.tasksTools(), r.artifactTools(), h.tools, kit.Tools)
 	// A task its kind ended has no deadline: it ends as its kind said, however late it resumed.
 	if start := w.Task.StartedAt; kit.Timeout > 0 && kit.End == nil {
 		if start.IsZero() {
@@ -113,6 +113,9 @@ type run struct {
 	thread uuid.UUID
 	// clone is the clone of the task's repository that its workspace holds.
 	clone Clone
+	// artifactTags are the ETags of the artifacts the task read or wrote last, by ID: a version it adds is made from
+	// the artifact as it saw it.
+	artifactTags map[uuid.UUID]string
 }
 
 // prepare readies the task's workspace, unless its kind ended it, and tells the model when a task under way got a

@@ -33,6 +33,8 @@ type chatCase struct {
 	checkout     *checkout
 	state        agents.TaskState
 	waits        []wait
+	// artifacts are the organization's artifacts before the task starts.
+	artifacts map[uuid.UUID]*artifact
 	// kind, when set, handles the task, of kind review.
 	kind    *kind
 	wantErr bool
@@ -58,7 +60,8 @@ func keyed(c harness.Call, key uuid.UUID) harness.Call {
 }
 
 func TestChat(t *testing.T) {
-	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases(), conversationCases()) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases(), conversationCases(),
+		createArtifactCases(), changeArtifactCases()) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			runChat(t, tc)
@@ -144,7 +147,7 @@ func postCases() []chatCase {
 			}},
 		{name: "a task without a chat", turns: []harness.Turn{done},
 			check: func(t *testing.T, _ *cobranch, m *model) {
-				if names := toolNames(m.requests[0]); !slices.Equal(names, []string{"echo", "finish"}) {
+				if names := toolNames(m.requests[0]); !slices.Equal(names, []string{"create_artifact", "read_artifact", "update_artifact", "echo", "finish"}) {
 					t.Errorf("the model is offered %v", names)
 				}
 			}},
@@ -258,6 +261,7 @@ func runChat(t *testing.T, tc chatCase) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel, tasks: tc.tasks, tasksErr: tc.tasksErr,
+		artifacts: tc.artifacts,
 		work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue, AgentEmail: "agent@agents.example", Conversation: tc.conversation,
 			Task: agents.Task{Number: 7, Title: "Sweep", State: cmp.Or(tc.state, agents.TaskRunning), Agent: agents.Principal{ID: scout, DisplayName: "Scout"},
 				RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}

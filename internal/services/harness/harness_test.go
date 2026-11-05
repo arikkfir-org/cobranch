@@ -37,6 +37,11 @@ type cobranch struct {
 	// tasks are the organization's tasks, oldest first, as the task's token sees them; tasksErr fails their listing.
 	tasks    []agents.Task
 	tasksErr error
+	// artifacts are the organization's artifacts by ID; made the artifacts the task wrote, each time it did; cards the
+	// artifacts the task's messages named, in the order it posted them.
+	artifacts map[uuid.UUID]*artifact
+	made      []harness.NewArtifact
+	cards     []uuid.UUID
 }
 
 // wait is what a wait for the chat's updates sees: nothing, a message someone posts to a thread, the task's own when
@@ -96,7 +101,7 @@ func (c *cobranch) Thread(_ context.Context, org string, chat harness.Chat, id u
 	return slices.Clone(t.messages), nil
 }
 
-func (c *cobranch) StartThread(_ context.Context, org string, chat harness.Chat, id uuid.UUID, body string) error {
+func (c *cobranch) StartThread(_ context.Context, org string, chat harness.Chat, id uuid.UUID, body string, artifact uuid.UUID) error {
 	if c.postErr != nil {
 		return c.postErr
 	}
@@ -109,11 +114,19 @@ func (c *cobranch) StartThread(_ context.Context, org string, chat harness.Chat,
 	c.started = id
 	if _, ok := c.threads[id]; !ok {
 		c.threads[id] = &thread{chat: chat, messages: []harness.ChatMessage{c.mine(uuid.New(), body)}}
+		c.card(artifact)
 	}
 	return nil
 }
 
-func (c *cobranch) Post(_ context.Context, org string, chat harness.Chat, threadID, id uuid.UUID, body string) error {
+// card records that a message named the artifact, unless it is uuid.Nil.
+func (c *cobranch) card(artifact uuid.UUID) {
+	if artifact != uuid.Nil {
+		c.cards = append(c.cards, artifact)
+	}
+}
+
+func (c *cobranch) Post(_ context.Context, org string, chat harness.Chat, threadID, id uuid.UUID, body string, artifact uuid.UUID) error {
 	if c.postErr != nil {
 		return c.postErr
 	}
@@ -123,6 +136,7 @@ func (c *cobranch) Post(_ context.Context, org string, chat harness.Chat, thread
 	}
 	if !slices.ContainsFunc(t.messages, func(m harness.ChatMessage) bool { return m.ID == id }) {
 		t.messages = append(t.messages, c.mine(id, body))
+		c.card(artifact)
 	}
 	return nil
 }
@@ -410,7 +424,7 @@ func kindCases() []harnessCase {
 				for _, s := range m.requests[0].Tools {
 					names = append(names, s.Name)
 				}
-				if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "echo", "stamp", "finish"}) ||
+				if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "create_artifact", "read_artifact", "update_artifact", "echo", "stamp", "finish"}) ||
 					!strings.HasSuffix(m.requests[0].System, "Be brief.\n\nStamp it.") {
 					t.Errorf("the model is offered %v, with %q", names, m.requests[0].System)
 				}
@@ -497,7 +511,7 @@ func firstTask(t *testing.T, c *cobranch, m *model, e *echo) {
 	for _, s := range first.Tools {
 		names = append(names, s.Name)
 	}
-	if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "echo", "finish"}) {
+	if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "create_artifact", "read_artifact", "update_artifact", "echo", "finish"}) {
 		t.Errorf("the model is offered %v", names)
 	}
 	second := m.requests[1].Messages

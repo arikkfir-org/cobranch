@@ -105,6 +105,7 @@ type ChatMessage struct {
 	DeletedBy   *uuid.UUID
 	Version     int64
 	TaskID      *uuid.UUID
+	ArtifactID  *uuid.UUID
 	AskedTaskID *uuid.UUID
 }
 

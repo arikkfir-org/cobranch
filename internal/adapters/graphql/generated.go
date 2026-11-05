@@ -235,7 +235,14 @@ type ComplexityRoot struct {
 		StartLine func(childComplexity int) int
 	}
 
+	ChatArtifact struct {
+		ID    func(childComplexity int) int
+		Kind  func(childComplexity int) int
+		Title func(childComplexity int) int
+	}
+
 	ChatMessage struct {
+		Artifact        func(childComplexity int) int
 		AskedAgent      func(childComplexity int) int
 		AskedTaskID     func(childComplexity int) int
 		AskedTaskNumber func(childComplexity int) int
@@ -2076,6 +2083,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ChatAnchor.StartLine(childComplexity), true
 
+	case "ChatArtifact.id":
+		if e.ComplexityRoot.ChatArtifact.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatArtifact.ID(childComplexity), true
+	case "ChatArtifact.kind":
+		if e.ComplexityRoot.ChatArtifact.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatArtifact.Kind(childComplexity), true
+	case "ChatArtifact.title":
+		if e.ComplexityRoot.ChatArtifact.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatArtifact.Title(childComplexity), true
+
+	case "ChatMessage.artifact":
+		if e.ComplexityRoot.ChatMessage.Artifact == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.Artifact(childComplexity), true
 	case "ChatMessage.askedAgent":
 		if e.ComplexityRoot.ChatMessage.AskedAgent == nil {
 			break
@@ -7089,8 +7121,17 @@ type ChatMessage {
   askedTaskNumber: Int
   "The agent it asked."
   askedAgent: CommitPrincipal
+  "The artifact it names, which the conversation draws as a card that opens it; null for none, and once the artifact is deleted."
+  artifact: ChatArtifact
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+}
+
+"The artifact a message names, as its card shows it to whoever reads the thread; the artifact opens only for those whose grants reach it."
+type ChatArtifact {
+  id: ID!
+  title: String!
+  kind: ArtifactKind!
 }
 
 "What changed in a chat."
@@ -7135,6 +7176,8 @@ input ChatThreadInput {
   body: String!
   "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent."
   ask: ID
+  "An artifact of the organization that the poster reads, which its first message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid)."
+  artifactId: ID
 }
 
 "A message to post."
@@ -7145,6 +7188,8 @@ input ChatMessageInput {
   body: String!
   "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there."
   ask: ID
+  "An artifact of the organization that the poster reads, which the message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid)."
+  artifactId: ID
 }
 
 extend type Mutation {
@@ -9267,6 +9312,18 @@ func (ec *executionContext) childFields_ChatAnchor(ctx context.Context, field gr
 	return nil, fmt.Errorf("no field named %q was found under type ChatAnchor", field.Name)
 }
 
+func (ec *executionContext) childFields_ChatArtifact(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_ChatArtifact_id(ctx, field)
+	case "title":
+		return ec.fieldContext_ChatArtifact_title(ctx, field)
+	case "kind":
+		return ec.fieldContext_ChatArtifact_kind(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ChatArtifact", field.Name)
+}
+
 func (ec *executionContext) childFields_ChatMessage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -9297,6 +9354,8 @@ func (ec *executionContext) childFields_ChatMessage(ctx context.Context, field g
 		return ec.fieldContext_ChatMessage_askedTaskNumber(ctx, field)
 	case "askedAgent":
 		return ec.fieldContext_ChatMessage_askedAgent(ctx, field)
+	case "artifact":
+		return ec.fieldContext_ChatMessage_artifact(ctx, field)
 	case "version":
 		return ec.fieldContext_ChatMessage_version(ctx, field)
 	}
@@ -17608,6 +17667,75 @@ func (ec *executionContext) fieldContext_ChatAnchor_endLine(_ context.Context, f
 	return graphql.NewScalarFieldContext("ChatAnchor", field, false, false, "Int")
 }
 
+func (ec *executionContext) _ChatArtifact_id(ctx context.Context, field graphql.CollectedField, obj *ChatArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatArtifact_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ChatArtifact_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatArtifact", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ChatArtifact_title(ctx context.Context, field graphql.CollectedField, obj *ChatArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatArtifact_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ChatArtifact_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatArtifact", field, false, false, "String")
+}
+
+func (ec *executionContext) _ChatArtifact_kind(ctx context.Context, field graphql.CollectedField, obj *ChatArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatArtifact_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v ArtifactKind) graphql.Marshaler {
+			return ec.marshalNArtifactKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ChatArtifact_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatArtifact", field, false, false, "ArtifactKind")
+}
+
 func (ec *executionContext) _ChatMessage_id(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17952,6 +18080,38 @@ func (ec *executionContext) fieldContext_ChatMessage_askedAgent(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_artifact(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_artifact(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Artifact, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatArtifact) graphql.Marshaler {
+			return ec.marshalOChatArtifact2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatArtifact(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_artifact(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatArtifact(ctx, field)
 		},
 	}
 	return fc, nil
@@ -36399,7 +36559,7 @@ func (ec *executionContext) unmarshalInputChatMessageInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "body", "ask"}
+	fieldsInOrder := [...]string{"id", "body", "ask", "artifactId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -36427,6 +36587,13 @@ func (ec *executionContext) unmarshalInputChatMessageInput(ctx context.Context, 
 				return it, err
 			}
 			it.Ask = data
+		case "artifactId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("artifactId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ArtifactID = data
 		}
 	}
 	return it, nil
@@ -36455,7 +36622,7 @@ func (ec *executionContext) unmarshalInputChatThreadInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "anchor", "body", "ask"}
+	fieldsInOrder := [...]string{"id", "anchor", "body", "ask", "artifactId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -36490,6 +36657,13 @@ func (ec *executionContext) unmarshalInputChatThreadInput(ctx context.Context, o
 				return it, err
 			}
 			it.Ask = data
+		case "artifactId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("artifactId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ArtifactID = data
 		}
 	}
 	return it, nil
@@ -39187,6 +39361,49 @@ func (ec *executionContext) _ChatAnchor(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var chatArtifactImplementors = []string{"ChatArtifact"}
+
+func (ec *executionContext) _ChatArtifact(ctx context.Context, sel ast.SelectionSet, obj *ChatArtifact) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, chatArtifactImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ChatArtifact")
+		case "id":
+			out.Values[i] = ec._ChatArtifact_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._ChatArtifact_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._ChatArtifact_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var chatMessageImplementors = []string{"ChatMessage"}
 
 func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionSet, obj *ChatMessage) graphql.Marshaler {
@@ -39265,6 +39482,11 @@ func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionS
 			}
 		case "askedAgent":
 			out.Values[i] = ec._ChatMessage_askedAgent(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "artifact":
+			out.Values[i] = ec._ChatMessage_artifact(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -47122,6 +47344,13 @@ func (ec *executionContext) unmarshalOChatAnchorInput2ᚖcobranchᚗdevᚋintern
 	}
 	res, err := ec.unmarshalInputChatAnchorInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOChatArtifact2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatArtifact(ctx context.Context, sel ast.SelectionSet, v *ChatArtifact) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ChatArtifact(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOChatMessage2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatMessageᚄ(ctx context.Context, sel ast.SelectionSet, v []*ChatMessage) graphql.Marshaler {

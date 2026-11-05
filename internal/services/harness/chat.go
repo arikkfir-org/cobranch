@@ -142,7 +142,7 @@ func (r *run) postMessage(ctx context.Context, c Call) (string, error) {
 	if err := decode(c.Arguments, &a); err != nil {
 		return "", err
 	}
-	id, err := r.post(ctx, c.Key, a.Body)
+	id, err := r.post(ctx, c.Key, a.Body, uuid.Nil)
 	if err != nil {
 		return "", err
 	}
@@ -152,9 +152,10 @@ func (r *run) postMessage(ctx context.Context, c Call) (string, error) {
 	return "Posted.", nil
 }
 
-// post posts body to the task's thread, starting it when the task has none, and answers the ID that key names: the
-// message's, or the thread's it started. Since key names it, a call run again after a restart posts nothing more.
-func (r *run) post(ctx context.Context, key, body string) (uuid.UUID, error) {
+// post posts body to the task's thread, naming the artifact as its card unless it is uuid.Nil, starting the thread when
+// the task has none, and answers the ID that key names: the message's, or the thread's it started. Since key names it,
+// a call run again after a restart posts nothing more.
+func (r *run) post(ctx context.Context, key, body string, artifact uuid.UUID) (uuid.UUID, error) {
 	if strings.TrimSpace(body) == "" {
 		return uuid.Nil, errors.New("the message is empty")
 	}
@@ -167,13 +168,13 @@ func (r *run) post(ctx context.Context, key, body string) (uuid.UUID, error) {
 	case id: // this call started the thread before a restart
 		return id, nil
 	case uuid.Nil:
-		if err := r.cobranch.StartThread(ctx, r.work.OrgSlug, chat, id, body); err != nil {
+		if err := r.cobranch.StartThread(ctx, r.work.OrgSlug, chat, id, body, artifact); err != nil {
 			return uuid.Nil, fmt.Errorf("starting the thread: %w", err)
 		}
 		r.thread = id
 		return id, nil
 	}
-	if err := r.cobranch.Post(ctx, r.work.OrgSlug, chat, r.thread, id, body); err != nil {
+	if err := r.cobranch.Post(ctx, r.work.OrgSlug, chat, r.thread, id, body, artifact); err != nil {
 		return uuid.Nil, fmt.Errorf("posting the message: %w", err)
 	}
 	return id, nil

@@ -10,6 +10,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/orgs/orgstest"
 )
 
 // chatStep is one request of a conversation on feature/login's chat, against one fixture: path is relative to the
@@ -260,5 +261,29 @@ func TestChatThreadNamesItsReview(t *testing.T) {
 				t.Errorf("chatThread() = %s, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestChatCards(t *testing.T) {
+	const chat = "/v1/orgs/acme/repos/website/branches/feature%2Flogin/chat"
+	plan := uuid.MustParse("0190f1b2-0000-7000-8000-0000000000d1")
+	f := newOrgFixture(t)
+	f.chatStore.Artifacts[plan] = chats.ArtifactRef{ID: plan, OrgID: f.acme.ID, Title: "Plan", Kind: "document"}
+	f.store.Artifacts[plan] = orgstest.ArtifactScope{OrgID: f.acme.ID, RepoID: f.website.ID, OwnerID: f.olivia.User.ID, RepositoryAccess: "none",
+		OrganizationAccess: "none"}
+	card := `"artifact":{"id":"` + plan.String() + `","kind":"document","title":"Plan"}`
+	steps := []chatStep{
+		{name: "a thread whose first message is a card", viewer: olivia, method: "POST", path: "/threads", body: `{"body":"Wrote the plan.","artifactId":"` + plan.String() + `"}`,
+			wantStatus: 201, want: []string{card}},
+		{name: "a card one may not read", viewer: maxAs(auth.RoleDeveloper), method: "POST", path: "/threads/{thread}/messages",
+			body: `{"body":"See this.","artifactId":"` + plan.String() + `"}`, wantStatus: 400, wantCode: "message.artifact_invalid"},
+		{name: "the card, read by one it doesn't open for", viewer: maxAs(auth.RoleDeveloper), method: "GET", path: "/threads/{thread}", wantStatus: 200,
+			want: []string{card}},
+		{name: "a card of nothing", viewer: olivia, method: "POST", path: "/threads/{thread}/messages", body: `{"body":"See this.","artifactId":"` + uuid.NewString() + `"}`,
+			wantStatus: 400, wantCode: "message.artifact_invalid"},
+	}
+	var ids chatIDs
+	for _, s := range steps {
+		s.run(t, f, chat, &ids)
 	}
 }

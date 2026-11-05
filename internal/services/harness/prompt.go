@@ -50,6 +50,10 @@ func (r *run) where() string {
 			out += " When they ask about your work, tasks lists what you work on, your queue and what you ended last."
 		}
 	}
+	if !r.kit.Quiet {
+		out += "\n\nWhen someone asks for a document, a diagram, a report or a page, write it as an artifact with " +
+			"create_artifact, rather than in a message or a commit; revise one with update_artifact, after read_artifact."
+	}
 	switch c := r.clone; {
 	case c.Commit != "":
 		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + " at commit " + c.Commit + " of branch " +

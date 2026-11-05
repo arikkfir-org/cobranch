@@ -336,6 +336,13 @@ type ChatAnchorInput struct {
 	EndLine int `json:"endLine"`
 }
 
+// The artifact a message names, as its card shows it to whoever reads the thread; the artifact opens only for those whose grants reach it.
+type ChatArtifact struct {
+	ID    string       `json:"id"`
+	Title string       `json:"title"`
+	Kind  ArtifactKind `json:"kind"`
+}
+
 // One of a thread's messages, in Markdown.
 type ChatMessage struct {
 	ID       string `json:"id"`
@@ -363,6 +370,8 @@ type ChatMessage struct {
 	AskedTaskNumber *int `json:"askedTaskNumber,omitempty"`
 	// The agent it asked.
 	AskedAgent *CommitPrincipal `json:"askedAgent,omitempty"`
+	// The artifact it names, which the conversation draws as a card that opens it; null for none, and once the artifact is deleted.
+	Artifact *ChatArtifact `json:"artifact,omitempty"`
 	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 }
@@ -375,6 +384,8 @@ type ChatMessageInput struct {
 	Body string `json:"body"`
 	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there.
 	Ask *string `json:"ask,omitempty"`
+	// An artifact of the organization that the poster reads, which the message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid).
+	ArtifactID *string `json:"artifactId,omitempty"`
 }
 
 // A page of a branch's chat.
@@ -418,6 +429,8 @@ type ChatThreadInput struct {
 	Body string `json:"body"`
 	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
 	Ask *string `json:"ask,omitempty"`
+	// An artifact of the organization that the poster reads, which its first message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid).
+	ArtifactID *string `json:"artifactId,omitempty"`
 }
 
 // A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is.

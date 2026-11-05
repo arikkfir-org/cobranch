@@ -78,8 +78,17 @@ type ChatMessage {
   askedTaskNumber: Int
   "The agent it asked."
   askedAgent: CommitPrincipal
+  "The artifact it names, which the conversation draws as a card that opens it; null for none, and once the artifact is deleted."
+  artifact: ChatArtifact
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+}
+
+"The artifact a message names, as its card shows it to whoever reads the thread; the artifact opens only for those whose grants reach it."
+type ChatArtifact {
+  id: ID!
+  title: String!
+  kind: ArtifactKind!
 }
 
 "What changed in a chat."
@@ -124,6 +133,8 @@ input ChatThreadInput {
   body: String!
   "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent."
   ask: ID
+  "An artifact of the organization that the poster reads, which its first message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid)."
+  artifactId: ID
 }
 
 "A message to post."
@@ -134,6 +145,8 @@ input ChatMessageInput {
   body: String!
   "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there."
   ask: ID
+  "An artifact of the organization that the poster reads, which the message names as its card; any other is refused (BAD_USER_INPUT, message.artifact_invalid)."
+  artifactId: ID
 }
 
 extend type Mutation {
