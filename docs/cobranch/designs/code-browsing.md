@@ -242,11 +242,12 @@ The ref picker lists branches and tags; a file links its permanent URL at the co
 - **A file** is one card, as the File screen draws it: its name, lines, size and language, then Raw, History and a
   button that copies its text, over its numbered lines. A click on a line's number picks it and a shift-click a range,
   which the URL's anchor (`#L3-L5`) keeps and a link button copies; on a branch, the lines picked start a thread of its
-  chat. Markdown switches between Preview and Source; an image shows on a stage; a binary file, or one past 1 MiB, isn't
-  shown, and offers its download.
+  chat, and its threads on the file are listed under the card. Markdown switches between Preview and Source; an image
+  shows on a stage; a binary file, or one past 1 MiB, isn't shown, and offers its download; a symlink links its target
+  in the same commit. A directory or a file that can't be read says so in its card, with Try again.
 - **History** gains the graph and a switch between every parent and the first, and `?path=` lists the commits that
   changed a path; a commit gains a link to browse its files.
-- **Empty repositories** say nothing was pushed yet; Clone holds the URLs to push to.
+- **Empty repositories** say nothing was pushed yet, with the command that clones them; Clone holds the URLs to push to.
 
 ## Configuration
 
