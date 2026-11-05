@@ -136,14 +136,14 @@ Weights stop at Semi Bold: hierarchy comes from size and colour (`fg/default` ag
 ## Spacing, radii and elevation
 
 Spacing follows a 4 px grid with a 2 px half-step, and every padding, gap and radius in the file is bound to a token, so
-a change to a token moves every screen. The density is comfortable: rows are 36 px, single-line table rows 32 px.
+a change to a token moves every screen. The density is comfortable: rows are 36 px, table rows included.
 
 | Group | Tokens (px) | Use |
 | --- | --- | --- |
 | `space/*` | 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64 | 8 to 12 inside controls, 16 inside cards, 24 between page sections, 32 page margins |
 | `size/control-*` | sm 28, md 32, lg 40 | Button and input heights |
 | `size/icon-*` | sm 16, md 20 | Icons |
-| `size/row`, `size/row-sm` | 36, 32 | Rows, single-line table rows |
+| `size/row`, `size/row-sm` | 36, 32 | Rows and table rows; `row-sm` is no longer used |
 | `size/topbar`, `size/sidebar`, `size/pane` | 48, 240, 320 | App shell |
 | `radius/*` | none 0, sm 4, md 6, lg 8, xl 12, full 999 | sm for tags and code chips; md for buttons, inputs and menu items; lg for cards, menus and machine avatars; xl for dialogs; full for people, status badges and counts |
 
@@ -519,7 +519,7 @@ preference unless `data-theme="light"`.
 | What colour is the primary action? | Blue; ink stays for text and the mark (2026-11-04) |
 | Light, dark, or both? | Both, equal: the system decides, and a person may override it (2026-11-04) |
 | What is the shell? | A sidebar and a top bar, both fixed (2026-11-04) |
-| How dense? | Comfortable: 36 px rows, 32 px single-line table rows (2026-11-04) |
+| How dense? | Comfortable: 36 px rows (2026-11-04), table rows too (2026-11-05) |
 | What is the mark? | A person and an agent on one trunk, in an ink square, from 24 px; the branch graph at 16 px and as the favicon (2026-11-04) |
 | Where does the system live in code? | `tokens.css` and a component stylesheet in the Console; Figma stays the source (2026-11-04) |
 | How are settings laid out? | Tabs, scoped to the organization (2026-11-04) |
