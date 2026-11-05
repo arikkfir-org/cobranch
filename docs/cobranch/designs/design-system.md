@@ -23,8 +23,8 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 51 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
-| Screens | 49 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Components | 53 components: controls, badges, tags, avatars, menus, tables, cards, meters, dialogs, the app shell, list rows, brand |
+| Screens | 50 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
