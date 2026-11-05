@@ -8,8 +8,8 @@ export const view = "organization.agents-quotas";
 export default ({ org, main }) => showQuotas(org, main);
 
 // stat is one of the month's figures: its label, its value, and a line on what makes it up.
-const stat = (label, value, meta) => h("div", { class: "stat" }, h("span", { class: "stat-label" }, label), h("span", { class: "stat-value" }, value),
-  h("span", { class: "stat-meta", title: meta }, meta));
+const stat = (label, value, meta) => h("div", { class: "quotas-stat" }, h("span", { class: "quotas-stat-label" }, label), h("span", { class: "quotas-stat-value" }, value),
+  h("span", { class: "quotas-stat-meta", title: meta }, meta));
 
 // showQuotas is what the organization's agents spent this month, in the viewer's time zone (Agents · Quotas): the
 // month's figures, then each agent's tasks and spend with its costliest task against its cap, and each model's tasks,
@@ -25,7 +25,7 @@ async function showQuotas(org, main) {
   const top = report.agents.filter((a) => a.costliest).sort((x, y) => micros(y.costliest.spent) - micros(x.costliest.spent))[0];
   const highest = top ? micros(top.costliest.spent) : 0;
   main.replaceChildren(
-    h("div", { class: "stats" },
+    h("div", { class: "quotas-stats" },
       stat("Spent this month", usd(spent), month + ", so far · " + plural(report.agents.length, "agent")),
       stat("Tasks", String(tasks), (tasks - failed - active) + " finished · " + failed + " failed on their cap · " + active + " active"),
       top ? stat("Highest task", usd(highest), [top.cap ? "of a $" + top.cap + " cap" : "uncapped", "#" + top.costliest.number + " " + top.costliest.title].join(" · "))

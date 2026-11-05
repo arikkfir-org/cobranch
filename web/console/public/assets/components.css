@@ -233,9 +233,9 @@
 }
 
 /* Table/Header cell and Table/Cell: objects of one kind, in a table that is its own card. Header cells are 36px on the
-   sunken background in Label/Small; body cells are at least 36px, a second line grows them; body rows are divided by
-   border/subtle and hovered; a cell holds text, Muted metadata, Mono names (SHAs, paths, branches), or a badge, an
-   avatar or a button. */
+   sunken background in Label/Small; body cells are at least 36px above their divider, a second line grows them; body
+   rows are divided by border/subtle and hovered; a cell holds text, Muted metadata, Mono names (SHAs, paths, branches),
+   or a badge, an avatar or a button. */
 .table {
   width: 100%; border-collapse: separate; border-spacing: 0;
   border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden;
@@ -244,8 +244,8 @@
   height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-sunken); color: var(--color-fg-muted); font: var(--text-label-small); text-align: left; white-space: nowrap;
 }
-.table td { height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
-.table tbody tr:last-child td { border-bottom: 0; }
+.table td { height: calc(var(--size-row) + 1px); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
+.table tbody tr:last-child td { height: var(--size-row); border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
 /* Table/Row: State=Muted for a row that no longer counts (a revoked key, an archived repository), its cells muted;
    State=Selected for the row a pane or detail shows. */
@@ -369,6 +369,30 @@
 .meter-share { height: var(--space-4); }
 .meter-bar { display: block; height: 100%; border-radius: var(--radius-full); background: var(--color-action-primary-bg); }
 :is(.meter-warning, .meter-danger) .meter-bar { background: var(--tone-solid); }
+
+/* Stat: a counter on the surface: its label in Label/Small muted, with its icon at the end, its value in Heading/Large,
+   and under it a Badge/Quiet (.badge-quiet with its tone) that says more. */
+.stat { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); min-width: 0; padding: var(--space-16);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); }
+.stat-label { display: flex; align-items: center; gap: var(--space-8); align-self: stretch; min-width: 0; color: var(--color-fg-muted); font: var(--text-label-small); white-space: nowrap; }
+.stat-label > .icon { margin-left: auto; }
+.stat-value { color: var(--color-fg-default); font: var(--text-heading-large); letter-spacing: var(--text-heading-large-tracking); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Chart/Bars: a Card of a value by day: its title with the total at the header's end, a bar a day in one tone (Info
+   unless AI or Accent), at most 10px wide and 4px apart, narrowing evenly to fit the days, and the first day and the
+   last under them in Caption subtle. A pointed bar turns fg/default, and a tooltip above it says its day and value. */
+.chart-bars { --chart-bar: var(--color-status-info-solid); container-type: inline-size; }
+.chart-bars.tone-ai { --chart-bar: var(--color-status-ai-solid); }
+.chart-bars.tone-accent { --chart-bar: var(--color-action-primary-bg); }
+.chart-bars-plot { position: relative; display: flex; align-items: flex-end; gap: var(--space-4); height: 152px; padding: var(--space-16); }
+.chart-bars-bar { flex: 0 1 10px; min-width: var(--space-4); border-radius: var(--radius-xs); background: var(--chart-bar); }
+.chart-bars-bar:is(:hover, :focus-visible) { outline: none; background: var(--color-fg-default); }
+.chart-bars-axis { display: flex; justify-content: space-between; gap: var(--space-8); padding: 0 var(--space-16) var(--space-12); color: var(--color-fg-subtle); font: var(--text-caption); }
+.chart-bars-tooltip { position: absolute; z-index: 1; padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm); background: var(--color-fg-default); color: var(--color-bg-surface);
+  font: var(--text-caption); white-space: nowrap; pointer-events: none; translate: -50% -100%; }
+@media (hover: none) { .chart-bars-tooltip { display: none; } }
+/* A card too narrow for a month at 4px a bar and 4px apart draws the bars 2px apart instead. */
+@container (max-width: 280px) { .chart-bars-plot { gap: var(--space-2); } }
 
 /* Dialog: a modal dialog over the scrim, 480px wide: a title with a close button, the body, and a sunken footer with
    the actions on the right, primary last. Esc closes it, and so does a click on the scrim, which the page wires. */

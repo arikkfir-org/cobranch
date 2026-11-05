@@ -1,0 +1,24 @@
+/* The Overview's layout (Overview, Overview · 1024, Overview · Phone): the Stats in a row that wraps, five across at
+   1440, four at 1024, two on a phone; the three Chart/Bars side by side, their headers' totals under their titles below
+   1200 wide, stacked on a phone, where a header is a row again; then By repository, whose figures take 120px each from
+   1200 up and 80px below (each cell 16px more, its padding beyond Figma's), leaving the rest to the repository; on a
+   phone the table keeps the repository and its spend, 96px. Until there is something to count (Overview · Empty), one
+   Card holds the Empty state 64px from its edges. Layout only; the components draw everything else. */
+.overview { display: grid; gap: var(--space-24); }
+.overview-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-16); }
+.overview-charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16); }
+.overview-repositories th.cell-number { width: 136px; }
+.overview-repository { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.overview-empty { padding-block: var(--space-64); }
+.overview-repository > a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1199px) {
+  .overview-repositories th.cell-number { width: 96px; }
+}
+@media (min-width: 769px) and (max-width: 1199px) {
+  .overview-charts .card-header { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+}
+@media (max-width: 768px) {
+  .overview-charts { grid-template-columns: minmax(0, 1fr); }
+  .overview-repositories :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(4), :nth-child(6)) { display: none; }
+  .overview-repositories th.cell-number { width: 112px; }
+}
