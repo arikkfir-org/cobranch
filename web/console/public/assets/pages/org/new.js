@@ -1,28 +1,33 @@
 import { api } from "../../lib/api.js";
 import { h } from "../../lib/dom.js";
-import { repoSlugInput } from "../../lib/repository.js";
+import { failure, field, input, textarea } from "../../lib/forms.js";
+import { pageHeading } from "../../lib/layout.js";
 import { go } from "../../lib/router.js";
+import { base } from "../../lib/state.js";
 
 export const allowed = (can) => can("repos.create");
 export const view = "organization.new-repository";
-export const crumbs = [{ label: "New repository" }];
+export const crumbs = ({ root }) => [{ label: "Repositories", href: root + "/repos" }, { label: "New" }];
+export const heading = () => pageHeading({ title: "New repository", description: "A repository holds code, branches, issues, jobs and the conversations around them." });
 export default ({ org, main }) => showNewRepository(org, main);
 
-// The form that makes a repository, whose creator becomes its Maintainer.
+// The form that makes a repository, named by its slug, whose creator becomes its Maintainer; it opens the repository
+// once made.
 function showNewRepository(org, main) {
-  const error = h("p", { class: "alert", hidden: true });
-  const slug = repoSlugInput("");
-  const name = h("input", { name: "name", maxlength: 100, placeholder: "Website" });
-  const description = h("input", { name: "description", maxlength: 500 });
-  main.replaceChildren(h("h1", {}, "New repository"), error, h("section", { class: "panel" },
-    h("form", { onsubmit: (e) => {
-      e.preventDefault();
-      api("POST", "/orgs/" + org.slug + "/repos", { slug: slug.value, name: name.value || undefined, description: description.value })
-        .then((r) => go("/" + org.slug + "/" + r.slug)).catch((err) => { error.textContent = err.message; error.hidden = false; });
-    } },
-      h("label", {}, "Slug", h("span", {}, "Its URL, in " + org.name + ": lowercase letters, digits, dots, underscores and hyphens."), slug),
-      h("label", {}, "Name", h("span", {}, "Its slug unless you name it."), name),
-      h("label", {}, "Description", description),
-      h("p", {}, "You become its Maintainer. Others of " + org.name + " read it once you grant them a role on it, or through an organization role that reads every repository."),
-      h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
+  const error = failure();
+  const where = (slug) => "Lower case letters, digits, dots, underscores and hyphens. It becomes the URL, " + org.slug + "/" + (slug || "website") + ", and the clone path.";
+  const help = h("span", {}, where(""));
+  const slug = input({ name: "slug", required: true, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100, autocomplete: "off",
+    oninput: () => { help.textContent = where(slug.value); } });
+  const description = textarea({ name: "description", maxlength: 500, rows: 4 });
+  const create = h("button", { class: "btn btn-primary", type: "submit" }, "Create repository");
+  main.replaceChildren(error.el, h("form", { class: "card new-repository", onsubmit: (e) => {
+    e.preventDefault();
+    create.disabled = true;
+    api("POST", "/orgs/" + org.slug + "/repos", { slug: slug.value, description: description.value })
+      .then((r) => go("/" + org.slug + "/" + r.slug)).catch((err) => { error.fail(err); create.disabled = false; });
+  } },
+  h("div", { class: "card-body" }, field("Name", slug, help), field("Description", description, "One line, shown in lists.")),
+  h("footer", { class: "card-footer" }, h("a", { class: "btn", href: base + org.slug + "/repos", "data-nav": "" }, "Cancel"), create)));
+  slug.focus();
 }

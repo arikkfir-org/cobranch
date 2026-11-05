@@ -20,6 +20,19 @@ export const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
 
 export const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
+// since is how long ago a moment was, as a table's column says it: just now, 14 min ago, 2 h ago, yesterday, 3 days
+// ago, 2 weeks ago, then its date.
+export function since(at) {
+  const minutes = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  const days = Math.floor(minutes / (24 * 60));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return minutes + " min ago";
+  if (days < 1) return Math.floor(minutes / 60) + " h ago";
+  if (days < 2) return "yesterday";
+  if (days < 14) return days + " days ago";
+  return days < 60 ? Math.floor(days / 7) + " weeks ago" : when(at);
+}
+
 // ago is how long ago a moment was, as a conversation says it: just now, 14 min, 2 h, yesterday, then its date.
 export function ago(at) {
   const minutes = Math.floor((Date.now() - new Date(at).getTime()) / 60000);

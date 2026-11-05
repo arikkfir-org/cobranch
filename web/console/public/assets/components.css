@@ -262,9 +262,16 @@
 .table td a { color: inherit; text-decoration: none; }
 .table td a:hover { text-decoration: underline; }
 .cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
-.cell-two-lines > :first-child { color: var(--color-fg-default); font: var(--text-body-medium); }
+.cell-two-lines > :is(:first-child, .icon + *) { margin-top: 0; color: var(--color-fg-default); font: var(--text-body-medium); }
 .cell-two-lines > * + * { margin-top: var(--space-2); }
-.cell-two-lines > code, .cell-two-lines > code:first-child { font: var(--text-code-medium); }
+.cell-two-lines > code, .cell-two-lines > code:is(:first-child, .icon + *) { font: var(--text-code-medium); }
+/* A two-line cell that leads with a 20px icon (a repository's) fills the row's width the other columns leave, and
+   truncates its lines beside the icon; the cells after it keep to one line. */
+.table td.cell-two-lines:has(> .icon) { width: 100%; max-width: 0; }
+.table td.cell-two-lines:has(> .icon) ~ td { white-space: nowrap; }
+.cell-two-lines > .icon { float: left; margin-right: var(--space-12); }
+.cell-two-lines > .icon svg { width: var(--size-icon-md); height: var(--size-icon-md); }
+.cell-two-lines:has(> .icon) > :not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
    or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
@@ -376,11 +383,11 @@
 .section-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
 .section-header-description { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
 
-/* Filters: the row over a list or table: a 320px search Input on the left, then its controls, and its count in Caption on
-   the right. */
+/* Filters: the row over a list or table: a 320px search Input on the left, and its controls, then its count in Caption,
+   on the right. */
 .filters { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
-.filters > .input { flex: 0 1 320px; }
-.filters-count { margin-left: auto; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.filters > .input { flex: 0 1 320px; margin-right: auto; }
+.filters-count { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 @media (max-width: 768px) {
   .filters { flex-wrap: wrap; }
   .filters > .input { flex-basis: 100%; }

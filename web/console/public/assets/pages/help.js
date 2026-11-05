@@ -238,6 +238,8 @@ function patterns() {
       h("tbody", {}, h("tr", {}, h("td", { class: "cell-two-lines" }, h("span", {}, "deploy-bot"), h("code", {}, "cbk_…3hWH")), h("td", { class: "cell-number" }, "1.2 GiB"),
         h("td", { class: "cell-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Rotate"), h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Revoke"))),
         h("tr", { class: "row-muted" }, h("td", { class: "cell-two-lines" }, h("span", {}, "old-bot"), h("code", {}, "cbk_…9QxA")), h("td", { class: "cell-number" }, "revoked yesterday"), h("td", {})),
+        h("tr", {}, h("td", { class: "cell-two-lines" }, icon("folder-git-2"), h("code", {}, "website"), h("span", {}, "The project's website and its docs, which a two-line cell with an icon truncates.")),
+          h("td", { class: "cell-number" }, "4 · 2 ready"), h("td", {})),
         h("tr", { class: "row-selected" }, h("td", {}, "The row a pane shows"), h("td", { class: "cell-number" }, "340 MiB"), h("td", {})))),
     copyField("Your new key", "cbk_live_3f9a2c7e1b4d8e60f1a2b3c4d5e6f7a8", "Shown once. Copy it now; Cobranch keeps only its hash."));
 }
