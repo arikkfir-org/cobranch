@@ -137,6 +137,37 @@ func (q *Queries) OrganizationRoles(ctx context.Context, orgID uuid.UUID) ([]Rol
 	return items, nil
 }
 
+const roleHolders = `-- name: RoleHolders :many
+SELECT role_id, count(DISTINCT principal_id)::int AS holders FROM grants
+WHERE scope = 'organization' AND scope_id = $1::uuid GROUP BY role_id
+`
+
+type RoleHoldersRow struct {
+	RoleID  uuid.UUID
+	Holders int32
+}
+
+// RoleHolders counts, for each role granted at the organization, the principals who hold it there.
+func (q *Queries) RoleHolders(ctx context.Context, orgID uuid.UUID) ([]RoleHoldersRow, error) {
+	rows, err := q.db.Query(ctx, roleHolders, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoleHoldersRow
+	for rows.Next() {
+		var i RoleHoldersRow
+		if err := rows.Scan(&i.RoleID, &i.Holders); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const roleInUse = `-- name: RoleInUse :one
 SELECT (EXISTS (SELECT 1 FROM grants WHERE role_id = $1) OR EXISTS (SELECT 1 FROM organizations WHERE membership_role_id = $1))::boolean
 `

@@ -341,8 +341,15 @@ func TestMembersAPI(t *testing.T) {
 		{name: "members", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/members"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[struct{ Members []Member }](t, body)
-				if len(got.Members) != 2 || len(got.Members[0].Roles) != 1 {
-					t.Errorf("members = %s", body)
+				if len(got.Members) != 2 || len(got.Members[0].Roles) != 1 || got.Members[0].Email != nil {
+					t.Errorf("members = %s, want two, without emails for a Member", body)
+				}
+			}},
+		{name: "members as their manager", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/members"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[struct{ Members []Member }](t, body)
+				if len(got.Members) != 2 || got.Members[0].Email == nil || *got.Members[0].Email == "" {
+					t.Errorf("members = %s, want their emails for an Owner", body)
 				}
 			}},
 		{name: "members as an outsider", viewer: nia, method: "GET", path: fixed("/v1/orgs/acme/members"), wantStatus: 404, wantCode: "organization.not_found"},

@@ -2,6 +2,11 @@
 -- name: OrganizationRoles :many
 SELECT * FROM roles WHERE scope = 'organization' AND (org_id IS NULL OR org_id = @org_id::uuid) ORDER BY built_in DESC, name;
 
+-- RoleHolders counts, for each role granted at the organization, the principals who hold it there.
+-- name: RoleHolders :many
+SELECT role_id, count(DISTINCT principal_id)::int AS holders FROM grants
+WHERE scope = 'organization' AND scope_id = @org_id::uuid GROUP BY role_id;
+
 -- name: InsertRole :exec
 INSERT INTO roles (id, scope, name, description, permissions, built_in, org_id)
 VALUES (@id, 'organization', @name, @description, @permissions, false, @org_id);

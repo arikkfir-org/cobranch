@@ -350,7 +350,9 @@ func (a api) ListPermissions(ctx context.Context, req ListPermissionsRequestObje
 	if !req.Params.Scope.Valid() {
 		return nil, refuse(http.StatusBadRequest, "request.invalid", "Permissions are listed at scope organization.")
 	}
-	return ListPermissions200JSONResponse{Permissions: orgs.RolePermissions()}, nil
+	return ListPermissions200JSONResponse{Permissions: orgs.RolePermissions(), Labels: mapAll(orgs.RolePermissionLabels, func(p orgs.PermissionLabel) PermissionLabel {
+		return PermissionLabel{Id: p.ID, Group: p.Group, Label: p.Label}
+	})}, nil
 }
 
 // ListRoles lists the roles the organization grants.
@@ -367,7 +369,11 @@ func (a api) ListRoles(ctx context.Context, req ListRolesRequestObject) (ListRol
 	if err != nil {
 		return nil, fail(err, "organization")
 	}
-	return ListRoles200JSONResponse{Roles: mapAll(roles, role)}, nil
+	return ListRoles200JSONResponse{Roles: mapAll(roles, func(r orgs.Role) Role {
+		out := role(r)
+		out.Holders = &r.Holders
+		return out
+	})}, nil
 }
 
 // CreateRole defines a custom role.
@@ -489,7 +495,11 @@ func (a api) ListMembers(ctx context.Context, req ListMembersRequestObject) (Lis
 		return nil, fail(err, "organization")
 	}
 	return ListMembers200JSONResponse{Members: mapAll(members, func(m orgs.Member) Member {
-		return Member{UserId: m.UserID, DisplayName: m.DisplayName, JoinedAt: m.JoinedAt, Roles: mapAll(m.Roles, role)}
+		out := Member{UserId: m.UserID, DisplayName: m.DisplayName, JoinedAt: m.JoinedAt, Roles: mapAll(m.Roles, role)}
+		if m.Email != "" {
+			out.Email = &m.Email
+		}
+		return out
 	})}, nil
 }
 

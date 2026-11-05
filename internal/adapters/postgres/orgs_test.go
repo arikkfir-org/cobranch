@@ -143,6 +143,11 @@ func TestOrgStoreMembers(t *testing.T) {
 	if !slices.Equal(names, []string{"Member", "Owner"}) {
 		t.Errorf("roles held = %v, want a Member and an Owner", names)
 	}
+	for _, m := range members {
+		if want := map[uuid.UUID]string{f.olivia: "olivia@example.com", f.max: "max@example.com"}[m.UserID]; m.Email != want {
+			t.Errorf("%s's email = %q, want %q", m.DisplayName, m.Email, want)
+		}
+	}
 	m, err := f.s.Member(ctx, f.acme.ID, f.max)
 	if err != nil || len(m.Roles) != 1 || m.Roles[0].ID != auth.RoleMember || m.JoinedAt.IsZero() {
 		t.Errorf("Member(max) = %+v, %v", m, err)
@@ -353,6 +358,11 @@ func TestOrgStoreRolesAndExpiry(t *testing.T) {
 	roles, err := f.s.Roles(ctx, f.acme.ID)
 	if err != nil || len(roles) != 4 || roles[0].Name != "Automation" || !roles[0].BuiltIn {
 		t.Errorf("Roles() = %+v, %v, want Automation, Guest, Member and Owner", roles, err)
+	}
+	for _, r := range roles {
+		if want := map[string]int{"Automation": 1, "Member": 1, "Owner": 1}[r.Name]; r.Holders != want { // Automation: the AI reviewer
+			t.Errorf("%s's holders = %d, want %d", r.Name, r.Holders, want)
+		}
 	}
 	if r, err := f.s.Role(ctx, auth.RoleOwner); err != nil || r.Name != "Owner" || !slices.Contains(r.Permissions, "org.manage") {
 		t.Errorf("Role(Owner) = %+v, %v", r, err)

@@ -13,14 +13,20 @@ func TestRoleListing(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "roles", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/roles"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if got := decode[struct{ Roles []Role }](t, body); len(got.Roles) != 4 || got.Roles[0].Name != "Owner" || got.Roles[0].OrgId != nil {
-					t.Errorf("roles = %s", body)
+				if got := decode[struct{ Roles []Role }](t, body); len(got.Roles) != 4 || got.Roles[0].Name != "Owner" || got.Roles[0].OrgId != nil ||
+					got.Roles[0].Holders == nil || *got.Roles[0].Holders != 1 {
+					t.Errorf("roles = %s, want Owner first, held by one", body)
 				}
 			}},
 		{name: "roles of an organization the viewer isn't in", viewer: nia, method: "GET", path: fixed("/v1/orgs/acme/roles"), wantStatus: 404, wantCode: "organization.not_found"},
 		{name: "permissions", viewer: maxim, method: "GET", path: fixed("/v1/permissions?scope=organization"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if got := decode[struct{ Permissions []string }](t, body); !slices.Equal(got.Permissions, orgs.RolePermissions()) {
+				got := decode[struct {
+					Permissions []string
+					Labels      []PermissionLabel
+				}](t, body)
+				if !slices.Equal(got.Permissions, orgs.RolePermissions()) || len(got.Labels) != len(orgs.RolePermissionLabels) ||
+					got.Labels[0] != (PermissionLabel{Id: "org.read", Group: "Organization", Label: "Read the organization"}) {
 					t.Errorf("permissions = %s", body)
 				}
 			}},

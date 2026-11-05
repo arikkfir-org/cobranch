@@ -248,7 +248,9 @@ No API returns a value: only a job run or an agent task receives it.
 
 Names are `<object>.<action>`. A release may add permissions but never renames one; later designs add theirs to the
 catalog, at the organization: issues add `issues.read`, `issues.write` and `issues.manage`
-([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs.
+([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs. The API lists the
+permissions a role may hold with a label for people and the area each is about (Organization, Repositories, Reviews,
+Issues, Agents, Secrets), which the Console's role editor ticks; a test keeps every such permission labelled.
 
 | Permission | Allows |
 | --- | --- |
@@ -257,7 +259,7 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 | `orgs.create` | Create organizations |
 | `org.read` | See the organization, its members, groups and principals |
 | `org.manage` | Rename the organization, change its settings, delete it |
-| `org.members.manage` | Invite, approve and remove members; manage groups |
+| `org.members.manage` | Invite, approve and remove members, and see their emails; manage groups |
 | `org.grants.manage` | Define custom roles; grant and revoke roles, within the granter's own permissions |
 | `org.principals.manage` | Create and delete API keys, OAuth apps and workload identities; manage agents |
 | `org.audit.read` | Read the organization's audit trail |
