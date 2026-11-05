@@ -1,9 +1,8 @@
 import { annotationStatuses } from "../lib/annotations.js";
 import { logo, mark, markSmall } from "../lib/brand.js";
 import { branchStatuses } from "../lib/branches.js";
-import { app, h } from "../lib/dom.js";
+import { h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
-import { viewerLinks } from "../lib/layout.js";
 import { reviewStates } from "../lib/reviews.js";
 import { base } from "../lib/state.js";
 import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
@@ -14,18 +13,8 @@ import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
 // component is. It draws from the classes alone: what differs from Figma is a bug in components.css or in the file.
 // The app shell's own components are the shell's to draw, not specimens here.
 
-export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
-export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
-
-// showHelp draws the help page at rest, the path's parts after help/, under the Console's bar.
-export function showHelp(rest) {
-  const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"),
-    h("nav", {}, h("a", { href: base + "help", "data-nav": "", class: "current" }, "Help")), h("span", { class: "spacer" }), ...viewerLinks());
-  const main = h("main", { class: "page" });
-  document.body.className = "";
-  app.replaceChildren(bar, main);
-  show({ main, rest });
-}
+export const view = (rest) => ({ components: "help.components" })[rest[0]] || "help";
+export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: base + "help" }, { label: "Components" }] : [{ label: "Help" }];
 
 export default function show({ main, rest }) {
   if (rest[0] === "components") return main.append(...components());
@@ -116,7 +105,8 @@ function forms() {
   const select = (attrs = {}) => h("span", { class: "select" }, h("select", attrs, ["Anthropic", "OpenAI", "A local model"].map((m) => h("option", {}, m))));
   const textarea = (attrs = {}) => h("textarea", { class: "textarea", ...attrs }, "Work the issue or the branch you are given. Open a branch named after the issue, keep commits small, and ask in the chat before changing an API.");
   const check = (cls, type, label, attrs) => h("label", { class: cls }, h("input", { type, name: cls, ...attrs }), label);
-  const choices = themes.map((t) => h("button", { type: "button", onclick: () => setTheme(t) }, t[0].toUpperCase() + t.slice(1)));
+  // The switch draws the choice at once; the settings page is where a failed save is reported.
+  const choices = themes.map((t) => h("button", { type: "button", onclick: () => setTheme(t).catch(() => {}) }, t[0].toUpperCase() + t.slice(1)));
   const pressed = () => choices.forEach((c, i) => c.setAttribute("aria-pressed", themes[i] === theme() ? "true" : "false"));
   pressed();
   onThemeChange(() => { if (choices[0].isConnected) pressed(); });

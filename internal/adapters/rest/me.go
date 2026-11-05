@@ -13,7 +13,7 @@ import (
 )
 
 // Sessions is what the API needs of sign-in's service: the viewer's sessions, personal tokens and SSH keys, and
-// revoking one.
+// revoking one, and their preferences.
 type Sessions interface {
 	Sessions(ctx context.Context, userID uuid.UUID) ([]auth.Session, error)
 	Revoke(ctx context.Context, userID, id uuid.UUID) error
@@ -23,6 +23,8 @@ type Sessions interface {
 	AddSSHKey(ctx context.Context, a auth.Authenticated, in auth.SSHKeyInput) (auth.Credential, error)
 	SSHKeys(ctx context.Context, userID uuid.UUID) ([]auth.Credential, error)
 	DeleteSSHKey(ctx context.Context, a auth.Authenticated, id uuid.UUID) error
+	Preferences(ctx context.Context, a auth.Authenticated) (auth.Preferences, error)
+	UpdatePreferences(ctx context.Context, a auth.Authenticated, p auth.PreferencesPatch) (auth.Preferences, error)
 }
 
 // problem is a Problem for the request ctx belongs to.

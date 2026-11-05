@@ -58,7 +58,7 @@ classes that map its components. A fix to a component reaches every screen and e
 
 Colour has two layers: primitives hold raw values, and semantic tokens alias them per mode. Components use semantic
 tokens only, and Light and Dark are two modes of the one `Color` collection, so a frame changes theme by switching its
-mode. Both themes are equal: the system's setting decides, and a person may override it.
+mode. Both themes are equal: the system's setting decides, and a person may override it. The choice is kept with the person (`/v1/me/preferences`), so every browser they sign in from follows it; each browser keeps a copy to draw its first frame in the right theme.
 
 **Primitives** (`Primitives`): a cool gray in 15 steps, from `gray/0` #ffffff to `gray/1000` #0c0d0f; blue, green,
 amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 50 and 60% for overlays and shadows.
@@ -232,15 +232,15 @@ bound to `fg/default`, and an instance takes the colour of its context.
 The Components page holds 41 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
-shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are the shell's own, drawn around
-every page. The Console's `/help/components` page, behind the sign-in, draws every class of `components.css` and the
+shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
+`lib/shell.css`, one root class each. The Console's `/help/components` page, behind the sign-in, draws every class of `components.css` and the
 marks in both themes, for review beside the file. Each component in the file links its source and ends its description
 with the classes that draw it; Figma's Code Connect would do this in Dev Mode, but needs an Organization or Enterprise
 plan.
 
 | Component | Variants | Properties | In the Console |
 | --- | --- | --- | --- |
-| Brand/Logo, Brand/Mark small, Brand/Credit | None | None: the large mark with the wordmark, the small mark (also the favicon), the credit line | `logo()` and `markSmall()` in `lib/brand.js`; the credit is the app shell's |
+| Brand/Logo, Brand/Mark small, Brand/Credit | None | None: the large mark with the wordmark, the small mark (also the favicon), the credit line | `logo()` and `markSmall()` in `lib/brand.js`; the credit `.app-sidebar-credit` (`lib/shell.css`) |
 | Button | Style: Primary, Secondary, Ghost, Danger × Size: Medium 32, Small 28 × State: Default, Hover, Disabled | Label, leading icon, trailing icon (each optional, swappable) | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm` |
 | Icon button | Style: Secondary, Ghost × Size: Medium, Small | Icon | `.icon-btn`, `.icon-btn-ghost`, `.icon-btn-sm` |
 | Input, Select, Textarea | State: Default, Focus, Error, Disabled | Label, value, helper text (each optional); Input also a leading icon | `.field` with `.field-label` and `.field-help`, around `.input`, `.select` or `.textarea` |
@@ -248,7 +248,7 @@ plan.
 | Segmented control | Selected: 1, 2, 3 | Three options (the theme: Light, Dark, System) | `.segmented`, with `aria-pressed` on the chosen button |
 | Tab | State: Default, Selected | Label, icon, count | `.tab-bar`, `.tab`, `.tab-count` |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked | `.menu`, `.menu-item`, `.menu-item-danger`, `.menu-shortcut`, `.menu-divider` |
-| Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | The app shell's |
+| Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | `.nav-item`, `.nav-sub-item` (`lib/shell.css`) |
 | Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono | Text | `.table`, `.cell-muted`, `.cell-mono` |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone | `.badge` with a `.tone-*` class |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None | `.badge` with a `.tone-*` class |
@@ -260,12 +260,12 @@ plan.
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
 | Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`; `.tooltip`, or `data-tooltip` on what it labels |
-| App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | The app shell's |
-| App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | The app shell's |
+| App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | `.app-sidebar`, `.app-topbar` (`lib/shell.css`) |
+| App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
 | Annotation row | Status (as Badge/Annotation) | Name, description, duration; creator avatar nested | `.annotation-row` in a `.list` |
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
-| Chat message | Author: Person, Agent | Name, time, body, code reference | The app shell's |
+| Chat message | Author: Person, Agent | Name, time, body, code reference | `.chat-message` (`lib/shell.css`) |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
@@ -347,7 +347,7 @@ Researcher waits for a task.
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
 | [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | Settings as tabs; a request to join, members with roles, invited people |
 | [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
-| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with a cap per task |
+| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
@@ -448,7 +448,8 @@ The Figma file is the source of truth, and the Console follows it, never leads.
    [`tokens.css`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/public/assets/tokens.css) from it;
    nobody edits `tokens.css` by hand, and CI fails when it differs from the export. A pull request that changes it names
    the Figma change it carries. The steps are in the tools'
-   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md).
+   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md). The Back-office's image
+   takes the Console's `tokens.css`, typefaces and marks when it is built, so one export reaches both.
 3. **Components map one to one.** Each Figma component is one class of the Console's component stylesheet, named after
    it. A page composes those classes and writes no component CSS of its own, so a component fix reaches every page.
 4. **Screens are the acceptance test.** A page group is done when the Console matches its Figma screen at 1440 wide,
@@ -497,7 +498,7 @@ preference unless `data-theme="light"`.
 | Where do labels go? | Above their fields (2026-11-04) |
 | Where does a conversation live? | One pane on the right, whose subject follows the page (2026-11-04) |
 | Tables or rich rows for lists? | Proposed: tables for organization-level lists, rich rows inside a page |
-| How does an agent's spend show? | Proposed: on each task row of the agent's page |
-| How are models capped? | Proposed: a cap per task on the model, which an agent may lower |
+| How does an agent's spend show? | On each task row of the agent's page, against its cap, and the month so far on its facts (2026-11-05) |
+| How are models capped? | They aren't: the cap per task is each agent's, and models carry prices only (2026-11-05) |
 | Where do artifacts appear? | Proposed: a tab on their repository, and posted into the conversation that asked for them |
 | Who may see an artifact? | Proposed: grants to the repository's members, the organization, people and agents, each view or edit |

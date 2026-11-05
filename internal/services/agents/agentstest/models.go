@@ -144,6 +144,9 @@ func (s *Store) SetModel(_ context.Context, actor, orgID, id uuid.UUID, version 
 		if _, ok := s.providers[orgID][provider]; provider != "" && !ok {
 			return &orgs.ValidationError{Field: "provider", Code: "agent.provider_invalid", Message: "the organization hasn't added this provider"}
 		}
+		if _, ok := s.models[modelKey{orgID, provider, model}]; provider != "" && !ok {
+			return &orgs.ValidationError{Field: "model", Code: "agent.model_invalid", Message: "the organization hasn't added this model"}
+		}
 		a.Provider, a.Model = provider, model
 		return nil
 	})

@@ -26,6 +26,7 @@ type Agent struct {
 	Model        *string
 	Secrets      []byte
 	Purpose      *string
+	Cap          *int64
 }
 
 type AgentTask struct {
@@ -336,6 +337,19 @@ type Membership struct {
 	JoinedAt time.Time
 }
 
+type Model struct {
+	OrgID       uuid.UUID
+	Provider    string
+	Model       string
+	InputPrice  int64
+	OutputPrice int64
+	IsDefault   bool
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type ModelProvider struct {
 	OrgID     uuid.UUID
 	Provider  string
@@ -365,6 +379,13 @@ type OrganizationLimit struct {
 	Version      int64
 	UpdatedAt    time.Time
 	UpdatedBy    *uuid.UUID
+}
+
+type Preference struct {
+	PrincipalID uuid.UUID
+	Theme       string
+	UpdatedAt   time.Time
+	Version     int64
 }
 
 type Principal struct {

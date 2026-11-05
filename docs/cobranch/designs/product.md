@@ -1,7 +1,7 @@
 # The Cobranch product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-04, and synced
+> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-05, and synced
 > again once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -57,7 +57,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Quotas](quotas.md) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
 | [Issues](issues.md) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
 | [Console](console.md) | The Console as static ES modules: a shell, shared modules and a module per page, with no build step. | Proposed |
-| [Conversations](conversations.md) | A conversation on every page: private ones about an organization, a repository or an agent, shared ones on branches and issues. | Proposed |
+| [Conversations](https://claude.ai/artifact/2zef9Urapj7JwH7tXkUjBn) | A conversation on every page: private ones about an organization, a repository or an agent, shared ones on branches and issues. | Proposed |
 | [Artifacts](https://claude.ai/artifact/GadW2fC9NMBLA86DqcHCBk) | Documents, diagrams, reports and pages agents generate for a repository: versions, grants, and where they render. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |

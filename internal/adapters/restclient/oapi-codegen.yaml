@@ -1,5 +1,5 @@
-# oapi-codegen's settings for restclient.gen.go: a client of the REST API's calls that an agent's harness makes, and the
-# models they take.
+# oapi-codegen's settings for restclient.gen.go: a client of the REST API's calls that an agent's harness and its pod's
+# model proxy make, and the models they take.
 package: restclient
 output: restclient.gen.go
 generate:
@@ -13,5 +13,5 @@ output-options:
     getRepositoryConversationThread, startRepositoryConversationThread, postRepositoryConversationMessage,
     listRepositoryConversationThreads, listRepositoryConversationUpdates, getAgentConversationThread,
     startAgentConversationThread, postAgentConversationMessage, listAgentConversationThreads,
-    listAgentConversationUpdates, listTasks, getBranchDiff, getBlob, getTree, listReviews, submitReview]
+    listAgentConversationUpdates, listTasks, getBranchDiff, getBlob, getTree, listReviews, submitReview, recordMyTaskSpend]
   nullable-type: true

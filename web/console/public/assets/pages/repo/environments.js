@@ -1,4 +1,5 @@
 import { api, apiPage } from "../../lib/api.js";
+import { branchSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { deliversTo, deliveryStates, environmentHealths, environmentSyncs, environmentsPanel } from "../../lib/environments.js";
 import { capitalized, shortSha, whenExactly } from "../../lib/format.js";
@@ -7,6 +8,11 @@ import { render } from "../../lib/router.js";
 
 export const nav = { label: "Environments", order: 30 };
 export const accepts = (rest) => rest.length <= 1;
+export const heading = (rest) => !rest.length;
+export const crumbs = ({ root, rest }) => [{ label: "Environments", href: root + "/environments" }, ...(rest.length ? [{ label: "Environment" }] : [])];
+// subject is an environment's branch's conversation, on the environment's page.
+export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/environments/" + encodeURIComponent(rest[0]))
+  .then((e) => (e.branch ? branchSubject(org, repo, path, at, e.branch, can) : null)) : null;
 export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryEnvironment(path, at, rest[0], can, fail) : [await environmentsPanel(path, at, "")];
 
 // repositoryEnvironment is an environment's page: its target and branch, where it delivers, its sync, health and

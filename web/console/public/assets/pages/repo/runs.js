@@ -1,4 +1,5 @@
 import { api } from "../../lib/api.js";
+import { branchSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { capitalized, whenExactly } from "../../lib/format.js";
 import { render } from "../../lib/router.js";
@@ -7,6 +8,11 @@ import { follows } from "../../lib/state.js";
 
 export const nav = { label: "Runs", order: 20 };
 export const accepts = (rest) => rest.length <= 1;
+export const heading = (rest) => !rest.length;
+export const crumbs = ({ root, rest }) => [{ label: "Runs", href: root + "/runs" }, ...(rest.length ? [{ label: "#" + rest[0] }] : [])];
+// subject is a run's branch's conversation, on the run's page; a tag's run has none.
+export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/runs/" + encodeURIComponent(rest[0]))
+  .then((r) => (r.ref.startsWith("refs/heads/") ? branchSubject(org, repo, path, at, r.ref.slice("refs/heads/".length), can) : null)) : null;
 export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryRun(path, at, rest[0], can, fail) : [await runsPanel(path, at, can, fail, "")];
 
 // repositoryRun is a run's page: its state and why, its job, ref and commit, what queued it, who started it, when it

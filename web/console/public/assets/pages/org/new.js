@@ -5,6 +5,7 @@ import { go } from "../../lib/router.js";
 
 export const allowed = (can) => can("repos.create");
 export const view = "organization.new-repository";
+export const crumbs = [{ label: "New repository" }];
 export default ({ org, main }) => showNewRepository(org, main);
 
 // The form that makes a repository, whose creator becomes its Maintainer.

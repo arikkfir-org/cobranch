@@ -111,6 +111,7 @@ func TestRemoveModelProvider(t *testing.T) {
 		}
 	}
 	scout := f.agent(t, f.olive, "Scout")
+	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model"})
 	if _, err := f.service.SetModel(ctx, f.olive, f.org, scout.ID, "anthropic", "a-model", agents.AnyVersion); err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +144,7 @@ func TestSetModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	scout := f.agent(t, f.mel, "Scout")
+	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model"})
 	long := fmt.Sprintf("%0201d", 0)
 	tests := []struct {
 		name                    string
@@ -157,6 +159,7 @@ func TestSetModel(t *testing.T) {
 		{name: "a provider the organization hasn't added", viewer: f.stu, provider: "openai", model: "a-model", version: 1, want: invalid("agent.provider_invalid")},
 		{name: "a model without a provider", viewer: f.stu, model: "a-model", version: 1, want: invalid("agent.model_invalid")},
 		{name: "a model's name too long", viewer: f.stu, provider: "anthropic", model: long, version: 1, want: invalid("agent.model_invalid")},
+		{name: "a model the organization hasn't added", viewer: f.stu, provider: "anthropic", model: "c-model", version: 1, want: invalid("agent.model_invalid")},
 		{name: "as a steward", viewer: f.stu, provider: " anthropic ", model: " a-model ", version: 1, wantProvider: "anthropic", wantModel: "a-model"},
 		{name: "from a stale version", viewer: f.stu, provider: "anthropic", model: "b-model", version: 1, want: agents.ErrChanged},
 		{name: "none", viewer: f.olive, version: agents.AnyVersion},

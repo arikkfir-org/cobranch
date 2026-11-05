@@ -5,6 +5,7 @@ import { render } from "../../lib/router.js";
 import { base, me } from "../../lib/state.js";
 
 export const nav = { label: "Access", order: 40 };
+export const crumbs = [{ label: "Access" }];
 export default ({ org, repo, path, orgCan, fail }) => repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
 
 // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants

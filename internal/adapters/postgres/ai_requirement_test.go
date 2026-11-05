@@ -98,20 +98,43 @@ func (s aiSteps) run() {
 	}
 }
 
+// running is the running review task.
+func (s aiSteps) running() uuid.UUID {
+	var id uuid.UUID
+	if err := s.f.pool.QueryRow(context.Background(), "SELECT id FROM agent_tasks WHERE state = 'running'").Scan(&id); err != nil {
+		s.t.Fatal(err)
+	}
+	return id
+}
+
 // end has the harness move the running review task as change says.
 func (s aiSteps) end(change agents.StateChange) func() {
 	return func() {
-		ctx := context.Background()
-		var id uuid.UUID
-		if err := s.f.pool.QueryRow(ctx, "SELECT id FROM agent_tasks WHERE state = 'running'").Scan(&id); err != nil {
-			s.t.Fatal(err)
-		}
 		body, err := json.Marshal(map[string]string{"state": string(change.State)})
 		if err != nil {
 			s.t.Fatal(err)
 		}
-		if _, _, err := s.a.Append(ctx, s.reviewer, id, agents.Entry{Seq: 1, Kind: agents.EntryState, Body: body}, &change); err != nil {
+		if _, _, err := s.a.Append(context.Background(), s.reviewer, s.running(), agents.Entry{Seq: 1, Kind: agents.EntryState, Body: body}, &change); err != nil {
 			s.t.Fatal(err)
+		}
+	}
+}
+
+// fail has the controller fail the running review task for reason, as it does when its pod fails.
+func (s aiSteps) fail(reason string) func() {
+	return func() {
+		if failed, err := NewTaskPodStore(s.f.pool).Fail(context.Background(), s.running(), reason); !failed || err != nil {
+			s.t.Fatalf("Fail() = %t, %v", failed, err)
+		}
+	}
+}
+
+// spend has the running review task's model proxy report a call that read input tokens, which reaches its cap.
+func (s aiSteps) spend(input int64) func() {
+	return func() {
+		spend, err := s.a.RecordSpend(context.Background(), s.running(), agents.Usage{ID: uuid.New(), Model: "review-1", Input: input})
+		if err != nil || !spend.Ended {
+			s.t.Fatalf("RecordSpend() = %+v, %v; want the task ended", spend, err)
 		}
 	}
 }
@@ -150,7 +173,11 @@ func TestAIRequirementStatus(t *testing.T) {
 	f.push(t, main)
 	requiresAI(t, f, f.website.ID)
 	exec(context.Background(), t, f.pool, "INSERT INTO model_providers (org_id, provider) VALUES ($1, 'acme-models')", f.acme.ID)
+	exec(context.Background(), t, f.pool, "INSERT INTO models (org_id, provider, model) VALUES ($1, 'acme-models', 'review-1')", f.acme.ID)
+	exec(context.Background(), t, f.pool, "UPDATE models SET input_price = 3000000 WHERE org_id = $1", f.acme.ID)
+	exec(context.Background(), t, f.pool, "UPDATE agents SET cap = 250000 WHERE principal_id = $1", s.reviewer)
 	shaD, failure := strings.Repeat("d", 40), "The model's provider refused the credentials."
+	lost, capped := "Its pod was lost.", "It spent $0.30, reaching its cap of $0.25 a task."
 	steps := []struct {
 		name string
 		do   []func()
@@ -167,7 +194,9 @@ func TestAIRequirementStatus(t *testing.T) {
 		{name: "a newer push queues its review", do: []func(){s.push(shaC, shaD, 2)}, want: "processing queued"},
 		{name: "its review fails", do: []func(){s.run, s.end(agents.StateChange{State: agents.TaskFailed, Reason: failure})},
 			want: "blocked failed: " + failure},
-		{name: "taking the reviewer's model away", do: []func(){s.model("", "")}, want: "blocked failed: " + failure},
+		{name: "another review, which the controller fails", do: []func(){s.request, s.run, s.fail(lost)}, want: "blocked failed: " + lost},
+		{name: "another review, which reaches its cap", do: []func(){s.request, s.run, s.spend(100_000)}, want: "blocked failed: " + capped},
+		{name: "taking the reviewer's model away", do: []func(){s.model("", "")}, want: "blocked failed: " + capped},
 	}
 	for _, step := range steps {
 		for _, do := range step.do {

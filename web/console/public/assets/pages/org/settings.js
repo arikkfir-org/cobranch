@@ -6,14 +6,15 @@ import { roleSelect } from "../../lib/organization.js";
 import { go } from "../../lib/router.js";
 import { base, setOrgs } from "../../lib/state.js";
 
-export const nav = { label: "Settings", order: 90 };
+export const nav = { label: "Settings", order: 90, icon: "settings", place: "foot", tab: "General", description: "How the organization is named, who may join it, and what it may hold." };
+export const crumbs = [{ label: "Settings" }];
 export default ({ org, main, can }) => showSettings(org, main, can);
 
 // showSettings is an organization's usage against its limits, for anyone who reads it, and, with org.manage, the
 // form that changes its settings and its model providers.
 async function showSettings(org, main, can) {
   const usage = await api("GET", "/orgs/" + org.slug + "/usage");
-  const sections = [h("h1", {}, "Settings"), usagePanel(org, usage)];
+  const sections = [usagePanel(org, usage)];
   if (can("org.manage")) {
     const error = h("p", { class: "alert", hidden: true });
     const fail = (err) => { error.textContent = err.message; error.hidden = false; };

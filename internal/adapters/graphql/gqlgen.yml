@@ -25,6 +25,7 @@ models:
       sessions: { resolver: true }
       personalTokens: { resolver: true }
       sshKeys: { resolver: true }
+      preferences: { resolver: true }
       permissions: { resolver: true }
       organizations: { resolver: true }
       invitations: { resolver: true }
@@ -51,6 +52,7 @@ models:
       artifact: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
+      models: { resolver: true }
       conversation: { resolver: true }
   Issue:
     fields:
@@ -73,6 +75,10 @@ models:
     fields:
       assigneeId: { omittable: true }
       repositoryId: { omittable: true }
+  # A null clears an agent's own cap; a field left out keeps it.
+  AgentPatch:
+    fields:
+      cap: { omittable: true }
   Repository:
     fields:
       viewerPermissions: { resolver: true }

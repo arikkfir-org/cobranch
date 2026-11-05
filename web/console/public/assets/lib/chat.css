@@ -1,24 +1,15 @@
-/* Chats: their threads and messages. */
-.threads { display: grid; gap: var(--space-12); }
-.thread { display: grid; gap: var(--space-8); padding: var(--space-12); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); scroll-margin-top: var(--space-16); }
-.thread.resolved { background: var(--color-bg-sunken); }
-.thread > .row { justify-content: flex-start; }
-.thread > .row .spacer + * { margin-left: auto; }
+/* Messages in Markdown: a chat message's (lib/shell.css draws the rest of it) and a review's. */
 .message { display: grid; gap: var(--space-4); min-width: 0; }
 .message + .message { padding-top: var(--space-8); border-top: 1px solid var(--color-border-default); }
-.message .meta { display: flex; gap: var(--space-8); align-items: baseline; flex-wrap: wrap; color: var(--color-fg-muted); font: var(--text-caption); }
-.message .meta strong { color: var(--color-fg-default); font: var(--text-body-small-strong); }
-.message .meta .actions { margin-left: auto; display: flex; gap: var(--space-4); }
-.message .body { overflow-wrap: anywhere; }
-.message .body p, .message .text { color: inherit; }
-.message .body > :first-child { margin-top: 0; }
-.message .body > :last-child { margin-bottom: 0; }
-.message .body p, .message .body ul, .message .body ol, .message .body blockquote, .message .body pre, .message .body table { margin: 0 0 var(--space-8); }
-.message .body blockquote { padding-left: var(--space-12); border-left: 3px solid var(--color-border-default); color: var(--color-fg-muted); }
-.message .body pre { padding: var(--space-8) var(--space-12); overflow-x: auto; border-radius: var(--radius-md); background: var(--color-bg-sunken); font: var(--text-code-medium); }
-.message .body code { font: var(--text-code-medium); }
-.message .body img { max-width: 100%; }
-.message .body table { border-collapse: collapse; display: block; overflow-x: auto; }
-.message .body th, .message .body td { padding: var(--space-4) var(--space-8); border: 1px solid var(--color-border-default); }
+.message .body, .chat-message-body { overflow-wrap: anywhere; }
+.message .body p, .message .text, .chat-message-body p { color: inherit; }
+.message .body > :first-child, .chat-message-body > :first-child { margin-top: 0; }
+.message .body > :last-child, .chat-message-body > :last-child { margin-bottom: 0; }
+.message .body p, .message .body ul, .message .body ol, .message .body blockquote, .message .body pre, .message .body table, .chat-message-body p, .chat-message-body ul, .chat-message-body ol, .chat-message-body blockquote, .chat-message-body pre, .chat-message-body table { margin: 0 0 var(--space-8); }
+.message .body blockquote, .chat-message-body blockquote { padding-left: var(--space-12); border-left: 3px solid var(--color-border-default); color: var(--color-fg-muted); }
+.message .body pre, .chat-message-body pre { padding: var(--space-8) var(--space-12); overflow-x: auto; border-radius: var(--radius-md); background: var(--color-bg-sunken); font: var(--text-code-medium); }
+.message .body code, .chat-message-body code { font: var(--text-code-medium); }
+.message .body img, .chat-message-body img { max-width: 100%; }
+.message .body table, .chat-message-body table { border-collapse: collapse; display: block; overflow-x: auto; }
+.message .body th, .message .body td, .chat-message-body th, .chat-message-body td { padding: var(--space-4) var(--space-8); border: 1px solid var(--color-border-default); }
 .message .text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.thread form textarea, .chat > form textarea { min-height: 64px; resize: vertical; }

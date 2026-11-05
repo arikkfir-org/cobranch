@@ -1,12 +1,20 @@
 import { annotationIcons } from "../../lib/annotations.js";
 import { api, apiPage } from "../../lib/api.js";
+import { branchSubject } from "../../lib/chat.js";
 import { refPicker } from "../../lib/code.js";
 import { h } from "../../lib/dom.js";
-import { shortSha, subject, whenExactly, who } from "../../lib/format.js";
+import { shortSha, subject as messageSubject, whenExactly, who } from "../../lib/format.js";
 import { go } from "../../lib/router.js";
 import { base } from "../../lib/state.js";
 
 export const under = "";
+export const heading = false;
+export const crumbs = ({ root, rest }) => [{ label: "Commits", href: root + "/commits/" + (rest.join("/") || "main") }, { label: rest.join("/") || "main" }];
+// subject is the branch's conversation, on its history; a tag's or a commit's has none.
+export const subject = ({ org, repo, path, at, rest, can }) => {
+  const ref = rest.join("/") || "main";
+  return api("GET", path + "/branches/" + encodeURIComponent(ref)).then(() => branchSubject(org, repo, path, at, ref, can), () => null);
+};
 export default async ({ path, at, rest, fail }) => [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
 
 // repositoryHistory is the history of a branch, a tag or a commit, nearest first, a page at a time, under a picker of
@@ -26,7 +34,7 @@ async function repositoryHistory(path, at, ref, fail) {
   const row = (c) => {
     const lines = draw ? draw(c) : null;
     return h("tr", {}, lines ? h("td", { class: "graph", style: "width:" + lines.width + "px", "aria-hidden": "true" }, lines.svg) : null,
-      h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, subject(c.message)),
+      h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, messageSubject(c.message)),
         h("p", {}, who(c.author), " · ", whenExactly(c.author.at))), h("td", { class: "sha" }, annotationIcons(c.annotations), h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
   };
   const rows = h("tbody");

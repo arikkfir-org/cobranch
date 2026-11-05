@@ -10,9 +10,11 @@ import { h } from "./dom.js";
 // file this loads shares.
 const assets = new URL("../", import.meta.url);
 
-// orgPages and repoPages are the pages' modules by the part of the route that opens them: "" for index.js.
+// orgPages and repoPages are the pages' modules by the part of the route that opens them: "" for index.js; consolePages
+// are those of pages/ that draw in the app shell, which a default export says, by the Console path they take.
 export const orgPages = new Map();
 export const repoPages = new Map();
+export const consolePages = new Map();
 
 // stylesheet links the stylesheet at a path under assets, and resolves once it loaded.
 const stylesheet = (path) => new Promise((resolve, reject) => {
@@ -29,5 +31,7 @@ export async function load(named) {
   const sheets = ["fonts.css", "tokens.css", "console.css", "components.css", ...dirs.flatMap((dir, i) => files[i].filter((f) => f.endsWith(".css")).map((f) => dir + f))];
   const pages = (dir, i, into) => Promise.all(files[i].filter((f) => f.endsWith(".js")).map(async (f) => [f === "index.js" ? "" : f.slice(0, -3), await import(new URL(dir + f, assets).href)]))
     .then((loaded) => loaded.forEach(([part, module]) => into.set(part, module)));
-  await Promise.all([...sheets.map(stylesheet), pages("pages/org/", 2, orgPages), pages("pages/repo/", 3, repoPages)]);
+  const shelled = new Map();
+  await Promise.all([...sheets.map(stylesheet), pages("pages/", 1, shelled), pages("pages/org/", 2, orgPages), pages("pages/repo/", 3, repoPages)]);
+  shelled.forEach((module, part) => { if (module.default) consolePages.set(part, module); });
 }

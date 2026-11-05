@@ -1,0 +1,10 @@
+/* Account and Preferences (pages/settings.js): their frames laid out as the Figma file's Account and Preferences
+   screens lay them out. Layout only; every component on them is drawn by components.css. */
+.facts td:first-child { width: 1%; padding-right: var(--space-32); white-space: nowrap; vertical-align: top; padding-top: var(--space-8); }
+.facts td { padding-block: var(--space-8); }
+.listing td:not(:first-child), .listing th:not(:first-child) { width: 1%; white-space: nowrap; }
+.listing td { padding-block: var(--space-8); }
+.listing td:last-child { text-align: right; }
+.preference { display: flex; align-items: center; gap: var(--space-16); padding: var(--space-12) var(--space-16); }
+.preference .segmented { flex: none; width: var(--size-sidebar); }
+.dialog .picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
