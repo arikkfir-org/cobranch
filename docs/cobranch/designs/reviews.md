@@ -272,7 +272,8 @@ adds them to it.
 - **A branch's diff** is from the merge base of `main` and its head, so commits `main` gained since don't show; **a
   commit's** is against its first parent, or the empty tree for a root commit.
 - **Built by the Git server** on code browsing's internal call, in a throwaway repository of one snapshot: `git diff`
-  with renames found, each file's status, its old and new paths, and its hunks.
+  with renames found, each file's status, its old and new paths, the objects of its content before and after, and its
+  hunks.
 - **Up to limits:** 3,000 files, and 20,000 lines and 4 MiB of their text in all, past which the answer says what it
   left out; a file past 5,000 lines or 1 MiB, or with a line past 64 KiB, or binary, is listed with its counts but
   without hunks. The limits bound the Git server's work and memory, and the API servers', as well as the answer: it
@@ -317,7 +318,10 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
   file, Unified or Split, with the reviews of its head beneath; a reviewer drafts comments on lines, then submits
   Approve, Request changes or Comment with a body. The branch chat's open threads on the diff's lines (at its head,
   or on a removed line at its base, a review's comments among them) show under their lines, with Reply, Resolve and
-  Open in conversation; resolved and outdated threads stay in the conversation pane.
+  Open in conversation; resolved and outdated threads stay in the conversation pane. Each file's card has Viewed, which
+  folds it and checks it off in the Files card: a signed-in viewer's own marks, kept on the branch so they follow them to
+  every browser, each holding the object of the file's content it was marked at, so a file changed since shows
+  unviewed again.
 - **A commit's page** shows its diff against its parent and its reviews, read-only: reviewers review on its branch.
 - **The requirements panel** names `main`'s required approvals and `ai`, and a Blocked branch says which failed, as
   [branch status](branch-status.md#the-console) lists its other checks.
@@ -332,6 +336,8 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 | `GET /branches/{branch}/diff` | `Repository.branchDiff` | `repo.read` |
 | `GET /commits/{sha}/diff` | `Repository.commitDiff` | `repo.read` |
 | `POST /branches/{branch}/review` | `requestReview` | `repo.push` |
+| `GET /branches/{branch}/viewed` | `Repository.viewedFiles` | `repo.read`, signed in |
+| `PATCH /branches/{branch}/viewed` | `updateViewedFiles` | `repo.read`, signed in |
 
 `POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`.
 It takes `branch` and `comments` beside `state` and `body`, and with comments `messages.post` too; a branch deleted
@@ -339,6 +345,13 @@ meanwhile is `409 branch.deleted`. A review answers its Markdown body as written
 chat message does. A thread carries the review it is a comment of as `reviewId`. Every `GET` answers a strong `ETag`,
 and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages with an opaque cursor and
 `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and its AI review's task.
+
+`…/viewed` answers the viewer's Viewed marks on a branch by path, each with its object (none for a file the branch
+deletes) and when it was made, and Anonymous `403 viewed.signed_in_only`. `PATCH` is a merge patch of them:
+`{"files": {"<path>": {"object": "<sha>"}}}` marks a file, `{}` marks one the branch deletes, and `null` takes a mark
+off; a mark already at its object keeps its moment. Its `ETag` digests the marks, and `If-Match` takes it or `*`, which
+the Console sends, since each of its changes is one file's. At most 3,000 files a change, and 10,000 marks a person on
+a branch (`400 viewed.too_many`).
 
 ## Data model
 
@@ -348,6 +361,11 @@ and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` 
 
 `reviews` carries trigger `audit()`; `review_settings`, like `merge_requirements`, is a parsed copy of a file whose
 history is Git’s. Every new row carries `org_id`.
+
+`viewed_files` (migration `00059`) keeps a person's Viewed marks: `principal_id`, `branch_id` and `path`, its key, then
+`object` and `viewed_at`, with `org_id`; audited, versioned, and gone with their principal or branch. A mark belongs to the branch's
+row, which a deletion keeps, so a name that lives again starts without them. A change locks its person's marks on the
+branch for its transaction, so two tabs' changes don't interleave.
 
 ## Rollout
 

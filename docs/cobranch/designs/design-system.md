@@ -355,7 +355,7 @@ Researcher waits for a task.
 | [Commit](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-13670) | One commit: its message, who wrote and pushed it, its annotations and jobs, its diff Unified or Split |
 | [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
-| [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open and a resolved thread beside it |
+| [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open, a resolved thread and a file marked Viewed, folded and checked off, beside it |
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
 | [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
 | [Issues · Filter set](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-17300) | A filter picked from its menu, which the button then names |
