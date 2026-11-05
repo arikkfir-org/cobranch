@@ -270,7 +270,7 @@ plan.
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
 | Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
-| Fact row | Kind: Text, Editable, Person | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu; Person a 32px avatar, the name over the email | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`); Person `.fact-row-person` (`.fact-person`, `.fact-person-name`, `.fact-person-email`) |
+| Fact row | Kind: Text, Editable, Person, Who | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu; Person a 32px avatar, the name over the email; Who a 20px avatar before the name | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`); Person `.fact-row-person` (`.fact-person`, `.fact-person-name`, `.fact-person-email`); Who `.fact-row-who` |
 | Activity/Event | None | Who did what, and when | `.event-row` |
 | Activity/Item | None | Whoever did it as Avatar 20 of any kind, the sentence, which wraps, and how long ago | `.activity-item` in an `.activity-list` |
 | Pattern/Agent row | Status: Working (Info), Watching (AI), Idle (Neutral) | Name, what it does now, which wraps; Avatar Agent 24 and the status Tag nested | `.agent-row` in a `.list` |
