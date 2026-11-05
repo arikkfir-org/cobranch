@@ -116,6 +116,11 @@ func TestArtifactsAPI(t *testing.T) {
 					t.Errorf("made %s", body)
 				}
 			}},
+	})
+}
+
+func TestRepositoryArtifactsAPI(t *testing.T) {
+	runOrgCases(t, []orgCase{
 		{name: "list", viewer: olivia, method: "GET", path: repoArtifacts(t, ""), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
 			if got := decode[ArtifactList](t, body).Artifacts; len(got) != 2 {
 				t.Errorf("listed %s", body)
