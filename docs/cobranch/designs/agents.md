@@ -368,7 +368,9 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
   may not, nor may the agent, which a task's token acts as, so no task lifts its own budget. A task's cap is its agent's
   as it now stands, so raising it lets a task that ran out go further next time. The
   call that brings a task's spend to its cap fails the task, Failed with “It spent $1.01, reaching its cap of $1.00 a task.”,
-  in its transcript and an event in its agent's name, and the proxy refuses every turn after.
+  in its transcript and an event in its agent's name, and the proxy refuses every turn after. A task that ends otherwise,
+  cancelled or timed out, is learnt of from the report of the turn on its way then, and the proxy withholds that turn's
+  answer: the provider charged for it, but the harness never acts on it.
 - **At most one turn over.** A turn's price is known only once it is answered, so the turn that crosses the cap still
   answers. A report that fails is kept and sent again before the next turn, which waits for it; a turn never starts
   while the last one is unreported.

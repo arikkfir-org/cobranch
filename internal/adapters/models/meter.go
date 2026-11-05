@@ -28,6 +28,8 @@ type Meter interface {
 // rather than streamed, so that each answer says what the turn read and wrote, and reports that before the harness
 // reads the answer. A report that fails is kept and sent again before the next turn, which waits for it, so a task
 // never runs more than one turn ahead of what it spent; once the task has ended, at its cap or otherwise, no turn goes.
+// A task that ends otherwise, cancelled or timed out, is learnt of from the report of the turn on its way then, whose
+// answer is withheld: the provider charged for it, but the harness never acts on it.
 type metered struct {
 	provider, model string
 	meter           Meter
@@ -37,6 +39,9 @@ type metered struct {
 	pending *agents.Usage
 	ended   bool
 }
+
+// errEnded is a turn refused, or its answer withheld, because the task has ended.
+var errEnded = errors.New("the task has ended, as it does once it reaches its cap: its model takes no more turns")
 
 // ServeHTTP sends a turn of the task's model on, after the report of the last one, unless the task has ended.
 func (m *metered) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +59,7 @@ func (m *metered) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if m.ended {
-		http.Error(w, "The task has ended, as it does once it reaches its cap: its model takes no more turns.", http.StatusPaymentRequired)
+		http.Error(w, errEnded.Error(), http.StatusPaymentRequired)
 		return
 	}
 	m.next.ServeHTTP(w, r)
@@ -102,7 +107,8 @@ func turnPath(provider, model string) string {
 }
 
 // meterAnswer reads a turn's answer, reports what it read and wrote, and puts the answer back for the harness. A report
-// that fails is kept for the next turn, and the answer still goes: the provider already charged for it.
+// that fails is kept for the next turn, and the answer still goes: the provider already charged for it. A report that
+// finds the task already ended withholds the answer, errEnded, so the harness takes no step past the task's end.
 func (m *metered) meterAnswer(resp *http.Response) error {
 	if resp.StatusCode/100 != 2 {
 		return nil
@@ -123,7 +129,12 @@ func (m *metered) meterAnswer(resp *http.Response) error {
 		return nil
 	}
 	u := agents.Usage{ID: uuid.New(), Model: m.model, Input: input, Output: output}
-	if err := m.report(ctx, u); err != nil && !m.ended {
+	switch err := m.report(ctx, u); {
+	case err != nil && m.ended:
+		slog.WarnContext(ctx, "A turn answered after its task ended: its answer is withheld", "input_tokens", input,
+			"output_tokens", output, "error", err)
+		return errEnded
+	case err != nil:
 		slog.WarnContext(ctx, "Reporting a call's spend failed: it goes again before the next turn", "error", err)
 		m.pending = &u
 	}

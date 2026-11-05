@@ -342,7 +342,7 @@ Researcher waits for a task.
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
 | [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | Settings as tabs; a request to join, members with roles, invited people |
 | [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
-| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with a cap per task |
+| [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
@@ -492,7 +492,7 @@ preference unless `data-theme="light"`.
 | Where do labels go? | Above their fields (2026-11-04) |
 | Where does a conversation live? | One pane on the right, whose subject follows the page (2026-11-04) |
 | Tables or rich rows for lists? | Proposed: tables for organization-level lists, rich rows inside a page |
-| How does an agent's spend show? | Proposed: on each task row of the agent's page |
-| How are models capped? | Proposed: a cap per task on the model, which an agent may lower |
+| How does an agent's spend show? | On each task row of the agent's page, against its cap, and the month so far on its facts (2026-11-05) |
+| How are models capped? | They aren't: the cap per task is each agent's, and models carry prices only (2026-11-05) |
 | Where do artifacts appear? | Proposed: a tab on their repository, and posted into the conversation that asked for them |
 | Who may see an artifact? | Proposed: grants to the repository's members, the organization, people and agents, each view or edit |

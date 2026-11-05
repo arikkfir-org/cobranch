@@ -192,24 +192,38 @@ func TestProxyMeters(t *testing.T) {
 	}
 }
 
+// TestProxyStopsAtTheEndOfItsTask covers a task that ends other than at its cap, cancelled or with its token refused: the
+// report of the turn on its way then learns of it, and that turn's answer is withheld, as every turn after is refused.
 func TestProxyStopsAtTheEndOfItsTask(t *testing.T) {
+	turns := []struct {
+		name       string
+		wantStatus int
+		wantSent   bool
+	}{
+		{name: "the turn on its way is withheld", wantStatus: http.StatusPaymentRequired, wantSent: true},
+		{name: "the next goes nowhere", wantStatus: http.StatusPaymentRequired},
+	}
 	for _, ended := range []error{agents.ErrEnded, harness.ErrRefused} {
-		provider := &compressingProvider{answer: `{"usage":{"input_tokens":1}}`}
-		upstream := httptest.NewServer(provider)
-		meter := &fakeMeter{}
-		handler, err := Proxy(Settings{Provider: "openai", Model: "test-model", Key: "test-key", URL: upstream.URL}, meter)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for i, want := range []int{http.StatusOK, http.StatusPaymentRequired} {
-			meter.script([]error{ended}, false)
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/chat/completions", strings.NewReader(`{"model":"test-model"}`)))
-			if w.Code != want {
-				t.Errorf("turn %d once the meter answers %v: %d, want %d", i+1, ended, w.Code, want)
+		t.Run(ended.Error(), func(t *testing.T) {
+			provider := &compressingProvider{answer: `{"usage":{"input_tokens":1}}`}
+			upstream := httptest.NewServer(provider)
+			defer upstream.Close()
+			meter := &fakeMeter{}
+			handler, err := Proxy(Settings{Provider: "openai", Model: "test-model", Key: "test-key", URL: upstream.URL}, meter)
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-		upstream.Close()
+			for _, turn := range turns {
+				meter.script([]error{ended}, false)
+				provider.reset(0)
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/chat/completions", strings.NewReader(`{"model":"test-model"}`)))
+				if w.Code != turn.wantStatus || provider.sent() != turn.wantSent || strings.Contains(w.Body.String(), "usage") {
+					t.Errorf("%s: answered %d %q, sent on %t; want %d without the answer, sent on %t", turn.name, w.Code, w.Body.String(),
+						provider.sent(), turn.wantStatus, turn.wantSent)
+				}
+			}
+		})
 	}
 }
 
