@@ -308,7 +308,7 @@ func (q *Queries) EndEnvironment(ctx context.Context, iD uuid.UUID, teardownID u
 }
 
 const environmentObjects = `-- name: EnvironmentObjects :many
-SELECT environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message FROM environment_objects WHERE environment_id = $1 ORDER BY position
+SELECT environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message, ready, created_at FROM environment_objects WHERE environment_id = $1 ORDER BY position
 `
 
 func (q *Queries) EnvironmentObjects(ctx context.Context, environmentID uuid.UUID) ([]EnvironmentObject, error) {
@@ -332,6 +332,8 @@ func (q *Queries) EnvironmentObjects(ctx context.Context, environmentID uuid.UUI
 			&i.DeliveryID,
 			&i.Health,
 			&i.Message,
+			&i.Ready,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -421,10 +423,12 @@ func (q *Queries) InsertDeliveryToken(ctx context.Context, arg InsertDeliveryTok
 }
 
 const insertEnvironmentObjects = `-- name: InsertEnvironmentObjects :exec
-INSERT INTO environment_objects (environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message)
+INSERT INTO environment_objects (environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message,
+    ready, created_at)
 SELECT $1::uuid, unnest($2::int[]), unnest($3::text[]), unnest($4::text[]),
     unnest($5::text[]), unnest($6::text[]), unnest($7::text[]), unnest($8::text[]),
-    unnest($9::uuid[]), unnest($10::text[]), unnest($11::text[])
+    unnest($9::uuid[]), unnest($10::text[]), unnest($11::text[]),
+    unnest($12::text[]), nullif(unnest($13::text[]), '')::timestamptz
 `
 
 type InsertEnvironmentObjectsParams struct {
@@ -439,9 +443,12 @@ type InsertEnvironmentObjectsParams struct {
 	DeliveryIds   []uuid.UUID
 	Healths       []string
 	Messages      []string
+	Readies       []string
+	CreatedAts    []string
 }
 
-// InsertEnvironmentObjects records an environment's inventory: the nth of each list is the nth object.
+// InsertEnvironmentObjects records an environment's inventory: the nth of each list is the nth object. Its creation
+// times are RFC 3339, or empty for one never read.
 func (q *Queries) InsertEnvironmentObjects(ctx context.Context, arg InsertEnvironmentObjectsParams) error {
 	_, err := q.db.Exec(ctx, insertEnvironmentObjects,
 		arg.EnvironmentID,
@@ -455,6 +462,8 @@ func (q *Queries) InsertEnvironmentObjects(ctx context.Context, arg InsertEnviro
 		arg.DeliveryIds,
 		arg.Healths,
 		arg.Messages,
+		arg.Readies,
+		arg.CreatedAts,
 	)
 	return err
 }
@@ -635,8 +644,9 @@ func (q *Queries) SetEnvironmentHealth(ctx context.Context, health string, iD uu
 }
 
 const setObjectHealths = `-- name: SetObjectHealths :exec
-UPDATE environment_objects o SET health = h.health, message = h.message
-FROM (SELECT unnest($2::int[]) AS position, unnest($3::text[]) AS health, unnest($4::text[]) AS message) h
+UPDATE environment_objects o SET health = h.health, message = h.message, ready = h.ready, created_at = h.created_at
+FROM (SELECT unnest($2::int[]) AS position, unnest($3::text[]) AS health, unnest($4::text[]) AS message,
+    unnest($5::text[]) AS ready, nullif(unnest($6::text[]), '')::timestamptz AS created_at) h
 WHERE o.environment_id = $1 AND o.position = h.position
 `
 
@@ -645,15 +655,20 @@ type SetObjectHealthsParams struct {
 	Positions     []int32
 	Healths       []string
 	Messages      []string
+	Readies       []string
+	CreatedAts    []string
 }
 
-// SetObjectHealths records the health each of an environment's objects read as, by position.
+// SetObjectHealths records the health each of an environment's objects read as, by position, with how much of it is
+// ready and when the cluster created it: RFC 3339, or empty for one it couldn't read.
 func (q *Queries) SetObjectHealths(ctx context.Context, arg SetObjectHealthsParams) error {
 	_, err := q.db.Exec(ctx, setObjectHealths,
 		arg.EnvironmentID,
 		arg.Positions,
 		arg.Healths,
 		arg.Messages,
+		arg.Readies,
+		arg.CreatedAts,
 	)
 	return err
 }

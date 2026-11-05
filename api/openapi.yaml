@@ -6540,6 +6540,59 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/objects:
+    get:
+      operationId: listEnvironmentObjects
+      summary: What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "200":
+          description: The environment's objects.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [objects]
+                properties:
+                  objects:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnvironmentObject"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/targets:
+    get:
+      operationId: listDeliveryTargets
+      summary: The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The targets; none without the file or a delivery key in it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets]
+                properties:
+                  targets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DeliveryTarget"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/environments/{environment}/deliveries:
     get:
       operationId: listDeliveries
@@ -6548,6 +6601,15 @@ paths:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/environmentId"
+        - name: kind
+          in: query
+          description: Only the deliveries of these kinds, as kind=deliver&kind=teardown; every kind when left out.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/DeliveryKind"
         - name: cursor
           in: query
           description: Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
@@ -9426,7 +9488,7 @@ components:
     Environment:
       type: object
       description: A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
-      required: [id, target, branch, namespace, sync, health, paused, createdAt, version]
+      required: [id, target, branch, namespace, renders, sync, health, paused, createdAt, version]
       properties:
         id:
           type: string
@@ -9440,8 +9502,19 @@ components:
           type: string
           format: uuid
           description: The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+        clusterName:
+          type: string
+          description: The name of that secret, for a viewer who holds secrets.manage where it lives; absent otherwise.
         namespace:
           type: string
+        url:
+          type: string
+          description: Where it answers, its target's url in the default branch's /cobranch.yaml with its variables expanded; absent when the target has none.
+        renders:
+          type: array
+          description: The roots its branch's head renders for it, in order; empty while its target or its /cobranch.yaml is gone, or its roots can't be planned.
+          items:
+            $ref: "#/components/schemas/Render"
         revision:
           type: string
           description: The commit of its last successful delivery; absent before one.
@@ -9465,6 +9538,79 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
+    Render:
+      type: object
+      description: A root a delivery renders.
+      required: [kind, path]
+      properties:
+        kind:
+          type: string
+          description: How it renders. helm renders the chart there, kustomize builds the kustomization there, and manifests reads every manifest under it.
+          enum: [helm, kustomize, manifests]
+        path:
+          type: string
+          description: The directory, relative to the repository, with its variables expanded.
+    EnvironmentObject:
+      type: object
+      description: An object an environment holds, as its last apply applied it, with its health as the controller last read it.
+      required: [version, kind, namespace, name, health, message]
+      properties:
+        group:
+          type: string
+          description: Its API group; absent for the core group.
+        version:
+          type: string
+        kind:
+          type: string
+        namespace:
+          type: string
+          description: Its namespace; empty for an object of the whole cluster.
+        name:
+          type: string
+        health:
+          $ref: "#/components/schemas/EnvironmentHealth"
+        message:
+          type: string
+          description: Why it has its health, as kstatus words it; may be empty.
+        ready:
+          type: string
+          description: How many of its replicas, pods or completions are ready, as 2/2; absent for a kind that counts none.
+        createdAt:
+          type: string
+          format: date-time
+          description: When its cluster created it; absent before a health read found it.
+        delivery:
+          type: integer
+          format: int64
+          description: The number of the delivery whose apply recorded it; absent once that delivery is gone.
+    DeliveryTarget:
+      type: object
+      description: A target the default branch's /cobranch.yaml declares under delivery. Its namespace and url keep their variables.
+      required: [name, branches, namespace]
+      properties:
+        name:
+          type: string
+        branches:
+          type: array
+          description: The branch patterns it delivers.
+          items:
+            type: string
+        cluster:
+          type: string
+          format: uuid
+          description: The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+        clusterName:
+          type: string
+          description: The name of that secret, for a viewer who holds secrets.manage where it lives; absent otherwise.
+        namespace:
+          type: string
+        url:
+          type: string
+          description: Where its environments answer; absent without one.
+    DeliveryKind:
+      type: string
+      description: What a delivery does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+      enum: [deliver, resync, teardown]
     EnvironmentSync:
       type: string
       description: Whether the environment's cluster holds its branch's newest commit.
@@ -9476,7 +9622,7 @@ components:
     Delivery:
       type: object
       description: One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
-      required: [id, number, environment, target, branch, kind, trigger, state, reason, queuedAt, version]
+      required: [id, number, environment, target, branch, kind, subject, trigger, state, reason, queuedAt, version]
       properties:
         id:
           type: string
@@ -9496,12 +9642,13 @@ components:
           type: string
           description: Its environment's branch.
         kind:
-          type: string
-          description: What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
-          enum: [deliver, resync, teardown]
+          $ref: "#/components/schemas/DeliveryKind"
         sha:
           type: string
           description: The commit it delivers; absent for a teardown.
+        subject:
+          type: string
+          description: The first line of that commit's message; empty for a teardown.
         trigger:
           type: string
           description: What queued it. schedule is the controller's own, which resyncs each environment every while and tears down one whose branch is gone.

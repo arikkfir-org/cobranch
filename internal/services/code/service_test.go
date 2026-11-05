@@ -31,6 +31,7 @@ type fixture struct {
 	objects  *codetest.Objects
 	markdown *codetest.Renderer
 	authz    *auth.Authorizer
+	orgs     *orgstest.Store
 	repo     uuid.UUID
 	service  *code.Service
 	max      code.Viewer
@@ -45,7 +46,7 @@ func newFixture() *fixture {
 		nia: code.Viewer{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindUser, DisplayName: "Nia"}}}
 	o.Repos[f.repo] = uuid.New()
 	f.store.SlugList[f.repo] = [2]string{"acme", "website"}
-	f.authz = auth.NewAuthorizer(o)
+	f.authz, f.orgs = auth.NewAuthorizer(o), o
 	f.service = code.NewService(f.store, f.objects, f.markdown, f.authz)
 	o.Grant(f.max.ID, auth.RoleReader, auth.ScopeRepository, f.repo)
 	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.max.ID, DisplayName: "Max"}, Transport: git.TransportHTTPS, At: now}

@@ -13,8 +13,12 @@ import (
 // environment is e as the API shows it.
 func environment(e code.Environment) Environment {
 	out := Environment{Id: e.ID, Target: Principal{Id: e.Target.ID, DisplayName: e.Target.DisplayName}, Branch: e.Branch,
-		Cluster: e.Cluster, Namespace: e.Namespace, SyncedAt: utc(e.SyncedAt), Sync: EnvironmentSync(e.Sync),
+		Cluster: e.Cluster, ClusterName: optional(e.ClusterName), Namespace: e.Namespace, Url: optional(e.URL),
+		Renders: make([]Render, 0, len(e.Renders)), SyncedAt: utc(e.SyncedAt), Sync: EnvironmentSync(e.Sync),
 		Health: EnvironmentHealth(e.Health), Paused: e.Paused, CreatedAt: e.CreatedAt.UTC(), Version: e.Version}
+	for _, r := range e.Renders {
+		out.Renders = append(out.Renders, Render{Kind: RenderKind(r.Kind), Path: r.Path})
+	}
 	if e.Revision != "" {
 		out.Revision = &e.Revision
 	}
@@ -28,13 +32,29 @@ func environment(e code.Environment) Environment {
 // delivery is d as the API shows it.
 func delivery(d code.Delivery) Delivery {
 	out := Delivery{Id: d.ID, Number: d.Number, Environment: d.EnvironmentID, Target: d.Target, Branch: d.Branch,
-		Kind: DeliveryKind(d.Kind), Trigger: DeliveryTrigger(d.Trigger), Push: d.PushID, State: DeliveryState(d.State),
+		Kind: DeliveryKind(d.Kind), Subject: d.Subject, Trigger: DeliveryTrigger(d.Trigger), Push: d.PushID, State: DeliveryState(d.State),
 		Reason: d.Reason, StartedBy: principal(d.StartedBy), QueuedAt: d.QueuedAt.UTC(), StartedAt: utc(d.StartedAt),
 		EndedAt: utc(d.EndedAt), Version: d.Version}
 	if d.SHA != "" {
 		out.Sha = &d.SHA
 	}
 	return out
+}
+
+// environmentObject is o as the API shows it.
+func environmentObject(o code.EnvironmentObject) EnvironmentObject {
+	out := EnvironmentObject{Group: optional(o.Group), Version: o.Version, Kind: o.Kind, Namespace: o.Namespace, Name: o.Name,
+		Health: EnvironmentHealth(o.Health), Message: o.Message, Ready: optional(o.Ready), CreatedAt: utc(o.CreatedAt)}
+	if o.Delivery != 0 {
+		out.Delivery = &o.Delivery
+	}
+	return out
+}
+
+// deliveryTarget is t as the API shows it.
+func deliveryTarget(t code.DeliveryTarget) DeliveryTarget {
+	return DeliveryTarget{Name: t.Name, Branches: t.Branches, Cluster: t.Cluster, ClusterName: optional(t.ClusterName),
+		Namespace: t.Namespace, Url: optional(t.URL)}
 }
 
 // taggedEnvironment is e as the API shows it, with its ETag, which digests how it reads: its newest delivery, its
@@ -107,7 +127,50 @@ func (a api) GetEnvironment(ctx context.Context, req GetEnvironmentRequestObject
 	return GetEnvironment200JSONResponse{Body: body, Headers: GetEnvironment200ResponseHeaders{ETag: tag}}, nil
 }
 
-// ListDeliveries lists a page of one of the repository's environments' deliveries, and links the next.
+// ListEnvironmentObjects lists what one of the repository's environments holds, in order.
+func (a api) ListEnvironmentObjects(ctx context.Context, req ListEnvironmentObjectsRequestObject) (ListEnvironmentObjectsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.code.EnvironmentObjects(ctx, v, repo.ID, req.Environment)
+	if err != nil {
+		return nil, fail(err, "environment")
+	}
+	out := ListEnvironmentObjects200JSONResponse{Objects: make([]EnvironmentObject, 0, len(list))}
+	for _, o := range list {
+		out.Objects = append(out.Objects, environmentObject(o))
+	}
+	return out, nil
+}
+
+// ListDeliveryTargets lists the targets the repository's default branch declares.
+func (a api) ListDeliveryTargets(ctx context.Context, req ListDeliveryTargetsRequestObject) (ListDeliveryTargetsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.code.DeliveryTargets(ctx, v, repo.ID)
+	if err != nil {
+		return nil, fail(err, "repository")
+	}
+	out := ListDeliveryTargets200JSONResponse{Targets: make([]DeliveryTarget, 0, len(list))}
+	for _, t := range list {
+		out.Targets = append(out.Targets, deliveryTarget(t))
+	}
+	return out, nil
+}
+
+// ListDeliveries lists a page of one of the repository's environments' deliveries, of the kinds the query names, and
+// links the next.
 func (a api) ListDeliveries(ctx context.Context, req ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -126,7 +189,13 @@ func (a api) ListDeliveries(ctx context.Context, req ListDeliveriesRequestObject
 	if p := req.Params; p.Limit != nil {
 		limit = *p.Limit
 	}
-	page, err := a.code.Deliveries(ctx, v, repo.ID, req.Environment, before, limit)
+	var kinds []code.DeliveryKind
+	if p := req.Params; p.Kind != nil {
+		for _, k := range *p.Kind {
+			kinds = append(kinds, code.DeliveryKind(k))
+		}
+	}
+	page, err := a.code.Deliveries(ctx, v, repo.ID, req.Environment, kinds, before, limit)
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
@@ -137,6 +206,9 @@ func (a api) ListDeliveries(ctx context.Context, req ListDeliveriesRequestObject
 	}
 	if page.Next != 0 {
 		next := url.Values{"cursor": {strconv.FormatInt(page.Next, 10)}}
+		for _, k := range kinds {
+			next.Add("kind", string(k))
+		}
 		if limit != 0 {
 			next.Set("limit", strconv.Itoa(limit))
 		}

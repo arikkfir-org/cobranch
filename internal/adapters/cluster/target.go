@@ -72,7 +72,7 @@ func (t *Target) Health(ctx context.Context, objects []deliverer.Object) ([]deli
 	out := make([]deliverer.Object, 0, len(read))
 	for _, h := range read {
 		o := objectOf(h.Ref)
-		o.Health, o.Message = consoleHealth(h.Health), h.Message
+		o.Health, o.Message, o.Ready, o.Created = consoleHealth(h.Health), h.Message, h.Ready, h.Created
 		out = append(out, o)
 	}
 	return out, consoleHealth(worst), nil

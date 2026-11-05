@@ -398,27 +398,6 @@ func (e ChatUpdateKind) Valid() bool {
 	}
 }
 
-// Defines values for DeliveryKind.
-const (
-	Deliver  DeliveryKind = "deliver"
-	Resync   DeliveryKind = "resync"
-	Teardown DeliveryKind = "teardown"
-)
-
-// Valid indicates whether the value is a known member of the DeliveryKind enum.
-func (e DeliveryKind) Valid() bool {
-	switch e {
-	case Deliver:
-		return true
-	case Resync:
-		return true
-	case Teardown:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for DeliveryTrigger.
 const (
 	DeliveryTriggerPush      DeliveryTrigger = "push"
@@ -437,6 +416,27 @@ func (e DeliveryTrigger) Valid() bool {
 	case DeliveryTriggerResume:
 		return true
 	case DeliveryTriggerSchedule:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryKind.
+const (
+	Deliver  DeliveryKind = "deliver"
+	Resync   DeliveryKind = "resync"
+	Teardown DeliveryKind = "teardown"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryKind enum.
+func (e DeliveryKind) Valid() bool {
+	switch e {
+	case Deliver:
+		return true
+	case Resync:
+		return true
+	case Teardown:
 		return true
 	default:
 		return false
@@ -938,6 +938,27 @@ func (e PushTransport) Valid() bool {
 	case Https:
 		return true
 	case Ssh:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RenderKind.
+const (
+	Helm      RenderKind = "helm"
+	Kustomize RenderKind = "kustomize"
+	Manifests RenderKind = "manifests"
+)
+
+// Valid indicates whether the value is a known member of the RenderKind enum.
+func (e RenderKind) Valid() bool {
+	switch e {
+	case Helm:
+		return true
+	case Kustomize:
+		return true
+	case Manifests:
 		return true
 	default:
 		return false
@@ -2105,7 +2126,7 @@ type Delivery struct {
 	Environment openapi_types.UUID `json:"environment"`
 	Id          openapi_types.UUID `json:"id"`
 
-	// Kind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+	// Kind What a delivery does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
 	Kind DeliveryKind `json:"kind"`
 
 	// Number Counts the repository's deliveries from 1.
@@ -2128,6 +2149,9 @@ type Delivery struct {
 	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
 	State DeliveryState `json:"state"`
 
+	// Subject The first line of that commit's message; empty for a teardown.
+	Subject string `json:"subject"`
+
 	// Target Its environment's target's name.
 	Target string `json:"target"`
 
@@ -2138,14 +2162,31 @@ type Delivery struct {
 	Version int64 `json:"version"`
 }
 
-// DeliveryKind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
-type DeliveryKind string
-
 // DeliveryTrigger What queued it. schedule is the controller's own, which resyncs each environment every while and tears down one whose branch is gone.
 type DeliveryTrigger string
 
+// DeliveryKind What a delivery does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+type DeliveryKind string
+
 // DeliveryState Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
 type DeliveryState string
+
+// DeliveryTarget A target the default branch's /cobranch.yaml declares under delivery. Its namespace and url keep their variables.
+type DeliveryTarget struct {
+	// Branches The branch patterns it delivers.
+	Branches []string `json:"branches"`
+
+	// Cluster The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+	Cluster *openapi_types.UUID `json:"cluster,omitempty"`
+
+	// ClusterName The name of that secret, for a viewer who holds secrets.manage where it lives; absent otherwise.
+	ClusterName *string `json:"clusterName,omitempty"`
+	Name        string  `json:"name"`
+	Namespace   string  `json:"namespace"`
+
+	// Url Where its environments answer; absent without one.
+	Url *string `json:"url,omitempty"`
+}
 
 // Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
@@ -2222,8 +2263,11 @@ type Environment struct {
 	Branch string `json:"branch"`
 
 	// Cluster The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
-	Cluster   *openapi_types.UUID `json:"cluster,omitempty"`
-	CreatedAt time.Time           `json:"createdAt"`
+	Cluster *openapi_types.UUID `json:"cluster,omitempty"`
+
+	// ClusterName The name of that secret, for a viewer who holds secrets.manage where it lives; absent otherwise.
+	ClusterName *string   `json:"clusterName,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
 
 	// Health The worst of the environment's objects' health; unknown until a delivery reads it.
 	Health EnvironmentHealth  `json:"health"`
@@ -2235,6 +2279,9 @@ type Environment struct {
 
 	// Paused A paused environment takes no delivery until resumed.
 	Paused bool `json:"paused"`
+
+	// Renders The roots its branch's head renders for it, in order; empty while its target or its /cobranch.yaml is gone, or its roots can't be planned.
+	Renders []Render `json:"renders"`
 
 	// Revision The commit of its last successful delivery; absent before one.
 	Revision *string `json:"revision,omitempty"`
@@ -2248,12 +2295,42 @@ type Environment struct {
 	// Target Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Target Principal `json:"target"`
 
+	// Url Where it answers, its target's url in the default branch's /cobranch.yaml with its variables expanded; absent when the target has none.
+	Url *string `json:"url,omitempty"`
+
 	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
 	Version int64 `json:"version"`
 }
 
 // EnvironmentHealth The worst of the environment's objects' health; unknown until a delivery reads it.
 type EnvironmentHealth string
+
+// EnvironmentObject An object an environment holds, as its last apply applied it, with its health as the controller last read it.
+type EnvironmentObject struct {
+	// CreatedAt When its cluster created it; absent before a health read found it.
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// Delivery The number of the delivery whose apply recorded it; absent once that delivery is gone.
+	Delivery *int64 `json:"delivery,omitempty"`
+
+	// Group Its API group; absent for the core group.
+	Group *string `json:"group,omitempty"`
+
+	// Health The worst of the environment's objects' health; unknown until a delivery reads it.
+	Health EnvironmentHealth `json:"health"`
+	Kind   string            `json:"kind"`
+
+	// Message Why it has its health, as kstatus words it; may be empty.
+	Message string `json:"message"`
+	Name    string `json:"name"`
+
+	// Namespace Its namespace; empty for an object of the whole cluster.
+	Namespace string `json:"namespace"`
+
+	// Ready How many of its replicas, pods or completions are ready, as 2/2; absent for a kind that counts none.
+	Ready   *string `json:"ready,omitempty"`
+	Version string  `json:"version"`
+}
 
 // EnvironmentSync Whether the environment's cluster holds its branch's newest commit.
 type EnvironmentSync string
@@ -3279,6 +3356,18 @@ type RefUpdate struct {
 	New  string `json:"new"`
 	Old  string `json:"old"`
 }
+
+// Render A root a delivery renders.
+type Render struct {
+	// Kind How it renders. helm renders the chart there, kustomize builds the kustomization there, and manifests reads every manifest under it.
+	Kind RenderKind `json:"kind"`
+
+	// Path The directory, relative to the repository, with its variables expanded.
+	Path string `json:"path"`
+}
+
+// RenderKind How it renders. helm renders the chart there, kustomize builds the kustomization there, and manifests reads every manifest under it.
+type RenderKind string
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
@@ -4729,6 +4818,9 @@ type GetEnvironmentParams struct {
 
 // ListDeliveriesParams defines parameters for ListDeliveries.
 type ListDeliveriesParams struct {
+	// Kind Only the deliveries of these kinds, as kind=deliver&kind=teardown; every kind when left out.
+	Kind *[]DeliveryKind `form:"kind,omitempty" json:"kind,omitempty"`
+
 	// Cursor Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -5623,6 +5715,9 @@ type ServerInterface interface {
 	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
 	ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams)
+	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/objects)
+	ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
 	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
 	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
 	PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
@@ -5683,6 +5778,9 @@ type ServerInterface interface {
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/targets)
+	ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeParams)
@@ -14083,6 +14181,19 @@ func (siw *ServerInterfaceWrapper) ListDeliveries(w http.ResponseWriter, r *http
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListDeliveriesParams
 
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "cursor" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -14111,6 +14222,50 @@ func (siw *ServerInterfaceWrapper) ListDeliveries(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDeliveries(w, r, org, repo, environment, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironmentObjects operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironmentObjects(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironmentObjects(w, r, org, repo, environment)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15161,6 +15316,41 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTags(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDeliveryTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListDeliveryTargets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDeliveryTargets(w, r, org, repo)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16744,6 +16934,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/start", wrapper.StartRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments", wrapper.ListEnvironments)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}", wrapper.GetEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/objects", wrapper.ListEnvironmentObjects)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/targets", wrapper.ListDeliveryTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/deliveries", wrapper.ListDeliveries)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/redeliver", wrapper.Redeliver)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/pause", wrapper.PauseEnvironment)
@@ -34089,6 +34281,79 @@ func (response ListDeliveriesdefaultApplicationProblemPlusJSONResponse) VisitLis
 	return err
 }
 
+type ListEnvironmentObjectsRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type ListEnvironmentObjectsResponseObject interface {
+	VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error
+}
+
+type ListEnvironmentObjects200JSONResponse struct {
+	Objects []EnvironmentObject `json:"objects"`
+}
+
+func (response ListEnvironmentObjects200JSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentObjects401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListEnvironmentObjects401ApplicationProblemPlusJSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentObjects404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEnvironmentObjects404ApplicationProblemPlusJSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentObjectsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListEnvironmentObjectsdefaultApplicationProblemPlusJSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PauseEnvironmentRequestObject struct {
 	Org         Org           `json:"org"`
 	Repo        Repo          `json:"repo"`
@@ -36045,6 +36310,78 @@ type ListTagsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListTagsdefaultApplicationProblemPlusJSONResponse) VisitListTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveryTargetsRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListDeliveryTargetsResponseObject interface {
+	VisitListDeliveryTargetsResponse(w http.ResponseWriter) error
+}
+
+type ListDeliveryTargets200JSONResponse struct {
+	Targets []DeliveryTarget `json:"targets"`
+}
+
+func (response ListDeliveryTargets200JSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveryTargets401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListDeliveryTargets401ApplicationProblemPlusJSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveryTargets404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListDeliveryTargets404ApplicationProblemPlusJSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveryTargetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListDeliveryTargetsdefaultApplicationProblemPlusJSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -39227,6 +39564,9 @@ type StrictServerInterface interface {
 	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
 	ListDeliveries(ctx context.Context, request ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error)
+	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/objects)
+	ListEnvironmentObjects(ctx context.Context, request ListEnvironmentObjectsRequestObject) (ListEnvironmentObjectsResponseObject, error)
 	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
 	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
 	PauseEnvironment(ctx context.Context, request PauseEnvironmentRequestObject) (PauseEnvironmentResponseObject, error)
@@ -39287,6 +39627,9 @@ type StrictServerInterface interface {
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
+	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/targets)
+	ListDeliveryTargets(ctx context.Context, request ListDeliveryTargetsRequestObject) (ListDeliveryTargetsResponseObject, error)
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(ctx context.Context, request GetTreeRequestObject) (GetTreeResponseObject, error)
@@ -44409,6 +44752,34 @@ func (sh *strictHandler) ListDeliveries(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// ListEnvironmentObjects operation middleware
+func (sh *strictHandler) ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request ListEnvironmentObjectsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEnvironmentObjects(ctx, request.(ListEnvironmentObjectsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEnvironmentObjects")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnvironmentObjectsResponseObject); ok {
+		if err := validResponse.VisitListEnvironmentObjectsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PauseEnvironment operation middleware
 func (sh *strictHandler) PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
 	var request PauseEnvironmentRequestObject
@@ -44973,6 +45344,33 @@ func (sh *strictHandler) ListTags(w http.ResponseWriter, r *http.Request, org Or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTagsResponseObject); ok {
 		if err := validResponse.VisitListTagsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDeliveryTargets operation middleware
+func (sh *strictHandler) ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListDeliveryTargetsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDeliveryTargets(ctx, request.(ListDeliveryTargetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDeliveryTargets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDeliveryTargetsResponseObject); ok {
+		if err := validResponse.VisitListDeliveryTargetsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

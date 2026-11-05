@@ -45,6 +45,33 @@ var healthTests = []struct {
 		want: Degraded},
 }
 
+func TestReadyOf(t *testing.T) {
+	tests := []struct {
+		name string
+		u    *unstructured.Unstructured
+		want string
+	}{
+		{name: "a Deployment rolled out", u: with(deployment(map[string]any{"readyReplicas": int64(1)}), int64(2), "spec", "replicas"), want: "1/2"},
+		{name: "a Deployment with no pod ready", u: deployment(map[string]any{}), want: "0/1"},
+		{name: "a StatefulSet of the default replicas", u: with(obj("apps/v1", "StatefulSet", "shop", "db"), int64(1), "status", "readyReplicas"),
+			want: "1/1"},
+		{name: "a DaemonSet", u: with(with(obj("apps/v1", "DaemonSet", "shop", "agent"), int64(3), "status", "desiredNumberScheduled"),
+			int64(2), "status", "numberReady"), want: "2/3"},
+		{name: "a Job done", u: with(with(obj("batch/v1", "Job", "shop", "migrate"), int64(1), "spec", "completions"), int64(1), "status", "succeeded"),
+			want: "1/1"},
+		{name: "a Job of the default completions, running", u: obj("batch/v1", "Job", "shop", "migrate"), want: "0/1"},
+		{name: "a Service", u: obj("v1", "Service", "shop", "api"), want: ""},
+		{name: "another group's Deployment", u: obj("example.com/v1", "Deployment", "shop", "x"), want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := readyOf(tt.u); got != tt.want {
+				t.Errorf("readyOf() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHealthOf(t *testing.T) {
 	for _, tt := range healthTests {
 		t.Run(tt.name, func(t *testing.T) {

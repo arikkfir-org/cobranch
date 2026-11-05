@@ -7,6 +7,7 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -32,25 +33,81 @@ func (q *Queries) ActiveDeliveryAt(ctx context.Context, environmentID uuid.UUID,
 	return i, err
 }
 
-const deliveriesOf = `-- name: DeliveriesOf :many
-SELECT d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name
-FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
-WHERE d.environment_id = $1 AND ($2::bigint = 0 OR d.number < $2::bigint)
-ORDER BY d.number DESC
-LIMIT $3
+const clusterSecrets = `-- name: ClusterSecrets :many
+SELECT s.id, s.org_id, s.repo_id, s.name
+FROM secrets s JOIN repositories r ON r.org_id = s.org_id
+WHERE r.id = $1 AND s.id = ANY ($2::uuid[])
 `
+
+type ClusterSecretsRow struct {
+	ID     uuid.UUID
+	OrgID  uuid.UUID
+	RepoID *uuid.UUID
+	Name   string
+}
+
+// ClusterSecrets finds those of the secrets of ids, which a repository's targets name as their clusters, that are its
+// organization's, with the repository each belongs to, if any.
+func (q *Queries) ClusterSecrets(ctx context.Context, repoID uuid.UUID, ids []uuid.UUID) ([]ClusterSecretsRow, error) {
+	rows, err := q.db.Query(ctx, clusterSecrets, repoID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClusterSecretsRow
+	for rows.Next() {
+		var i ClusterSecretsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.RepoID,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deliveriesOf = `-- name: DeliveriesOf :many
+SELECT d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
+FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
+WHERE d.environment_id = $1 AND ($2::bigint = 0 OR d.number < $2::bigint)
+    AND (cardinality($3::text[]) = 0 OR d.kind = ANY ($3::text[]))
+ORDER BY d.number DESC
+LIMIT $4
+`
+
+type DeliveriesOfParams struct {
+	EnvironmentID uuid.UUID
+	Before        int64
+	Kinds         []string
+	Lim           int32
+}
 
 type DeliveriesOfRow struct {
 	Delivery      Delivery
 	Target        string
 	Branch        string
 	StartedByName *string
+	Subject       string
 }
 
-// DeliveriesOf lists a page of an environment's deliveries, newest first, from before a number (0 for the newest).
-func (q *Queries) DeliveriesOf(ctx context.Context, environmentID uuid.UUID, before int64, lim int32) ([]DeliveriesOfRow, error) {
-	rows, err := q.db.Query(ctx, deliveriesOf, environmentID, before, lim)
+// DeliveriesOf lists a page of an environment's deliveries, newest first, from before a number (0 for the newest), of
+// the kinds named, or of every kind when none is, each with its commit's subject.
+func (q *Queries) DeliveriesOf(ctx context.Context, arg DeliveriesOfParams) ([]DeliveriesOfRow, error) {
+	rows, err := q.db.Query(ctx, deliveriesOf,
+		arg.EnvironmentID,
+		arg.Before,
+		arg.Kinds,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +136,7 @@ func (q *Queries) DeliveriesOf(ctx context.Context, environmentID uuid.UUID, bef
 			&i.Target,
 			&i.Branch,
 			&i.StartedByName,
+			&i.Subject,
 		); err != nil {
 			return nil, err
 		}
@@ -91,9 +149,10 @@ func (q *Queries) DeliveriesOf(ctx context.Context, environmentID uuid.UUID, bef
 }
 
 const deliveryByNumber = `-- name: DeliveryByNumber :one
-SELECT d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name
+SELECT d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
 FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
 WHERE d.repo_id = $1 AND d.number = $2
 `
 
@@ -102,6 +161,7 @@ type DeliveryByNumberRow struct {
 	Target        string
 	Branch        string
 	StartedByName *string
+	Subject       string
 }
 
 func (q *Queries) DeliveryByNumber(ctx context.Context, repoID uuid.UUID, number int64) (DeliveryByNumberRow, error) {
@@ -128,6 +188,7 @@ func (q *Queries) DeliveryByNumber(ctx context.Context, repoID uuid.UUID, number
 		&i.Target,
 		&i.Branch,
 		&i.StartedByName,
+		&i.Subject,
 	)
 	return i, err
 }
@@ -455,10 +516,64 @@ func (q *Queries) InsertTarget(ctx context.Context, arg InsertTargetParams) erro
 	return err
 }
 
+const inventoryOf = `-- name: InventoryOf :many
+SELECT o.api_group, o.version, o.kind, o.namespace, o.name, o.health, o.message, o.ready, o.created_at, d.number AS delivery
+FROM environment_objects o LEFT JOIN deliveries d ON d.id = o.delivery_id
+WHERE o.environment_id = $1
+ORDER BY o.position
+`
+
+type InventoryOfRow struct {
+	ApiGroup  string
+	Version   string
+	Kind      string
+	Namespace string
+	Name      string
+	Health    string
+	Message   string
+	Ready     string
+	CreatedAt *time.Time
+	Delivery  *int64
+}
+
+// InventoryOf lists what an environment holds, in the order its last apply applied it, each with the number of the
+// delivery whose apply recorded it.
+func (q *Queries) InventoryOf(ctx context.Context, environmentID uuid.UUID) ([]InventoryOfRow, error) {
+	rows, err := q.db.Query(ctx, inventoryOf, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InventoryOfRow
+	for rows.Next() {
+		var i InventoryOfRow
+		if err := rows.Scan(
+			&i.ApiGroup,
+			&i.Version,
+			&i.Kind,
+			&i.Namespace,
+			&i.Name,
+			&i.Health,
+			&i.Message,
+			&i.Ready,
+			&i.CreatedAt,
+			&i.Delivery,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const latestDeliveries = `-- name: LatestDeliveries :many
-SELECT DISTINCT ON (d.environment_id) d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name
+SELECT DISTINCT ON (d.environment_id) d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, d.sha, d.trigger, d.push_id, d.state, d.reason, d.started_by, d.lease_until, d.queued_at, d.started_at, d.ended_at, d.version, t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
 FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
 WHERE d.environment_id = ANY ($1::uuid[])
 ORDER BY d.environment_id, d.number DESC
 `
@@ -468,10 +583,11 @@ type LatestDeliveriesRow struct {
 	Target        string
 	Branch        string
 	StartedByName *string
+	Subject       string
 }
 
-// LatestDeliveries finds the newest delivery of each of some environments, with its environment's target and branch
-// and the name of who started it.
+// LatestDeliveries finds the newest delivery of each of some environments, with its environment's target and branch,
+// the name of who started it and its commit's subject.
 func (q *Queries) LatestDeliveries(ctx context.Context, ids []uuid.UUID) ([]LatestDeliveriesRow, error) {
 	rows, err := q.db.Query(ctx, latestDeliveries, ids)
 	if err != nil {
@@ -502,6 +618,7 @@ func (q *Queries) LatestDeliveries(ctx context.Context, ids []uuid.UUID) ([]Late
 			&i.Target,
 			&i.Branch,
 			&i.StartedByName,
+			&i.Subject,
 		); err != nil {
 			return nil, err
 		}

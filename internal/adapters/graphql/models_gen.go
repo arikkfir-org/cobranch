@@ -611,7 +611,9 @@ type Delivery struct {
 	Branch string       `json:"branch"`
 	Kind   DeliveryKind `json:"kind"`
 	// The commit it delivers; null for a teardown.
-	Sha     *string         `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+	// The first line of that commit's message; empty for a teardown.
+	Subject string          `json:"subject"`
 	Trigger DeliveryTrigger `json:"trigger"`
 	// The push that queued it; null for any other.
 	Push  *string       `json:"push,omitempty"`
@@ -632,6 +634,20 @@ type DeliveryPage struct {
 	Deliveries []*Delivery `json:"deliveries"`
 	// Where the next page starts, as deliveries' after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// A target the default branch's /cobranch.yaml declares under delivery. Its namespace and url keep their variables.
+type DeliveryTarget struct {
+	Name string `json:"name"`
+	// The branch patterns it delivers.
+	Branches []string `json:"branches"`
+	// The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster.
+	Cluster *string `json:"cluster,omitempty"`
+	// The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise.
+	ClusterName *string `json:"clusterName,omitempty"`
+	Namespace   string  `json:"namespace"`
+	// Where its environments answer; null without one.
+	URL *string `json:"url,omitempty"`
 }
 
 // A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
@@ -700,8 +716,16 @@ type Environment struct {
 	// The branch's short name.
 	Branch string `json:"branch"`
 	// The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster.
-	Cluster   *string `json:"cluster,omitempty"`
-	Namespace string  `json:"namespace"`
+	Cluster *string `json:"cluster,omitempty"`
+	// The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise.
+	ClusterName *string `json:"clusterName,omitempty"`
+	Namespace   string  `json:"namespace"`
+	// Where it answers, its target's url in the default branch's /cobranch.yaml with its variables expanded; null when the target has none.
+	URL *string `json:"url,omitempty"`
+	// The roots its branch's head renders for it, in order; empty while its target or its /cobranch.yaml is gone, or its roots can't be planned.
+	Renders []*Render `json:"renders"`
+	// What it holds, in the order its last apply applied it, each with its health as last read.
+	Objects []*EnvironmentObject `json:"objects"`
 	// The commit of its last successful delivery; null before one.
 	Revision *string `json:"revision,omitempty"`
 	// When a delivery last succeeded; null before one.
@@ -712,13 +736,33 @@ type Environment struct {
 	Paused bool `json:"paused"`
 	// Its newest delivery; null before one.
 	Latest *Delivery `json:"latest,omitempty"`
-	// A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100.
+	// A page of its deliveries of kinds, or of every kind when it is empty, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100.
 	Deliveries *DeliveryPage `json:"deliveries"`
 	CreatedAt  time.Time     `json:"createdAt"`
 	// Counts its changes from 1.
 	Version int `json:"version"`
 	// The ID of the environment's repository, which its deliveries read.
 	RepositoryID string `json:"-"`
+}
+
+// An object an environment holds, as its last apply applied it, with its health as the controller last read it.
+type EnvironmentObject struct {
+	// Its API group; empty for the core group.
+	Group   string `json:"group"`
+	Version string `json:"version"`
+	Kind    string `json:"kind"`
+	// Its namespace; empty for an object of the whole cluster.
+	Namespace string            `json:"namespace"`
+	Name      string            `json:"name"`
+	Health    EnvironmentHealth `json:"health"`
+	// Why it has its health, as kstatus words it; may be empty.
+	Message string `json:"message"`
+	// How many of its replicas, pods or completions are ready, as 2/2; null for a kind that counts none.
+	Ready *string `json:"ready,omitempty"`
+	// When its cluster created it; null before a health read found it.
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	// The number of the delivery whose apply recorded it; null once that delivery is gone.
+	Delivery *int `json:"delivery,omitempty"`
 }
 
 // A file or a symlink at a commit, and its text when it isn't binary.
@@ -1498,6 +1542,13 @@ type RefUpdate struct {
 	New  string `json:"new"`
 }
 
+// A root a delivery renders.
+type Render struct {
+	Kind RenderKind `json:"kind"`
+	// The directory, relative to the repository, with its variables expanded.
+	Path string `json:"path"`
+}
+
 // One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
 	ID             string `json:"id"`
@@ -1564,6 +1615,8 @@ type Repository struct {
 	Environment *Environment `json:"environment,omitempty"`
 	// One of the repository's deliveries by number: null unless it is there; takes repo.read.
 	Delivery *Delivery `json:"delivery,omitempty"`
+	// The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+	DeliveryTargets []*DeliveryTarget `json:"deliveryTargets"`
 	// A page of the repository's runs, newest first, those the filters given keep: at commit sha, of the job named job, on the branch named branch, in one of states, and those whose job's name or branch or tag holds query, ignoring case, or whose commit's name starts with it (up to 200 characters, on one line); from the newest, or from after, where the previous page's nextCursor says the next one starts. The first page counts them all. Takes repo.read. first is 1 to 100.
 	Runs *RunPage `json:"runs"`
 	// One of the repository's runs by number: null unless it is there; takes repo.read.
@@ -3760,6 +3813,67 @@ func (e *MergeMethod) UnmarshalJSON(b []byte) error {
 }
 
 func (e MergeMethod) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How a root renders.
+type RenderKind string
+
+const (
+	// Renders the chart there.
+	RenderKindHelm RenderKind = "HELM"
+	// Builds the kustomization there.
+	RenderKindKustomize RenderKind = "KUSTOMIZE"
+	// Reads every manifest under it.
+	RenderKindManifests RenderKind = "MANIFESTS"
+)
+
+var AllRenderKind = []RenderKind{
+	RenderKindHelm,
+	RenderKindKustomize,
+	RenderKindManifests,
+}
+
+func (e RenderKind) IsValid() bool {
+	switch e {
+	case RenderKindHelm, RenderKindKustomize, RenderKindManifests:
+		return true
+	}
+	return false
+}
+
+func (e RenderKind) String() string {
+	return string(e)
+}
+
+func (e *RenderKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RenderKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RenderKind", str)
+	}
+	return nil
+}
+
+func (e RenderKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RenderKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RenderKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

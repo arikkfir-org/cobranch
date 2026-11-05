@@ -370,6 +370,7 @@ func (s *DeliveryStore) SetHealth(ctx context.Context, environmentID uuid.UUID, 
 		p := queries.SetObjectHealthsParams{EnvironmentID: environmentID}
 		for i, o := range objects {
 			p.Positions, p.Healths, p.Messages = append(p.Positions, int32(i)), append(p.Healths, string(o.Health)), append(p.Messages, o.Message) //nolint:gosec // an inventory holds far fewer than 2^31 objects
+			p.Readies, p.CreatedAts = append(p.Readies, o.Ready), append(p.CreatedAts, createdAt(o))
 		}
 		if err := q.SetObjectHealths(ctx, p); err != nil {
 			return fmt.Errorf("recording environment %s's objects' health: %w", environmentID, err)
@@ -396,9 +397,17 @@ func objectsOf(ctx context.Context, q *queries.Queries, environmentID uuid.UUID)
 	out := make([]deliverer.Object, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, deliverer.Object{Group: r.ApiGroup, Version: r.Version, Kind: r.Kind, Namespace: r.Namespace, Name: r.Name,
-			UID: r.Uid, Health: code.Health(r.Health), Message: r.Message})
+			UID: r.Uid, Health: code.Health(r.Health), Message: r.Message, Ready: r.Ready, Created: r.CreatedAt})
 	}
 	return out, nil
+}
+
+// createdAt is when o's cluster created it, as the inventory's queries take it: RFC 3339, or empty when unknown.
+func createdAt(o deliverer.Object) string {
+	if o.Created == nil {
+		return ""
+	}
+	return o.Created.UTC().Format(time.RFC3339Nano)
 }
 
 // setInventory replaces an environment's inventory with objects, as delivery deliveryID left it.
@@ -416,6 +425,7 @@ func setInventory(ctx context.Context, q *queries.Queries, environmentID, delive
 		p.ApiGroups, p.Versions, p.Kinds = append(p.ApiGroups, o.Group), append(p.Versions, o.Version), append(p.Kinds, o.Kind)
 		p.Namespaces, p.Names, p.Uids = append(p.Namespaces, o.Namespace), append(p.Names, o.Name), append(p.Uids, o.UID)
 		p.DeliveryIds, p.Healths, p.Messages = append(p.DeliveryIds, deliveryID), append(p.Healths, string(health)), append(p.Messages, o.Message)
+		p.Readies, p.CreatedAts = append(p.Readies, o.Ready), append(p.CreatedAts, createdAt(o))
 	}
 	if err := q.InsertEnvironmentObjects(ctx, p); err != nil {
 		return fmt.Errorf("recording environment %s's inventory: %w", environmentID, err)

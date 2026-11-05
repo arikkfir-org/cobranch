@@ -103,28 +103,48 @@ FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
 WHERE e.repo_id = @repo_id AND e.id = @id AND e.deleted_at IS NULL
 FOR UPDATE OF e;
 
--- LatestDeliveries finds the newest delivery of each of some environments, with its environment's target and branch
--- and the name of who started it.
+-- LatestDeliveries finds the newest delivery of each of some environments, with its environment's target and branch,
+-- the name of who started it and its commit's subject.
 -- name: LatestDeliveries :many
-SELECT DISTINCT ON (d.environment_id) sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name
+SELECT DISTINCT ON (d.environment_id) sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
 FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
 WHERE d.environment_id = ANY (@ids::uuid[])
 ORDER BY d.environment_id, d.number DESC;
 
--- DeliveriesOf lists a page of an environment's deliveries, newest first, from before a number (0 for the newest).
+-- DeliveriesOf lists a page of an environment's deliveries, newest first, from before a number (0 for the newest), of
+-- the kinds named, or of every kind when none is, each with its commit's subject.
 -- name: DeliveriesOf :many
-SELECT sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name
+SELECT sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
 FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
 WHERE d.environment_id = @environment_id AND (@before::bigint = 0 OR d.number < @before::bigint)
+    AND (cardinality(@kinds::text[]) = 0 OR d.kind = ANY (@kinds::text[]))
 ORDER BY d.number DESC
 LIMIT @lim;
 
+-- InventoryOf lists what an environment holds, in the order its last apply applied it, each with the number of the
+-- delivery whose apply recorded it.
+-- name: InventoryOf :many
+SELECT o.api_group, o.version, o.kind, o.namespace, o.name, o.health, o.message, o.ready, o.created_at, d.number AS delivery
+FROM environment_objects o LEFT JOIN deliveries d ON d.id = o.delivery_id
+WHERE o.environment_id = @environment_id
+ORDER BY o.position;
+
+-- ClusterSecrets finds those of the secrets of ids, which a repository's targets name as their clusters, that are its
+-- organization's, with the repository each belongs to, if any.
+-- name: ClusterSecrets :many
+SELECT s.id, s.org_id, s.repo_id, s.name
+FROM secrets s JOIN repositories r ON r.org_id = s.org_id
+WHERE r.id = @repo_id AND s.id = ANY (@ids::uuid[]);
+
 -- name: DeliveryByNumber :one
-SELECT sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name
+SELECT sqlc.embed(d), t.name AS target, e.branch, p.display_name AS started_by_name,
+    coalesce(split_part(c.message, E'\n', 1), '')::text AS subject
 FROM deliveries d JOIN environments e ON e.id = d.environment_id JOIN delivery_targets t ON t.principal_id = e.target_id
-    LEFT JOIN principals p ON p.id = d.started_by
+    LEFT JOIN principals p ON p.id = d.started_by LEFT JOIN commits c ON c.repo_id = d.repo_id AND c.sha = d.sha
 WHERE d.repo_id = @repo_id AND d.number = @number;
 
 -- DeliveryForUpdate finds a delivery by number with its environment's target, and locks it until the transaction ends.

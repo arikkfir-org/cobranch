@@ -9,6 +9,8 @@ extend type Repository {
   environment(id: ID!): Environment
   "One of the repository's deliveries by number: null unless it is there; takes repo.read."
   delivery(number: Int!): Delivery
+  "The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read."
+  deliveryTargets: [DeliveryTarget!]!
 }
 
 extend type Branch {
@@ -36,7 +38,15 @@ type Environment {
   branch: String!
   "The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster."
   cluster: ID
+  "The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise."
+  clusterName: String
   namespace: String!
+  "Where it answers, its target's url in the default branch's /cobranch.yaml with its variables expanded; null when the target has none."
+  url: String
+  "The roots its branch's head renders for it, in order; empty while its target or its /cobranch.yaml is gone, or its roots can't be planned."
+  renders: [Render!]!
+  "What it holds, in the order its last apply applied it, each with its health as last read."
+  objects: [EnvironmentObject!]!
   "The commit of its last successful delivery; null before one."
   revision: String
   "When a delivery last succeeded; null before one."
@@ -47,11 +57,62 @@ type Environment {
   paused: Boolean!
   "Its newest delivery; null before one."
   latest: Delivery
-  "A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100."
-  deliveries(first: Int! = 30, after: String): DeliveryPage!
+  "A page of its deliveries of kinds, or of every kind when it is empty, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100."
+  deliveries(first: Int! = 30, after: String, kinds: [DeliveryKind!]! = []): DeliveryPage!
   createdAt: Time!
   "Counts its changes from 1."
   version: Int!
+}
+
+"A root a delivery renders."
+type Render {
+  kind: RenderKind!
+  "The directory, relative to the repository, with its variables expanded."
+  path: String!
+}
+
+"How a root renders."
+enum RenderKind {
+  "Renders the chart there."
+  HELM
+  "Builds the kustomization there."
+  KUSTOMIZE
+  "Reads every manifest under it."
+  MANIFESTS
+}
+
+"An object an environment holds, as its last apply applied it, with its health as the controller last read it."
+type EnvironmentObject {
+  "Its API group; empty for the core group."
+  group: String!
+  version: String!
+  kind: String!
+  "Its namespace; empty for an object of the whole cluster."
+  namespace: String!
+  name: String!
+  health: EnvironmentHealth!
+  "Why it has its health, as kstatus words it; may be empty."
+  message: String!
+  "How many of its replicas, pods or completions are ready, as 2/2; null for a kind that counts none."
+  ready: String
+  "When its cluster created it; null before a health read found it."
+  createdAt: Time
+  "The number of the delivery whose apply recorded it; null once that delivery is gone."
+  delivery: Int
+}
+
+"A target the default branch's /cobranch.yaml declares under delivery. Its namespace and url keep their variables."
+type DeliveryTarget {
+  name: String!
+  "The branch patterns it delivers."
+  branches: [String!]!
+  "The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster."
+  cluster: ID
+  "The name of that secret, for a viewer who holds secrets.manage where it lives; null otherwise."
+  clusterName: String
+  namespace: String!
+  "Where its environments answer; null without one."
+  url: String
 }
 
 "Whether an environment's cluster holds its branch's newest commit."
@@ -93,6 +154,8 @@ type Delivery {
   kind: DeliveryKind!
   "The commit it delivers; null for a teardown."
   sha: String
+  "The first line of that commit's message; empty for a teardown."
+  subject: String!
   trigger: DeliveryTrigger!
   "The push that queued it; null for any other."
   push: ID

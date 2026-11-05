@@ -114,3 +114,51 @@ func paused(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.
 		return next(f)
 	}
 }
+
+// withPlans gives withEnvironments' preview its URL and what it renders, production what it holds and a resync, and
+// website its targets, before next's setup; the preview's cluster is website's secret previews-gke.
+func withPlans(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return withEnvironments(func(f *orgFixture) *auth.Authenticated {
+		created := time.Date(2026, 11, 2, 9, 0, 0, 0, time.FixedZone("IST", 2*3600))
+		e := &f.codeStore.EnvironmentList[f.website.ID][1]
+		e.URL, e.Renders = "https://feature-login.example.com", []code.Render{{Kind: "helm", Path: "deploy/chart"}, {Kind: "kustomize", Path: "deploy/previews"}}
+		f.codeStore.Clusters = []code.ClusterSecret{{ID: *e.Cluster, OrgID: f.acme.ID, RepoID: &f.website.ID, Name: "previews-gke"}}
+		f.codeStore.Objects[productionID] = []code.EnvironmentObject{
+			{Group: "apps", Version: "v1", Kind: "Deployment", Namespace: "shop", Name: "api", Health: code.Progressing, Message: "Ready: 1/2",
+				Ready: "1/2", CreatedAt: &created, Delivery: 1},
+			{Version: "v1", Kind: "Service", Namespace: "shop", Name: "api", Health: code.Healthy}}
+		f.codeStore.Targets[f.website.ID] = []code.Target{{Name: "previews", Branches: []string{"feature/**"}, Cluster: e.Cluster,
+			Namespace: "shop-${branch.slug}", URL: "https://${branch.slug}.example.com"}}
+		f.codeStore.AddDelivery(f.website.ID, code.Delivery{EnvironmentID: productionID, Kind: code.Resync, SHA: shaOf("b"),
+			Trigger: code.TriggeredBySchedule, State: code.DeliverySucceeded})
+		return next(f)
+	})
+}
+
+func TestEnvironmentPlanQueries(t *testing.T) {
+	repo := func(fields string) func(*orgFixture) string {
+		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
+	}
+	reader, maintainer := withPlans(maxHolding(auth.RoleReader)), withPlans(maxHolding(auth.RoleMaintainer))
+	preview, production := `environment(id: "`+previewID.String()+`")`, `environment(id: "`+productionID.String()+`")`
+	runOrgCases(t, []orgCase{
+		{name: "a Maintainer sees its URL, renders and cluster's name", viewer: maintainer, document: repo(preview + ` { url clusterName renders { kind path } }`),
+			want: []string{`"environment":{"url":"https://feature-login.example.com","clusterName":"previews-gke",` +
+				`"renders":[{"kind":"HELM","path":"deploy/chart"},{"kind":"KUSTOMIZE","path":"deploy/previews"}]}`}},
+		{name: "a Reader sees no cluster's name", viewer: reader, document: repo(preview + ` { cluster clusterName }`),
+			want: []string{`"environment":{"cluster":"6f1c2b8e-3d4a-4e5f-9a1b-2c3d4e5f6a7b","clusterName":null}`}},
+		{name: "one without a URL or renders", viewer: reader, document: repo(production + ` { url renders { path } }`),
+			want: []string{`"environment":{"url":null,"renders":[]}`}},
+		{name: "what it holds", viewer: reader, document: repo(production + ` { objects { group version kind namespace name health message ready createdAt delivery } }`),
+			want: []string{`"objects":[{"group":"apps","version":"v1","kind":"Deployment","namespace":"shop","name":"api","health":"PROGRESSING",` +
+				`"message":"Ready: 1/2","ready":"1/2","createdAt":"2026-11-02T07:00:00Z","delivery":1},` +
+				`{"group":"","version":"v1","kind":"Service","namespace":"shop","name":"api","health":"HEALTHY","message":"","ready":null,"createdAt":null,"delivery":null}]`}},
+		{name: "its deliveries of some kinds", viewer: reader,
+			document: repo(production + ` { commits: deliveries(kinds: [DELIVER, TEARDOWN]) { deliveries { number } } resyncs: deliveries(kinds: [RESYNC]) { deliveries { number kind } } }`),
+			want:     []string{`"commits":{"deliveries":[{"number":2},{"number":1}]}`, `"resyncs":{"deliveries":[{"number":4,"kind":"RESYNC"}]}`}},
+		{name: "the targets", viewer: maintainer, document: repo(`deliveryTargets { name branches cluster clusterName namespace url }`),
+			want: []string{`"deliveryTargets":[{"name":"previews","branches":["feature/**"],"cluster":"6f1c2b8e-3d4a-4e5f-9a1b-2c3d4e5f6a7b",` +
+				`"clusterName":"previews-gke","namespace":"shop-${branch.slug}","url":"https://${branch.slug}.example.com"}]`}},
+		{name: "no targets yet", viewer: maxHolding(auth.RoleReader), document: repo(`deliveryTargets { name }`), want: []string{`"deliveryTargets":[]`}},
+	})
+}

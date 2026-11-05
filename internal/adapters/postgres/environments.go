@@ -10,11 +10,12 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/delivery"
 	"cobranch.dev/internal/services/repos"
 )
 
 // Environments lists the repository's live environments, by target and then branch, of branch unless it is empty,
-// each with its newest delivery (code.Store).
+// each with its newest delivery, its URL and what it renders (code.Store).
 func (s *CodeStore) Environments(ctx context.Context, repoID uuid.UUID, branch string) ([]code.Environment, error) {
 	rows, err := s.q.EnvironmentsOf(ctx, repoID, branch)
 	if err != nil {
@@ -24,11 +25,14 @@ func (s *CodeStore) Environments(ctx context.Context, repoID uuid.UUID, branch s
 	for _, r := range rows {
 		out = append(out, environmentView(r.Environment, r.Target))
 	}
-	return out, s.withLatest(ctx, out)
+	if err := s.withLatest(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, s.withPlans(ctx, repoID, out)
 }
 
-// Environment finds one of the repository's live environments with its newest delivery, or repos.ErrNotFound
-// (code.Store).
+// Environment finds one of the repository's live environments with its newest delivery, its URL and what it renders,
+// or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Environment(ctx context.Context, repoID, id uuid.UUID) (code.Environment, error) {
 	row, err := s.q.EnvironmentByID(ctx, repoID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -41,7 +45,96 @@ func (s *CodeStore) Environment(ctx context.Context, repoID, id uuid.UUID) (code
 	if err := s.withLatest(ctx, out); err != nil {
 		return code.Environment{}, err
 	}
+	if err := s.withPlans(ctx, repoID, out); err != nil {
+		return code.Environment{}, err
+	}
 	return out[0], nil
+}
+
+// withPlans sets each environment's URL, and the roots its branch's head renders for it, as a delivery of that head
+// would plan them: from the default branch's targets and the branch's own /cobranch.yaml, in the namespace the
+// environment keeps, which a render is given. An environment whose target is gone, whose file doesn't parse, or whose
+// roots or URL don't plan, gets none of them.
+func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code.Environment) error {
+	if len(envs) == 0 {
+		return nil
+	}
+	main, err := mainSettings(ctx, s.q, repoID)
+	if err != nil {
+		return err
+	}
+	slugs, err := s.q.Slugs(ctx, repoID)
+	if err != nil {
+		return fmt.Errorf("reading the repository's slugs: %w", err)
+	}
+	tips := map[string]branchTip{}
+	for i, e := range envs {
+		target, err := delivery.Target(main.Delivery, e.Target.DisplayName)
+		if err != nil {
+			continue // its target is gone, and its teardown comes
+		}
+		tip, ok := tips[e.Branch]
+		if !ok {
+			if tip, err = tipOf(ctx, s.q, repoID, e.Branch); err != nil {
+				return err
+			}
+			tips[e.Branch] = tip
+		}
+		c := delivery.Context{Branch: e.Branch, Commit: tip.head, Repository: slugs.Repo, Organization: slugs.Org}
+		envs[i].URL, _ = delivery.URLFor(target, c, e.Namespace) // a URL that doesn't expand opens nothing
+		target.Namespace = e.Namespace
+		if plan, err := delivery.PlanFor(tip.roots, target, c); err == nil && tip.broken == "" {
+			for _, r := range plan.Roots {
+				envs[i].Renders = append(envs[i].Renders, code.Render{Kind: string(r.Kind), Path: r.Path})
+			}
+		}
+	}
+	return nil
+}
+
+// EnvironmentObjects lists what a live environment holds, in order, or repos.ErrNotFound without it (code.Store).
+func (s *CodeStore) EnvironmentObjects(ctx context.Context, repoID, environmentID uuid.UUID) ([]code.EnvironmentObject, error) {
+	if _, err := s.q.EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
+		return nil, repos.ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("finding environment %s: %w", environmentID, err)
+	}
+	rows, err := s.q.InventoryOf(ctx, environmentID)
+	if err != nil {
+		return nil, fmt.Errorf("listing environment %s's objects: %w", environmentID, err)
+	}
+	out := make([]code.EnvironmentObject, 0, len(rows))
+	for _, r := range rows {
+		o := code.EnvironmentObject{Group: r.ApiGroup, Version: r.Version, Kind: r.Kind, Namespace: r.Namespace, Name: r.Name,
+			Health: code.Health(r.Health), Message: r.Message, Ready: r.Ready, CreatedAt: r.CreatedAt}
+		if r.Delivery != nil {
+			o.Delivery = *r.Delivery
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+// DeliveryTargets lists the targets of the default branch's /cobranch.yaml, in its order (code.Store).
+func (s *CodeStore) DeliveryTargets(ctx context.Context, repoID uuid.UUID) ([]code.Target, error) {
+	main, err := mainSettings(ctx, s.q, repoID)
+	if err != nil {
+		return nil, err
+	}
+	return main.Delivery.Targets, nil
+}
+
+// ClusterSecrets finds those of ids that are secrets of the repository's organization (code.Store).
+func (s *CodeStore) ClusterSecrets(ctx context.Context, repoID uuid.UUID, ids []uuid.UUID) ([]code.ClusterSecret, error) {
+	rows, err := s.q.ClusterSecrets(ctx, repoID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("finding the clusters' secrets: %w", err)
+	}
+	out := make([]code.ClusterSecret, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, code.ClusterSecret{ID: r.ID, OrgID: r.OrgID, RepoID: r.RepoID, Name: r.Name})
+	}
+	return out, nil
 }
 
 // withLatest sets each environment's newest delivery.
@@ -59,7 +152,7 @@ func (s *CodeStore) withLatest(ctx context.Context, envs []code.Environment) err
 	}
 	latest := make(map[uuid.UUID]code.Delivery, len(rows))
 	for _, r := range rows {
-		latest[r.Delivery.EnvironmentID] = deliveryView(r.Delivery, r.Target, r.Branch, r.StartedByName)
+		latest[r.Delivery.EnvironmentID] = deliveryView(r.Delivery, r.Target, r.Branch, r.StartedByName, r.Subject)
 	}
 	for i := range envs {
 		if d, ok := latest[envs[i].ID]; ok {
@@ -69,21 +162,26 @@ func (s *CodeStore) withLatest(ctx context.Context, envs []code.Environment) err
 	return nil
 }
 
-// Deliveries lists at most limit of a live environment's deliveries, newest first, numbered before before (0 for the
-// newest), or repos.ErrNotFound without it (code.Store).
-func (s *CodeStore) Deliveries(ctx context.Context, repoID, environmentID uuid.UUID, before int64, limit int) ([]code.Delivery, error) {
+// Deliveries lists at most limit of a live environment's deliveries of kinds (every kind when it is empty), newest
+// first, numbered before before (0 for the newest), or repos.ErrNotFound without it (code.Store).
+func (s *CodeStore) Deliveries(ctx context.Context, repoID, environmentID uuid.UUID, kinds []code.DeliveryKind, before int64,
+	limit int) ([]code.Delivery, error) {
 	if _, err := s.q.EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding environment %s: %w", environmentID, err)
 	}
-	rows, err := s.q.DeliveriesOf(ctx, environmentID, before, int32(limit))
+	names := make([]string, len(kinds))
+	for i, k := range kinds {
+		names[i] = string(k)
+	}
+	rows, err := s.q.DeliveriesOf(ctx, queries.DeliveriesOfParams{EnvironmentID: environmentID, Before: before, Kinds: names, Lim: int32(limit)})
 	if err != nil {
 		return nil, fmt.Errorf("listing the deliveries: %w", err)
 	}
 	out := make([]code.Delivery, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, deliveryView(r.Delivery, r.Target, r.Branch, r.StartedByName))
+		out = append(out, deliveryView(r.Delivery, r.Target, r.Branch, r.StartedByName, r.Subject))
 	}
 	return out, nil
 }
@@ -97,7 +195,7 @@ func (s *CodeStore) Delivery(ctx context.Context, repoID uuid.UUID, number int64
 	if err != nil {
 		return code.Delivery{}, fmt.Errorf("finding delivery #%d: %w", number, err)
 	}
-	return deliveryView(row.Delivery, row.Target, row.Branch, row.StartedByName), nil
+	return deliveryView(row.Delivery, row.Target, row.Branch, row.StartedByName, row.Subject), nil
 }
 
 // Redeliver queues, for actor, a delivery of the head of a live environment's branch, superseding its deliveries
@@ -269,10 +367,10 @@ func environmentView(e queries.Environment, target string) code.Environment {
 }
 
 // deliveryView is the domain's view of a deliveries row, of target's environment of branch, started by who
-// startedBy names, if anyone.
-func deliveryView(d queries.Delivery, target, branch string, startedBy *string) code.Delivery {
+// startedBy names, if anyone, delivering a commit of subject.
+func deliveryView(d queries.Delivery, target, branch string, startedBy *string, subject string) code.Delivery {
 	out := code.Delivery{ID: d.ID, Number: d.Number, EnvironmentID: d.EnvironmentID, Target: target, Branch: branch,
-		Kind: code.DeliveryKind(d.Kind), Trigger: code.DeliveryTrigger(d.Trigger), PushID: d.PushID,
+		Subject: subject, Kind: code.DeliveryKind(d.Kind), Trigger: code.DeliveryTrigger(d.Trigger), PushID: d.PushID,
 		State: code.DeliveryState(d.State), Reason: d.Reason, StartedBy: principalOf(d.StartedBy, startedBy),
 		QueuedAt: d.QueuedAt, StartedAt: d.StartedAt, EndedAt: d.EndedAt, Version: d.Version}
 	if d.Sha != nil {

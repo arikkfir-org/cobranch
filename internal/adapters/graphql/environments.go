@@ -17,8 +17,44 @@ func environment(repositoryID string, e code.Environment) *Environment {
 		cluster := e.Cluster.String()
 		out.Cluster = &cluster
 	}
+	out.ClusterName, out.URL = nonEmpty(e.ClusterName), nonEmpty(e.URL)
+	out.Renders = mapAll(e.Renders, func(r code.Render) *Render {
+		return &Render{Kind: RenderKind(strings.ToUpper(r.Kind)), Path: r.Path}
+	})
 	if e.Latest != nil {
 		out.Latest = delivery(*e.Latest)
+	}
+	return out
+}
+
+// environmentObject is o as the API shows it.
+func environmentObject(o code.EnvironmentObject) *EnvironmentObject {
+	out := &EnvironmentObject{Group: o.Group, Version: o.Version, Kind: o.Kind, Namespace: o.Namespace, Name: o.Name,
+		Health: EnvironmentHealth(strings.ToUpper(string(o.Health))), Message: o.Message, Ready: nonEmpty(o.Ready),
+		CreatedAt: utc(o.CreatedAt)}
+	if o.Delivery != 0 {
+		number := int(o.Delivery)
+		out.Delivery = &number
+	}
+	return out
+}
+
+// deliveryTarget is t as the API shows it.
+func deliveryTarget(t code.DeliveryTarget) *DeliveryTarget {
+	out := &DeliveryTarget{Name: t.Name, Branches: t.Branches, ClusterName: nonEmpty(t.ClusterName), Namespace: t.Namespace,
+		URL: nonEmpty(t.URL)}
+	if t.Cluster != nil {
+		cluster := t.Cluster.String()
+		out.Cluster = &cluster
+	}
+	return out
+}
+
+// deliveryKinds are kinds as the domain names them.
+func deliveryKinds(kinds []DeliveryKind) []code.DeliveryKind {
+	out := make([]code.DeliveryKind, 0, len(kinds))
+	for _, k := range kinds {
+		out = append(out, code.DeliveryKind(strings.ToLower(string(k))))
 	}
 	return out
 }
@@ -31,7 +67,7 @@ func environments(repositoryID string, list []code.Environment) []*Environment {
 // delivery is d as the API shows it.
 func delivery(d code.Delivery) *Delivery {
 	out := &Delivery{ID: d.ID.String(), Number: int(d.Number), EnvironmentID: d.EnvironmentID.String(), Target: d.Target,
-		Branch: d.Branch, Kind: DeliveryKind(strings.ToUpper(string(d.Kind))), Sha: nonEmpty(d.SHA),
+		Branch: d.Branch, Kind: DeliveryKind(strings.ToUpper(string(d.Kind))), Sha: nonEmpty(d.SHA), Subject: d.Subject,
 		Trigger: DeliveryTrigger(strings.ToUpper(string(d.Trigger))), State: DeliveryState(strings.ToUpper(string(d.State))),
 		Reason: d.Reason, StartedBy: commitPrincipal(d.StartedBy), QueuedAt: d.QueuedAt.UTC(), StartedAt: utc(d.StartedAt),
 		EndedAt: utc(d.EndedAt), Version: int(d.Version)}
