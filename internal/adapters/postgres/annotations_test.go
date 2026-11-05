@@ -168,7 +168,7 @@ func TestCodeStoreAnnotations(t *testing.T) {
 	if err != nil || main.Commit == nil || len(main.Commit.Annotations) != 2 {
 		t.Errorf("Branch(main) = %+v, %v; want its head's two annotations", main.Commit, err)
 	}
-	line, err := f.c.FirstParents(ctx, f.website.ID, f.shaD, 10)
+	line, err := f.c.FirstParents(ctx, f.website.ID, f.shaD, "", 10)
 	if err != nil || len(line) != 3 {
 		t.Fatalf("FirstParents() = %v, %v", names(line), err)
 	}

@@ -187,7 +187,7 @@ exports `default`, `tab`, `allowed`, `count` and `view`; its `default` draws int
 | `count(ctx)` | Tab | A promise of the number its tab shows | No number |
 | `allowed(can)` | Both | Whether the viewer may open it, from the permissions they hold there | Anyone who reads the organization or repository |
 | `view` | Both | The name its page views report, or a function of the rest of the path that returns one | `organization.<part>` or `repository.<part>` |
-| `under` | Repository | The tab it lights, as a file and a commit light Files (`"tree"`) | Its own tab |
+| `under` | Repository | The tab it lights, as a file lights Files (`"tree"`) and a commit Branches (`""`) | Its own tab |
 | `count(ctx)` | Repository | The number its tab shows beside its label, or a promise of one: Branches counts the branches besides main | No number |
 | `accepts(rest)` | Repository | Which rests of the path it shows; any other sends the viewer to the repository's root | Every rest |
 

@@ -64,7 +64,7 @@ whenever it runs the Git server.
 | `GET /internal/v1/repos/{id}/tree?ref=&path=` | The commit the ref names, the tree at the path, and its entries: name, mode, kind, object and size |
 | `GET /internal/v1/repos/{id}/blob?ref=&path=&limit=` | The commit, the blob at the path, its mode and size, and up to `limit` bytes of it |
 | `GET /internal/v1/repos/{id}/raw?ref=&path=` | The blob's bytes, streamed, with its commit and object in headers |
-| `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=&path=` | The commits reachable from the ref, every parent followed, in `git rev-list --date-order`: each one's name and its parents'; with a path, only those that changed it |
+| `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=&path=&grep=&count=` | The commits reachable from the ref, every parent followed, in `git rev-list --date-order`: each one's name and its parents'; with a path, only those that changed it; with `grep`, only those whose message holds it, ignoring case; with `count`, how many the whole walk holds |
 | `GET /internal/v1/repos/{id}/last-commits?ref=&path=` | How many commits changed the directory at the path, the latest of them, and the latest that changed each of its entries, from one walk of `git log -- <path>` of at most 10,000 commits. Added for the Files screen ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
 | `GET /internal/v1/repos/{id}/paths?ref=` | The paths of the ref's files and symlinks, sorted, from `git ls-tree -r`, up to 50,000, and whether it stopped there. Added for Go to file ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
 | `GET /internal/v1/repos/{id}/blame?ref=&path=` | The runs of the file's lines, each with the commit that last changed it, from `git blame --incremental`, neighbours one commit changed joined. Added for Blame ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
@@ -223,6 +223,13 @@ on.
   rev-list -- <path>` simplifies it; a caller repeats `path` with its cursor, as it repeats `parents=all`. Along first parents it is refused (`400`,
   `parents.path`), since PostgreSQL holds no paths. Built for the Files screen's History links
   ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
+- **A filter and a count.** `q` keeps the commits whose message holds it, ignoring case, along either walk: `git log -i
+  -F --grep` on the Git server, a search of the lowered message along first parents in PostgreSQL. The first page, the
+  one without a cursor, counts the whole history, or what `q` keeps (`total`): `git rev-list --count` over the same
+  walk, or PostgreSQL's along first parents. Built for the Commits screen
+  ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
+- **The branches a push moved.** A commit's push names the branches it moved, in order (`push.branches`), which the
+  Commit screen shows the commit on.
 
 ## Caching
 
@@ -259,8 +266,16 @@ The ref picker lists branches and tags; a file links its permanent URL at the co
   chat, and its threads on the file are listed under the card. Markdown switches between Preview and Source; an image
   shows on a stage; a binary file, or one past 1 MiB, isn't shown, and offers its download; a symlink links its target
   in the same commit. A directory or a file that can't be read says so in its card, with Try again.
-- **History** gains the graph and a switch between every parent and the first, and `?path=` lists the commits that
-  changed a path; a commit gains a link to browse its files.
+- **Commits** (`…/commits/<ref>`), under the Branches tab, as the Commits screen draws it: the Ref picker, Every parent
+  or First parent, a filter of the messages (`?q=`) and how many commits there are; then the commits, a card per day
+  they were committed, beside a graph of their lines, a lane per line, the main line first and its merges' lines in
+  the status colours; along first parents the graph is one line, and filtered it has none. `?path=` lists the commits
+  that changed a path, under its name. Older loads the next page.
+- **A commit** (`…/commit/<sha>`), as the Commit screen draws it: its subject beside Browse files and its SHA, which
+  copies, its message's body, a line of who wrote it and when it was committed, the branches its push moved, its
+  parents, its committer when someone else, its pusher and how, whether it is signed (unchecked) and its co-authors;
+  its annotations as badges, each with a menu to open its link or delete it, and how many jobs ran on it, linking
+  them; then its diff, Unified or Split, and its reviews, read-only.
 - **Empty repositories** say nothing was pushed yet, with the command that clones them; Clone holds the URLs to push to.
 
 ## Configuration
@@ -302,6 +317,9 @@ Nothing of an installation is in the product: the chart wires the internal call 
 - **The shared token goes a release later.** The release that sends the viewer's token stops reading the token
   PostgreSQL held, and the next drops its table, so the release before keeps working through a rolling upgrade. While
   old and new servers run side by side, a code read between an old one and a new one fails until both have rolled.
+- **A history's filter and count wait for the Git server to roll.** A Git server of the release before reads neither
+  `grep` nor `count`: while it still answers, an every-parent history lists its walk unfiltered and uncounted, and the
+  Commits screen shows no count rather than a wrong one.
 
 ## Risks
 

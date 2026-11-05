@@ -19,10 +19,9 @@ type Objects interface {
 	Blob(ctx context.Context, repoID uuid.UUID, ref, path string, limit int64) (Blob, error)
 	// Raw streams the bytes of the file or symlink at path in the commit ref names.
 	Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (Raw, error)
-	// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, newest first
-	// as git log --date-order lists them, after skipping the first skip; with a path, only those that changed what is
-	// there, as git log -- path lists them.
-	Log(ctx context.Context, repoID uuid.UUID, ref, path string, skip, limit int) (Log, error)
+	// Log lists the page of history q asks for: commits reachable from the commit its ref names, every parent
+	// followed, newest first as git log --date-order lists them.
+	Log(ctx context.Context, repoID uuid.UUID, q LogQuery) (Log, error)
 	// LastCommits reads what last changed the directory at path in the commit ref names: how many commits changed it,
 	// the latest of them, and the latest that changed each of its entries.
 	LastCommits(ctx context.Context, repoID uuid.UUID, ref, path string) (LastCommits, error)
@@ -56,7 +55,7 @@ func (unavailable) Raw(context.Context, uuid.UUID, string, string) (Raw, error) 
 	return Raw{}, ErrUnavailable
 }
 
-func (unavailable) Log(context.Context, uuid.UUID, string, string, int, int) (Log, error) {
+func (unavailable) Log(context.Context, uuid.UUID, LogQuery) (Log, error) {
 	return Log{}, ErrUnavailable
 }
 

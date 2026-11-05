@@ -1,9 +1,52 @@
-/* A repository's history: its graph's lanes. */
-.commits td.graph { position: relative; padding: 0; }
-.commits td.graph svg { position: absolute; top: 0; left: 0; height: 100%; overflow: visible; }
-.commits td.graph line { stroke-width: 2; }
-.lane-0 { stroke: var(--color-status-info-solid); fill: var(--color-status-info-solid); }
-.lane-1 { stroke: var(--color-status-success-solid); fill: var(--color-status-success-solid); }
-.lane-2 { stroke: var(--color-status-warning-solid); fill: var(--color-status-warning-solid); }
-.lane-3 { stroke: var(--color-status-danger-solid); fill: var(--color-status-danger-solid); }
-.lane-4 { stroke: var(--color-status-neutral-solid); fill: var(--color-status-neutral-solid); }
+/* A repository's history (commits.js) and a commit (commit.js), as the Commits and Commit screens draw them. */
+.commits-toolbar { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.commits-parents, .commits-filter { flex: none; width: 240px; }
+.commits-filter > input::-webkit-search-cancel-button { display: none; }
+.commits-count { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.commits-path { display: grid; gap: var(--space-2); }
+.commits-path-title { display: flex; align-items: center; gap: var(--space-8); min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.commits-path-title code { min-width: 0; overflow: hidden; font: var(--text-code-medium); letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.commits-path-description { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
+.commits-days { display: grid; gap: var(--space-24); }
+.commits-more { display: flex; justify-content: flex-end; }
+.commits-more:has(> [hidden]) { display: none; }
+
+/* The graph: a gutter of 64px, wider for more lanes, left of each day's header and rows, the lanes 16px apart from
+   24px in; 2px lines, 45° bends and 10px dots ringed by the surface. Lane 0, history's main line, is border/strong
+   with fg/muted dots, the others take the ai, info, success and warning solids in turn; the newest commit's dot is
+   info's. */
+.commits-graphed :is(.card-header, .commit-row) { position: relative; padding-left: var(--commits-gutter, 64px); }
+.commits-graph { position: absolute; top: 0; bottom: -1px; left: 0; width: var(--commits-gutter, 64px); pointer-events: none; }
+.commit-row:last-child > .commits-graph { bottom: 0; }
+.graph-line { position: absolute; width: 2px; margin-left: -1px; background: currentColor; }
+.graph-bend { position: absolute; overflow: visible; }
+.graph-bend line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.graph-dot { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: var(--radius-full); background: currentColor; box-shadow: 0 0 0 2px var(--color-bg-surface); transform: translate(-50%, -50%); }
+.lane-0 { color: var(--color-border-strong); }
+.lane-1 { color: var(--color-status-ai-solid); }
+.lane-2 { color: var(--color-status-info-solid); }
+.lane-3 { color: var(--color-status-success-solid); }
+.lane-4 { color: var(--color-status-warning-solid); }
+.graph-dot-main { color: var(--color-fg-muted); }
+.graph-dot-newest { color: var(--color-status-info-solid); }
+
+/* A commit's header: its subject beside Browse files and its SHA, its body, the meta line and the Jobs line. */
+.commit-header { display: grid; gap: var(--space-8); min-width: 0; }
+.commit-title-line { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.commit-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); overflow-wrap: anywhere; }
+.commit-title-line > .btn { flex: none; text-decoration: none; }
+.commit-sha-icon { display: inline-flex; }
+.commit-body { margin: 0; color: var(--color-fg-muted); font: var(--text-body-medium); white-space: pre-wrap; overflow-wrap: anywhere; }
+.commit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); margin: 0; color: var(--color-fg-muted); font: var(--text-body-medium); }
+.commit-meta-part { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); min-width: 0; }
+.commit-meta strong { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.commit-meta a { color: var(--color-fg-link); text-decoration: none; }
+.commit-meta a:hover { text-decoration: underline; }
+.commit-meta > .commit-meta-part > .icon { color: var(--color-fg-link); }
+.commit-meta-shas { font: var(--text-code-small); }
+.commit-jobs { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); min-height: 18px; }
+.commit-annotation { border: 0; background: none; cursor: pointer; }
+.commit-annotation:hover { text-decoration: underline; }
+.commit-annotation-menu { width: 220px; }
+.commit-jobs-link { color: var(--color-fg-link); font: var(--text-body-small); text-decoration: none; }
+.commit-jobs-link:hover { text-decoration: underline; }

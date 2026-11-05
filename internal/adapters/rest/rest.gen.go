@@ -3178,8 +3178,11 @@ type Problem struct {
 // Push The push that first brought a commit; getCommit alone answers it.
 type Push struct {
 	// At When Cobranch recorded it.
-	At time.Time          `json:"at"`
-	Id openapi_types.UUID `json:"id"`
+	At time.Time `json:"at"`
+
+	// Branches The branches it moved, without refs/heads/, in the order it moved them; one it deleted isn't among them.
+	Branches []string           `json:"branches"`
+	Id       openapi_types.UUID `json:"id"`
 
 	// Pusher Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Pusher *Principal `json:"pusher,omitempty"`
@@ -4442,6 +4445,9 @@ type ListCommitsParams struct {
 	// Path A file's or a directory's path from the repository's root, as names separated by /, whose history the page lists: the commits that changed what is there, every parent followed. A path's history takes parents=all or none, and parents=first is 400 parents.path.
 	Path *string `form:"path,omitempty" json:"path,omitempty"`
 
+	// Q Text the commits' messages hold, ignoring case, as git log -i -F --grep searches them: the page lists only those commits. Up to 200 characters on one line, or 400 q.invalid.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// Parents Which parents of each commit the history follows, the first alone or every one; every one for a path's.
 	Parents *ListCommitsParamsParents `form:"parents,omitempty" json:"parents,omitempty"`
 
@@ -5357,7 +5363,7 @@ type ServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -12198,6 +12204,19 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
 		}
 		return
 	}
@@ -30558,6 +30577,9 @@ type ListCommits200ResponseHeaders struct {
 type ListCommits200JSONResponse struct {
 	Body struct {
 		Commits []Commit `json:"commits"`
+
+		// Total How many commits the whole history holds, the query's alone when it has one, as git rev-list --count counts them; on the first page only, the one without a cursor.
+		Total *int `json:"total,omitempty"`
 	}
 	Headers ListCommits200ResponseHeaders
 }
@@ -38188,7 +38210,7 @@ type StrictServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(ctx context.Context, request RequestReviewRequestObject) (RequestReviewResponseObject, error)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.

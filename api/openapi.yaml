@@ -5797,7 +5797,8 @@ paths:
         git log --date-order lists it (no commit before its children, the newest first among those the graph leaves
         free), it reads the Git server (an installation without one answers 503) and leaves out any commit
         no push recorded. A path's history follows every parent and holds the commits that changed what is there, as
-        git log -- path lists them.
+        git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the
+        whole history.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -5822,6 +5823,14 @@ paths:
             or none, and parents=first is 400 parents.path.
           schema:
             type: string
+        - name: q
+          in: query
+          description: >-
+            Text the commits' messages hold, ignoring case, as git log -i -F --grep searches them: the page lists only
+            those commits. Up to 200 characters on one line, or 400 q.invalid.
+          schema:
+            type: string
+            maxLength: 200
         - name: parents
           in: query
           description: Which parents of each commit the history follows, the first alone or every one; every one for a path's.
@@ -5869,6 +5878,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Commit"
+                  total:
+                    type: integer
+                    description: >-
+                      How many commits the whole history holds, the query's alone when it has one, as git rev-list
+                      --count counts them; on the first page only, the one without a cursor.
         "304":
           description: The page is still the one If-None-Match names.
           headers:
@@ -8646,7 +8660,7 @@ components:
     Push:
       type: object
       description: The push that first brought a commit; getCommit alone answers it.
-      required: [id, transport, at]
+      required: [id, transport, at, branches]
       properties:
         id:
           type: string
@@ -8661,6 +8675,11 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded it.
+        branches:
+          type: array
+          description: The branches it moved, without refs/heads/, in the order it moved them; one it deleted isn't among them.
+          items:
+            type: string
     ChatAnchor:
       type: object
       description: Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.

@@ -22,7 +22,55 @@ func commitNames(commits []Commit) []string {
 }
 
 // commitPage is a page of a branch's history.
-type commitPage struct{ Commits []Commit }
+type commitPage struct {
+	Commits []Commit
+	Total   *int
+}
+
+// counted checks that a page counts want commits in its history, or none when want is negative.
+func counted(want int) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, _ *orgFixture, body []byte) {
+		got := decode[commitPage](t, body).Total
+		if want < 0 && got != nil || want >= 0 && (got == nil || *got != want) {
+			t.Errorf("total of %s, want %d", body, want)
+		}
+	}
+}
+
+// TestHistoryQueryAPI checks a history's query, carried to its next page, and the count of its first page.
+func TestHistoryQueryAPI(t *testing.T) {
+	const commits = "/v1/orgs/acme/repos/website/commits"
+	runOrgCases(t, []orgCase{
+		{name: "the first page counts the history", viewer: olivia, method: "GET", path: fixed(commits + "?limit=1"), wantStatus: 200, check: counted(3)},
+		{name: "a later page doesn't", viewer: olivia, method: "GET", path: fixed(commits + "?limit=1&cursor=" + shaOf("b")), wantStatus: 200, check: counted(-1)},
+		{name: "the commits whose message holds a query, counted", viewer: olivia, method: "GET", path: fixed(commits + "?q=COMMIT+B"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, body []byte) {
+				history("b")(t, f, body)
+				counted(1)(t, f, body)
+			}},
+		{name: "a query's next page keeps the query", viewer: olivia, method: "GET", path: fixed(commits + "?q=commit&limit=1"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, body []byte) {
+				history("c")(t, f, body)
+				link := f.call(&f.olivia, "GET", commits+"?q=commit&limit=1", "").Header().Get("Link")
+				next, _, _ := strings.Cut(strings.TrimPrefix(link, "<?"), ">")
+				if !strings.Contains(next, "q=commit") {
+					t.Fatalf("Link = %q, want the query's next page", link)
+				}
+				history("b")(t, f, f.call(&f.olivia, "GET", commits+"?"+next, "").Body.Bytes())
+			}},
+		{name: "every parent, queried and counted", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all&q=commit+a"), wantStatus: 200,
+			before: func(f *orgFixture) {
+				for _, n := range []string{"a", "b", "c"} {
+					f.objects.Messages[shaOf(n)] = "Commit " + n + "\n"
+				}
+			}, check: func(t *testing.T, f *orgFixture, body []byte) {
+				history("a")(t, f, body)
+				counted(1)(t, f, body)
+			}},
+		{name: "a query over two lines", viewer: olivia, method: "GET", path: fixed(commits + "?q=commit%0Ab"), wantStatus: 400, wantCode: "q.invalid"},
+		{name: "a query too long", viewer: olivia, method: "GET", path: fixed(commits + "?q=" + strings.Repeat("a", 201)), wantStatus: 400, wantCode: "q.invalid"},
+	})
+}
 
 // history checks that a page lists the commits want names, by their first letters.
 func history(want ...string) func(t *testing.T, f *orgFixture, body []byte) {
@@ -199,7 +247,7 @@ func TestCommitAPI(t *testing.T) {
 				c := decode[Commit](t, body)
 				if c.Sha != shaOf("c") || !slices.Equal(c.Parents, []string{shaOf("b")}) || c.Push == nil || c.Push.Id != f.push.ID ||
 					c.Push.Pusher == nil || c.Push.Pusher.DisplayName != "Olivia" || c.Push.Transport != "https" ||
-					c.Author.Principal == nil || c.Author.Principal.Id != f.olivia.User.ID {
+					!slices.Equal(c.Push.Branches, []string{"main", "feature"}) || c.Author.Principal == nil || c.Author.Principal.Id != f.olivia.User.ID {
 					t.Errorf("commit = %s", body)
 				}
 			}},

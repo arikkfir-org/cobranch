@@ -15,8 +15,8 @@ extend type Repository {
   branch(name: String!): Branch
   "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
   deletedBranch(name: String!): DeletedBranch
-  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100."
-  history(branch: String! = "main", ref: String, path: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
+  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. With a query, the page holds only the commits whose message holds it, ignoring case, as git log -i -F --grep searches them; up to 200 characters on one line, or a BAD_USER_INPUT error whose reason is q.invalid. first is 1 to 100."
+  history(branch: String! = "main", ref: String, path: String, query: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
   "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
@@ -518,6 +518,8 @@ type CommitPage {
   commits: [Commit!]!
   "Where the next page starts, as history's after; null after the last page."
   nextCursor: String
+  "How many commits the whole history holds, the query's alone when it has one, as git rev-list --count counts them; on the first page only, the one without after, and null on later ones."
+  total: Int
 }
 
 "A commit a push brought, as the push recorded it."
@@ -603,6 +605,8 @@ type Push {
   transport: String!
   "When Cobranch recorded it."
   at: Time!
+  "The branches it moved, without refs/heads/, in the order it moved them; one it deleted isn't among them."
+  branches: [String!]!
 }
 
 # What needs each viewer across an organization's repositories, and what happened in them, newest first

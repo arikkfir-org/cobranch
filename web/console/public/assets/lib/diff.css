@@ -1,28 +1,58 @@
-/* Diffs: their files, hunks and draft comments. */
-.diff-summary { display: flex; gap: var(--space-12); flex-wrap: wrap; align-items: baseline; margin: 0; }
-.added-count { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
-.removed-count { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
-.diff-files { display: grid; gap: var(--space-12); }
-details.file-diff { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); overflow: hidden; }
-details.file-diff > summary { display: flex; gap: var(--space-8); align-items: baseline; flex-wrap: wrap; padding: var(--space-8) var(--space-12); cursor: pointer; background: var(--color-bg-sunken); }
-details.file-diff[open] > summary { border-bottom: 1px solid var(--color-border-default); }
-details.file-diff summary code { overflow-wrap: anywhere; }
-details.file-diff summary .counts { margin-left: auto; display: flex; gap: var(--space-8); }
-.file-diff p.note { margin: 0; padding: var(--space-8) var(--space-12); color: var(--color-fg-muted); }
-.hunks { overflow-x: auto; }
-table.hunk { font: var(--text-code-medium); font-variant-ligatures: none; }
-table.hunk td { padding: 0 var(--space-8); white-space: pre; vertical-align: top; }
-table.hunk td.ln { width: 1%; text-align: right; color: var(--color-fg-muted); user-select: none; }
-table.hunk td.mark { width: 1%; padding: 0 var(--space-4); user-select: none; }
-table.hunk td.text { tab-size: 4; }
-table.hunk tr.added td { background: var(--color-status-success-bg); }
-table.hunk tr.removed td { background: var(--color-status-danger-bg); }
-table.hunk tr.hunk-head td { background: var(--color-status-info-bg); color: var(--color-fg-muted); }
-table.hunk .no-newline { color: var(--color-fg-muted); font: var(--text-caption); }
-table.hunk td.act { width: 1%; padding: 0 var(--space-2); user-select: none; }
-table.hunk .add-comment { display: inline-grid; place-items: center; width: var(--size-icon-md); height: var(--size-icon-md); padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: none; color: var(--color-fg-link); font: inherit; cursor: pointer; opacity: .35; }
-table.hunk tr:hover .add-comment, table.hunk .add-comment:focus-visible { opacity: 1; border-color: var(--color-border-default); background: var(--color-bg-surface); }
-table.hunk tr.draft td { white-space: normal; font: var(--text-body-medium); padding: var(--space-8) var(--space-12); background: var(--color-bg-surface); border-block: 1px solid var(--color-border-default); }
+/* A diff (lib/diff.js): its counts and layout switch, and each file's Diff card, its lines unified or split, with
+   draft comments between them. */
+.diff-stats { display: flex; align-items: center; gap: var(--space-8); min-height: 30px; color: var(--color-fg-default); font: var(--text-body-medium); }
+.diff-stats .spacer, .diff-card-header .spacer, .draft-comment-header .spacer { flex: 1; }
+.diff-layout { flex: none; width: 240px; }
+.diff-added { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
+.diff-removed { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
+.diff-cards { display: grid; gap: var(--space-24); }
+.diff-left-out { color: var(--color-fg-muted); font: var(--text-body-small); }
+
+.diff-card-header { display: flex; align-items: center; gap: var(--space-8); min-width: 0; padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
+.diff-card-header > .icon { color: var(--color-fg-muted); }
+.diff-card-path { min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-medium); text-overflow: ellipsis; white-space: nowrap; }
+.diff-card-header :is(.diff-added, .diff-removed) { flex: none; font: var(--text-code-small); }
+.diff-note { display: flex; align-items: center; gap: var(--space-12); margin: 0; padding: var(--space-12) var(--space-16); color: var(--color-fg-muted); font: var(--text-body-small); }
+.diff-note + .diff-note { padding-top: 0; }
+
+/* Lines: 22px each in Code/Small, a hunk's header on bg/selected, numbers in fg/subtle (44px each in one column, 48px
+   a half in two), a 24px sign column, added lines on status/success and removed ones on status/danger. */
+.diff-lines { overflow-x: auto; font: var(--text-code-small); font-variant-ligatures: none; }
+.diff-rows { display: grid; width: max-content; min-width: 100%; }
+.diff-line, .diff-half { position: relative; display: flex; align-items: center; min-height: 22px; }
+.diff-hunk { padding-left: var(--space-16); background: var(--color-bg-selected); color: var(--color-fg-muted); }
+.diff-hunk .diff-text { color: inherit; }
+.diff-num { flex: none; width: 44px; color: var(--color-fg-subtle); text-align: right; user-select: none; }
+.diff-sign { flex: none; width: 24px; color: var(--color-fg-subtle); text-align: center; user-select: none; }
+.diff-text { color: var(--color-fg-default); white-space: pre; tab-size: 4; }
+.diff-no-newline { color: var(--color-fg-muted); font: var(--text-caption); }
+.diff-added.diff-line, .diff-half.diff-added { background: var(--color-status-success-bg); }
+.diff-removed.diff-line, .diff-half.diff-removed { background: var(--color-status-danger-bg); }
+:is(.diff-line, .diff-half).diff-added .diff-sign { color: var(--color-status-success-fg); }
+:is(.diff-line, .diff-half).diff-removed .diff-sign { color: var(--color-status-danger-fg); }
+:is(.diff-line, .diff-half) .diff-added, :is(.diff-line, .diff-half) .diff-removed { color: inherit; }
+
+/* Split: the old half beside the new, a border/subtle between; a long line wraps within its half, so both stay in
+   step, a hunk's header is cut short, and the shorter side of a change pads with bg/sunken filler. */
+.diff-split { display: grid; overflow-x: visible; }
+.diff-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.diff-split-row > .diff-half:first-child { border-right: 1px solid var(--color-border-subtle); }
+.diff-split .diff-num { width: 48px; }
+.diff-split .diff-half { align-items: flex-start; }
+.diff-split .diff-half > span { padding-block: 3px; }
+.diff-split .diff-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-split .diff-hunk .diff-text { overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+.diff-filler { background: var(--color-bg-sunken); }
+
+/* Drafting: a line's comment button over its gutter, shown on hover, and the drafts beneath their lines. */
+.diff-comment {
+  position: absolute; top: 1px; left: var(--space-4); display: grid; place-items: center; width: 20px; height: 20px; padding: 0;
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-fg-link); cursor: pointer; opacity: 0;
+}
+.diff-comment .icon svg { width: var(--space-12); height: var(--space-12); }
+:is(.diff-line, .diff-half):hover > .diff-comment, .diff-comment:focus-visible { opacity: 1; }
+.diff-draft { padding: var(--space-8) var(--space-16); border-block: 1px solid var(--color-border-subtle); background: var(--color-bg-surface); font: var(--text-body-medium); }
 .draft-comment { display: grid; gap: var(--space-8); max-width: 72ch; }
-.draft-comment textarea { min-height: 64px; resize: vertical; }
-.draft-comment p.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-comment-header { display: flex; align-items: center; gap: var(--space-8); font: var(--text-body-small); }
+.draft-comment-text { margin: 0; color: var(--color-fg-default); white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-comment-actions { display: flex; justify-content: flex-end; gap: var(--space-8); }

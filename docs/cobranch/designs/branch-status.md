@@ -379,8 +379,9 @@ Branch names carry `/`; the Console takes the rest of the path after `branches/`
   (`…/branches/<branch>?tab=…`). Its **Merge** button merges it for a principal with `repo.merge` once it is Ready, and
   its menu offers a principal with `repo.bypass` to merge it anyway, by a merge commit or a fast-forward, whichever its
   base allows; it sends the head the page shows, so a branch that moved meanwhile isn't merged.
-- **A commit's page** lists its annotations, each with its status, summary, link, principal and how long it ran, and
-  offers to delete those the viewer may delete. History rows show their commits' annotations as icons.
+- **A commit's page** shows its annotations as badges, each with its status, its summary and principal in its
+  tooltip, and a menu that opens its link and deletes it for a viewer who may. History rows show their commits'
+  annotations as icons.
 - **The status language** is the design system's: one word, one icon, one tone for each branch and annotation status, as
   [the design system](design-system.md) lists them.
 

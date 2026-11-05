@@ -366,6 +366,7 @@ type ComplexityRoot struct {
 	CommitPage struct {
 		Commits    func(childComplexity int) int
 		NextCursor func(childComplexity int) int
+		Total      func(childComplexity int) int
 	}
 
 	CommitPrincipal struct {
@@ -949,6 +950,7 @@ type ComplexityRoot struct {
 
 	Push struct {
 		At        func(childComplexity int) int
+		Branches  func(childComplexity int) int
 		ID        func(childComplexity int) int
 		Pusher    func(childComplexity int) int
 		Transport func(childComplexity int) int
@@ -988,7 +990,7 @@ type ComplexityRoot struct {
 		Description       func(childComplexity int) int
 		Environment       func(childComplexity int, id string) int
 		Environments      func(childComplexity int) int
-		History           func(childComplexity int, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) int
+		History           func(childComplexity int, branch string, ref *string, path *string, query *string, parents *HistoryParents, first int, after *string) int
 		ID                func(childComplexity int) int
 		JobPrincipals     func(childComplexity int) int
 		Name              func(childComplexity int) int
@@ -1416,7 +1418,7 @@ type RepositoryResolver interface {
 	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
 	Branch(ctx context.Context, obj *Repository, name string) (*Branch, error)
 	DeletedBranch(ctx context.Context, obj *Repository, name string) (*DeletedBranch, error)
-	History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) (*CommitPage, error)
+	History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, query *string, parents *HistoryParents, first int, after *string) (*CommitPage, error)
 	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
 	Review(ctx context.Context, obj *Repository, id string) (*Review, error)
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
@@ -2832,6 +2834,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CommitPage.NextCursor(childComplexity), true
+	case "CommitPage.total":
+		if e.ComplexityRoot.CommitPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommitPage.Total(childComplexity), true
 
 	case "CommitPrincipal.displayName":
 		if e.ComplexityRoot.CommitPrincipal.DisplayName == nil {
@@ -5952,6 +5960,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Push.At(childComplexity), true
+	case "Push.branches":
+		if e.ComplexityRoot.Push.Branches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Push.Branches(childComplexity), true
 	case "Push.id":
 		if e.ComplexityRoot.Push.ID == nil {
 			break
@@ -6220,7 +6234,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["ref"].(*string), args["path"].(*string), args["parents"].(*HistoryParents), args["first"].(int), args["after"].(*string)), true
+		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["ref"].(*string), args["path"].(*string), args["query"].(*string), args["parents"].(*HistoryParents), args["first"].(int), args["after"].(*string)), true
 	case "Repository.id":
 		if e.ComplexityRoot.Repository.ID == nil {
 			break
@@ -8312,8 +8326,8 @@ extend type Repository {
   branch(name: String!): Branch
   "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
   deletedBranch(name: String!): DeletedBranch
-  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100."
-  history(branch: String! = "main", ref: String, path: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
+  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. With a query, the page holds only the commits whose message holds it, ignoring case, as git log -i -F --grep searches them; up to 200 characters on one line, or a BAD_USER_INPUT error whose reason is q.invalid. first is 1 to 100."
+  history(branch: String! = "main", ref: String, path: String, query: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
   "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
@@ -8815,6 +8829,8 @@ type CommitPage {
   commits: [Commit!]!
   "Where the next page starts, as history's after; null after the last page."
   nextCursor: String
+  "How many commits the whole history holds, the query's alone when it has one, as git rev-list --count counts them; on the first page only, the one without after, and null on later ones."
+  total: Int
 }
 
 "A commit a push brought, as the push recorded it."
@@ -8900,6 +8916,8 @@ type Push {
   transport: String!
   "When Cobranch recorded it."
   at: Time!
+  "The branches it moved, without refs/heads/, in the order it moved them; one it deleted isn't among them."
+  branches: [String!]!
 }
 
 # What needs each viewer across an organization's repositories, and what happened in them, newest first
@@ -10922,6 +10940,8 @@ func (ec *executionContext) childFields_CommitPage(ctx context.Context, field gr
 		return ec.fieldContext_CommitPage_commits(ctx, field)
 	case "nextCursor":
 		return ec.fieldContext_CommitPage_nextCursor(ctx, field)
+	case "total":
+		return ec.fieldContext_CommitPage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CommitPage", field.Name)
 }
@@ -11900,6 +11920,8 @@ func (ec *executionContext) childFields_Push(ctx context.Context, field graphql.
 		return ec.fieldContext_Push_transport(ctx, field)
 	case "at":
 		return ec.fieldContext_Push_at(ctx, field)
+	case "branches":
+		return ec.fieldContext_Push_branches(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Push", field.Name)
 }
@@ -15975,30 +15997,38 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["path"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "parents",
-		func(ctx context.Context, v any) (*HistoryParents, error) {
-			return ec.unmarshalOHistoryParents2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["parents"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (int, error) {
-			return ec.unmarshalNInt2int(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["first"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "query",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg5
+	args["query"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "parents",
+		func(ctx context.Context, v any) (*HistoryParents, error) {
+			return ec.unmarshalOHistoryParents2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parents"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg6
 	return args, nil
 }
 
@@ -21818,6 +21848,29 @@ func (ec *executionContext) _CommitPage_nextCursor(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_CommitPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CommitPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _CommitPage_total(ctx context.Context, field graphql.CollectedField, obj *CommitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommitPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommitPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommitPage", field, false, false, "Int")
 }
 
 func (ec *executionContext) _CommitPrincipal_id(ctx context.Context, field graphql.CollectedField, obj *CommitPrincipal) (ret graphql.Marshaler) {
@@ -34368,6 +34421,29 @@ func (ec *executionContext) fieldContext_Push_at(_ context.Context, field graphq
 	return graphql.NewScalarFieldContext("Push", field, false, false, "Time")
 }
 
+func (ec *executionContext) _Push_branches(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Push_branches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Branches, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Push_branches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Push", field, false, false, "String")
+}
+
 func (ec *executionContext) _Query_version(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -35276,7 +35352,7 @@ func (ec *executionContext) _Repository_history(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["ref"].(*string), fc.Args["path"].(*string), fc.Args["parents"].(*HistoryParents), fc.Args["first"].(int), fc.Args["after"].(*string))
+			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["ref"].(*string), fc.Args["path"].(*string), fc.Args["query"].(*string), fc.Args["parents"].(*HistoryParents), fc.Args["first"].(int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *CommitPage) graphql.Marshaler {
@@ -45284,6 +45360,11 @@ func (ec *executionContext) _CommitPage(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "total":
+			out.Values[i] = ec._CommitPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -49140,6 +49221,11 @@ func (ec *executionContext) _Push(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "at":
 			out.Values[i] = ec._Push_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "branches":
+			out.Values[i] = ec._Push_branches(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

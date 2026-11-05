@@ -563,6 +563,8 @@ type CommitPage struct {
 	Commits []*Commit `json:"commits"`
 	// Where the next page starts, as history's after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+	// How many commits the whole history holds, the query's alone when it has one, as git rev-list --count counts them; on the first page only, the one without after, and null on later ones.
+	Total *int `json:"total,omitempty"`
 }
 
 // Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key.
@@ -1462,6 +1464,8 @@ type Push struct {
 	Transport string `json:"transport"`
 	// When Cobranch recorded it.
 	At time.Time `json:"at"`
+	// The branches it moved, without refs/heads/, in the order it moved them; one it deleted isn't among them.
+	Branches []string `json:"branches"`
 }
 
 type Query struct {
@@ -1506,7 +1510,7 @@ type Repository struct {
 	Branch *Branch `json:"branch,omitempty"`
 	// The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read.
 	DeletedBranch *DeletedBranch `json:"deletedBranch,omitempty"`
-	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100.
+	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. With a query, the page holds only the commits whose message holds it, ignoring case, as git log -i -F --grep searches them; up to 200 characters on one line, or a BAD_USER_INPUT error whose reason is q.invalid. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`

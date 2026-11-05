@@ -220,10 +220,11 @@ func TestInternalRaw(t *testing.T) {
 	}
 }
 
-func TestInternalLog(t *testing.T) {
-	t.Parallel()
-	b := newBrowsed(t)
-	all, err := b.client.Log(b.ctx(t), website, "main", "", 0, 10)
+// mainLog is main's whole log, which TestInternalLog's cases take pages of: the merge with both its parents, then
+// feature's commit, then the first.
+func mainLog(t *testing.T, b *browsed) code.Log {
+	t.Helper()
+	all, err := b.client.Log(b.ctx(t), website, code.LogQuery{Ref: "main", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,14 +235,34 @@ func TestInternalLog(t *testing.T) {
 	if all.Commit != b.merge || !slices.Equal(names, []string{b.merge, b.feature, b.first}) || !slices.Equal(all.Entries[0].Parents, []string{b.first, b.feature}) {
 		t.Fatalf("Log(main) = %+v, want the merge with both its parents, then feature's commit, then the first, whose clock ran ahead", all)
 	}
+	return all
+}
+
+func TestInternalLog(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	all := mainLog(t, b)
 	tests := []struct {
-		name, ref, path string
-		skip, limit     int
-		wantCommit      string
-		want            []code.LogEntry
-		wantErr         error
+		name, ref, path, grep string
+		skip, limit           int
+		count                 bool
+		wantCommit            string
+		want                  []code.LogEntry
+		wantTotal             int
+		wantErr               error
 	}{
 		{name: "after a skip, at most the limit", ref: "main", skip: 1, limit: 1, wantCommit: "merge", want: all.Entries[1:2]},
+		{name: "counted", ref: "main", skip: 1, limit: 1, count: true, wantCommit: "merge", want: all.Entries[1:2], wantTotal: 3},
+		{name: "only counted", ref: "main", count: true, wantCommit: "merge", wantTotal: 3},
+		{name: "the messages that hold a query, ignoring case", ref: "main", grep: "FEATURE", limit: 10, count: true, wantCommit: "merge",
+			want: all.Entries[:2], wantTotal: 2},
+		{name: "a query's page after a skip", ref: "main", grep: "feature", skip: 1, limit: 1, count: true, wantCommit: "merge",
+			want: all.Entries[1:2], wantTotal: 2},
+		{name: "a query is text, not a pattern", ref: "main", grep: "F.rst", limit: 10, count: true, wantCommit: "merge"},
+		{name: "a query that looks like an option", ref: "main", grep: "--all", limit: 10, count: true, wantCommit: "merge"},
+		{name: "a path's, queried and counted", ref: "main", path: "feature.txt", grep: "add", limit: 10, count: true, wantCommit: "merge",
+			want: []code.LogEntry{{SHA: b.feature, Parents: []string{}}}, wantTotal: 1},
+		{name: "a path's, counted", ref: "main", path: "docs", count: true, wantCommit: "merge", wantTotal: 1},
 		{name: "a file's, the merge simplified away", ref: "main", path: "feature.txt", limit: 10, wantCommit: "merge",
 			want: []code.LogEntry{{SHA: b.feature, Parents: []string{}}}},
 		{name: "a directory's", ref: "main", path: "docs", limit: 10, wantCommit: "merge", want: []code.LogEntry{{SHA: b.first, Parents: []string{}}}},
@@ -256,12 +277,13 @@ func TestInternalLog(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := b.client.Log(b.ctx(t), website, b.named(tt.ref), tt.path, tt.skip, tt.limit)
+			q := code.LogQuery{Ref: b.named(tt.ref), Path: tt.path, Grep: tt.grep, Skip: tt.skip, Limit: tt.limit, Count: tt.count}
+			log, err := b.client.Log(b.ctx(t), website, q)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Log() error = %v, want %v", err, tt.wantErr)
 			}
-			if err == nil && (log.Commit != b.named(tt.wantCommit) || !sameLog(log.Entries, tt.want)) {
-				t.Errorf("Log() = %+v, want %v at %s", log, tt.want, tt.wantCommit)
+			if err == nil && (log.Commit != b.named(tt.wantCommit) || !sameLog(log.Entries, tt.want) || !counts(log.Total, tt.count, tt.wantTotal)) {
+				t.Errorf("Log() = %v at %s, of %s, want %v at %s, of %d", log.Entries, log.Commit, countOf(log.Total), tt.want, b.named(tt.wantCommit), tt.wantTotal)
 			}
 		})
 	}
@@ -380,6 +402,22 @@ func TestInternalPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+// counts tells whether total is what a walk asked to count carries: want, or nil when it wasn't asked.
+func counts(total *int, count bool, want int) bool {
+	if !count {
+		return total == nil
+	}
+	return total != nil && *total == want
+}
+
+// countOf is what total points at, or "none".
+func countOf(total *int) string {
+	if total == nil {
+		return "none"
+	}
+	return strconv.Itoa(*total)
 }
 
 // sameLog reports whether got and want name the same commits with the same parents, in the same order.

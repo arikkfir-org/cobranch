@@ -164,24 +164,38 @@ func TestCodeStoreFirstParents(t *testing.T) {
 	tests := []struct {
 		name  string
 		from  string
+		grep  string
 		limit int
 		want  []string
+		count int
 	}{
-		{name: "along first parents only", from: f.shaD, limit: 10, want: []string{"d", "b", "a"}},
-		{name: "at most limit", from: f.shaD, limit: 2, want: []string{"d", "b"}},
-		{name: "from a commit of a merged branch", from: shaC, limit: 10, want: []string{"c", "a"}},
+		{name: "along first parents only", from: f.shaD, limit: 10, want: []string{"d", "b", "a"}, count: 3},
+		{name: "at most limit", from: f.shaD, limit: 2, want: []string{"d", "b"}, count: 3},
+		{name: "from a commit of a merged branch", from: shaC, limit: 10, want: []string{"c", "a"}, count: 2},
 		{name: "from an object that is no commit", from: f.shaE, limit: 10},
+		{name: "the messages that hold a query, ignoring case", from: f.shaD, grep: "CHANGE B", limit: 10, want: []string{"b"}, count: 1},
+		{name: "a query walks past what it leaves out", from: f.shaD, grep: "change a", limit: 1, want: []string{"a"}, count: 1},
+		{name: "a query every message holds, up to limit", from: f.shaD, grep: "change", limit: 2, want: []string{"d", "b"}, count: 3},
+		{name: "a query nothing holds", from: f.shaD, grep: "nothing like it", limit: 10},
+		{name: "a query of a merged branch's commit, off the first parents", from: f.shaD, grep: "change c", limit: 10},
+		{name: "a query of LIKE's wildcards matches them as they are", from: f.shaD, grep: "%", limit: 10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := f.c.FirstParents(context.Background(), f.website.ID, tt.from, tt.limit)
+			got, err := f.c.FirstParents(context.Background(), f.website.ID, tt.from, tt.grep, tt.limit)
 			if err != nil || !slices.Equal(names(got), tt.want) {
 				t.Errorf("FirstParents() = %v, %v, want %v", names(got), err, tt.want)
 			}
+			if n, err := f.c.CountFirstParents(context.Background(), f.website.ID, tt.from, tt.grep); err != nil || n != tt.count {
+				t.Errorf("CountFirstParents() = %d, %v, want %d", n, err, tt.count)
+			}
 		})
 	}
-	if got, err := f.c.FirstParents(context.Background(), f.secret.ID, f.shaD, 10); err != nil || len(got) != 0 {
+	if got, err := f.c.FirstParents(context.Background(), f.secret.ID, f.shaD, "", 10); err != nil || len(got) != 0 {
 		t.Errorf("another repository's FirstParents() = %v, %v", names(got), err)
+	}
+	if n, err := f.c.CountFirstParents(context.Background(), f.secret.ID, f.shaD, ""); err != nil || n != 0 {
+		t.Errorf("another repository's CountFirstParents() = %d, %v", n, err)
 	}
 }
 
@@ -194,8 +208,11 @@ func TestCodeStoreCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.FirstPush != f.second.ID || p.ID != f.second.ID || p.Transport != git.TransportHTTPS || p.Pusher == nil || p.Pusher.ID != f.olivia ||
-		p.Pusher.DisplayName == "" || !p.At.After(now.AddDate(-1, 0, 0)) {
-		t.Errorf("Commit(d) was pushed in %+v, want the second push, by Olivia", p)
+		p.Pusher.DisplayName == "" || !p.At.After(now.AddDate(-1, 0, 0)) || !slices.Equal(p.Branches, []string{"main", "feature", "stray"}) {
+		t.Errorf("Commit(d) was pushed in %+v, want the second push, by Olivia, of main, feature and stray", p)
+	}
+	if _, p, err := f.c.Commit(ctx, f.website.ID, shaA); err != nil || !slices.Equal(p.Branches, []string{"main", "old"}) {
+		t.Errorf("Commit(a) was pushed in %+v, %v, want the first push, of main and old, which a later push deleted", p, err)
 	}
 	if c.Author.Name != "Ada Author" || c.Author.Email != "ada@example.com" || c.Author.Zone != "+0200" || c.Author.Principal == nil ||
 		c.Author.Principal.DisplayName != "Ada Author" || c.Committer.Principal == nil || c.Committer.Principal.ID != f.olivia {

@@ -313,9 +313,9 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
   review's state: Waiting, Queued, Running, Failed with its reason, or its review. Its menu asks the AI reviewer for
   another review, or starts one that waits.
 - **Its Files changed tab** (`…/branches/<branch>?tab=changes`: a query, since a branch's name may hold `/`;
-  `…/changes/<branch>` sends there) shows the branch's diff against `main`, file by file, with the reviews of its head
-  beneath; a reviewer drafts comments on lines, then submits Approve, Request changes or Comment with a body.
-- **A commit's page** lists its reviews and shows its diff against its parent.
+  `…/changes/<branch>` sends there) shows the branch's diff against `main`, file by file, Unified or Split, with the
+  reviews of its head beneath; a reviewer drafts comments on lines, then submits Approve, Request changes or Comment with a body.
+- **A commit's page** shows its diff against its parent and its reviews, read-only: reviewers review on its branch.
 - **The requirements panel** names `main`'s required approvals and `ai`, and a Blocked branch says which failed, as
   [branch status](branch-status.md#the-console) lists its other checks.
 

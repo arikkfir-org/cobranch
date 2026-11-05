@@ -441,8 +441,8 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | `GET`, `POST /secrets/{id}/access`, `DELETE …/access/{principal}` | `Secret.access`, `grantSecret`, `revokeSecret` | reading: `secrets.manage` on it or `org.grants.manage`; granting: `org.grants.manage` and `secrets.read` on it |
 | `GET /repos/{repo}/jobs` | `Repository.jobPrincipals` | `repo.read` |
 
-- **A repository's Jobs tab** lists its runs, newest first; **a commit's page** lists the runs at the commit beneath
-  its annotations, and **a branch's Jobs tab** (`?tab=jobs`) those on its head, with Start for a waiting run, Run for a
+- **A repository's Jobs tab** lists its runs, newest first, or those at a commit (`?sha=`); **a commit's page** counts
+  the runs at the commit beside its annotations and links them there, and **a branch's Jobs tab** (`?tab=jobs`) those on its head, with Start for a waiting run, Run for a
   manual job, and Re-run and Cancel.
 - **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
   runs.

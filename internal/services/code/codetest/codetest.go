@@ -4,6 +4,7 @@ package codetest
 
 import (
 	"context"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -280,16 +281,29 @@ func (s *Store) Activity(_ context.Context, orgID uuid.UUID, repoIDs []uuid.UUID
 	return out, nil
 }
 
-// FirstParents walks the repository's commits from sha along first parents.
-func (s *Store) FirstParents(_ context.Context, repoID uuid.UUID, sha string, limit int) ([]code.Commit, error) {
+// FirstParents walks the repository's commits from sha along first parents, keeping those whose message holds grep.
+func (s *Store) FirstParents(_ context.Context, repoID uuid.UUID, sha, grep string, limit int) ([]code.Commit, error) {
 	if s.Fail != nil {
 		return nil, s.Fail
 	}
 	var out []code.Commit
 	for c, ok := s.Commits[repoID][sha]; ok && len(out) < limit; c, ok = s.Commits[repoID][firstParent(c)] {
-		out = append(out, s.annotated(repoID, c))
+		if Holds(c.Message, grep) {
+			out = append(out, s.annotated(repoID, c))
+		}
 	}
 	return out, nil
+}
+
+// CountFirstParents counts the repository's commits from sha along first parents whose message holds grep.
+func (s *Store) CountFirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string) (int, error) {
+	commits, err := s.FirstParents(ctx, repoID, sha, grep, math.MaxInt)
+	return len(commits), err
+}
+
+// Holds tells whether message holds grep, ignoring case, as a history's query keeps it.
+func Holds(message, grep string) bool {
+	return strings.Contains(strings.ToLower(message), strings.ToLower(grep))
 }
 
 func firstParent(c code.Commit) string {

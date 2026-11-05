@@ -116,7 +116,22 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.artifacts = artifacts.NewService(f.artifactStore, auth.NewAuthorizer(store), markdown.New(nil, nil))
 	f.overviewStore = overviewtest.NewStore()
 	f.overview = overview.NewService(f.overviewStore, auth.NewAuthorizer(store))
-	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
+	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now,
+		Branches: []string{"main", "feature"}}
+	f.addBranches()
+	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
+	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.codeStore.ActivityList[f.acme.ID] = websiteActivity(f)
+	f.addChats()
+	f.addAgents(t)
+	f.commitObjects()
+	f.addIssues()
+	return f
+}
+
+// addBranches gives the website its main, a blocked feature merged once before it moved on, and a feature/login whose
+// settings are wrong.
+func (f *orgFixture) addBranches() {
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
 	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))
@@ -134,14 +149,6 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) {
 		b.Base, b.Status, b.SettingsError = "main", code.StatusProcessing, "/cobranch.yaml line 3: jobs is a map of jobs by name"
 	})
-	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
-	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
-	f.codeStore.ActivityList[f.acme.ID] = websiteActivity(f)
-	f.addChats()
-	f.addAgents(t)
-	f.commitObjects()
-	f.addIssues()
-	return f
 }
 
 // logged is a log's entry for the commit letter names, with the parents its other letters name.

@@ -86,11 +86,26 @@ type LogEntry struct {
 	Parents []string
 }
 
-// Log is a page of a walk of history, as the Git server reads it: the commit its ref resolved to, and the commits the
-// page holds, reachable from it with every parent followed, newest first.
+// LogQuery is a page of a walk of history a caller asks the Git server for: the commits reachable from the commit Ref
+// names; only those that changed what is at Path, as git log -- path lists them, when it names one; only those whose
+// message holds Grep, ignoring case, when it is set; after the first Skip of them, at most Limit; and with Count, how
+// many the whole walk holds.
+type LogQuery struct {
+	Ref   string
+	Path  string
+	Grep  string
+	Skip  int
+	Limit int
+	Count bool
+}
+
+// Log is a page of a walk of history, as the Git server reads it: the commit its ref resolved to, the commits the page
+// holds, reachable from it with every parent followed, newest first, and, when the query asked for Count, how many the
+// whole walk holds: nil when the server didn't count, as a Git server of an earlier release doesn't.
 type Log struct {
 	Commit  string
 	Entries []LogEntry
+	Total   *int
 }
 
 // LastCommits is what last changed a directory at a commit, as the Git server reads it: the commit its ref resolved

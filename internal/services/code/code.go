@@ -58,6 +58,8 @@ type Push struct {
 	Pusher    *Principal
 	Transport git.Transport
 	At        time.Time
+	// Branches are the branches it moved, without refs/heads/, in the order it moved them: where its commits went.
+	Branches []string
 }
 
 // Branch is one of a repository's live branches and the commit it is at: Commit is nil while its head names an
@@ -98,10 +100,12 @@ type Merge struct {
 	At   time.Time
 }
 
-// Page is a page of history, nearest first; Next is where the next page starts, empty after the last.
+// Page is a page of history, nearest first; Next is where the next page starts, empty after the last. Total is how
+// many commits the whole history holds, on its first page only.
 type Page struct {
 	Commits []Commit
 	Next    string
+	Total   *int
 }
 
 // The sizes of a page of history or of a commit's reviews.

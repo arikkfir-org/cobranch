@@ -3,7 +3,7 @@ import { api, apiPage } from "../../lib/api.js";
 import { aiCheckStates, branchBadge, branchStatuses, checkShort, processingWhat } from "../../lib/branches.js";
 import { branchSubject } from "../../lib/chat.js";
 import { ask, dialog } from "../../lib/dialog.js";
-import { diffPanel } from "../../lib/diff.js";
+import { diffView } from "../../lib/diff.js";
 import { h } from "../../lib/dom.js";
 import { banner, checkbox, field, input } from "../../lib/forms.js";
 import { environmentsPanel } from "../../lib/environments.js";
@@ -67,7 +67,7 @@ async function tabContent(ctx, b, tab) {
   const { path, at, can, fail } = ctx;
   if (tab === "changes") {
     const drafting = reviewDrafting(path, b, can);
-    return [await diffPanel(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, "Changes into " + b.base, drafting),
+    return [...await diffView(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, drafting),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
   if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsPanel(path, at, can, fail, b.head)];
