@@ -1,7 +1,7 @@
 import { api, apiPage } from "./api.js";
 import { h } from "./dom.js";
-import { capitalized, shortSha, whenExactly } from "./format.js";
-import { icon } from "./icons.js";
+import { capitalized, shortSha, since, whenExactly } from "./format.js";
+import { actorAvatar, icon, machineAvatar } from "./icons.js";
 import { go, render } from "./router.js";
 
 // The run states, drawn as the annotation statuses are.
@@ -19,39 +19,95 @@ export function runBadge(state) {
   return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
 }
 
-// runsPanel lists the repository's runs, newest first, at commit sha unless it is empty, a page at a time: each
-// with its state and why, its job, its ref and commit, what queued it and when, and Start or Cancel for a viewer
-// holding jobs.run.
-export async function runsPanel(path, at, can, fail, sha) {
-  const rows = h("tbody");
-  let next = null;
-  const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older runs");
-  const row = runRow(path, at, can, fail);
-  async function load(from) {
-    older.disabled = true;
-    try {
-      const page = await apiPage(from);
-      rows.append(...page.data.runs.map(row));
-      next = page.next;
-      older.hidden = !next;
-    } catch (err) {
-      fail(err);
-    } finally {
-      older.disabled = false;
-    }
-  }
-  await load(path + "/runs" + (sha ? "?" + new URLSearchParams({ sha }) : ""));
-  const none = h("p", {}, sha ? "No runs at this commit. " : "No runs yet. ", "The jobs that ", h("code", {}, "/cobranch.yaml"),
-    " declares run when what they name under ", h("code", {}, "on"), " happens, such as a push.");
-  return h("section", { class: "panel" }, h("h3", {}, "Runs"), rows.children.length ? h("table", { class: "runs" }, rows) : none, h("div", {}, older));
+// runStatuses are the words a run's state reads as, the annotations' that the jobs design maps runs onto: Pending while
+// it waits or is queued, In progress while it runs, then Successful or Failed, a cancellation reading Failed.
+export const runStatuses = {
+  pending: { word: "Pending", tone: "neutral", states: ["waiting", "queued"] },
+  in_progress: { word: "In progress", tone: "info", states: ["running"] },
+  successful: { word: "Successful", tone: "success", states: ["succeeded"] },
+  failed: { word: "Failed", tone: "danger", states: ["failed", "cancelled"] },
+};
+// runStatus is a run's status as Badge/Quiet draws it in a table, its state and why in its tooltip.
+export function runStatus(r) {
+  const s = Object.values(runStatuses).find((v) => v.states.includes(r.state));
+  return h("span", { class: "badge-quiet tone-" + s.tone, title: runStates[r.state].word + (r.reason ? ": " + capitalized(r.reason) : "") }, s.word);
 }
 
-// runRow makes a row of a run: its state and why, its job, ref and commit, what queued it and when, and its actions.
-const runRow = (path, at, can, fail) => (r) => h("tr", {},
-  h("td", { class: "state" }, runBadge(r.state)),
-  h("td", {}, h("a", { href: at.run(r.number), "data-nav": "" }, h("code", {}, r.job.displayName), " #" + r.number), r.reason ? h("p", {}, capitalized(r.reason)) : null,
-    h("p", { class: "muted" }, refName(r.ref), " · ", h("a", { href: at.commit(r.sha), "data-nav": "" }, h("code", {}, shortSha(r.sha))), " · ", triggered(r), " · ", whenExactly(r.queuedAt))),
-  h("td", { class: "actions" }, runActions(path, at, r, can, fail)));
+// duration is how long a run ran, as the Jobs table says it: 38s, 4m 12s, 1h 05m; until now while it runs, and a dash
+// before it starts.
+export function duration(r) {
+  if (!r.startedAt) return "—";
+  const s = Math.max(0, Math.round(((r.endedAt ? new Date(r.endedAt) : new Date()) - new Date(r.startedAt)) / 1000));
+  const two = (n) => String(n).padStart(2, "0");
+  return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m " + two(s % 60) + "s" : Math.floor(s / 3600) + "h " + two(Math.floor(s / 60) % 60) + "m";
+}
+
+// runsTable is a repository's runs as the Jobs screen's table draws them, newest first, a page at a time, Older runs
+// adding the next under those shown. load shows the page at from, in place of those shown unless adding, and answers
+// it, or null when it failed or a later load overtook it.
+export function runsTable(path, at, fail) {
+  const rows = h("tbody");
+  const table = h("table", { class: "table runs-table" },
+    h("thead", {}, h("tr", {}, ["Job", "Branch", "Commit", "Status", "Started", "Duration", "By"].map((t) => h("th", {}, t)))), rows);
+  const more = h("button", { class: "btn btn-sm", type: "button", hidden: true }, "Older runs");
+  let next = null;
+  let asked = 0;
+  async function load(from, adding) {
+    const mine = ++asked;
+    more.disabled = true;
+    try {
+      const page = await apiPage(from);
+      if (mine !== asked) return null;
+      if (!adding) rows.replaceChildren();
+      rows.append(...page.data.runs.map((r) => runRow(at, r)));
+      next = page.next;
+      more.hidden = !next;
+      return page;
+    } catch (err) {
+      if (mine === asked) fail(err);
+      return null;
+    } finally {
+      if (mine === asked) more.disabled = false;
+    }
+  }
+  more.addEventListener("click", () => load(next, true));
+  return { table, more, load };
+}
+
+// runsAt is the runs at commit sha, as a branch's Jobs tab shows them at its head until it draws its pushes: the Jobs
+// table, or an Empty state when none ran there.
+export async function runsAt(path, at, fail, sha) {
+  const list = runsTable(path, at, fail);
+  const page = await list.load(path + "/runs?" + new URLSearchParams({ sha }), false);
+  if (page && !page.data.runs.length) {
+    return noRuns("play", "No runs at " + shortSha(sha), ["The jobs ", h("code", {}, "/cobranch.yaml"), " declares at this commit run when what they name under ", h("code", {}, "on"), " happens, such as a push."]);
+  }
+  return h("div", { class: "runs-list" }, list.table, h("div", {}, list.more));
+}
+
+// noRuns is the card a list of runs shows when it has none: an Empty state saying why, and action under it, if any.
+export const noRuns = (glyph, title, text, action = null) => h("section", { class: "card empty-centred" }, h("div", { class: "empty" },
+  h("div", { class: "empty-icon" }, icon(glyph)), h("h2", { class: "empty-title" }, title), h("p", { class: "empty-description" }, text), action));
+
+// runRow is a run's row in the Jobs table: its job and number, linking to its page; its branch, or tag; its commit;
+// its status; when it started, or was queued while it waits; how long it ran; and who caused it.
+const runRow = (at, r) => {
+  const ref = r.ref.replace(/^refs\/(heads|tags)\//, "");
+  return h("tr", {},
+    h("td", { class: "cell-mono" }, h("a", { href: at.run(r.number), "data-nav": "" }, r.job.displayName + " #" + r.number)),
+    h("td", { class: "cell-mono", title: r.ref.startsWith("refs/tags/") ? "Tag " + ref : ref }, ref),
+    h("td", { class: "cell-mono" }, h("a", { href: at.commit(r.sha), "data-nav": "", title: r.sha }, shortSha(r.sha))),
+    h("td", {}, runStatus(r)),
+    h("td", { class: "cell-muted", title: whenExactly(r.startedAt || r.queuedAt) }, since(r.startedAt || r.queuedAt)),
+    h("td", {}, duration(r)),
+    h("td", {}, causer(r)));
+};
+
+// causer is the avatar of who caused a run, by its kind: a person, an agent, a job or an API key; its job's for a
+// schedule's run; or a dash once whoever caused it is gone.
+const causer = (r) => r.causedBy ? actorAvatar(r.causedBy)
+  : r.trigger.kind === "schedule" ? machineAvatar(r.job.displayName + ", on its schedule")
+  : h("span", { class: "cell-unassigned", title: "Someone since gone" }, "–");
 
 // runActions are Start for a waiting run, Cancel for one that hasn't ended, and Re-run for one that has, which opens
 // the new run, for a viewer holding jobs.run.

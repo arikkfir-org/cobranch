@@ -318,3 +318,12 @@ func principalOf(id *uuid.UUID, displayName *string) *code.Principal {
 	}
 	return &code.Principal{ID: *id, DisplayName: *displayName}
 }
+
+// actorOf is a principal by its ID, display name and kind, as a LEFT JOIN on principals gives them, or nil when it
+// matched none.
+func actorOf(id *uuid.UUID, displayName, kind *string) *code.Actor {
+	if id == nil || displayName == nil || kind == nil {
+		return nil
+	}
+	return &code.Actor{ID: *id, DisplayName: *displayName, Kind: *kind}
+}

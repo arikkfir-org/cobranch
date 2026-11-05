@@ -9,8 +9,8 @@ scalar Map
 scalar Any
 
 extend type Repository {
-  "A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100."
-  runs(sha: String, first: Int! = 30, after: String): RunPage!
+  "A page of the repository's runs, newest first, those the filters given keep: at commit sha, of the job named job, on the branch named branch, in one of states, and those whose job's name or branch or tag holds query, ignoring case, or whose commit's name starts with it (up to 200 characters, on one line); from the newest, or from after, where the previous page's nextCursor says the next one starts. The first page counts them all. Takes repo.read. first is 1 to 100."
+  runs(sha: String, job: String, branch: String, states: [RunState!], query: String, first: Int! = 30, after: String): RunPage!
   "One of the repository's runs by number: null unless it is there; takes repo.read."
   run(number: Int!): Run
 }
@@ -33,6 +33,8 @@ type RunPage {
   runs: [Run!]!
   "Where the next page starts, as runs' after; null after the last page."
   nextCursor: String
+  "How many runs the filters keep, on every page; on the first page alone, null on the rest."
+  total: Int
 }
 
 "One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then."
@@ -60,6 +62,8 @@ type Run {
   reason: String!
   "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
+  "Who caused it, with their kind: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it, such as a person, an agent, a job or an API key; null for a schedule's run, or once they are gone."
+  causedBy: Actor
   queuedAt: Time!
   startedAt: Time
   endedAt: Time

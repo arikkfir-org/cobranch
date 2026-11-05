@@ -3,6 +3,7 @@ package codetest
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -25,18 +26,43 @@ func (s *Store) AddRun(repoID uuid.UUID, r code.Run) code.Run {
 	return r
 }
 
-// Runs lists the repository's runs, newest first, as code.Store does.
-func (s *Store) Runs(_ context.Context, repoID uuid.UUID, sha string, before int64, limit int) ([]code.Run, error) {
+// Runs lists the repository's runs that q keeps, newest first, as code.Store does.
+func (s *Store) Runs(_ context.Context, repoID uuid.UUID, q code.RunsQuery) ([]code.Run, error) {
 	if s.Fail != nil {
 		return nil, s.Fail
 	}
 	var out []code.Run
 	for _, r := range slices.Backward(s.RunList[repoID]) {
-		if (before == 0 || r.Number < before) && (sha == "" || r.SHA == sha) && len(out) < limit {
+		if (q.Before == 0 || r.Number < q.Before) && keeps(q, r) && len(out) < q.Limit {
 			out = append(out, r)
 		}
 	}
 	return out, nil
+}
+
+// CountRuns counts the repository's runs that q's filters keep, as code.Store does.
+func (s *Store) CountRuns(_ context.Context, repoID uuid.UUID, q code.RunsQuery) (int, error) {
+	if s.Fail != nil {
+		return 0, s.Fail
+	}
+	n := 0
+	for _, r := range s.RunList[repoID] {
+		if keeps(q, r) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// keeps reports whether q's filters keep r: its commit, job, branch and state, and a query its job's name or branch
+// holds, ignoring case, or its commit starts with.
+func keeps(q code.RunsQuery, r code.Run) bool {
+	branch, _ := strings.CutPrefix(r.Ref, "refs/heads/")
+	query := strings.ToLower(q.Query)
+	return (q.SHA == "" || r.SHA == q.SHA) && (q.Job == "" || r.Job.DisplayName == q.Job) && (q.Branch == "" || r.Ref == "refs/heads/"+q.Branch) &&
+		(len(q.States) == 0 || slices.Contains(q.States, r.State)) &&
+		(query == "" || strings.Contains(strings.ToLower(r.Job.DisplayName), query) || strings.Contains(strings.ToLower(branch), query) ||
+			strings.HasPrefix(r.SHA, query))
 }
 
 // Run finds one of the repository's runs by number, as code.Store does.

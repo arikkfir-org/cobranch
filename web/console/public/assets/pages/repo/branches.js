@@ -14,7 +14,7 @@ import { issueBadge } from "../../lib/issues.js";
 import { popover } from "../../lib/menu.js";
 import { commitReviews, reviewDrafting } from "../../lib/reviews.js";
 import { go, render } from "../../lib/router.js";
-import { manualJobs, runsPanel } from "../../lib/runs.js";
+import { manualJobs, runsAt } from "../../lib/runs.js";
 import { base, me, setCarried } from "../../lib/state.js";
 import { mergeCard, repositoryBranches } from "./index.js";
 
@@ -72,7 +72,7 @@ async function tabContent(ctx, b, tab) {
     return [...await diffView(branch + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can), me ? branch + "/viewed" : null),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
-  if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsPanel(path, at, can, fail, b.head)];
+  if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsAt(path, at, fail, b.head)];
   if (tab === "environment") return [await environmentsPanel(path, at, b.name)];
   if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
   return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,
@@ -88,9 +88,7 @@ function branchTabBar({ path, at }, b, shown) {
     const count = (n) => n && tab.append(h("span", { class: "tab-count" }, n));
     // A count that fails to arrive leaves the tab without one.
     if (t === "changes") api("GET", path + "/branches/" + encodeURIComponent(b.name) + "/diff-counts").then((c) => count(c.files), () => {});
-    if (t === "jobs") apiPage(path + "/runs?" + new URLSearchParams({ sha: b.head })).then((page) => {
-      count(page.data.runs.length && page.data.runs.length + (page.next ? "+" : ""));
-    }, () => {});
+    if (t === "jobs") api("GET", path + "/runs?" + new URLSearchParams({ sha: b.head, limit: "1" })).then((page) => count(page.total), () => {});
     return tab;
   }));
 }

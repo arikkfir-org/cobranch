@@ -34,7 +34,7 @@ type Code interface {
 	Paths(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref string) (code.Paths, error)
 	Blame(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.FileBlame, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
-	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.RunsQuery) (code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunLogs(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]code.RunLog, error)
 	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
@@ -191,6 +191,14 @@ func commitPrincipal(p *code.Principal) *CommitPrincipal {
 		return nil
 	}
 	return &CommitPrincipal{ID: p.ID.String(), DisplayName: p.DisplayName}
+}
+
+// actor is who did something, with their kind, as the API shows them; nil for nobody.
+func actor(a *code.Actor) *Actor {
+	if a == nil {
+		return nil
+	}
+	return &Actor{ID: a.ID.String(), DisplayName: a.DisplayName, Kind: a.Kind}
 }
 
 func person(p code.Person) *Person {

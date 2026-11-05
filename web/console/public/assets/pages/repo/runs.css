@@ -1,3 +1,26 @@
 /* A run's page: its jobs' logs. */
 pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); background: var(--color-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-code-medium); color: var(--color-fg-default); }
 .logs { display: grid; gap: var(--space-12); }
+
+/* The Jobs screen: its filters over its table, and the table's columns at the widths the screen draws them; the
+   components draw everything else. A branch's Jobs tab shows the same table, in a list of its own. */
+.runs-page, .runs-list { display: flex; flex-direction: column; gap: var(--space-24); container-type: inline-size; }
+.runs-table { table-layout: fixed; }
+.runs-table th:nth-child(2) { width: 240px; }
+.runs-table th:nth-child(3) { width: 90px; }
+.runs-table th:nth-child(4) { width: 120px; }
+.runs-table th:nth-child(5) { width: 110px; }
+.runs-table th:nth-child(6) { width: 90px; }
+.runs-table th:nth-child(7) { width: 56px; }
+.runs-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runs-menu { width: 260px; max-height: 360px; overflow-y: auto; }
+/* Narrower, as beside the conversation pane, the table drops its Commit column and narrows Branch, then drops Branch
+   and Started, so a run's job keeps its room. */
+@container (max-width: 1000px) {
+  .runs-table :is(th, td):nth-child(3) { display: none; }
+  .runs-table th:nth-child(2) { width: 180px; }
+}
+@container (max-width: 720px) {
+  .runs-table :is(th, td):is(:nth-child(2), :nth-child(5)) { display: none; }
+  .runs-filters > .filters-count { flex-basis: 100%; }
+}

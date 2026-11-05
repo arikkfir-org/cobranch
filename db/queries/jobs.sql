@@ -122,19 +122,43 @@ RETURNING slot;
 -- name: DeleteScheduleSlots :execrows
 DELETE FROM schedule_slots WHERE slot < @before;
 
--- RunsOf lists a page of a repository's runs, newest first, from before a number (0 for the newest), at a commit when
--- one is named, with their jobs' names and the names of who started them.
+-- RunsOf lists a page of a repository's runs, newest first, before run number before (0 for the newest), each with its
+-- job's name, who started it and who caused it: who started it, else its trigger's actor. Each filter left empty keeps
+-- every run: the commit, the job's name, the ref, the states, and a query that the job's name or the branch or tag
+-- holds, ignoring case, or that the commit starts with.
 -- name: RunsOf :many
-SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name
+SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
+  LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = @repo_id AND (@before::bigint = 0 OR r.number < @before::bigint)
   AND (@sha::text = '' OR r.sha = @sha::text)
+  AND (@job::text = '' OR j.name = @job::text)
+  AND (@ref::text = '' OR r.ref = @ref::text)
+  AND (cardinality(@states::text[]) = 0 OR r.state = ANY(@states::text[]))
+  AND (@query::text = '' OR strpos(lower(j.name), lower(@query::text)) > 0
+    OR strpos(lower(regexp_replace(r.ref, '^refs/(heads|tags)/', '')), lower(@query::text)) > 0
+    OR left(r.sha, length(@query::text)) = lower(@query::text))
 ORDER BY r.number DESC
 LIMIT @lim;
 
+-- CountRuns counts a repository's runs that RunsOf's filters keep.
+-- name: CountRuns :one
+SELECT count(*)
+FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id
+WHERE r.repo_id = @repo_id
+  AND (@sha::text = '' OR r.sha = @sha::text)
+  AND (@job::text = '' OR j.name = @job::text)
+  AND (@ref::text = '' OR r.ref = @ref::text)
+  AND (cardinality(@states::text[]) = 0 OR r.state = ANY(@states::text[]))
+  AND (@query::text = '' OR strpos(lower(j.name), lower(@query::text)) > 0
+    OR strpos(lower(regexp_replace(r.ref, '^refs/(heads|tags)/', '')), lower(@query::text)) > 0
+    OR left(r.sha, length(@query::text)) = lower(@query::text));
+
+-- RunByNumber finds one of a repository's runs by number, as RunsOf lists it.
 -- name: RunByNumber :one
-SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name
+SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
+  LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = @repo_id AND r.number = @number;
 
 -- RunForUpdate finds a run by number with its job's name, and locks it until the transaction ends.

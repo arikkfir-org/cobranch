@@ -3421,6 +3421,9 @@ type Run struct {
 	// CauseRun The number of the run whose annotation triggered it; absent for any other.
 	CauseRun *int64 `json:"causeRun,omitempty"`
 
+	// CausedBy Who caused it, with their kind: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it, such as a person, an agent, a job or an API key; absent for a schedule's run, or once they are gone.
+	CausedBy *Actor `json:"causedBy,omitempty"`
+
 	// Definition A job as /cobranch.yaml declared it.
 	Definition Job                `json:"definition"`
 	EndedAt    *time.Time         `json:"endedAt,omitempty"`
@@ -4676,6 +4679,18 @@ type ListRunsParams struct {
 	// SHA Only the runs at this commit, by its full name.
 	SHA *string `form:"sha,omitempty" json:"sha,omitempty"`
 
+	// Job Only the runs of the job of this name.
+	Job *string `form:"job,omitempty" json:"job,omitempty"`
+
+	// Branch Only the runs on the branch of this name.
+	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
+
+	// State Only the runs in one of these states; repeat it for each.
+	State *[]RunState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Q Only the runs whose job's name or branch or tag holds this text, ignoring case, or whose commit's name starts with it: up to 200 characters, on one line.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// Cursor Where the page starts, as the previous page's Link names it; the newest run when left out. Opaque.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -5543,7 +5558,7 @@ type ServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// ListRuns A page of the repository's runs of its jobs, newest first; takes repo.read.
+	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRunsParams)
 	// GetRun One of the repository's runs by its number; takes repo.read.
@@ -14521,6 +14536,58 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sha"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "job" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "job", r.URL.Query(), &params.Job, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "job"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "job", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "branch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "branch", r.URL.Query(), &params.Branch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "branch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
 		}
 		return
 	}
@@ -34842,6 +34909,9 @@ type ListRuns200ResponseHeaders struct {
 type ListRuns200JSONResponse struct {
 	Body struct {
 		Runs []Run `json:"runs"`
+
+		// Total How many runs the filters keep, on every page; on the first page alone.
+		Total *int `json:"total,omitempty"`
 	}
 	Headers ListRuns200ResponseHeaders
 }
@@ -38973,7 +39043,7 @@ type StrictServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
-	// ListRuns A page of the repository's runs of its jobs, newest first; takes repo.read.
+	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
 	// GetRun One of the repository's runs by its number; takes repo.read.

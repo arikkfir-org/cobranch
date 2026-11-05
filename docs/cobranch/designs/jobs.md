@@ -431,7 +431,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 
 | REST, under `/v1/orgs/{org}` | GraphQL | Takes |
 | --- | --- | --- |
-| `GET /repos/{repo}/runs?sha=`, `GET …/runs/{n}` | `Repository.runs(sha:)`, `Repository.run` | `repo.read` |
+| `GET /repos/{repo}/runs?sha=&job=&branch=&state=&q=`, `GET …/runs/{n}` | `Repository.runs(sha:, job:, branch:, states:, query:)`, `Repository.run` | `repo.read` |
 | `GET …/runs/{n}/logs`, `GET …/runs/{n}/logs/{container}` (text) | `Run.logs` | `repo.read` |
 | `POST …/runs/{n}/start`, `/cancel`, `/rerun` | `startRun`, `cancelRun`, `rerunRun` | `jobs.run` |
 | `POST /repos/{repo}/branches/{branch}/jobs/{job}/runs` | `runJob` | `jobs.run`, the job declaring `manual` |
@@ -441,9 +441,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | `GET`, `POST /secrets/{id}/access`, `DELETE …/access/{principal}` | `Secret.access`, `grantSecret`, `revokeSecret` | reading: `secrets.manage` on it or `org.grants.manage`; granting: `org.grants.manage` and `secrets.read` on it |
 | `GET /repos/{repo}/jobs` | `Repository.jobPrincipals` | `repo.read` |
 
-- **A repository's Jobs tab** lists its runs, newest first, or those at a commit (`?sha=`); **a commit's page** counts
-  the runs at the commit beside its annotations and links them there, and **a branch's Jobs tab** (`?tab=jobs`) those on its head, with Start for a waiting run, Run for a
-  manual job, and Re-run and Cancel.
+- **A repository's Jobs tab** lists its runs as a table, newest first: each one's job and number, branch, commit, status, when it started, how long it ran and who caused it (whoever started it, else its trigger's actor, drawn by their kind: a person, an agent, a job or an API key; a schedule's run shows its job's avatar, and one whose causer is gone a dash). Its filters keep the runs whose job's name or branch holds a text, ignoring case, or whose commit starts with it, of a job, on a branch and in a status, and it counts what they keep, of every run once they keep fewer. A run's status is its annotation's word: Pending while it waits or is queued, In progress while it runs, then Successful or Failed, a cancellation reading Failed with its reason in a tooltip. **A commit's page** counts the runs at the commit beside its annotations and links them there, by its short name as the filter's text, and **a branch's Jobs tab** (`?tab=jobs`) shows those on its head in the same table, with Run for a manual job; Start, Re-run and Cancel are on a run's page.
 - **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
   runs.
 - **An organization's Secrets page and a repository's Secrets tab** list their secrets, by name, with who is granted

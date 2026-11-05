@@ -8,7 +8,10 @@ package graphql
 import (
 	"context"
 	"errors"
+	"strings"
 
+	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -90,7 +93,7 @@ func (r *mutationResolver) PostEvent(ctx context.Context, repositoryID string, n
 }
 
 // Runs is the resolver for the runs field.
-func (r *repositoryResolver) Runs(ctx context.Context, obj *Repository, sha *string, first int, after *string) (*RunPage, error) {
+func (r *repositoryResolver) Runs(ctx context.Context, obj *Repository, sha *string, job *string, branch *string, states []RunState, query *string, first int, after *string) (*RunPage, error) {
 	v, repoID, err := repoOf(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -99,14 +102,14 @@ func (r *repositoryResolver) Runs(ctx context.Context, obj *Repository, sha *str
 	if err != nil {
 		return nil, err
 	}
-	at := ""
-	if sha != nil {
-		at = *sha
-	}
 	if first < 1 {
 		return nil, refuse(ctx, badUserInput, "limit.invalid", "first is 1 to 100")
 	}
-	page, err := r.Code.Runs(ctx, v, repoID, at, before, first)
+	q := code.RunsQuery{SHA: orEmpty(sha), Job: orEmpty(job), Branch: orEmpty(branch), Query: orEmpty(query), Before: before, Limit: first}
+	for _, st := range states {
+		q.States = append(q.States, jobs.State(strings.ToLower(string(st))))
+	}
+	page, err := r.Code.Runs(ctx, v, repoID, q)
 	if err != nil {
 		return nil, fail(ctx, err, "repository", "listing the runs")
 	}

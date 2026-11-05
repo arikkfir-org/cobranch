@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,8 @@ func withRuns(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *a
 		at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.FixedZone("IST", 2*3600))
 		for _, r := range []code.Run{
 			{SHA: shaOf("b"), State: jobs.StateSucceeded},
-			{SHA: shaOf("c"), State: jobs.StateWaiting, Reason: "waits for a member to start it"},
+			{SHA: shaOf("c"), State: jobs.StateWaiting, Reason: "waits for a member to start it",
+				CausedBy: &code.Actor{ID: uuid.New(), DisplayName: "ci/test", Kind: "job"}},
 			{SHA: shaOf("c"), State: jobs.StateQueued},
 		} {
 			r.Job, r.Ref, r.Definition, r.QueuedAt = job, "refs/heads/main", def, at
@@ -72,6 +74,23 @@ func TestListRunsAPI(t *testing.T) {
 					t.Errorf("runs = %s", body)
 				}
 			}},
+		{name: "in either of two states, counted", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?state=waiting&state=queued"),
+			wantStatus: 200, check: listed([]int64{3, 2}, 2)},
+		{name: "a job's on a branch", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?job=ci%2Fbuild&branch=main"),
+			wantStatus: 200, check: listed([]int64{3, 2, 1}, 3)},
+		{name: "on a branch that has none", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?branch=feature"),
+			wantStatus: 200, check: listed(nil, 0)},
+		{name: "a query its job's name holds, ignoring case", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=BUILD"),
+			wantStatus: 200, check: listed([]int64{3, 2, 1}, 3)},
+		{name: "a query its commit starts with", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=" + shaOf("b")[:7]),
+			wantStatus: 200, check: listed([]int64{1}, 1)},
+		{name: "a filtered page links the next with its filters, which counts none", viewer: withRuns(maxReading), method: http.MethodGet,
+			path: fixed(runsPath + "?state=waiting&state=queued&q=ci&limit=1"), wantStatus: 200,
+			wantHeader: http.Header{"Link": {`<?cursor=3&limit=1&q=ci&state=waiting&state=queued>; rel="next"`}}, check: listed([]int64{3}, 2)},
+		{name: "the next filtered page", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?cursor=3&limit=1&q=ci&state=waiting&state=queued"),
+			wantStatus: 200, check: listed([]int64{2}, -1)},
+		{name: "a state no run is in", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?state=done"), wantStatus: 400},
+		{name: "a query over two lines", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=a%0Ab"), wantStatus: 400, wantCode: "q.invalid"},
 		{name: "a cursor of nothing", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?cursor=next"), wantStatus: 400, wantCode: "cursor.invalid"},
 		{name: "a commit that isn't one", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?sha=main"), wantStatus: 400},
 		{name: "too many a page", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?limit=101"), wantStatus: 400},
@@ -80,12 +99,29 @@ func TestListRunsAPI(t *testing.T) {
 	})
 }
 
+// listed checks that a page lists the runs numbered want, in order, and counts total, or none for -1.
+func listed(want []int64, total int) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, _ *orgFixture, body []byte) {
+		got := decode[struct {
+			Runs  []Run
+			Total *int
+		}](t, body)
+		var numbers []int64
+		for _, r := range got.Runs {
+			numbers = append(numbers, r.Number)
+		}
+		if !slices.Equal(numbers, want) || (total < 0) != (got.Total == nil) || (got.Total != nil && *got.Total != total) {
+			t.Errorf("runs = %s, want %v of %d", body, want, total)
+		}
+	}
+}
+
 func TestRunAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "one by number", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"), wantStatus: 200,
 			wantHeader: http.Header{"Etag": {`"1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if r := decode[Run](t, body); r.Number != 2 || r.State != RunStateWaiting {
-					t.Errorf("run = %s", body)
+				if r := decode[Run](t, body); r.Number != 2 || r.State != RunStateWaiting || r.CausedBy == nil || r.CausedBy.Kind != "job" {
+					t.Errorf("run = %s, want #2, waiting, caused by a job", body)
 				}
 			}},
 		{name: "one the caller holds", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"),

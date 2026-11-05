@@ -47,7 +47,7 @@ type Code interface {
 	UpdateViewed(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, tag string, changes []code.ViewedChange) ([]code.ViewedFile, error)
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
-	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.RunsQuery) (code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunLogs(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]code.RunLog, error)
 	RunLog(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64, container string) (code.RunLog, error)
@@ -74,6 +74,14 @@ func principal(p *code.Principal) *Principal {
 		return nil
 	}
 	return &Principal{Id: p.ID, DisplayName: p.DisplayName}
+}
+
+// actor is who did something, with their kind, as the API shows them; nil for nobody.
+func actor(a *code.Actor) *Actor {
+	if a == nil {
+		return nil
+	}
+	return &Actor{Id: a.ID, DisplayName: a.DisplayName, Kind: a.Kind}
 }
 
 func person(p code.Person) Person {

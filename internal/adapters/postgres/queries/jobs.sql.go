@@ -52,6 +52,43 @@ func (q *Queries) BranchSettings(ctx context.Context, repoID uuid.UUID, name str
 	return i, err
 }
 
+const countRuns = `-- name: CountRuns :one
+SELECT count(*)
+FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id
+WHERE r.repo_id = $1
+  AND ($2::text = '' OR r.sha = $2::text)
+  AND ($3::text = '' OR j.name = $3::text)
+  AND ($4::text = '' OR r.ref = $4::text)
+  AND (cardinality($5::text[]) = 0 OR r.state = ANY($5::text[]))
+  AND ($6::text = '' OR strpos(lower(j.name), lower($6::text)) > 0
+    OR strpos(lower(regexp_replace(r.ref, '^refs/(heads|tags)/', '')), lower($6::text)) > 0
+    OR left(r.sha, length($6::text)) = lower($6::text))
+`
+
+type CountRunsParams struct {
+	RepoID uuid.UUID
+	Sha    string
+	Job    string
+	Ref    string
+	States []string
+	Query  string
+}
+
+// CountRuns counts a repository's runs that RunsOf's filters keep.
+func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRuns,
+		arg.RepoID,
+		arg.Sha,
+		arg.Job,
+		arg.Ref,
+		arg.States,
+		arg.Query,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteScheduleSlots = `-- name: DeleteScheduleSlots :execrows
 DELETE FROM schedule_slots WHERE slot < $1
 `
@@ -332,8 +369,9 @@ func (q *Queries) RepositoryRolePermissions(ctx context.Context, name string) ([
 }
 
 const runByNumber = `-- name: RunByNumber :one
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
+  LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = $1 AND r.number = $2
 `
 
@@ -341,8 +379,12 @@ type RunByNumberRow struct {
 	JobRun        JobRun
 	Job           string
 	StartedByName *string
+	CausedByID    *uuid.UUID
+	CausedByName  *string
+	CausedByKind  *string
 }
 
+// RunByNumber finds one of a repository's runs by number, as RunsOf lists it.
 func (q *Queries) RunByNumber(ctx context.Context, repoID uuid.UUID, number int64) (RunByNumberRow, error) {
 	row := q.db.QueryRow(ctx, runByNumber, repoID, number)
 	var i RunByNumberRow
@@ -369,6 +411,9 @@ func (q *Queries) RunByNumber(ctx context.Context, repoID uuid.UUID, number int6
 		&i.JobRun.RerunOf,
 		&i.Job,
 		&i.StartedByName,
+		&i.CausedByID,
+		&i.CausedByName,
+		&i.CausedByKind,
 	)
 	return i, err
 }
@@ -445,18 +490,29 @@ func (q *Queries) RunNumber(ctx context.Context, id uuid.UUID) (int64, error) {
 }
 
 const runsOf = `-- name: RunsOf :many
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
+  LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = $1 AND ($2::bigint = 0 OR r.number < $2::bigint)
   AND ($3::text = '' OR r.sha = $3::text)
+  AND ($4::text = '' OR j.name = $4::text)
+  AND ($5::text = '' OR r.ref = $5::text)
+  AND (cardinality($6::text[]) = 0 OR r.state = ANY($6::text[]))
+  AND ($7::text = '' OR strpos(lower(j.name), lower($7::text)) > 0
+    OR strpos(lower(regexp_replace(r.ref, '^refs/(heads|tags)/', '')), lower($7::text)) > 0
+    OR left(r.sha, length($7::text)) = lower($7::text))
 ORDER BY r.number DESC
-LIMIT $4
+LIMIT $8
 `
 
 type RunsOfParams struct {
 	RepoID uuid.UUID
 	Before int64
 	Sha    string
+	Job    string
+	Ref    string
+	States []string
+	Query  string
 	Lim    int32
 }
 
@@ -464,15 +520,24 @@ type RunsOfRow struct {
 	JobRun        JobRun
 	Job           string
 	StartedByName *string
+	CausedByID    *uuid.UUID
+	CausedByName  *string
+	CausedByKind  *string
 }
 
-// RunsOf lists a page of a repository's runs, newest first, from before a number (0 for the newest), at a commit when
-// one is named, with their jobs' names and the names of who started them.
+// RunsOf lists a page of a repository's runs, newest first, before run number before (0 for the newest), each with its
+// job's name, who started it and who caused it: who started it, else its trigger's actor. Each filter left empty keeps
+// every run: the commit, the job's name, the ref, the states, and a query that the job's name or the branch or tag
+// holds, ignoring case, or that the commit starts with.
 func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, error) {
 	rows, err := q.db.Query(ctx, runsOf,
 		arg.RepoID,
 		arg.Before,
 		arg.Sha,
+		arg.Job,
+		arg.Ref,
+		arg.States,
+		arg.Query,
 		arg.Lim,
 	)
 	if err != nil {
@@ -505,6 +570,9 @@ func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, er
 			&i.JobRun.RerunOf,
 			&i.Job,
 			&i.StartedByName,
+			&i.CausedByID,
+			&i.CausedByName,
+			&i.CausedByKind,
 		); err != nil {
 			return nil, err
 		}
