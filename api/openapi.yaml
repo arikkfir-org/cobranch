@@ -1129,6 +1129,338 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}:
+    get:
+      operationId: getArtifact
+      summary: One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The artifact.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "304":
+          description: The caller holds the artifact as it is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateArtifact
+      summary: Changes the fields the merge patch (RFC 7396) names of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatchArtifact"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ArtifactPatch"
+      responses:
+        "200":
+          description: The artifact as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteArtifact
+      summary: Deletes one of the organization's artifacts, its versions and every grant on it; takes artifacts.manage on it. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatchArtifact"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}/versions:
+    get:
+      operationId: listArtifactVersions
+      summary: An artifact's versions, newest first, without their bodies; takes artifacts.read on it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The versions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactVersionList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: addArtifactVersion
+      summary: >-
+        Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition
+        names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412;
+        without it, the answer is 428. An id of a version the caller added to this artifact already answers that
+        version, with 200, so a call sent again adds nothing more.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatchArtifact"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewArtifactVersion"
+      responses:
+        "200":
+          description: The version the id names, which the caller added before, without its body.
+          headers:
+            ETag:
+              description: The artifact's ETag as it now is.
+              required: true
+              schema:
+                type: string
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactVersion"
+        "201":
+          description: The version, without its body.
+          headers:
+            ETag:
+              description: The artifact's ETag as it now is.
+              required: true
+              schema:
+                type: string
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactVersion"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}/versions/{version}:
+    get:
+      operationId: getArtifactVersion
+      summary: A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/artifactVersionNumber"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The version.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactVersion"
+        "304":
+          description: The caller holds the version as it is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}/versions/{version}/raw:
+    get:
+      operationId: getArtifactVersionRaw
+      summary: >-
+        A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data
+        URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/artifactVersionNumber"
+        - name: download
+          in: query
+          description: Whether to answer the body as an attachment, named after the artifact's title and the version's format.
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The body, as the version's format.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              description: private, no-cache, so a revoked grant stops the next read.
+              required: true
+              schema:
+                type: string
+            Content-Disposition:
+              description: attachment, with a file name, when download is true.
+              schema:
+                type: string
+            Content-Security-Policy:
+              description: Sandboxes the body and lets it load data URLs and its own inline styles alone, so it runs nothing and calls nowhere.
+              required: true
+              schema:
+                type: string
+            X-Content-Type-Options:
+              description: nosniff, so no browser takes the body for another type.
+              required: true
+              schema:
+                type: string
+            Cross-Origin-Resource-Policy:
+              description: same-site, so only the installation's own pages embed the body.
+              required: true
+              schema:
+                type: string
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The body is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              description: private, no-cache.
+              required: true
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}/access:
+    get:
+      operationId: getArtifactAccess
+      summary: Who reaches an artifact, its audiences and the roles principals hold on the artifact itself, by name; grants on its repository and at its organization reach it too. Takes artifacts.read on it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: Who reaches it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactAccess"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: shareArtifact
+      summary: Gives one of the organization's members, API keys or agents a role on the artifact, in place of any role it held on it; takes artifacts.manage on it and every permission the role gives.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtifactShare"
+      responses:
+        "204":
+          description: Shared.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts/{id}/access/{principal}:
+    delete:
+      operationId: unshareArtifact
+      summary: Takes every role a principal holds on the artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository or at its organization, and its audiences, still reach it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/principal"
+      responses:
+        "204":
+          description: Unshared.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/invitations:
     get:
       operationId: listInvitations
@@ -3046,6 +3378,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Secret"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/artifacts:
+    get:
+      operationId: listArtifacts
+      summary: The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: kind
+          in: query
+          description: Only the artifacts of this kind.
+          schema:
+            $ref: "#/components/schemas/ArtifactKind"
+      responses:
+        "200":
+          description: The artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactList"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createArtifact
+      summary: >-
+        Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker
+        holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An
+        id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again
+        makes nothing more; one another principal or repository took is refused with 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewArtifact"
+      responses:
+        "200":
+          description: The artifact the id names, which the caller made before.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "201":
+          description: The artifact.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -5005,6 +5415,21 @@ components:
       description: The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
       schema:
         type: string
+    ifMatchArtifact:
+      name: If-Match
+      in: header
+      description: The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    artifactVersionNumber:
+      name: version
+      in: path
+      required: true
+      description: A version's number, from 1; 0 for the artifact's newest.
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
     ifNoneMatchAnnotation:
       name: If-None-Match
       in: header
@@ -7050,6 +7475,247 @@ components:
           enum: [user, api_key, job, agent]
         displayName:
           type: string
+    ArtifactKind:
+      type: string
+      description: What an artifact is for, which picks its icon and its filter, never its format.
+      enum: [document, diagram, report, page]
+    ArtifactReach:
+      type: string
+      description: How far an audience reaches an artifact.
+      enum: [none, view, edit]
+    ArtifactMediaType:
+      type: string
+      description: The format a version is written in.
+      enum: [text/markdown, image/svg+xml, text/html]
+    ArtifactRole:
+      type: string
+      description: A role an artifact grants, from viewing to managing.
+      enum: [viewer, editor, owner]
+    Artifact:
+      type: object
+      description: >-
+        A document, a diagram, a report or a page that a repository owns, as its readers see it: its versions' bodies
+        come from getArtifactVersion.
+      required: [id, orgId, repository, title, summary, kind, repositoryAccess, organizationAccess, audience, branch, head, mediaType, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        repository:
+          $ref: "#/components/schemas/ArtifactRepository"
+        title:
+          type: string
+        summary:
+          type: string
+        kind:
+          $ref: "#/components/schemas/ArtifactKind"
+        repositoryAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        organizationAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        audience:
+          type: string
+          description: Its widest audience, as the list's badge names it.
+          enum: [organization, repository, private]
+        agent:
+          $ref: "#/components/schemas/Principal"
+        taskNumber:
+          type: integer
+          format: int64
+          description: The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
+        branch:
+          type: string
+          description: The branch it came from; empty for none.
+        head:
+          type: integer
+          format: int32
+          description: Its newest version's number, the one it shows.
+        mediaType:
+          $ref: "#/components/schemas/ArtifactMediaType"
+        version:
+          type: integer
+          format: int64
+          description: Its version, which every change and every new version bumps, and its ETag carries.
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedBy:
+          $ref: "#/components/schemas/Principal"
+        updatedAt:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          description: What the caller holds on it, sorted; getArtifact alone answers it.
+          items:
+            type: string
+    ArtifactRepository:
+      type: object
+      description: The repository that owns an artifact.
+      required: [id, slug]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+    ArtifactList:
+      type: object
+      required: [artifacts]
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+    NewArtifact:
+      type: object
+      description: What makes an artifact with its first version.
+      required: [title, kind, mediaType, body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The artifact's ID, and its first version's, which the call that makes it picks so that it makes it once; a new one when absent.
+        title:
+          type: string
+          description: 1 to 200 characters.
+        summary:
+          type: string
+          description: At most 500 characters.
+        kind:
+          $ref: "#/components/schemas/ArtifactKind"
+        repositoryAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        organizationAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        branch:
+          type: string
+          description: The branch it came from; an agent's task names its own when absent.
+        mediaType:
+          $ref: "#/components/schemas/ArtifactMediaType"
+        body:
+          type: string
+          description: Its first version's body, 1 byte to 1 MiB of UTF-8 text without NUL characters.
+        note:
+          type: string
+          description: Why the version was written, at most 500 characters.
+    ArtifactPatch:
+      type: object
+      description: The fields of an artifact a change sets; those it leaves out stay as they are.
+      properties:
+        title:
+          type: string
+        summary:
+          type: string
+        repositoryAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        organizationAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+    ArtifactVersion:
+      type: object
+      description: A version of an artifact, which never changes.
+      required: [id, artifactId, number, mediaType, size, note, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        artifactId:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int32
+        mediaType:
+          $ref: "#/components/schemas/ArtifactMediaType"
+        size:
+          type: integer
+          format: int64
+          description: Its body's length in bytes.
+        author:
+          $ref: "#/components/schemas/Principal"
+        taskNumber:
+          type: integer
+          format: int64
+          description: The number of the agent's task it was written in; absent for none.
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        body:
+          type: string
+          description: Its text; getArtifactVersion alone answers it.
+        html:
+          type: string
+          description: A Markdown body rendered and sanitized as the Console shows it; getArtifactVersion alone answers it.
+    ArtifactVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactVersion"
+    NewArtifactVersion:
+      type: object
+      description: What adds a version.
+      required: [mediaType, body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The version's ID, which the call that adds it picks so that it adds it once; a new one when absent.
+        mediaType:
+          $ref: "#/components/schemas/ArtifactMediaType"
+        body:
+          type: string
+          description: 1 byte to 1 MiB of UTF-8 text without NUL characters.
+        note:
+          type: string
+          description: Why it was written, at most 500 characters.
+    ArtifactAccess:
+      type: object
+      description: Who reaches an artifact; grants on its repository and at its organization reach it too.
+      required: [repositoryAccess, organizationAccess, grants]
+      properties:
+        repositoryAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        organizationAccess:
+          $ref: "#/components/schemas/ArtifactReach"
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactGrant"
+    ArtifactGrant:
+      type: object
+      description: A role a principal holds on an artifact itself.
+      required: [principalId, kind, displayName, role]
+      properties:
+        principalId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [user, api_key, job, agent]
+        displayName:
+          type: string
+        role:
+          $ref: "#/components/schemas/ArtifactRole"
+    ArtifactShare:
+      type: object
+      description: Who an artifact is shared with, and as what.
+      required: [principalId, role]
+      properties:
+        principalId:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/ArtifactRole"
     ApiKeyInput:
       type: object
       description: What makes an API key; its first secret's expiry as SecretInput's.

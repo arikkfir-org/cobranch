@@ -288,3 +288,47 @@ func TestAuthorizerUnderADeliveryToken(t *testing.T) {
 		})
 	}
 }
+
+// TestAmong keeps the objects a list answers to those the request's credential lets its principal reach: a personal
+// token's permissions narrow them, and a task token's assigner caps them.
+func TestAmong(t *testing.T) {
+	agent, alice, user, a, b, c := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	listed := map[uuid.UUID][]uuid.UUID{agent: {a, b}, alice: {b, c}, user: {a, c}}
+	list := func(_ context.Context, principalID uuid.UUID) ([]uuid.UUID, error) {
+		return slices.Clone(listed[principalID]), nil
+	}
+	task := func(assigner uuid.UUID) *auth.Authenticated {
+		return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: agent, Kind: auth.KindAgent}},
+			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent, Task: auth.TaskGrant{ID: uuid.New(), AssignerID: assigner}}}
+	}
+	personal := func(permissions ...string) *auth.Authenticated {
+		return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: user, Kind: auth.KindUser}},
+			Credential: auth.Credential{ID: uuid.New(), Kind: auth.CredentialPersonalToken, Permissions: permissions}}
+	}
+	tests := []struct {
+		name      string
+		viewer    *auth.Authenticated
+		principal uuid.UUID
+		want      []uuid.UUID
+	}{
+		{name: "no token: what the list answers", principal: user, want: []uuid.UUID{a, c}},
+		{name: "a personal token that lists the permission", viewer: personal("artifacts.read"), principal: user, want: []uuid.UUID{a, c}},
+		{name: "a personal token that doesn't", viewer: personal("repo.read"), principal: user},
+		{name: "a task token: those its assigner reaches too", viewer: task(alice), principal: agent, want: []uuid.UUID{b}},
+		{name: "a task Cobranch started: the agent's own", viewer: task(agent), principal: agent, want: []uuid.UUID{a, b}},
+		{name: "a task whose assigner is gone: none", viewer: task(uuid.Nil), principal: agent},
+		{name: "a task token never caps someone else", viewer: task(alice), principal: user, want: []uuid.UUID{a, c}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.viewer != nil {
+				ctx = auth.WithViewer(ctx, *tt.viewer)
+			}
+			got, err := auth.NewAuthorizer(grants{}).Among(ctx, tt.principal, "artifacts.read", list)
+			if err != nil || !slices.Equal(got, tt.want) {
+				t.Errorf("Among() = %v, %v, want %v", got, err, tt.want)
+			}
+		})
+	}
+}

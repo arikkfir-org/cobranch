@@ -95,6 +95,12 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 			return nil, fmt.Errorf("reading the permissions on the secret: %w", err)
 		}
 		return permissions, nil
+	case auth.ScopeArtifact:
+		permissions, err := s.q.ArtifactPermissions(ctx, principalID, scopeID, auth.ArtifactPermissions)
+		if err != nil {
+			return nil, fmt.Errorf("reading the permissions on the artifact: %w", err)
+		}
+		return permissions, nil
 	}
 	var id *uuid.UUID
 	if scopeID != uuid.Nil {
@@ -363,6 +369,9 @@ func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uui
 		}
 		if _, err := q.DeleteSecretGrantsAt(ctx, userID, orgID); err != nil {
 			return fmt.Errorf("deleting the grants on the organization's secrets: %w", err)
+		}
+		if _, err := q.DeleteArtifactGrantsAt(ctx, userID, orgID); err != nil {
+			return fmt.Errorf("deleting the grants on the organization's artifacts: %w", err)
 		}
 		if err := dropPending(ctx, q, orgID, userID); err != nil {
 			return err
