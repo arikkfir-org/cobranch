@@ -1,22 +1,29 @@
 import { api } from "../lib/api.js";
-import { logo } from "../lib/brand.js";
-import { app, h } from "../lib/dom.js";
+import { h } from "../lib/dom.js";
 import { when } from "../lib/format.js";
-import { viewerLinks } from "../lib/layout.js";
-import { base, permissions } from "../lib/state.js";
-import { setTheme, theme, themes } from "../lib/theme.js";
+import { themeSwitch } from "../lib/layout.js";
+import { permissions } from "../lib/state.js";
 
-// The viewer's own settings: their theme, their personal tokens, which act as them wherever a password or a bearer
+// The viewer's own pages, which the avatar menu opens: Account at /settings, and Preferences at
+// /settings/preferences.
+export const view = "settings";
+export const crumbs = ({ rest }) => [{ label: rest[0] === "preferences" ? "Preferences" : "Account" }];
+export default ({ main, rest }) => (rest[0] === "preferences" ? showPreferences(main) : showAccount(main));
+
+// showPreferences draws the viewer's preferences: their theme, light, dark, or the system's, which follows their
+// operating system.
+function showPreferences(main) {
+  main.replaceChildren(h("h1", {}, "Preferences"),
+    h("section", { class: "panel" }, h("h3", {}, "Theme"),
+      h("p", {}, "Light or dark, or System to follow your operating system's setting as it changes."), themeSwitch()));
+}
+
+// showAccount draws the viewer's account: their personal tokens, which act as them wherever a password or a bearer
 // token goes, and their SSH keys, which act as them over SSH.
-export async function showMySettings(shown = null) {
-  const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, logo()),
-    h("nav", {}, h("a", { href: base + "settings", "data-nav": "", class: "current" }, "Your settings")), h("span", { class: "spacer" }), ...viewerLinks());
-  const main = h("main", { class: "page" });
-  document.body.className = "";
-  app.replaceChildren(bar, main);
+async function showAccount(main, shown = null) {
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-  const refresh = (created) => showMySettings(created || null).catch(fail);
+  const refresh = (created) => showAccount(main, created || null).catch(fail);
   const [tokens, keys] = await Promise.all([api("GET", "/me/tokens").then((d) => d.tokens), api("GET", "/me/ssh-keys").then((d) => d.sshKeys)]);
   const state = (t) => (new Date(t.expiresAt) <= Date.now() ? "expired " + when(t.expiresAt) : "expires " + when(t.expiresAt)) +
     (t.lastUsedAt ? ", last used " + when(t.lastUsedAt) : ", never used");
@@ -24,7 +31,7 @@ export async function showMySettings(shown = null) {
     h("td", {}, h("div", { class: "perms" }, t.permissions.map((p) => h("code", {}, p)))),
     h("td", {}, h("code", {}, "…" + t.hint), h("p", { class: "muted" }, state(t))),
     h("td", { class: "actions" }, h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/me/tokens/" + t.id).then(() => refresh()).catch(fail) }, "Revoke")));
-  const sections = [h("h1", {}, "Your settings"), error, themeSection()];
+  const sections = [h("h1", {}, "Account"), error];
   if (shown) sections.push(revealToken(shown));
   sections.push(h("section", { class: "panel" }, h("h3", {}, "Personal tokens"),
     h("p", {}, "A personal token acts as you, narrowed to the permissions it lists: it holds only what both its list and your roles give. Git asks for one as your password over HTTPS, and scripts send it as ", h("code", {}, "Authorization: Bearer …"), ". Every token ends within a year; revoke one the moment you stop using it."),
@@ -44,15 +51,6 @@ export async function showMySettings(shown = null) {
       h("div", {}, h("button", { class: "button primary", type: "submit" }, "Make the token")))));
   sections.push(...sshKeySections(keys, refresh, fail));
   main.replaceChildren(...sections);
-}
-
-// themeSection picks the viewer's theme: light, dark, or the system's, which follows their operating system.
-function themeSection() {
-  const names = { light: "Light", dark: "Dark", system: "System" };
-  const pick = (t) => h("label", { class: "check" }, h("input", { type: "radio", name: "theme", value: t, checked: theme() === t, onchange: () => setTheme(t) }), names[t]);
-  return h("section", { class: "panel" }, h("h3", {}, "Theme"),
-    h("p", {}, "Light or dark, or System to follow your operating system's setting as it changes."),
-    h("div", { class: "row start" }, themes.map(pick)));
 }
 
 // sshKeySections are the settings' SSH keys: the viewer's, each with its fingerprint and a button that deletes it,

@@ -8,6 +8,8 @@ import { runsPanel } from "../../lib/runs.js";
 
 export const under = "";
 export const accepts = (rest) => rest.length === 1;
+export const heading = false;
+export const crumbs = ({ rest }) => [{ label: "Commit" }, { label: shortSha(rest[0]) }];
 export default ({ path, at, rest, can, fail }) => repositoryCommit(path, at, rest[0], can, fail);
 
 // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,

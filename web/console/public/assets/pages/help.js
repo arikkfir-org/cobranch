@@ -1,9 +1,8 @@
 import { annotationStatuses } from "../lib/annotations.js";
 import { logo, mark, markSmall } from "../lib/brand.js";
 import { branchStatuses } from "../lib/branches.js";
-import { app, h } from "../lib/dom.js";
+import { h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
-import { viewerLinks } from "../lib/layout.js";
 import { reviewStates } from "../lib/reviews.js";
 import { base } from "../lib/state.js";
 import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
@@ -15,17 +14,7 @@ import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
 // The app shell's own components are the shell's to draw, not specimens here.
 
 export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
-export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
-
-// showHelp draws the help page at rest, the path's parts after help/, under the Console's bar.
-export function showHelp(rest) {
-  const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"),
-    h("nav", {}, h("a", { href: base + "help", "data-nav": "", class: "current" }, "Help")), h("span", { class: "spacer" }), ...viewerLinks());
-  const main = h("main", { class: "page" });
-  document.body.className = "";
-  app.replaceChildren(bar, main);
-  show({ main, rest });
-}
+export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: base + "help" }, { label: "Components" }] : [{ label: "Help" }];
 
 export default function show({ main, rest }) {
   if (rest[0] === "components") return main.append(...components());

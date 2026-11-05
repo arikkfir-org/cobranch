@@ -10,10 +10,11 @@ export let me = null;
 export let orgs = [];
 export let roles = []; // the roles the organization shown grants
 export let permissions = []; // what a role at an organization may hold
-let chatPoll = null; // stops the chat the page follows, once the Console draws another
-// follows makes stop the one way to stop the chat the page follows, stopping the one before: null when it follows
-// none.
-export const follows = (stop) => { if (chatPoll) chatPoll.abort(); chatPoll = stop; };
+export let agents = new Set(); // the IDs of the agents of the organization shown, as its sidebar last read them
+let pagePoll = null; // stops what the page follows live, once the Console draws another
+// follows makes stop the one way to stop what the page follows live (a run's progress), stopping the one before: null
+// when it follows nothing. The conversation pane follows its own, across pages (lib/pane.js).
+export const follows = (stop) => { if (pagePoll) pagePoll.abort(); pagePoll = stop; };
 export let carried = null; // what the next repository page says went wrong, once: a step that failed after the step before it re-rendered
 
 export const setBase = (b) => { base = b; };
@@ -23,3 +24,4 @@ export const setOrgs = (o) => { orgs = o; };
 export const setRoles = (r) => { roles = r; };
 export const setPermissions = (p) => { permissions = p; };
 export const setCarried = (err) => { carried = err; };
+export const setAgents = (ids) => { agents = ids; };

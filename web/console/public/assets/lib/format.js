@@ -19,3 +19,12 @@ export function size(bytes) {
 export const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
 
 export const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+// ago is how long ago a moment was, as a conversation says it: just now, 14 min, 2 h, yesterday, then its date.
+export function ago(at) {
+  const minutes = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return minutes + " min";
+  if (minutes < 24 * 60) return Math.floor(minutes / 60) + " h";
+  return minutes < 48 * 60 ? "yesterday" : when(at);
+}

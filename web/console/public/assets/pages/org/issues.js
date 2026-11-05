@@ -1,17 +1,27 @@
 import { api, apiPage } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
-import { issueChat } from "../../lib/chat.js";
+import { issueSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { when, whenExactly } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
 import { issueBadge, issueStates } from "../../lib/issues.js";
 import { rendered } from "../../lib/markdown.js";
 import { go } from "../../lib/router.js";
+import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
 import { taskBadge } from "../../lib/tasks.js";
 
-export const nav = { label: "Issues", order: 10 };
+// nav puts Issues in the sidebar, with the newest five open issues under it, after those the viewer opened last.
+export const nav = { label: "Issues", order: 10, icon: "circle-dot",
+  items: ({ org }) => api("GET", "/orgs/" + org.slug + "/issues?limit=5").then((d) => ({ items: d.issues.map((i) => issueItem(org, i)) })) };
 export const allowed = (can) => can("issues.read");
+export const crumbs = ({ org, sub }) => [{ label: "Issues", href: base + org.slug + "/issues" },
+  ...(sub === "new" ? [{ label: "New issue" }] : sub === "labels" ? [{ label: "Labels" }] : sub ? [{ label: sub }] : [])];
+// subject is an issue's conversation, its comments, on the issue's page.
+export const subject = ({ org, can, sub }) => {
+  const number = sub && /^(?:[A-Za-z][A-Za-z0-9]*-)?(\d+)$/.exec(sub);
+  return number ? issueSubject(org, Number(number[1]), sub, can) : null;
+};
 export default ({ org, main, can, sub }) => showIssues(org, main, can, sub);
 
 const issueGroups = ["in_review", "in_progress", "todo", "backlog", "done", "canceled"];
@@ -34,6 +44,8 @@ const avatar = (p) => h("span", { class: "avatar", title: p.displayName, role: "
   p.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?");
 // issuePath is an issue's page under the Console's root: by its identifier, though the page reads only its number.
 const issuePath = (org, i) => "/" + org.slug + "/issues/" + i.identifier;
+// issueItem is an issue as the sidebar's Issues lists it: its identifier and title.
+const issueItem = (org, i) => ({ key: String(i.number), label: i.identifier + " " + i.title, href: base + issuePath(org, i).slice(1), icon: "circle-dot" });
 // branchName is the name to give a branch that works on an issue: its identifier and title in lowercase words,
 // cut at a word within 60 characters, as Linear's "Copy git branch name" does.
 function branchName(i) {
@@ -166,7 +178,7 @@ async function showNewIssue(org, main, can) {
   const description = h("textarea", { name: "description", rows: 8, maxlength: 65536, placeholder: "What it is and why, in Markdown" });
   const state = stateSelect("backlog"), priority = prioritySelect("none"), assignee = assigneeSelect(members, agents, can("agents.assign"), null), repository = repositorySelect(repositories, null);
   const create = h("button", { class: "button primary", type: "submit" }, "Create");
-  main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / new"), h("h1", {}, "New issue")),
+  main.replaceChildren(h("div", { class: "heading" }, h("h1", {}, "New issue")),
     error, h("section", { class: "panel" }, h("form", { onsubmit: (e) => {
       e.preventDefault();
       create.disabled = true;
@@ -183,7 +195,7 @@ async function showNewIssue(org, main, can) {
 }
 
 // showIssue is an issue's page: its identifier and state, its title and rendered description, which the viewer may
-// edit, its activity, oldest first, and its comments, live; beside them, the side column changes its state,
+// edit, and its activity, oldest first, with its comments in the conversation pane; beside them, the side column changes its state,
 // priority, assignee and
 // repository, each at once and from the version the page shows, and offers a branch name. It opens the issue by
 // the number its identifier ends in, so a link made before the organization changed its key still opens it.
@@ -201,8 +213,9 @@ async function showIssue(org, main, can, identifier, notice) {
   }
   if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
   const write = can("issues.write");
-  const [events, branches, choices, comments] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
-    api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null, issueChat(path, can)]);
+  remember(org, "issues", issueItem(org, issue));
+  const [events, branches, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
+    api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null]);
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
   const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
@@ -211,8 +224,7 @@ async function showIssue(org, main, can, identifier, notice) {
   // changed it meanwhile, as they left it, saying so.
   const save = (patch) => api("PATCH", path, patch, { "Content-Type": "application/merge-patch+json", "If-Match": tag })
     .then(() => refresh()).catch((err) => (err.status === 412 ? refresh("Someone changed it meanwhile: here it is as they left it. Make your change again.") : fail(err)));
-  const heading = h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / ", h("code", {}, issue.identifier)),
-    h("div", { class: "title" }, h("code", {}, issue.identifier), issueBadge(issue.state)), h("h1", {}, issue.title));
+  const heading = h("div", { class: "heading" }, h("div", { class: "title" }, h("code", {}, issue.identifier), issueBadge(issue.state)), h("h1", {}, issue.title));
   const body = h("section", { class: "panel" });
   const show = () => body.replaceChildren(h("div", { class: "row" }, h("h3", {}, "Description"),
     write ? h("button", { class: "button small", type: "button", onclick: edit }, "Edit") : null),
@@ -233,7 +245,7 @@ async function showIssue(org, main, can, identifier, notice) {
     : h("p", {}, "No branch works on it yet: push one whose name holds ", h("code", {}, issue.identifier.toLowerCase()), ", or link one from its page."));
   const activity = h("section", { class: "panel" }, h("h3", {}, "Activity"), h("ul", { class: "activity" }, events.flatMap(issueEventLines)));
   const notes = h("p", { class: "alert", hidden: !notice }, notice || "");
-  main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity, comments),
+  main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity),
     issueSide(org, issue, can, choices, save, tag, fail)));
 }
 
@@ -357,7 +369,7 @@ async function showLabels(org, main, can, notice) {
     api("POST", path, { name: name.value, color: color.value, description: description.value }).then(() => refresh()).catch(fail);
   } }, h("div", { class: "fields" }, h("label", {}, "Name", name), h("label", {}, "Colour", color), h("label", {}, "Description", description)),
     h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))) : null;
-  main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / labels"), h("h1", {}, "Labels")),
+  main.replaceChildren(h("div", { class: "heading" }, h("h1", {}, "Labels")),
     h("p", { class: "alert", hidden: !notice }, notice || ""), error,
     h("section", { class: "panel" }, labels.length ? h("table", { class: "labels-table" }, h("tbody", {}, labels.map(row)))
       : h("p", {}, manage ? "No labels yet. Create the first below." : "No labels yet.")), ...(add ? [add] : []));

@@ -2,7 +2,8 @@ import { api } from "../../lib/api.js";
 import { h } from "../../lib/dom.js";
 import { permissions, roles, setRoles } from "../../lib/state.js";
 
-export const nav = { label: "Roles", order: 30 };
+export const nav = { label: "Roles", order: 30, under: "settings" };
+export const crumbs = ({ root }) => [{ label: "Settings", href: root + "/settings" }, { label: "Roles" }];
 export default ({ org, main, can }) => showRoles(org, main, can);
 
 // The roles page: what each role holds, and, with org.grants.manage, the organization's own roles to define,
@@ -40,7 +41,7 @@ function showRoles(org, main, can) {
     return row;
   };
   rows.append(...roles.map(roleRow));
-  const sections = [h("h1", {}, "Roles"), error,
+  const sections = [error,
     h("section", { class: "panel" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Role"), h("th", {}, "Permissions"), h("th", {}))), rows))];
   if (manage) sections.push(h("section", { class: "panel" }, h("h3", {}, "Define a role"), h("p", {}, "A role of this organization alone, to grant beside the built-in ones. Changing it changes every grant of it."),
     roleForm(null, (body) => api("POST", "/orgs/" + org.slug + "/roles", body), null)));

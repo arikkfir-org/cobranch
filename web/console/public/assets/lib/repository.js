@@ -1,28 +1,39 @@
 import { api } from "./api.js";
 import { repoPages } from "./assets.js";
 import { h } from "./dom.js";
-import { visibilities } from "./organization.js";
+import { frame, pageHeading } from "./layout.js";
+import { crumbsOf, subjectOf, visibilities } from "./organization.js";
 import { go } from "./router.js";
+import { remember } from "./sidebar.js";
 import { base, carried, config, setCarried } from "./state.js";
 
 // A repository's slug in a form: 1 to 100 lowercase letters, digits, dots, underscores and hyphens, from a letter
 // or digit. The API refuses the rest: a slug ending in .git, and the organization's own pages.
 export const repoSlugInput = (value) => h("input", { name: "slug", required: true, value, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100 });
 
-// A repository's pages, each a module of pages/repo/ (its code index.js), under its heading and its tabs. A page's
-// module answers the sections it shows from its default export, given the organization, the repository, its API path,
-// its links, the route's parts after the page's own (rest), can, orgCan and fail; its nav ({ label, order }) makes it
-// a tab, its under names the tab it shows under instead ("" for Code), its allowed(can), when it has one, says
-// whether the viewer may open it, and its accepts(rest), when it has one, which parts it shows. Any other route opens
-// the repository's code.
-export async function showRepository(org, main, orgCan, slug, sub, rest) {
+// repoSubject is a repository's conversation, which every page of the repository that names no other has: each
+// viewer's own, private to them, which no page has yet.
+const repoSubject = (org, repo) => ({ key: "repo:" + org.slug + "/" + repo.slug, title: repo.slug, code: true, scope: "Only you see this", chat: null,
+  none: "There's no conversation about " + repo.slug + " yet." });
+
+// A repository's pages, each a module of pages/repo/ (its code index.js), in the app shell, under the repository's
+// heading and its tabs. A page's module answers the sections it shows from its default export, given the
+// organization, the repository, its API path, its links, the route's parts after the page's own (rest), can, orgCan
+// and fail; its nav ({ label, order }) makes it a tab, its under names the tab it shows under instead ("" for Code),
+// its allowed(can), when it has one, says whether the viewer may open it, and its accepts(rest), when it has one,
+// which parts it shows. Its heading, true or a function of rest, says whether the repository's heading and tabs show
+// above it (a page about one branch, commit or run shows its own instead); its crumbs name it in the breadcrumbs after
+// the repository, and its subject the conversation the pane shows (lib/pane.js). Any other route opens the
+// repository's code. Opening one of its pages puts the repository first in the sidebar's Repositories.
+export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, sub, rest) {
   let repo;
   try {
     repo = await api("GET", "/orgs/" + org.slug + "/repos/" + encodeURIComponent(slug));
   } catch (err) {
     if (err.status !== 404) throw err;
+    const main = frame({ org, can: orgCan, part: "repos", crumbs: [orgCrumb, { label: slug }], subject: orgSubject });
     return main.replaceChildren(h("h1", {}, "No such repository"), h("p", {}, "There is no repository ", h("code", {}, org.slug + "/" + slug), " that you may read."),
-      h("div", {}, h("a", { class: "button", href: base + org.slug, "data-nav": "" }, "Back to " + org.name)));
+      h("div", {}, h("a", { class: "btn", href: base + org.slug, "data-nav": "" }, "Back to " + org.name)));
   }
   if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub, ...rest].filter(Boolean).map(encodeURIComponent).join("/"), true);
   const can = (p) => repo.viewerPermissions.includes(p);
@@ -32,21 +43,26 @@ export async function showRepository(org, main, orgCan, slug, sub, rest) {
   // A page shown under another's tab lights that tab, as a directory, a file, a history and a commit light Code.
   const tabOf = shown && shown.under !== undefined ? shown.under : sub;
   if (!tabs.some(([t]) => t === tabOf) || (shown.accepts && !shown.accepts(rest))) return go("/" + org.slug + "/" + repo.slug, true);
+  const root = base + org.slug + "/" + repo.slug;
+  remember(org, "repos", { key: repo.slug, label: repo.slug, href: root, code: true, icon: "folder-git-2" });
   const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
-  const tab = ([t, m]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, m.nav.label);
+  const at = repoLinks(org, repo);
+  const ctx = { org, repo, path, at, rest, can, orgCan, root };
+  const tab = ([t, m]) => h("a", { class: "tab", href: root + (t ? "/" + t : ""), "data-nav": "", "aria-current": t === tabOf ? "page" : null }, m.nav.label);
   const visibility = visibilities[repo.visibility];
-  const heading = h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug, "data-nav": "" }, org.name), " / ", h("code", {}, repo.slug)),
-    h("div", { class: "row" }, h("h1", {}, repo.name), h("span", { class: "chip", title: visibility.title }, visibility.name)),
-    repo.description ? h("p", {}, repo.description) : null, h("nav", { class: "tabs" }, tabs.map(tab)));
+  const headed = shown.heading === undefined || (typeof shown.heading === "function" ? shown.heading(rest) : shown.heading);
+  const head = headed ? pageHeading({ title: repo.name, tag: h("span", { class: "tag tone-neutral", title: visibility.title }, visibility.name),
+    description: repo.description, tabs: tabs.map(tab) }) : null;
+  const main = frame({ org, can: orgCan, part: "repos", crumbs: [orgCrumb, { label: repo.slug, href: root }, ...crumbsOf(shown, ctx)],
+    subject: subjectOf(shown, ctx, repoSubject(org, repo)), head });
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
   if (carried) {
     fail(carried);
     setCarried(null);
   }
-  const at = repoLinks(org, repo);
   const sections = await shown.default({ org, repo, path, at, rest, can, orgCan, fail });
-  main.replaceChildren(heading, error, ...sections);
+  main.replaceChildren(error, ...sections);
 }
 
 // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first

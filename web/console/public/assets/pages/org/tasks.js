@@ -7,7 +7,8 @@ import { go } from "../../lib/router.js";
 import { base, me } from "../../lib/state.js";
 import { taskBadge, taskStates } from "../../lib/tasks.js";
 
-export const nav = { label: "Tasks", order: 60 };
+export const nav = { label: "Tasks", order: 60, under: "agents" };
+export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agents" }, { label: "Tasks", href: root + "/tasks" }, ...(sub ? [{ label: "#" + sub }] : [])];
 export default ({ org, main, can, sub }) => sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
 
 const activeTask = (t) => ["queued", "running", "waiting"].includes(t.state);
@@ -161,7 +162,7 @@ async function showTasks(org, main, can) {
     }
   }
   await load("/orgs/" + org.slug + "/tasks" + (params.toString() ? "?" + params : ""));
-  main.replaceChildren(h("h1", {}, "Tasks"), error, h("section", { class: "panel" },
+  main.replaceChildren(error, h("section", { class: "panel" },
     h("div", { class: "row" }, filter, h("span", { class: "spacer" }), can("agents.assign") ? h("a", { class: "button small primary", href: base + org.slug + "/agents", "data-nav": "" }, "Assign a task") : null),
     rows.children.length ? h("table", { class: "runs" }, rows) : h("p", {}, "No tasks here yet. Members who hold ", h("code", {}, "agents.assign"), " assign them to the organization's agents."),
     h("div", {}, older)));
