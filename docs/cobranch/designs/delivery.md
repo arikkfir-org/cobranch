@@ -398,8 +398,14 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
   secret lives, as the list of secrets shows it; others see its ID alone. `/targets` lists `main`'s targets as the file
   declares them, their variables unexpanded, and `/deliveries?kind=deliver&kind=teardown` leaves the resyncs out. A
   delivery carries its commit's subject, which the Console lists it by.
-- **An environment's page** shows its objects with their health and kind, its deliveries with each render's manifests
-  and its pod's logs, and Redeliver, Pause and Resume.
+- **An environment's card** is the same on its page and on its branch's Environment tab: its health and how it stands,
+  what its newest delivery says and its URL; its cluster, namespace, renders and when it is torn down; its objects
+  with their health, readiness and age; its deliveries of commits and teardowns, each with its commit's subject, and
+  Start on a waiting one; and Open, Redeliver, or Resume while it is paused, with Pause in its menu. A render's
+  manifests and its pod's logs stay in the APIs.
+- **The Delivery tab** lists the repository's environments, each with its branch, URL and newest delivery, and the
+  targets `main`'s file declares. A branch's header opens its environment's URL when exactly one of its environments
+  has one.
 
 ## The chart
 

@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 57 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 64 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 67 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -334,7 +334,7 @@ only cue.
 
 ## Screens
 
-Sixty-four screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Sixty-seven screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -358,8 +358,11 @@ Researcher waits for a task.
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
 | [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open, a resolved thread and a file marked Viewed, folded and checked off, beside it |
 | [Branch · Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14769) | Its pushes, newest first, each a card of its jobs' runs as Annotation rows, the head's with Re-run all, and a link that opens the earlier pushes |
+| [Branch · Environment](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-14602) | Each environment it delivers to, a card: its health, how it stands and its URL; its cluster, namespace, renders and when it is torn down; its objects with their health, readiness and age; its deliveries of commits and teardowns; Open, Redeliver or Resume and Pause. Its failed, waiting, paused, tearing-down, degraded and no-environment states beside it |
 | [Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15120) | A repository's runs as a table: job, branch, commit, status, when, how long and who caused it, under a filter, Any job, Any branch, Any status and the count; empty, no-match and status menu states beside it |
 | [Run](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15661) | One run: its job, status and actions, what it ran and why, its steps beside the selected step's log, each line with its time, or its job's definition; running, failed, waiting, webhook, no-logs and not-found states beside it |
+| [Repository · Delivery](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-16082) | The repository's environments, each with its health, how it stands, its branch, URL and newest delivery, and Open; the targets main's /cobranch.yaml declares; no-targets state beside it |
+| [Repository · Environment](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=240-39358) | One environment's card, the full width, under a button back to Delivery |
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
 | [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
 | [Issues · Filter set](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-17300) | A filter picked from its menu, which the button then names |
@@ -405,7 +408,7 @@ Researcher waits for a task.
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-The repository's other screens (a branch's Environment and Delivery) are drawn, and join this table as the Console takes them on ([ENG-264](https://linear.app/arikkfir/issue/ENG-264)). Error states are drawn beside the screen they belong to.
+Error states are drawn beside the screen they belong to.
 
 ### Sign in
 
