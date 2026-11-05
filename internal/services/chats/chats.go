@@ -2,7 +2,9 @@
 // thread perhaps anchored to lines of a file at a commit, which its viewers follow live
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Branch chats"), and an
 // issue's comments are a chat of its own, whose threads point at no file
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md, "Comments").
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md, "Comments"). Beside them, each
+// person has a private conversation, a chat only they read, about their organization, each of its repositories and
+// each of its agents (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/conversations.md).
 package chats
 
 import (
@@ -39,40 +41,102 @@ type Viewer = auth.User
 // Principal is who started a thread, posted a message, resolved one or deleted the other.
 type Principal = code.Principal
 
+// Kind is what a chat belongs to.
+type Kind string
+
+// The kinds of chats: a branch's and an issue's, which their subjects' readers share, and a person's private
+// conversations about an organization, one of its repositories or one of its agents.
+const (
+	KindBranch       Kind = "branch"
+	KindIssue        Kind = "issue"
+	KindOrganization Kind = "organization"
+	KindRepository   Kind = "repository"
+	KindAgent        Kind = "agent"
+)
+
 // Subject is what a chat belongs to: one of a repository's branches, by its row, so a branch deleted and pushed again
-// is another, with a chat of its own; or one of an organization's issues, whose comments it holds. The service answers
-// it to a viewer who reads the repository or the issue, and every operation on it checks that again.
+// is another, with a chat of its own; one of an organization's issues, whose comments it holds; or a person's private
+// conversation about the organization, one of its repositories or one of its agents. The service answers it to a
+// viewer who reads the repository or the issue, or whose conversation it is and who reads what it is about, and every
+// operation on it checks that again.
 type Subject struct {
 	OrgID uuid.UUID
-	// RepoID and BranchID are the branch's; uuid.Nil for an issue's chat.
-	RepoID   uuid.UUID
+	// RepoID is the branch's repository, or the repository a conversation is about; uuid.Nil otherwise.
+	RepoID uuid.UUID
+	// BranchID is the branch's; uuid.Nil for any other chat.
 	BranchID uuid.UUID
-	// Branch is the branch's name, without refs/heads/.
+	// Branch is the branch's name, without refs/heads/, or for a repository's conversation its default branch, where
+	// its messages' relative links lead.
 	Branch string
-	// Head is the object the branch is at.
+	// Head is the object that branch is at; empty for a repository without it.
 	Head string
-	// IssueID is the issue's; uuid.Nil for a branch's chat.
+	// IssueID is the issue's; uuid.Nil for any other chat.
 	IssueID uuid.UUID
 	// Number is the issue's number in its organization, and Issue its identifier, such as ACME-42.
 	Number int
 	Issue  string
-	// Org and Repo are the slugs of the subject's organization and of the branch's repository, where messages'
-	// relative links lead.
+	// ConversationID is a private conversation's (ConversationID); uuid.Nil for a branch's chat or an issue's.
+	ConversationID uuid.UUID
+	// OwnerID is the principal whose private conversation it is, who alone reads it; uuid.Nil for a shared chat.
+	OwnerID uuid.UUID
+	// AgentID and Agent name the agent a conversation is with, by its principal and its name; uuid.Nil and empty
+	// otherwise.
+	AgentID uuid.UUID
+	Agent   string
+	// Org and Repo are the slugs of the subject's organization and of the branch's repository, or the repository's a
+	// conversation is about, where messages' relative links lead.
 	Org  string
 	Repo string
 }
 
-// ID is the subject's own ID, its branch's or its issue's, which its chat's events name.
+// ID is the subject's own ID, its branch's, its issue's or its conversation's, which its chat's events name.
 func (s Subject) ID() uuid.UUID {
-	if s.IssueID != uuid.Nil {
+	switch {
+	case s.ConversationID != uuid.Nil:
+		return s.ConversationID
+	case s.IssueID != uuid.Nil:
 		return s.IssueID
 	}
 	return s.BranchID
 }
 
+// Kind is what the chat belongs to.
+func (s Subject) Kind() Kind {
+	switch {
+	case s.ConversationID != uuid.Nil && s.AgentID != uuid.Nil:
+		return KindAgent
+	case s.ConversationID != uuid.Nil && s.RepoID != uuid.Nil:
+		return KindRepository
+	case s.ConversationID != uuid.Nil:
+		return KindOrganization
+	case s.IssueID != uuid.Nil:
+		return KindIssue
+	}
+	return KindBranch
+}
+
 // OfIssue reports whether the chat is an issue's.
 func (s Subject) OfIssue() bool {
-	return s.IssueID != uuid.Nil
+	return s.Kind() == KindIssue
+}
+
+// Private reports whether the chat is a person's private conversation, which only they read.
+func (s Subject) Private() bool {
+	return s.ConversationID != uuid.Nil
+}
+
+// conversations is the namespace of the conversations' IDs.
+var conversations = uuid.MustParse("6b9a3f5e-2c4d-4e1a-9f0b-8d7c6e5a4b3c")
+
+// ConversationID is the ID of owner's private conversation about the organization orgID, about its repository repoID,
+// or with its agent agentID; repoID and agentID are uuid.Nil but for the conversation that names one. It comes from
+// the owner and the subject alone, so a conversation's events and followers name it before its first thread makes it.
+func ConversationID(owner, orgID, repoID, agentID uuid.UUID) uuid.UUID {
+	name := make([]byte, 0, 4*len(owner))
+	for _, id := range []uuid.UUID{owner, orgID, repoID, agentID} {
+		name = append(name, id[:]...)
+	}
+	return uuid.NewSHA1(conversations, name)
 }
 
 // Anchor points a thread at lines StartLine to EndLine, from 1, of the file at Path of commit SHA. It stays there when

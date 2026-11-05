@@ -11,6 +11,33 @@ import (
 	"github.com/google/uuid"
 )
 
+const agentConversationSubject = `-- name: AgentConversationSubject :one
+SELECT a.principal_id, a.org_id, a.name, o.slug AS org_slug
+FROM agents a JOIN organizations o ON o.id = a.org_id
+WHERE a.org_id = $1 AND a.principal_id = $2
+`
+
+type AgentConversationSubjectRow struct {
+	PrincipalID uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	OrgSlug     string
+}
+
+// AgentConversationSubject finds one of an organization's agents, as the subject of a person's conversation with it,
+// with its name and its organization's slug.
+func (q *Queries) AgentConversationSubject(ctx context.Context, orgID uuid.UUID, principalID uuid.UUID) (AgentConversationSubjectRow, error) {
+	row := q.db.QueryRow(ctx, agentConversationSubject, orgID, principalID)
+	var i AgentConversationSubjectRow
+	err := row.Scan(
+		&i.PrincipalID,
+		&i.OrgID,
+		&i.Name,
+		&i.OrgSlug,
+	)
+	return i, err
+}
+
 const branchDeleted = `-- name: BranchDeleted :one
 SELECT (deleted_at IS NOT NULL)::boolean AS deleted FROM branches WHERE id = $1
 `
@@ -218,10 +245,10 @@ func (q *Queries) ChatSubject(ctx context.Context, repoID uuid.UUID, name string
 }
 
 const chatThreads = `-- name: ChatThreads :many
-SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, t.issue_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
+SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, t.issue_id, t.conversation_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
 LEFT JOIN reviews rv ON rv.id = t.review_id
-WHERE t.org_id = $1 AND (t.branch_id = $2::uuid OR t.issue_id = $2::uuid)
+WHERE t.org_id = $1 AND (t.branch_id = $2::uuid OR t.issue_id = $2::uuid OR t.conversation_id = $2::uuid)
   AND ($3::uuid IS NULL OR t.id < $3::uuid)
 ORDER BY t.id DESC LIMIT $4
 `
@@ -240,9 +267,9 @@ type ChatThreadsRow struct {
 	ReviewedSha  *string
 }
 
-// ChatThreads lists at most lim of the chat threads of an organization's subject, a branch or an issue, newest first,
-// from the one before before names, or from the newest when it is null, with the display names of their starters and
-// resolvers, and the commit each one's review reviewed.
+// ChatThreads lists at most lim of the chat threads of an organization's subject, a branch, an issue or a conversation,
+// newest first, from the one before before names, or from the newest when it is null, with the display names of their
+// starters and resolvers, and the commit each one's review reviewed.
 func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]ChatThreadsRow, error) {
 	rows, err := q.db.Query(ctx, chatThreads,
 		arg.OrgID,
@@ -273,6 +300,7 @@ func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]Cha
 			&i.ChatThread.Version,
 			&i.ChatThread.ReviewID,
 			&i.ChatThread.IssueID,
+			&i.ChatThread.ConversationID,
 			&i.StarterName,
 			&i.ResolverName,
 			&i.ReviewedSha,
@@ -288,10 +316,10 @@ func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]Cha
 }
 
 const chatThreadsByID = `-- name: ChatThreadsByID :many
-SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, t.issue_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
+SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, t.issue_id, t.conversation_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
 LEFT JOIN reviews rv ON rv.id = t.review_id
-WHERE t.org_id = $1 AND (t.branch_id = $2::uuid OR t.issue_id = $2::uuid) AND t.id = ANY ($3::uuid[])
+WHERE t.org_id = $1 AND (t.branch_id = $2::uuid OR t.issue_id = $2::uuid OR t.conversation_id = $2::uuid) AND t.id = ANY ($3::uuid[])
 `
 
 type ChatThreadsByIDRow struct {
@@ -301,8 +329,8 @@ type ChatThreadsByIDRow struct {
 	ReviewedSha  *string
 }
 
-// ChatThreadsByID finds those of the chat threads of an organization's subject, a branch or an issue, that ids name,
-// with the display names of their starters and resolvers, and the commit each one's review reviewed.
+// ChatThreadsByID finds those of the chat threads of an organization's subject, a branch, an issue or a conversation,
+// that ids name, with the display names of their starters and resolvers, and the commit each one's review reviewed.
 func (q *Queries) ChatThreadsByID(ctx context.Context, orgID uuid.UUID, subjectID uuid.UUID, ids []uuid.UUID) ([]ChatThreadsByIDRow, error) {
 	rows, err := q.db.Query(ctx, chatThreadsByID, orgID, subjectID, ids)
 	if err != nil {
@@ -328,6 +356,7 @@ func (q *Queries) ChatThreadsByID(ctx context.Context, orgID uuid.UUID, subjectI
 			&i.ChatThread.Version,
 			&i.ChatThread.ReviewID,
 			&i.ChatThread.IssueID,
+			&i.ChatThread.ConversationID,
 			&i.StarterName,
 			&i.ResolverName,
 			&i.ReviewedSha,
@@ -396,6 +425,32 @@ func (q *Queries) EditChatMessage(ctx context.Context, body string, iD uuid.UUID
 	return i, err
 }
 
+const ensureConversation = `-- name: EnsureConversation :exec
+INSERT INTO conversations (id, org_id, owner_id, repo_id, agent_id)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT DO NOTHING
+`
+
+type EnsureConversationParams struct {
+	ID      uuid.UUID
+	OrgID   uuid.UUID
+	OwnerID uuid.UUID
+	RepoID  *uuid.UUID
+	AgentID *uuid.UUID
+}
+
+// EnsureConversation makes a person's conversation about a subject, unless it is there already.
+func (q *Queries) EnsureConversation(ctx context.Context, arg EnsureConversationParams) error {
+	_, err := q.db.Exec(ctx, ensureConversation,
+		arg.ID,
+		arg.OrgID,
+		arg.OwnerID,
+		arg.RepoID,
+		arg.AgentID,
+	)
+	return err
+}
+
 const hasCommit = `-- name: HasCommit :one
 SELECT EXISTS (SELECT 1 FROM commits WHERE repo_id = $1 AND sha = $2)
 `
@@ -406,6 +461,19 @@ func (q *Queries) HasCommit(ctx context.Context, repoID uuid.UUID, sha string) (
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const holdConversation = `-- name: HoldConversation :one
+SELECT id FROM conversations WHERE id = $1 FOR KEY SHARE
+`
+
+// HoldConversation finds a conversation and keeps it from being deleted until the transaction ends, so that a change to
+// it doesn't race the deletion of its subject or its owner.
+func (q *Queries) HoldConversation(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, holdConversation, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const holdIssue = `-- name: HoldIssue :one
@@ -465,29 +533,30 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 }
 
 const insertChatThread = `-- name: InsertChatThread :one
-INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, sha, path, start_line, end_line, created_by, review_id)
+INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, conversation_id, sha, path, start_line, end_line, created_by, review_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11)
+        $9, $10, $11, $12)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by, created_at, resolved_at, resolved_by, version, review_id, issue_id
+RETURNING id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by, created_at, resolved_at, resolved_by, version, review_id, issue_id, conversation_id
 `
 
 type InsertChatThreadParams struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	RepoID    *uuid.UUID
-	BranchID  *uuid.UUID
-	IssueID   *uuid.UUID
-	Sha       *string
-	Path      *string
-	StartLine *int32
-	EndLine   *int32
-	CreatedBy *uuid.UUID
-	ReviewID  *uuid.UUID
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	RepoID         *uuid.UUID
+	BranchID       *uuid.UUID
+	IssueID        *uuid.UUID
+	ConversationID *uuid.UUID
+	Sha            *string
+	Path           *string
+	StartLine      *int32
+	EndLine        *int32
+	CreatedBy      *uuid.UUID
+	ReviewID       *uuid.UUID
 }
 
-// InsertChatThread starts a thread of a branch's chat, in its repository, or of an issue's, perhaps a comment of a
-// review: none when one of its ID is there already.
+// InsertChatThread starts a thread of a branch's chat, in its repository, of an issue's or of a conversation, perhaps a
+// comment of a review: none when one of its ID is there already.
 func (q *Queries) InsertChatThread(ctx context.Context, arg InsertChatThreadParams) (ChatThread, error) {
 	row := q.db.QueryRow(ctx, insertChatThread,
 		arg.ID,
@@ -495,6 +564,7 @@ func (q *Queries) InsertChatThread(ctx context.Context, arg InsertChatThreadPara
 		arg.RepoID,
 		arg.BranchID,
 		arg.IssueID,
+		arg.ConversationID,
 		arg.Sha,
 		arg.Path,
 		arg.StartLine,
@@ -519,6 +589,7 @@ func (q *Queries) InsertChatThread(ctx context.Context, arg InsertChatThreadPara
 		&i.Version,
 		&i.ReviewID,
 		&i.IssueID,
+		&i.ConversationID,
 	)
 	return i, err
 }
@@ -584,10 +655,58 @@ func (q *Queries) NotifyChat(ctx context.Context, subjectID string) error {
 	return err
 }
 
+const organizationConversationSubject = `-- name: OrganizationConversationSubject :one
+SELECT id, slug FROM organizations WHERE id = $1
+`
+
+type OrganizationConversationSubjectRow struct {
+	ID   uuid.UUID
+	Slug string
+}
+
+// OrganizationConversationSubject finds an organization, as the subject of a person's conversation about it, with its
+// slug.
+func (q *Queries) OrganizationConversationSubject(ctx context.Context, id uuid.UUID) (OrganizationConversationSubjectRow, error) {
+	row := q.db.QueryRow(ctx, organizationConversationSubject, id)
+	var i OrganizationConversationSubjectRow
+	err := row.Scan(&i.ID, &i.Slug)
+	return i, err
+}
+
+const repositoryConversationSubject = `-- name: RepositoryConversationSubject :one
+SELECT r.id, r.org_id, r.slug AS repo_slug, o.slug AS org_slug, b.head
+FROM repositories r JOIN organizations o ON o.id = r.org_id
+    LEFT JOIN branches b ON b.repo_id = r.id AND b.name = $1 AND b.deleted_at IS NULL
+WHERE r.org_id = $2 AND r.id = $3
+`
+
+type RepositoryConversationSubjectRow struct {
+	ID       uuid.UUID
+	OrgID    uuid.UUID
+	RepoSlug string
+	OrgSlug  string
+	Head     *string
+}
+
+// RepositoryConversationSubject finds one of an organization's repositories, as the subject of a person's conversation
+// about it, with its slug and its organization's, and the commit its live default branch is at, if it has one.
+func (q *Queries) RepositoryConversationSubject(ctx context.Context, defaultBranch string, orgID uuid.UUID, repoID uuid.UUID) (RepositoryConversationSubjectRow, error) {
+	row := q.db.QueryRow(ctx, repositoryConversationSubject, defaultBranch, orgID, repoID)
+	var i RepositoryConversationSubjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.RepoSlug,
+		&i.OrgSlug,
+		&i.Head,
+	)
+	return i, err
+}
+
 const resolveChatThread = `-- name: ResolveChatThread :one
 UPDATE chat_threads SET resolved_at = CASE WHEN $1::uuid IS NULL THEN NULL ELSE now() END, resolved_by = $1::uuid
 WHERE id = $2 AND ($3::bigint < 0 OR version = $3::bigint)
-RETURNING id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by, created_at, resolved_at, resolved_by, version, review_id, issue_id
+RETURNING id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by, created_at, resolved_at, resolved_by, version, review_id, issue_id, conversation_id
 `
 
 // ResolveChatThread resolves a thread for by, or opens it again when by is null, when it is at version, or at any
@@ -611,6 +730,7 @@ func (q *Queries) ResolveChatThread(ctx context.Context, by *uuid.UUID, iD uuid.
 		&i.Version,
 		&i.ReviewID,
 		&i.IssueID,
+		&i.ConversationID,
 	)
 	return i, err
 }

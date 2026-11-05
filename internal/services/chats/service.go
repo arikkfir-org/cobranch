@@ -23,15 +23,20 @@ import (
 
 var tracer = otel.Tracer("cobranch.dev/internal/services/chats")
 
-// Store keeps the chats. Every change it makes appends the chat's event, whose subject is the chat's branch or issue,
-// and wakes the servers that follow it once its transaction commits; a change to the chat of a deleted branch is
-// ErrBranchDeleted, and to that of a deleted issue repos.ErrNotFound.
+// Store keeps the chats. Every change it makes appends the chat's event, whose subject is the chat's branch, issue or
+// conversation, and wakes the servers that follow it once its transaction commits; a change to the chat of a deleted
+// branch is ErrBranchDeleted, and to that of a deleted issue, or a conversation whose subject or owner is gone,
+// repos.ErrNotFound. A change to a conversation makes it, the first time.
 type Store interface {
 	// Subject finds a repository's branch by name as a chat's subject: the live one, or else the one of that name deleted
 	// last; repos.ErrNotFound when no branch had the name.
 	Subject(ctx context.Context, repoID uuid.UUID, branch string) (Subject, error)
 	// Issue finds one of the organization's issues by number as a chat's subject, or repos.ErrNotFound.
 	Issue(ctx context.Context, orgID uuid.UUID, number int) (Subject, error)
+	// Conversation finds owner's private conversation as a chat's subject: about the organization, about its repository
+	// repoID, or with its agent agentID, the other uuid.Nil; repos.ErrNotFound when the organization has no such
+	// repository or agent. A conversation without threads yet has its subject too, which its first thread makes.
+	Conversation(ctx context.Context, owner, orgID, repoID, agentID uuid.UUID) (Subject, error)
 	// Head finds the object a branch is at now, deleted or not, or repos.ErrNotFound.
 	Head(ctx context.Context, branchID uuid.UUID) (string, error)
 	// HasCommit reports whether the repository holds a commit.
@@ -67,8 +72,9 @@ type Store interface {
 
 // Notifier tells the servers that follow a chat when it may have changed.
 type Notifier interface {
-	// Watch returns a channel that receives soon after a change to the chat of a subject, a branch or an issue,
-	// commits, and a function that stops it. Changes that come while the channel is full make one receive.
+	// Watch returns a channel that receives soon after a change to the chat of a subject, a branch, an issue or a
+	// conversation, commits, and a function that stops it. Changes that come while the channel is full make one
+	// receive.
 	Watch(subjectID uuid.UUID) (<-chan struct{}, func())
 }
 
@@ -78,9 +84,10 @@ const MaxUpdates = 100
 // poll is how often a follower reads its chat again without a wake, for a notification it missed.
 const poll = time.Minute
 
-// Service keeps the branches' chats for the viewers who read their repositories, and the issues' for those who read
-// the organization's issues: every operation checks repo.read, or issues.read, through the authorizer first, and
-// answers repos.ErrNotFound without it, as for a repository or an issue that doesn't exist.
+// Service keeps the branches' chats for the viewers who read their repositories, the issues' for those who read the
+// organization's issues, and each private conversation for its owner while they read what it is about: every
+// operation checks repo.read, issues.read or org.read through the authorizer first, and answers repos.ErrNotFound
+// without it, as for a repository or an issue that doesn't exist, and for another's conversation.
 type Service struct {
 	store    Store
 	notifier Notifier
@@ -112,6 +119,13 @@ var (
 	// who sees the organization but not its issues.
 	issueRules = rules{scope: auth.ScopeOrganization, view: orgs.PermRead, read: permIssueRead, post: permIssuePost, moderate: permIssueModerate,
 		where: "at the organization"}
+	// orgConversationRules are the rules of a conversation about the organization or with one of its agents, and
+	// repoConversationRules of one about a repository: its owner, who alone reads it, posts and moderates there while
+	// they read what it is about.
+	orgConversationRules = rules{scope: auth.ScopeOrganization, view: orgs.PermRead, read: orgs.PermRead, post: orgs.PermRead, moderate: orgs.PermRead,
+		where: "at the organization"}
+	repoConversationRules = rules{scope: auth.ScopeRepository, view: repos.PermRead, read: repos.PermRead, post: repos.PermRead,
+		moderate: repos.PermRead, where: "on the repository"}
 )
 
 // access is what a viewer may do in a chat they read, by its rules.
@@ -125,11 +139,19 @@ func (a access) forbidden(permission, what string) error {
 	return fmt.Errorf("%w: %s %s%s", auth.ErrForbidden, permission, a.rules.where, what)
 }
 
-// holds returns what v may do in the subject's chat: repos.ErrNotFound when v doesn't see its subject, and
-// auth.ErrForbidden when v sees it but doesn't read its chat.
+// holds returns what v may do in the subject's chat: repos.ErrNotFound when v doesn't see its subject, or it is
+// another's conversation, and auth.ErrForbidden when v sees it but doesn't read its chat.
 func (s *Service) holds(ctx context.Context, v Viewer, subj Subject) (access, error) {
-	if subj.OfIssue() {
+	if subj.Private() && subj.OwnerID != v.ID {
+		return access{}, repos.ErrNotFound
+	}
+	switch subj.Kind() {
+	case KindIssue:
 		return s.holdsBy(ctx, v, issueRules, subj.OrgID)
+	case KindOrganization, KindAgent:
+		return s.holdsBy(ctx, v, orgConversationRules, subj.OrgID)
+	case KindRepository:
+		return s.holdsBy(ctx, v, repoConversationRules, subj.RepoID)
 	}
 	return s.holdsBy(ctx, v, branchRules, subj.RepoID)
 }
@@ -164,7 +186,11 @@ func (s *Service) poster(ctx context.Context, v Viewer, subj Subject) (access, e
 
 // on is the attributes of a span that acts on the subject's chat.
 func on(subj Subject) []attribute.KeyValue {
-	if subj.OfIssue() {
+	switch {
+	case subj.Private():
+		return []attribute.KeyValue{attribute.String("cobranch.organization.id", subj.OrgID.String()),
+			attribute.String("cobranch.conversation.id", subj.ConversationID.String()), attribute.String("cobranch.conversation.kind", string(subj.Kind()))}
+	case subj.OfIssue():
 		return []attribute.KeyValue{attribute.String("cobranch.organization.id", subj.OrgID.String()), attribute.String("cobranch.issue.id", subj.IssueID.String())}
 	}
 	return []attribute.KeyValue{attribute.String("cobranch.repository.id", subj.RepoID.String()), attribute.String("cobranch.branch.id", subj.BranchID.String())}
@@ -196,6 +222,43 @@ func (s *Service) Issue(ctx context.Context, v Viewer, orgID uuid.UUID, number i
 	}
 	subj, err := s.store.Issue(ctx, orgID, number)
 	return subj, failed(span, "finding the chat", err)
+}
+
+// Organization finds the viewer's own conversation about the organization, which only they read; it takes org.read.
+// An organization the viewer may not see is repos.ErrNotFound.
+func (s *Service) Organization(ctx context.Context, v Viewer, orgID uuid.UUID) (Subject, error) {
+	ctx, span := tracer.Start(ctx, "chats.Service.Organization")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.organization.id", orgID.String()))
+	return s.conversation(ctx, span, v, orgConversationRules, orgID, orgID, uuid.Nil, uuid.Nil)
+}
+
+// Repository finds the viewer's own conversation about one of the organization's repositories, which only they read;
+// it takes repo.read. A repository the viewer doesn't read is repos.ErrNotFound.
+func (s *Service) Repository(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) (Subject, error) {
+	ctx, span := tracer.Start(ctx, "chats.Service.Repository")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.organization.id", orgID.String()), attribute.String("cobranch.repository.id", repoID.String()))
+	return s.conversation(ctx, span, v, repoConversationRules, repoID, orgID, repoID, uuid.Nil)
+}
+
+// Agent finds the viewer's own conversation with one of the organization's agents, which only they read; it takes
+// org.read. An agent the organization doesn't have is repos.ErrNotFound.
+func (s *Service) Agent(ctx context.Context, v Viewer, orgID, agentID uuid.UUID) (Subject, error) {
+	ctx, span := tracer.Start(ctx, "chats.Service.Agent")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.organization.id", orgID.String()), attribute.String("cobranch.agent.id", agentID.String()))
+	return s.conversation(ctx, span, v, orgConversationRules, orgID, orgID, uuid.Nil, agentID)
+}
+
+// conversation checks that v reads the conversation's subject by r's rules at scopeID, then finds v's conversation
+// about the organization, its repository repoID or its agent agentID.
+func (s *Service) conversation(ctx context.Context, span trace.Span, v Viewer, r rules, scopeID, orgID, repoID, agentID uuid.UUID) (Subject, error) {
+	if _, err := s.holdsBy(ctx, v, r, scopeID); err != nil {
+		return Subject{}, failed(span, "finding the conversation", err)
+	}
+	subj, err := s.store.Conversation(ctx, v.ID, orgID, repoID, agentID)
+	return subj, failed(span, "finding the conversation", err)
 }
 
 // Threads lists a page of at most limit of the chat's threads, 1 to MaxPage, newest first, from the one before before
@@ -304,6 +367,9 @@ func (s *Service) validateThread(ctx context.Context, subj Subject, in ThreadInp
 	}
 	if subj.OfIssue() {
 		return &orgs.ValidationError{Field: "anchor", Code: "anchor.not_allowed", Message: "an issue's threads point at no file"}
+	}
+	if subj.Private() {
+		return &orgs.ValidationError{Field: "anchor", Code: "anchor.not_allowed", Message: "a conversation's threads point at no file"}
 	}
 	if err := ValidateAnchor(*in.Anchor); err != nil {
 		return err
@@ -480,7 +546,7 @@ func (s *Service) Updates(ctx context.Context, v Viewer, subj Subject, after int
 }
 
 // Follow sends the chat's updates after cursor after, in order, until ctx ends or the viewer no longer reads the
-// repository or the issue, then closes the channel; it takes repo.read, or issues.read for an issue's, checked at
+// repository, the issue or what their conversation is about, then closes the channel; it takes repo.read, or issues.read for an issue's, checked at
 // every read. It reads whenever the chat may have
 // changed, and once a minute for a change it missed.
 func (s *Service) Follow(ctx context.Context, v Viewer, subj Subject, after int64) (<-chan Update, error) {
@@ -539,26 +605,15 @@ func (s *Service) watch(subj Subject) (<-chan struct{}, func()) {
 }
 
 // read checks that v reads the chat, then lists at most MaxUpdates of the chat's updates after cursor after, at a
-// branch's head now, or by an issue's identifier now: repos.ErrNotFound once the issue is gone.
+// branch's head now, by an issue's identifier now, or by a conversation's subject now: repos.ErrNotFound once the
+// issue, or the repository or agent a conversation is about, is gone.
 func (s *Service) read(ctx context.Context, v Viewer, subj Subject, after int64) ([]Update, error) {
 	if _, err := s.holds(ctx, v, subj); err != nil {
 		return nil, err
 	}
-	if subj.OfIssue() {
-		now, err := s.store.Issue(ctx, subj.OrgID, subj.Number)
-		if err == nil && now.IssueID != subj.IssueID {
-			err = repos.ErrNotFound
-		}
-		if err != nil {
-			return nil, fmt.Errorf("reading the issue: %w", err)
-		}
-		subj = now
-	} else {
-		head, err := s.store.Head(ctx, subj.BranchID)
-		if err != nil {
-			return nil, fmt.Errorf("reading the branch's head: %w", err)
-		}
-		subj.Head = head
+	subj, err := s.now(ctx, subj)
+	if err != nil {
+		return nil, err
 	}
 	list, err := s.store.Updates(ctx, subj, after, MaxUpdates)
 	if err != nil {
@@ -577,6 +632,42 @@ func (s *Service) read(ctx context.Context, v Viewer, subj Subject, after int64)
 	return list, nil
 }
 
+// now is the subject as it is now: a branch at its head now, an issue by its identifier now and a conversation by its
+// subject's slugs and names now; repos.ErrNotFound once the issue, or what a conversation is about, is gone.
+func (s *Service) now(ctx context.Context, subj Subject) (Subject, error) {
+	switch subj.Kind() {
+	case KindBranch:
+		head, err := s.store.Head(ctx, subj.BranchID)
+		if err != nil {
+			return Subject{}, fmt.Errorf("reading the branch's head: %w", err)
+		}
+		subj.Head = head
+		return subj, nil
+	case KindIssue:
+		now, err := s.store.Issue(ctx, subj.OrgID, subj.Number)
+		if err == nil && now.IssueID != subj.IssueID {
+			err = repos.ErrNotFound
+		}
+		if err != nil {
+			return Subject{}, fmt.Errorf("reading the issue: %w", err)
+		}
+		return now, nil
+	}
+	now, err := s.store.Conversation(ctx, subj.OwnerID, subj.OrgID, repoOf(subj), subj.AgentID)
+	if err != nil {
+		return Subject{}, fmt.Errorf("reading the conversation's subject: %w", err)
+	}
+	return now, nil
+}
+
+// repoOf is the repository a repository's conversation is about; uuid.Nil for any other conversation.
+func repoOf(subj Subject) uuid.UUID {
+	if subj.Kind() == KindRepository {
+		return subj.RepoID
+	}
+	return uuid.Nil
+}
+
 // present works out whether t is outdated, and renders its messages.
 func (s *Service) present(ctx context.Context, subj Subject, t *Thread) error {
 	if t.Anchor != nil {
@@ -590,15 +681,21 @@ func (s *Service) present(ctx context.Context, subj Subject, t *Thread) error {
 	return nil
 }
 
-// render renders m's body as HTML, its relative links leading to the branch's files, or to the organization's pages
-// beside an issue's, as its description's do.
+// render renders m's body as HTML, its relative links leading to the branch's files, or a repository's conversation's
+// default branch's, to the organization's pages beside an issue's, as its description's do, or to the organization's
+// pages from an organization's or an agent's conversation.
 func (s *Service) render(ctx context.Context, subj Subject, m *Message) error {
 	if s.markdown == nil || m.Body == "" {
 		return nil
 	}
 	doc := code.Document{Org: subj.Org, Repo: subj.Repo, Ref: subj.Branch, Commit: subj.Head}
-	if subj.OfIssue() {
+	switch subj.Kind() {
+	case KindIssue:
 		doc = code.Document{Org: subj.Org, Path: "issues/" + subj.Issue}
+	case KindOrganization:
+		doc = code.Document{Org: subj.Org}
+	case KindAgent:
+		doc = code.Document{Org: subj.Org, Path: "agents/" + subj.AgentID.String()}
 	}
 	html, err := s.markdown.Render(ctx, []byte(m.Body), doc)
 	if err != nil {

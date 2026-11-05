@@ -64,7 +64,7 @@ func orEmpty(s *string) string {
 }
 
 func agent(a agents.Agent) *Agent {
-	out := &Agent{ID: a.ID.String(), Name: a.Name, Description: a.Description, Instructions: a.Instructions, BuiltIn: a.BuiltIn,
+	out := &Agent{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Name: a.Name, Description: a.Description, Instructions: a.Instructions, BuiltIn: a.BuiltIn,
 		CreatedBy: agentPrincipal(a.CreatedBy), CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), Version: int(a.Version),
 		Grants: make([]*AgentGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
