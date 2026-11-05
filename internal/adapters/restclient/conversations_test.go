@@ -152,10 +152,10 @@ func follow(t *testing.T, a *api, chat harness.Chat, message uuid.UUID) {
 	if messages, err := c.Thread(ctx, "acme", chat, threadID); err != nil || len(messages) != 3 || messages[1].Task != 7 {
 		t.Errorf("Thread() = %+v, %v", messages, err)
 	}
-	if err := c.StartThread(ctx, "acme", chat, message, "Starting."); err != nil {
+	if err := c.StartThread(ctx, "acme", chat, message, "Starting.", uuid.Nil); err != nil {
 		t.Errorf("StartThread() = %v", err)
 	}
-	if err := c.Post(ctx, "acme", chat, threadID, message, "Done."); err != nil {
+	if err := c.Post(ctx, "acme", chat, threadID, message, "Done.", uuid.Nil); err != nil {
 		t.Errorf("Post() = %v", err)
 	}
 	if after, err := c.ChatCursor(ctx, "acme", chat); err != nil || after != "c1" {

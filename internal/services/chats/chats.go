@@ -190,8 +190,26 @@ type Message struct {
 	Task *TaskRef
 	// Asked is the task it asked an agent for; nil for a message that asked nobody, and once the task is deleted.
 	Asked *Asked
+	// Artifact is the artifact of the organization it names, which the conversation draws as a card that opens it; nil
+	// for none, and once the artifact is deleted.
+	Artifact *ArtifactRef
 	// Version counts its changes from 1: it is its ETag, which an edit or a deletion names.
 	Version int64
+}
+
+// ArtifactRef names an artifact as a message's card shows it: its ID, title and kind. The card shows to whoever reads
+// the thread; the artifact opens only for those whose grants reach it.
+type ArtifactRef struct {
+	ID    uuid.UUID
+	OrgID uuid.UUID
+	Title string
+	Kind  string
+}
+
+// Said is what a new message says: its Markdown, and the artifact it names, uuid.Nil for none.
+type Said struct {
+	Body       string
+	ArtifactID uuid.UUID
 }
 
 // TaskRef names an agent's task: its ID, and its number in its organization.
@@ -260,6 +278,9 @@ type ThreadInput struct {
 	// Ask names one of the organization's agents the message asks, which gets a task that talks in the thread;
 	// uuid.Nil asks nobody, but in an agent's conversation, where it asks that agent.
 	Ask uuid.UUID
+	// ArtifactID names an artifact of the organization, which the poster reads, as its first message's card; uuid.Nil
+	// for none.
+	ArtifactID uuid.UUID
 }
 
 // MessageInput posts a message to a thread.
@@ -271,6 +292,9 @@ type MessageInput struct {
 	// Ask names one of the organization's agents the message asks, which gets a task that talks in the thread, once
 	// no task talks there; uuid.Nil asks nobody.
 	Ask uuid.UUID
+	// ArtifactID names an artifact of the organization, which the poster reads, as the message's card; uuid.Nil for
+	// none.
+	ArtifactID uuid.UUID
 }
 
 // The versions an edit, a deletion or a resolution names that are no message's or thread's own.

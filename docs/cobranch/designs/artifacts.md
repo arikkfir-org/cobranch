@@ -59,11 +59,16 @@ for those attached to it, and the conversation each was generated in; each opens
 ![Generating one: the task creates it, the harness posts the card](artifacts/generate.svg)
 
 The card is a message of the thread whose artifact field names the artifact: anyone who reads the thread sees the card,
-and opens the artifact only if the grants let them. An `update_artifact` call adds a version the same way.
+and opens the artifact only if the grants let them. An `update_artifact` call adds a version the same way, made from the
+artifact as the task’s last `read_artifact` found it: a version someone added since refuses it, and the model reads the
+artifact again.
 
 - **Asked in a conversation, or by a task.** A person asks an agent in any conversation ([Ask](agents.md)), or assigns
-  it a task that asks for an artifact. The task's harness offers the model two tools, `create_artifact` and
-  `update_artifact`, beside its chat and workspace tools.
+  it a task that asks for an artifact. The task's harness offers the model three tools beside its chat and workspace
+  tools: `create_artifact` writes one, `read_artifact` reads any version of one the task may read, and `update_artifact`
+  adds a version, made from the artifact as the task last read it: a version someone added since refuses the agent's,
+  and the model reads it again. The task's prompt tells the model to answer a request for a document, a diagram, a
+  report or a page with an artifact, rather than in a message or a commit. A review task gets none of them.
 - **Attached to the conversation's repository.** An artifact asked for in a branch's chat, or in a conversation about a
   repository, is attached to that repository; one asked for in an issue's chat or a conversation about the organization
   is attached to none (21.3.1, 22.4). A person creating one through the API attaches it to a repository, or to none.
@@ -133,7 +138,8 @@ artifact answers 404, as if it weren’t there; with `artifacts.list` alone it s
   agent, from their account: the grantee then lists, or reads, every artifact they own, in each organization both belong
   to, since every check starts from `org.read`. Nobody else grants on a person.
 - **Narrowed by the credential.** A personal token uses only the artifact permissions it lists; a task token only those
-  the task's assigner holds on the artifact too; a job's run token and a delivery's token reach no artifact, and make none.
+  the task's assigner holds on the artifact too; a job's run token and a delivery's token reach no artifact, and make
+  none.
 - **Invisible without `artifacts.read`.** An artifact the viewer can't read answers 404, as one that isn't there does,
   and a list leaves it out unless the viewer may list it.
 - **The list's badge** names the widest audience: Organization, Repository, or Only you when neither is set, whatever
@@ -222,6 +228,9 @@ their versions and the grants on them.
 | `GET`, `POST /orgs/{org}/artifacts/{id}/access`, `DELETE …/access/{principal}` | Who holds a role on it, and the audience; shares and unshares | `artifacts.read`; `artifacts.manage` and the role's permissions |
 | `GET`, `POST /me/artifact-access`, `DELETE …/{principal}` | Who lists or reads all of the viewer's artifacts; grants Artifact lister or viewer on oneself, and takes it back | Signed in as a user |
 
+- **Cards.** A chat message, in REST and GraphQL, carries `artifact`, the ID, title and kind of the artifact it names,
+  and a message posted or a thread started takes `artifactId`: an artifact of the organization the poster reads, or 400
+  `message.artifact_invalid`. Deleting the artifact leaves its messages without cards.
 - **One artifact, one address.** An artifact is addressed under its organization by its ID, as a secret is, so someone
   it is shared with who can't read its repository still opens it, and one attached to no repository has an address too.
 - **A listed item says what the viewer may do:** its permissions, `artifacts.list` alone when it may be listed but not
@@ -278,8 +287,9 @@ Repository or Organization.
 - **A leaked artifact link** opens nothing without a grant; the raw endpoint takes the same session or token as the rest
   of the API.
 - **A restarted pod** creates nothing twice: the call's key is the artifact's and the version's ID.
-- **A full database:** each version is capped at 1 MiB, and only principals holding `artifacts.create` add artifacts.
-  Whether artifacts count against an organization's quota is an open question.
+- **A full database:** each version is capped at 1 MiB; attaching an artifact to a repository takes `artifacts.create`
+  there, and one attached to no repository takes `org.read` from a person, an API key or an agent, never a job's or a
+  target's token. Whether artifacts count against an organization's quota is an open question.
 
 ## Rollout
 

@@ -37,7 +37,7 @@ func (r *run) askThread(ctx context.Context, c Call) (string, error) {
 	if err := decode(c.Arguments, &a); err != nil {
 		return "", err
 	}
-	question, err := r.post(ctx, c.Key, a.Question)
+	question, err := r.post(ctx, c.Key, a.Question, uuid.Nil)
 	if err != nil {
 		return "", err
 	}

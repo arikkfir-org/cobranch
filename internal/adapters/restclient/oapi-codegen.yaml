@@ -13,5 +13,6 @@ output-options:
     getRepositoryConversationThread, startRepositoryConversationThread, postRepositoryConversationMessage,
     listRepositoryConversationThreads, listRepositoryConversationUpdates, getAgentConversationThread,
     startAgentConversationThread, postAgentConversationMessage, listAgentConversationThreads,
-    listAgentConversationUpdates, listTasks, getBranchDiff, getBlob, getTree, listReviews, submitReview, recordMyTaskSpend]
+    listAgentConversationUpdates, listTasks, getBranchDiff, getBlob, getTree, listReviews, submitReview, recordMyTaskSpend, createArtifact,
+    createOrganizationArtifact, getArtifact, getArtifactVersion, addArtifactVersion]
   nullable-type: true

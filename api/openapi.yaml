@@ -8170,10 +8170,24 @@ components:
           description: That task's number in its organization.
         askedAgent:
           $ref: "#/components/schemas/Principal"
+        artifact:
+          $ref: "#/components/schemas/ChatArtifact"
         version:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the branch's head, the slugs its links name and its people's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    ChatArtifact:
+      type: object
+      description: The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+      required: [id, title, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        kind:
+          $ref: "#/components/schemas/ArtifactKind"
     ChatThreadInput:
       type: object
       description: A thread to start, with its first message.
@@ -8195,6 +8209,10 @@ components:
             One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned
             by the poster and capped by their permissions, that talks in the thread, private in a private conversation.
             Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
+        artifactId:
+          type: string
+          format: uuid
+          description: An artifact of the organization that the poster reads, which its first message names as its card; 400 message.artifact_invalid for any other.
     ChatThreadPatch:
       type: object
       description: How a thread changes.
@@ -8222,6 +8240,10 @@ components:
             One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned
             by the poster and capped by their permissions, that talks in the thread, private in a private conversation.
             Refused with ask.busy while another task talks in the thread, which reads what is posted there.
+        artifactId:
+          type: string
+          format: uuid
+          description: An artifact of the organization that the poster reads, which the message names as its card; 400 message.artifact_invalid for any other.
     ChatMessagePatch:
       type: object
       description: How a message changes.

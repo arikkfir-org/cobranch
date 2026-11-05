@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,9 @@ func chatMessage(m chats.Message) *ChatMessage {
 	if m.Asked != nil {
 		id, number := m.Asked.ID.String(), int(m.Asked.Number)
 		out.AskedTaskID, out.AskedTaskNumber, out.AskedAgent = &id, &number, commitPrincipal(&m.Asked.Agent)
+	}
+	if a := m.Artifact; a != nil {
+		out.Artifact = &ChatArtifact{ID: a.ID.String(), Title: a.Title, Kind: ArtifactKind(strings.ToUpper(a.Kind))}
 	}
 	return out
 }
@@ -163,6 +167,11 @@ func (r *Resolver) postMessage(ctx context.Context, v chats.Viewer, subj chats.S
 	if in.Ask, err = inputID(ctx, input.Ask, "ask.invalid"); err != nil {
 		return nil, err
 	}
+	if input.ArtifactID != nil {
+		if in.ArtifactID, err = cardID(ctx, *input.ArtifactID); err != nil {
+			return nil, err
+		}
+	}
 	m, err := r.Chats.Post(ctx, v, subj, threadID, in)
 	if err != nil {
 		return nil, fail(ctx, err, "thread", "posting the message")
@@ -243,7 +252,25 @@ func chatInput(ctx context.Context, in ChatThreadInput) (chats.ThreadInput, erro
 		return chats.ThreadInput{}, err
 	}
 	out.Ask = ask
+	if in.ArtifactID != nil {
+		id, err := cardID(ctx, *in.ArtifactID)
+		if err != nil {
+			return chats.ThreadInput{}, err
+		}
+		out.ArtifactID = id
+	}
 	return out, nil
+}
+
+// cardID is the ID of the artifact a new message names as its card; one that isn't an ID is refused as one the poster
+// may not name.
+func cardID(ctx context.Context, id string) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, fail(ctx, &orgs.ValidationError{Field: "artifactId", Code: "message.artifact_invalid",
+			Message: "a message names an artifact of its organization that its poster reads"}, "", "")
+	}
+	return parsed, nil
 }
 
 // anchorOf is a as the services take it.

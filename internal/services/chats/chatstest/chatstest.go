@@ -40,7 +40,9 @@ type Store struct {
 	Names      map[uuid.UUID]string
 	Tasks      map[uuid.UUID]int64
 	TaskAgents map[uuid.UUID]chats.Principal
-	Now        time.Time
+	// Artifacts are the artifacts a message may name as its card, by ID.
+	Artifacts map[uuid.UUID]chats.ArtifactRef
+	Now       time.Time
 }
 
 type thread struct {
@@ -63,7 +65,7 @@ func NewStore() *Store {
 	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, orgs: map[uuid.UUID]string{},
 		repos: map[uuid.UUID]map[uuid.UUID]chats.Subject{}, agents: map[uuid.UUID]map[uuid.UUID]string{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
 		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, asks: map[uuid.UUID]uuid.UUID{}, Names: map[uuid.UUID]string{},
-		Tasks: map[uuid.UUID]int64{}, TaskAgents: map[uuid.UUID]chats.Principal{}}
+		Tasks: map[uuid.UUID]int64{}, TaskAgents: map[uuid.UUID]chats.Principal{}, Artifacts: map[uuid.UUID]chats.ArtifactRef{}}
 }
 
 // SetBranch makes subj's branch live at its head in its repository, and the repository hold the head, and answers
@@ -376,7 +378,7 @@ func (s *Store) record(subj chats.Subject, kind chats.UpdateKind, threadID uuid.
 
 // StartThread starts the subject's thread id with its first message for by, or answers the thread of id that is
 // there.
-func (s *Store) StartThread(_ context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
+func (s *Store) StartThread(_ context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, said chats.Said) (chats.Thread, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[id]; ok {
@@ -386,15 +388,35 @@ func (s *Store) StartThread(_ context.Context, by chats.Poster, subj chats.Subje
 		return s.withMessages(t.Thread), false, nil
 	}
 	s.threads[id] = &thread{subject: subj.ID(), Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(by.ID), CreatedAt: s.Now, Version: 1}}
-	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now,
-		Version: 1}
+	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: said.Body, Author: s.principal(by.ID), Task: s.task(by.Task),
+		Artifact: s.card(said.ArtifactID), CreatedAt: s.Now, Version: 1}
 	s.ask(messageID, by)
 	s.record(subj, chats.ThreadStarted, id, &messageID)
 	return s.withMessages(s.threads[id].Thread), true, nil
 }
 
+// card is the artifact id names as a message's card; nil for uuid.Nil.
+func (s *Store) card(id uuid.UUID) *chats.ArtifactRef {
+	a, ok := s.Artifacts[id]
+	if !ok {
+		return nil
+	}
+	return &a
+}
+
+// Artifact finds an artifact as a card names it, or repos.ErrNotFound (chats.Store).
+func (s *Store) Artifact(_ context.Context, id uuid.UUID) (chats.ArtifactRef, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.Artifacts[id]
+	if !ok {
+		return chats.ArtifactRef{}, repos.ErrNotFound
+	}
+	return a, nil
+}
+
 // Post posts message id to one of the subject's threads for by, or answers the message of id that is there.
-func (s *Store) Post(_ context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
+func (s *Store) Post(_ context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, said chats.Said) (chats.Message, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[threadID]; !ok || t.subject != subj.ID() {
@@ -406,7 +428,8 @@ func (s *Store) Post(_ context.Context, by chats.Poster, subj chats.Subject, thr
 		}
 		return s.view(m), false, nil
 	}
-	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now, Version: 1}
+	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: said.Body, Author: s.principal(by.ID), Task: s.task(by.Task),
+		Artifact: s.card(said.ArtifactID), CreatedAt: s.Now, Version: 1}
 	s.ask(id, by)
 	s.threads[threadID].Version++
 	s.record(subj, chats.MessagePosted, threadID, &id)

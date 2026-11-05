@@ -18,6 +18,93 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ArtifactAudience.
+const (
+	Organization ArtifactAudience = "organization"
+	Private      ArtifactAudience = "private"
+	Repository   ArtifactAudience = "repository"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactAudience enum.
+func (e ArtifactAudience) Valid() bool {
+	switch e {
+	case Organization:
+		return true
+	case Private:
+		return true
+	case Repository:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactKind.
+const (
+	Diagram  ArtifactKind = "diagram"
+	Document ArtifactKind = "document"
+	Page     ArtifactKind = "page"
+	Report   ArtifactKind = "report"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactKind enum.
+func (e ArtifactKind) Valid() bool {
+	switch e {
+	case Diagram:
+		return true
+	case Document:
+		return true
+	case Page:
+		return true
+	case Report:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactMediaType.
+const (
+	ImagesvgXml  ArtifactMediaType = "image/svg+xml"
+	Texthtml     ArtifactMediaType = "text/html"
+	Textmarkdown ArtifactMediaType = "text/markdown"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactMediaType enum.
+func (e ArtifactMediaType) Valid() bool {
+	switch e {
+	case ImagesvgXml:
+		return true
+	case Texthtml:
+		return true
+	case Textmarkdown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactReach.
+const (
+	Edit ArtifactReach = "edit"
+	None ArtifactReach = "none"
+	View ArtifactReach = "view"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactReach enum.
+func (e ArtifactReach) Valid() bool {
+	switch e {
+	case Edit:
+		return true
+	case None:
+		return true
+	case View:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatUpdateKind.
 const (
 	MessageDeleted ChatUpdateKind = "message.deleted"
@@ -213,6 +300,105 @@ func (e TreeEntryKind) Valid() bool {
 	}
 }
 
+// Artifact A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it: its versions' bodies come from getArtifactVersion. One a list shows to a caller who may list it but not read it has only its id, orgId, title, kind, owner and permissions.
+type Artifact struct {
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent *Principal `json:"agent,omitempty"`
+
+	// Audience Its widest audience, as the list's badge names it.
+	Audience *ArtifactAudience `json:"audience,omitempty"`
+
+	// Branch The branch it came from; empty for none.
+	Branch    *string    `json:"branch,omitempty"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Head Its newest version's number, the one it shows.
+	Head *int32             `json:"head,omitempty"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType *ArtifactMediaType `json:"mediaType,omitempty"`
+	OrgId     openapi_types.UUID `json:"orgId"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// Owner Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Owner *Principal `json:"owner,omitempty"`
+
+	// Permissions What the caller holds on it, sorted; getArtifact answers it all, a list which of artifacts.list and artifacts.read.
+	Permissions *[]string `json:"permissions,omitempty"`
+
+	// Repository The repository an artifact is attached to; absent for none.
+	Repository *ArtifactRepository `json:"repository,omitempty"`
+
+	// RepositoryAccess How far an audience reaches an artifact.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	Summary          *string        `json:"summary,omitempty"`
+
+	// TaskNumber The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
+	TaskNumber *int64     `json:"taskNumber,omitempty"`
+	Title      string     `json:"title"`
+	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
+
+	// UpdatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	UpdatedBy *Principal `json:"updatedBy,omitempty"`
+
+	// Version Its version, which every change and every new version bumps, and its ETag carries.
+	Version *int64 `json:"version,omitempty"`
+}
+
+// ArtifactAudience Its widest audience, as the list's badge names it.
+type ArtifactAudience string
+
+// ArtifactKind What an artifact is for, which picks its icon and its filter, never its format.
+type ArtifactKind string
+
+// ArtifactMediaType The format a version is written in.
+type ArtifactMediaType string
+
+// ArtifactReach How far an audience reaches an artifact.
+type ArtifactReach string
+
+// ArtifactRepository The repository an artifact is attached to; absent for none.
+type ArtifactRepository struct {
+	Id   openapi_types.UUID `json:"id"`
+	Slug string             `json:"slug"`
+}
+
+// ArtifactVersion A version of an artifact, which never changes.
+type ArtifactVersion struct {
+	ArtifactId openapi_types.UUID `json:"artifactId"`
+
+	// Author Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Author *Principal `json:"author,omitempty"`
+
+	// Body Its text; getArtifactVersion alone answers it.
+	Body      *string   `json:"body,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Html A Markdown body rendered and sanitized as the Console shows it; getArtifactVersion alone answers it.
+	Html *string            `json:"html,omitempty"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+	Note      string            `json:"note"`
+	Number    int32             `json:"number"`
+
+	// Size Its body's length in bytes.
+	Size int64 `json:"size"`
+
+	// TaskNumber The number of the agent's task it was written in; absent for none.
+	TaskNumber *int64 `json:"taskNumber,omitempty"`
+}
+
 // ChatAnchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
 type ChatAnchor struct {
 	// EndLine The last line, at or after startLine.
@@ -226,8 +412,20 @@ type ChatAnchor struct {
 	StartLine int    `json:"startLine"`
 }
 
+// ChatArtifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+type ChatArtifact struct {
+	Id openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind  ArtifactKind `json:"kind"`
+	Title string       `json:"title"`
+}
+
 // ChatMessage One of a thread's messages, in Markdown.
 type ChatMessage struct {
+	// Artifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+	Artifact *ChatArtifact `json:"artifact,omitempty"`
+
 	// AskedAgent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	AskedAgent *Principal `json:"askedAgent,omitempty"`
 
@@ -270,6 +468,9 @@ type ChatMessage struct {
 
 // ChatMessageInput A message to post.
 type ChatMessageInput struct {
+	// ArtifactId An artifact of the organization that the poster reads, which the message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
+
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused with ask.busy while another task talks in the thread, which reads what is posted there.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`
 
@@ -313,6 +514,9 @@ type ChatThread struct {
 type ChatThreadInput struct {
 	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
+
+	// ArtifactId An artifact of the organization that the poster reads, which its first message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
 
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`
@@ -490,6 +694,54 @@ type MyTask struct {
 type MyTaskConversation struct {
 	AgentId        *openapi_types.UUID `json:"agentId,omitempty"`
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
+}
+
+// NewArtifact What makes an artifact with its first version.
+type NewArtifact struct {
+	// Body Its first version's body, 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Branch The branch it came from; an agent's task names its own when absent.
+	Branch *string `json:"branch,omitempty"`
+
+	// Id The artifact's ID, and its first version's, which the call that makes it picks so that it makes it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind ArtifactKind `json:"kind"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why the version was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
+
+	// OrganizationAccess How far an audience reaches an artifact.
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
+
+	// RepositoryAccess How far the repository's readers reach it, none when absent; an artifact attached to no repository has none.
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+
+	// Summary At most 500 characters.
+	Summary *string `json:"summary,omitempty"`
+
+	// Title 1 to 200 characters.
+	Title string `json:"title"`
+}
+
+// NewArtifactVersion What adds a version.
+type NewArtifactVersion struct {
+	// Body 1 byte to 1 MiB of UTF-8 text without NUL characters.
+	Body string `json:"body"`
+
+	// Id The version's ID, which the call that adds it picks so that it adds it once; a new one when absent.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// MediaType The format a version is written in.
+	MediaType ArtifactMediaType `json:"mediaType"`
+
+	// Note Why it was written, at most 500 characters.
+	Note *string `json:"note,omitempty"`
 }
 
 // Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
@@ -732,8 +984,17 @@ type TreeEntryKind string
 // AgentID defines model for agent.
 type AgentID = openapi_types.UUID
 
+// ArtifactVersionNumber defines model for artifactVersionNumber.
+type ArtifactVersionNumber = int32
+
 // BranchName defines model for branch.
 type BranchName = string
+
+// Id defines model for id.
+type Id = openapi_types.UUID
+
+// IfMatchArtifact defines model for ifMatchArtifact.
+type IfMatchArtifact = string
 
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
@@ -784,6 +1045,24 @@ type ListAgentConversationUpdatesParams struct {
 
 	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
 	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
+// GetArtifactParams defines parameters for GetArtifact.
+type GetArtifactParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// AddArtifactVersionParams defines parameters for AddArtifactVersion.
+type AddArtifactVersionParams struct {
+	// IfMatch The ETag of the artifact the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchArtifact `json:"If-Match,omitempty"`
+}
+
+// GetArtifactVersionParams defines parameters for GetArtifactVersion.
+type GetArtifactVersionParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListOrganizationConversationThreadsParams defines parameters for ListOrganizationConversationThreads.
@@ -960,6 +1239,12 @@ type StartAgentConversationThreadJSONRequestBody = ChatThreadInput
 // PostAgentConversationMessageJSONRequestBody defines body for PostAgentConversationMessage for application/json ContentType.
 type PostAgentConversationMessageJSONRequestBody = ChatMessageInput
 
+// CreateOrganizationArtifactJSONRequestBody defines body for CreateOrganizationArtifact for application/json ContentType.
+type CreateOrganizationArtifactJSONRequestBody = NewArtifact
+
+// AddArtifactVersionJSONRequestBody defines body for AddArtifactVersion for application/json ContentType.
+type AddArtifactVersionJSONRequestBody = NewArtifactVersion
+
 // StartOrganizationConversationThreadJSONRequestBody defines body for StartOrganizationConversationThread for application/json ContentType.
 type StartOrganizationConversationThreadJSONRequestBody = ChatThreadInput
 
@@ -971,6 +1256,9 @@ type StartIssueChatThreadJSONRequestBody = ChatThreadInput
 
 // PostIssueChatMessageJSONRequestBody defines body for PostIssueChatMessage for application/json ContentType.
 type PostIssueChatMessageJSONRequestBody = ChatMessageInput
+
+// CreateArtifactJSONRequestBody defines body for CreateArtifact for application/json ContentType.
+type CreateArtifactJSONRequestBody = NewArtifact
 
 // StartChatThreadJSONRequestBody defines body for StartChatThread for application/json ContentType.
 type StartChatThreadJSONRequestBody = ChatThreadInput
@@ -1126,6 +1414,44 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
 	ListAgentConversationUpdates(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateOrganizationArtifactWithBody Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+	CreateOrganizationArtifactWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+	CreateOrganizationArtifact(ctx context.Context, org Org, body CreateOrganizationArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	//
+	// Corresponds with GET /orgs/{org}/artifacts/{id} (the `GetArtifact` operationId).
+	GetArtifact(ctx context.Context, org Org, id Id, params *GetArtifactParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddArtifactVersionWithBody Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+	AddArtifactVersionWithBody(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+	AddArtifactVersion(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, body AddArtifactVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	//
+	// Corresponds with GET /orgs/{org}/artifacts/{id}/versions/{version} (the `GetArtifactVersion` operationId).
+	GetArtifactVersion(ctx context.Context, org Org, id Id, version ArtifactVersionNumber, params *GetArtifactVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 	//
 	// Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
@@ -1211,6 +1537,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
 	ListIssueChatUpdates(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateArtifactWithBody Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+	CreateArtifactWithBody(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+	CreateArtifact(ctx context.Context, org Org, repo Repo, body CreateArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	//
@@ -1519,6 +1859,104 @@ func (c *Client) ListAgentConversationUpdates(ctx context.Context, org Org, agen
 	return c.Client.Do(req)
 }
 
+// CreateOrganizationArtifactWithBody Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+func (c *Client) CreateOrganizationArtifactWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrganizationArtifactRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+func (c *Client) CreateOrganizationArtifact(ctx context.Context, org Org, body CreateOrganizationArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrganizationArtifactRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetArtifact One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+//
+// Corresponds with GET /orgs/{org}/artifacts/{id} (the `GetArtifact` operationId).
+func (c *Client) GetArtifact(ctx context.Context, org Org, id Id, params *GetArtifactParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetArtifactRequest(c.Server, org, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AddArtifactVersionWithBody Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+func (c *Client) AddArtifactVersionWithBody(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddArtifactVersionRequestWithBody(c.Server, org, id, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AddArtifactVersion Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+func (c *Client) AddArtifactVersion(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, body AddArtifactVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddArtifactVersionRequest(c.Server, org, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetArtifactVersion A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+//
+// Corresponds with GET /orgs/{org}/artifacts/{id}/versions/{version} (the `GetArtifactVersion` operationId).
+func (c *Client) GetArtifactVersion(ctx context.Context, org Org, id Id, version ArtifactVersionNumber, params *GetArtifactVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetArtifactVersionRequest(c.Server, org, id, version, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 //
 // Corresponds with GET /orgs/{org}/conversation (the `ListOrganizationConversationThreads` operationId).
@@ -1735,6 +2173,40 @@ func (c *Client) PostIssueChatMessage(ctx context.Context, org Org, number Numbe
 // Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
 func (c *Client) ListIssueChatUpdates(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListIssueChatUpdatesRequest(c.Server, org, number, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateArtifactWithBody Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+func (c *Client) CreateArtifactWithBody(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateArtifactRequestWithBody(c.Server, org, repo, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+func (c *Client) CreateArtifact(ctx context.Context, org Org, repo Repo, body CreateArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateArtifactRequest(c.Server, org, repo, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2530,6 +3002,241 @@ func NewListAgentConversationUpdatesRequest(server string, org Org, agentID Agen
 	return req, nil
 }
 
+// NewCreateOrganizationArtifactRequest calls the generic CreateOrganizationArtifact builder with application/json body
+func NewCreateOrganizationArtifactRequest(server string, org Org, body CreateOrganizationArtifactJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOrganizationArtifactRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateOrganizationArtifactRequestWithBody constructs an http.Request for the CreateOrganizationArtifact method, with any body, and a specified content type
+func NewCreateOrganizationArtifactRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/artifacts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetArtifactRequest constructs an http.Request for the GetArtifact method
+func NewGetArtifactRequest(server string, org Org, id Id, params *GetArtifactParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/artifacts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewAddArtifactVersionRequest calls the generic AddArtifactVersion builder with application/json body
+func NewAddArtifactVersionRequest(server string, org Org, id Id, params *AddArtifactVersionParams, body AddArtifactVersionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddArtifactVersionRequestWithBody(server, org, id, params, "application/json", bodyReader)
+}
+
+// NewAddArtifactVersionRequestWithBody constructs an http.Request for the AddArtifactVersion method, with any body, and a specified content type
+func NewAddArtifactVersionRequestWithBody(server string, org Org, id Id, params *AddArtifactVersionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/artifacts/%s/versions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IfMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-Match", *params.IfMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetArtifactVersionRequest constructs an http.Request for the GetArtifactVersion method
+func NewGetArtifactVersionRequest(server string, org Org, id Id, version ArtifactVersionNumber, params *GetArtifactVersionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int32"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/artifacts/%s/versions/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListOrganizationConversationThreadsRequest constructs an http.Request for the ListOrganizationConversationThreads method
 func NewListOrganizationConversationThreadsRequest(server string, org Org, params *ListOrganizationConversationThreadsParams) (*http.Request, error) {
 	var err error
@@ -3159,6 +3866,60 @@ func NewListIssueChatUpdatesRequest(server string, org Org, number Number, param
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateArtifactRequest calls the generic CreateArtifact builder with application/json body
+func NewCreateArtifactRequest(server string, org Org, repo Repo, body CreateArtifactJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateArtifactRequestWithBody(server, org, repo, "application/json", bodyReader)
+}
+
+// NewCreateArtifactRequestWithBody constructs an http.Request for the CreateArtifact method, with any body, and a specified content type
+func NewCreateArtifactRequestWithBody(server string, org Org, repo Repo, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/artifacts", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -4635,6 +5396,48 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent}/conversation/updates (the `ListAgentConversationUpdates` operationId).
 	ListAgentConversationUpdatesWithResponse(ctx context.Context, org Org, agentID AgentID, params *ListAgentConversationUpdatesParams, reqEditors ...RequestEditorFn) (*ListAgentConversationUpdatesResponse, error)
 
+	// CreateOrganizationArtifactWithBodyWithResponse Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+	CreateOrganizationArtifactWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrganizationArtifactResponse, error)
+
+	// CreateOrganizationArtifactWithResponse Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+	CreateOrganizationArtifactWithResponse(ctx context.Context, org Org, body CreateOrganizationArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrganizationArtifactResponse, error)
+
+	// GetArtifactWithResponse One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/artifacts/{id} (the `GetArtifact` operationId).
+	GetArtifactWithResponse(ctx context.Context, org Org, id Id, params *GetArtifactParams, reqEditors ...RequestEditorFn) (*GetArtifactResponse, error)
+
+	// AddArtifactVersionWithBodyWithResponse Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+	AddArtifactVersionWithBodyWithResponse(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddArtifactVersionResponse, error)
+
+	// AddArtifactVersionWithResponse Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+	AddArtifactVersionWithResponse(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, body AddArtifactVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*AddArtifactVersionResponse, error)
+
+	// GetArtifactVersionWithResponse A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/artifacts/{id}/versions/{version} (the `GetArtifactVersion` operationId).
+	GetArtifactVersionWithResponse(ctx context.Context, org Org, id Id, version ArtifactVersionNumber, params *GetArtifactVersionParams, reqEditors ...RequestEditorFn) (*GetArtifactVersionResponse, error)
+
 	// ListOrganizationConversationThreadsWithResponse A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4732,6 +5535,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
 	ListIssueChatUpdatesWithResponse(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListIssueChatUpdatesResponse, error)
+
+	// CreateArtifactWithBodyWithResponse Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+	CreateArtifactWithBodyWithResponse(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArtifactResponse, error)
+
+	// CreateArtifactWithResponse Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+	CreateArtifactWithResponse(ctx context.Context, org Org, repo Repo, body CreateArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArtifactResponse, error)
 
 	// GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	//
@@ -5474,6 +6291,384 @@ func (r ListAgentConversationUpdatesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAgentConversationUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateOrganizationArtifactResponse200Headers the declared response headers of an HTTP 200 response for CreateOrganizationArtifact
+type CreateOrganizationArtifactResponse200Headers struct {
+	ETag     string
+	Location string
+}
+
+// CreateOrganizationArtifactResponse201Headers the declared response headers of an HTTP 201 response for CreateOrganizationArtifact
+type CreateOrganizationArtifactResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type CreateOrganizationArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Artifact
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Artifact
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *CreateOrganizationArtifactResponse200Headers
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateOrganizationArtifactResponse201Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateOrganizationArtifactResponse) GetJSON200() *Artifact {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateOrganizationArtifactResponse) GetJSON201() *Artifact {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateOrganizationArtifactResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateOrganizationArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOrganizationArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOrganizationArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateOrganizationArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetArtifactResponse200Headers the declared response headers of an HTTP 200 response for GetArtifact
+type GetArtifactResponse200Headers struct {
+	ETag string
+}
+
+// GetArtifactResponse304Headers the declared response headers of an HTTP 304 response for GetArtifact
+type GetArtifactResponse304Headers struct {
+	ETag string
+}
+
+type GetArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Artifact
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetArtifactResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetArtifactResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetArtifactResponse) GetJSON200() *Artifact {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetArtifactResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetArtifactResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetArtifactResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// AddArtifactVersionResponse200Headers the declared response headers of an HTTP 200 response for AddArtifactVersion
+type AddArtifactVersionResponse200Headers struct {
+	ETag     string
+	Location string
+}
+
+// AddArtifactVersionResponse201Headers the declared response headers of an HTTP 201 response for AddArtifactVersion
+type AddArtifactVersionResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type AddArtifactVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ArtifactVersion
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ArtifactVersion
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON412 the response for an HTTP 412 `application/problem+json` response
+	ApplicationproblemJSON412 *Problem
+	// ApplicationproblemJSON428 the response for an HTTP 428 `application/problem+json` response
+	ApplicationproblemJSON428 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *AddArtifactVersionResponse200Headers
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *AddArtifactVersionResponse201Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AddArtifactVersionResponse) GetJSON200() *ArtifactVersion {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AddArtifactVersionResponse) GetJSON201() *ArtifactVersion {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON412 returns the response for an HTTP 412 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON412() *Problem {
+	return r.ApplicationproblemJSON412
+}
+
+// GetApplicationproblemJSON428 returns the response for an HTTP 428 `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSON428() *Problem {
+	return r.ApplicationproblemJSON428
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r AddArtifactVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AddArtifactVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AddArtifactVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddArtifactVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AddArtifactVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetArtifactVersionResponse200Headers the declared response headers of an HTTP 200 response for GetArtifactVersion
+type GetArtifactVersionResponse200Headers struct {
+	ETag string
+}
+
+// GetArtifactVersionResponse304Headers the declared response headers of an HTTP 304 response for GetArtifactVersion
+type GetArtifactVersionResponse304Headers struct {
+	ETag string
+}
+
+type GetArtifactVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ArtifactVersion
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetArtifactVersionResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetArtifactVersionResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetArtifactVersionResponse) GetJSON200() *ArtifactVersion {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetArtifactVersionResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetArtifactVersionResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetArtifactVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetArtifactVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetArtifactVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetArtifactVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetArtifactVersionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6354,6 +7549,112 @@ func (r ListIssueChatUpdatesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListIssueChatUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateArtifactResponse200Headers the declared response headers of an HTTP 200 response for CreateArtifact
+type CreateArtifactResponse200Headers struct {
+	ETag     string
+	Location string
+}
+
+// CreateArtifactResponse201Headers the declared response headers of an HTTP 201 response for CreateArtifact
+type CreateArtifactResponse201Headers struct {
+	ETag     string
+	Location string
+}
+
+type CreateArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Artifact
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Artifact
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *CreateArtifactResponse200Headers
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateArtifactResponse201Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateArtifactResponse) GetJSON200() *Artifact {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateArtifactResponse) GetJSON201() *Artifact {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateArtifactResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateArtifactResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8069,6 +9370,84 @@ func (c *ClientWithResponses) ListAgentConversationUpdatesWithResponse(ctx conte
 	return ParseListAgentConversationUpdatesResponse(rsp)
 }
 
+// CreateOrganizationArtifactWithBodyWithResponse Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+func (c *ClientWithResponses) CreateOrganizationArtifactWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrganizationArtifactResponse, error) {
+	rsp, err := c.CreateOrganizationArtifactWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrganizationArtifactResponse(rsp)
+}
+
+// CreateOrganizationArtifactWithResponse Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/artifacts (the `CreateOrganizationArtifact` operationId).
+func (c *ClientWithResponses) CreateOrganizationArtifactWithResponse(ctx context.Context, org Org, body CreateOrganizationArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrganizationArtifactResponse, error) {
+	rsp, err := c.CreateOrganizationArtifact(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrganizationArtifactResponse(rsp)
+}
+
+// GetArtifactWithResponse One of the organization's artifacts, with what the caller holds on it, without its versions' bodies; takes artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/artifacts/{id} (the `GetArtifact` operationId).
+func (c *ClientWithResponses) GetArtifactWithResponse(ctx context.Context, org Org, id Id, params *GetArtifactParams, reqEditors ...RequestEditorFn) (*GetArtifactResponse, error) {
+	rsp, err := c.GetArtifact(ctx, org, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetArtifactResponse(rsp)
+}
+
+// AddArtifactVersionWithBodyWithResponse Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+func (c *ClientWithResponses) AddArtifactVersionWithBodyWithResponse(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddArtifactVersionResponse, error) {
+	rsp, err := c.AddArtifactVersionWithBody(ctx, org, id, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddArtifactVersionResponse(rsp)
+}
+
+// AddArtifactVersionWithResponse Adds an artifact's next version, which becomes the one it shows; takes artifacts.write on it. The addition names the ETag of the artifact it was made from in If-Match, and a version added meanwhile refuses it with 412; without it, the answer is 428. An id of a version the caller added to this artifact already answers that version, with 200, so a call sent again adds nothing more.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/artifacts/{id}/versions (the `AddArtifactVersion` operationId).
+func (c *ClientWithResponses) AddArtifactVersionWithResponse(ctx context.Context, org Org, id Id, params *AddArtifactVersionParams, body AddArtifactVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*AddArtifactVersionResponse, error) {
+	rsp, err := c.AddArtifactVersion(ctx, org, id, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddArtifactVersionResponse(rsp)
+}
+
+// GetArtifactVersionWithResponse A version of an artifact, 0 for its newest, with its body and, for Markdown, the sanitized HTML the Console shows; takes artifacts.read on it.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/artifacts/{id}/versions/{version} (the `GetArtifactVersion` operationId).
+func (c *ClientWithResponses) GetArtifactVersionWithResponse(ctx context.Context, org Org, id Id, version ArtifactVersionNumber, params *GetArtifactVersionParams, reqEditors ...RequestEditorFn) (*GetArtifactVersionResponse, error) {
+	rsp, err := c.GetArtifactVersion(ctx, org, id, version, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetArtifactVersionResponse(rsp)
+}
+
 // ListOrganizationConversationThreadsWithResponse A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -8249,6 +9628,32 @@ func (c *ClientWithResponses) ListIssueChatUpdatesWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseListIssueChatUpdatesResponse(rsp)
+}
+
+// CreateArtifactWithBodyWithResponse Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+func (c *ClientWithResponses) CreateArtifactWithBodyWithResponse(ctx context.Context, org Org, repo Repo, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArtifactResponse, error) {
+	rsp, err := c.CreateArtifactWithBody(ctx, org, repo, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateArtifactResponse(rsp)
+}
+
+// CreateArtifactWithResponse Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/artifacts (the `CreateArtifact` operationId).
+func (c *ClientWithResponses) CreateArtifactWithResponse(ctx context.Context, org Org, repo Repo, body CreateArtifactJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArtifactResponse, error) {
+	rsp, err := c.CreateArtifact(ctx, org, repo, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateArtifactResponse(rsp)
 }
 
 // GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
@@ -9070,6 +10475,390 @@ func ParseListAgentConversationUpdatesResponse(rsp *http.Response) (*ListAgentCo
 	return response, nil
 }
 
+// ParseCreateOrganizationArtifactResponse parses an HTTP response from a CreateOrganizationArtifactWithResponse call
+func ParseCreateOrganizationArtifactResponse(rsp *http.Response) (*CreateOrganizationArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOrganizationArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Artifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Artifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers CreateOrganizationArtifactResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 201:
+		var headers CreateOrganizationArtifactResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetArtifactResponse parses an HTTP response from a GetArtifactWithResponse call
+func ParseGetArtifactResponse(rsp *http.Response) (*GetArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Artifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetArtifactResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetArtifactResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseAddArtifactVersionResponse parses an HTTP response from a AddArtifactVersionWithResponse call
+func ParseAddArtifactVersionResponse(rsp *http.Response) (*AddArtifactVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddArtifactVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ArtifactVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ArtifactVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON412 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 428:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON428 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers AddArtifactVersionResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 201:
+		var headers AddArtifactVersionResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetArtifactVersionResponse parses an HTTP response from a GetArtifactVersionWithResponse call
+func ParseGetArtifactVersionResponse(rsp *http.Response) (*GetArtifactVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetArtifactVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ArtifactVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetArtifactVersionResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetArtifactVersionResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseListOrganizationConversationThreadsResponse parses an HTTP response from a ListOrganizationConversationThreadsWithResponse call
 func ParseListOrganizationConversationThreadsResponse(rsp *http.Response) (*ListOrganizationConversationThreadsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -9863,6 +11652,118 @@ func ParseListIssueChatUpdatesResponse(rsp *http.Response) (*ListIssueChatUpdate
 		}
 		response.ApplicationproblemJSONDefault = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseCreateArtifactResponse parses an HTTP response from a CreateArtifactWithResponse call
+func ParseCreateArtifactResponse(rsp *http.Response) (*CreateArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Artifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Artifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers CreateArtifactResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 201:
+		var headers CreateArtifactResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil

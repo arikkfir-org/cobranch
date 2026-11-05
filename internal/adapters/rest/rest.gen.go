@@ -1636,8 +1636,20 @@ type ChatAnchor struct {
 	StartLine int    `json:"startLine"`
 }
 
+// ChatArtifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+type ChatArtifact struct {
+	Id openapi_types.UUID `json:"id"`
+
+	// Kind What an artifact is for, which picks its icon and its filter, never its format.
+	Kind  ArtifactKind `json:"kind"`
+	Title string       `json:"title"`
+}
+
 // ChatMessage One of a thread's messages, in Markdown.
 type ChatMessage struct {
+	// Artifact The artifact a message names, which the conversation draws as a card that opens it; absent for none, and once the artifact is deleted. The card shows to whoever reads the thread, and the artifact opens only for those whose grants reach it.
+	Artifact *ChatArtifact `json:"artifact,omitempty"`
+
 	// AskedAgent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	AskedAgent *Principal `json:"askedAgent,omitempty"`
 
@@ -1680,6 +1692,9 @@ type ChatMessage struct {
 
 // ChatMessageInput A message to post.
 type ChatMessageInput struct {
+	// ArtifactId An artifact of the organization that the poster reads, which the message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
+
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused with ask.busy while another task talks in the thread, which reads what is posted there.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`
 
@@ -1729,6 +1744,9 @@ type ChatThread struct {
 type ChatThreadInput struct {
 	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
+
+	// ArtifactId An artifact of the organization that the poster reads, which its first message names as its card; 400 message.artifact_invalid for any other.
+	ArtifactId *openapi_types.UUID `json:"artifactId,omitempty"`
 
 	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
 	Ask *openapi_types.UUID `json:"ask,omitempty"`

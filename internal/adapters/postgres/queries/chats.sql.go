@@ -62,6 +62,30 @@ func (q *Queries) BranchHead(ctx context.Context, id uuid.UUID) (string, error) 
 	return head, err
 }
 
+const chatArtifact = `-- name: ChatArtifact :one
+SELECT id, org_id, title, kind FROM artifacts WHERE id = $1
+`
+
+type ChatArtifactRow struct {
+	ID    uuid.UUID
+	OrgID uuid.UUID
+	Title string
+	Kind  string
+}
+
+// ChatArtifact finds an artifact as a message's card names it: its organization, title and kind.
+func (q *Queries) ChatArtifact(ctx context.Context, id uuid.UUID) (ChatArtifactRow, error) {
+	row := q.db.QueryRow(ctx, chatArtifact, id)
+	var i ChatArtifactRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Title,
+		&i.Kind,
+	)
+	return i, err
+}
+
 const chatCursor = `-- name: ChatCursor :one
 SELECT coalesce(max(seq), 0)::bigint FROM events WHERE subject_id = $1 AND kind LIKE 'chat.%'
 `
@@ -108,11 +132,13 @@ func (q *Queries) ChatEvents(ctx context.Context, subjectID *uuid.UUID, after in
 }
 
 const chatMessagesByID = `-- name: ChatMessagesByID :many
-SELECT m.id, m.thread_id, m.org_id, m.author_id, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.version, m.task_id, m.asked_task_id, a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
-    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name
+SELECT m.id, m.thread_id, m.org_id, m.author_id, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.version, m.task_id, m.artifact_id, m.asked_task_id, a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
+    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name,
+    ar.title AS artifact_title, ar.kind AS artifact_kind
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
     LEFT JOIN agent_tasks tk ON tk.id = m.task_id
     LEFT JOIN agent_tasks ak ON ak.id = m.asked_task_id LEFT JOIN agents ag ON ag.principal_id = ak.agent_id
+    LEFT JOIN artifacts ar ON ar.id = m.artifact_id
 WHERE m.id = ANY ($1::uuid[])
 `
 
@@ -124,10 +150,13 @@ type ChatMessagesByIDRow struct {
 	AskedNumber    *int64
 	AskedAgentID   *uuid.UUID
 	AskedAgentName *string
+	ArtifactTitle  *string
+	ArtifactKind   *string
 }
 
 // ChatMessagesByID finds the messages that ids name, with the display names of their authors and deleters, the
-// number of the task each came from, and the number and agent of the task each asked for.
+// number of the task each came from, the number and agent of the task each asked for, and the title and kind of the
+// artifact each names.
 func (q *Queries) ChatMessagesByID(ctx context.Context, ids []uuid.UUID) ([]ChatMessagesByIDRow, error) {
 	rows, err := q.db.Query(ctx, chatMessagesByID, ids)
 	if err != nil {
@@ -149,6 +178,7 @@ func (q *Queries) ChatMessagesByID(ctx context.Context, ids []uuid.UUID) ([]Chat
 			&i.ChatMessage.DeletedBy,
 			&i.ChatMessage.Version,
 			&i.ChatMessage.TaskID,
+			&i.ChatMessage.ArtifactID,
 			&i.ChatMessage.AskedTaskID,
 			&i.AuthorName,
 			&i.DeleterName,
@@ -156,6 +186,8 @@ func (q *Queries) ChatMessagesByID(ctx context.Context, ids []uuid.UUID) ([]Chat
 			&i.AskedNumber,
 			&i.AskedAgentID,
 			&i.AskedAgentName,
+			&i.ArtifactTitle,
+			&i.ArtifactKind,
 		); err != nil {
 			return nil, err
 		}
@@ -168,11 +200,13 @@ func (q *Queries) ChatMessagesByID(ctx context.Context, ids []uuid.UUID) ([]Chat
 }
 
 const chatMessagesOf = `-- name: ChatMessagesOf :many
-SELECT m.id, m.thread_id, m.org_id, m.author_id, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.version, m.task_id, m.asked_task_id, a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
-    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name
+SELECT m.id, m.thread_id, m.org_id, m.author_id, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.version, m.task_id, m.artifact_id, m.asked_task_id, a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number,
+    ak.number AS asked_number, ak.agent_id AS asked_agent_id, ag.name AS asked_agent_name,
+    ar.title AS artifact_title, ar.kind AS artifact_kind
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
     LEFT JOIN agent_tasks tk ON tk.id = m.task_id
     LEFT JOIN agent_tasks ak ON ak.id = m.asked_task_id LEFT JOIN agents ag ON ag.principal_id = ak.agent_id
+    LEFT JOIN artifacts ar ON ar.id = m.artifact_id
 WHERE m.thread_id = ANY ($1::uuid[])
 ORDER BY m.thread_id, m.created_at, m.id
 `
@@ -185,11 +219,13 @@ type ChatMessagesOfRow struct {
 	AskedNumber    *int64
 	AskedAgentID   *uuid.UUID
 	AskedAgentName *string
+	ArtifactTitle  *string
+	ArtifactKind   *string
 }
 
 // ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were
-// posted, with the display names of their authors and deleters, the number of the task each came from, and the number
-// and agent of the task each asked for.
+// posted, with the display names of their authors and deleters, the number of the task each came from, the number and
+// agent of the task each asked for, and the title and kind of the artifact each names.
 func (q *Queries) ChatMessagesOf(ctx context.Context, threadIds []uuid.UUID) ([]ChatMessagesOfRow, error) {
 	rows, err := q.db.Query(ctx, chatMessagesOf, threadIds)
 	if err != nil {
@@ -211,6 +247,7 @@ func (q *Queries) ChatMessagesOf(ctx context.Context, threadIds []uuid.UUID) ([]
 			&i.ChatMessage.DeletedBy,
 			&i.ChatMessage.Version,
 			&i.ChatMessage.TaskID,
+			&i.ChatMessage.ArtifactID,
 			&i.ChatMessage.AskedTaskID,
 			&i.AuthorName,
 			&i.DeleterName,
@@ -218,6 +255,8 @@ func (q *Queries) ChatMessagesOf(ctx context.Context, threadIds []uuid.UUID) ([]
 			&i.AskedNumber,
 			&i.AskedAgentID,
 			&i.AskedAgentName,
+			&i.ArtifactTitle,
+			&i.ArtifactKind,
 		); err != nil {
 			return nil, err
 		}
@@ -393,7 +432,7 @@ func (q *Queries) ChatThreadsByID(ctx context.Context, orgID uuid.UUID, subjectI
 const deleteChatMessage = `-- name: DeleteChatMessage :one
 UPDATE chat_messages SET body = '', deleted_at = now(), deleted_by = $1
 WHERE id = $2 AND deleted_at IS NULL AND ($3::bigint < 0 OR version = $3::bigint)
-RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, asked_task_id
+RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, artifact_id, asked_task_id
 `
 
 // DeleteChatMessage empties a live message and marks who deleted it, when it is at version, or at any version when
@@ -413,6 +452,7 @@ func (q *Queries) DeleteChatMessage(ctx context.Context, deletedBy *uuid.UUID, i
 		&i.DeletedBy,
 		&i.Version,
 		&i.TaskID,
+		&i.ArtifactID,
 		&i.AskedTaskID,
 	)
 	return i, err
@@ -421,7 +461,7 @@ func (q *Queries) DeleteChatMessage(ctx context.Context, deletedBy *uuid.UUID, i
 const editChatMessage = `-- name: EditChatMessage :one
 UPDATE chat_messages SET body = $1, edited_at = now()
 WHERE id = $2 AND deleted_at IS NULL AND ($3::bigint < 0 OR version = $3::bigint)
-RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, asked_task_id
+RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, artifact_id, asked_task_id
 `
 
 // EditChatMessage changes a live message's body, when it is at version, or at any version when version is negative:
@@ -441,6 +481,7 @@ func (q *Queries) EditChatMessage(ctx context.Context, body string, iD uuid.UUID
 		&i.DeletedBy,
 		&i.Version,
 		&i.TaskID,
+		&i.ArtifactID,
 		&i.AskedTaskID,
 	)
 	return i, err
@@ -511,10 +552,10 @@ func (q *Queries) HoldIssue(ctx context.Context, id uuid.UUID) (uuid.UUID, error
 }
 
 const insertChatMessage = `-- name: InsertChatMessage :one
-INSERT INTO chat_messages (id, thread_id, org_id, author_id, body, task_id, asked_task_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO chat_messages (id, thread_id, org_id, author_id, body, task_id, asked_task_id, artifact_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, asked_task_id
+RETURNING id, thread_id, org_id, author_id, body, created_at, edited_at, deleted_at, deleted_by, version, task_id, artifact_id, asked_task_id
 `
 
 type InsertChatMessageParams struct {
@@ -525,10 +566,11 @@ type InsertChatMessageParams struct {
 	Body        string
 	TaskID      *uuid.UUID
 	AskedTaskID *uuid.UUID
+	ArtifactID  *uuid.UUID
 }
 
-// InsertChatMessage posts a message, perhaps from an agent's task, perhaps asking an agent for a task: none when one of
-// its ID is there already.
+// InsertChatMessage posts a message, perhaps from an agent's task, perhaps asking an agent for a task, perhaps naming
+// an artifact: none when one of its ID is there already.
 func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessageParams) (ChatMessage, error) {
 	row := q.db.QueryRow(ctx, insertChatMessage,
 		arg.ID,
@@ -538,6 +580,7 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 		arg.Body,
 		arg.TaskID,
 		arg.AskedTaskID,
+		arg.ArtifactID,
 	)
 	var i ChatMessage
 	err := row.Scan(
@@ -552,6 +595,7 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 		&i.DeletedBy,
 		&i.Version,
 		&i.TaskID,
+		&i.ArtifactID,
 		&i.AskedTaskID,
 	)
 	return i, err
