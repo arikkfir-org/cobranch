@@ -13,9 +13,10 @@ spec:
   # Reserved once for all of a task's steps (step-level requests would add up as if the steps ran at once), measured
   # on the runs of 2026-11-01 at GOMAXPROCS=4 on a cold cache, with Go Cloud's drivers (the AWS, Azure and Google Cloud
   # SDKs): the compiles, lint and tests each keep about two cores busy and burst to four, and peak near 2.1Gi
-  # (generated), 1.5Gi (lint) and 1.4Gi (build), and on the runs of 2026-11-02, 2.6Gi (test) and 2.8Gi (lint, cold;
-  # 1.6Gi on main's caches). A limit holds a cold run: one restores nothing after a cache's rename or expiry. Size them
-  # again from real runs as the code grows.
+  # (generated), 1.5Gi (lint) and 1.4Gi (build), on the runs of 2026-11-02, 2.6Gi (test), and on those of 2026-11-05,
+  # 4.3Gi (lint, cold) and 3.4Gi (lint on main's caches of a change to the storage layer, which most packages import).
+  # A limit holds a cold run: one restores nothing after a cache's rename or expiry. Size them again from real runs as
+  # the code grows.
   taskRunSpecs:
     - pipelineTaskName: build
       computeResources:
@@ -28,9 +29,9 @@ spec:
       computeResources:
         requests:
           cpu: "2"
-          memory: 1536Mi
+          memory: 2Gi
         limits:
-          memory: 4Gi
+          memory: 6Gi
     - pipelineTaskName: test
       computeResources:
         requests:
