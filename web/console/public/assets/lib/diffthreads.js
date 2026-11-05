@@ -8,7 +8,7 @@ import { messageBody } from "./chat.js";
 import { h } from "./dom.js";
 import { ago, whenExactly } from "./format.js";
 import { avatar, icon } from "./icons.js";
-import { paneElement, setOpen } from "./pane.js";
+import { openThread } from "./pane.js";
 import { agents, me } from "./state.js";
 
 // pages bounds how many pages of a conversation's threads a diff reads: 1,000 threads.
@@ -69,9 +69,14 @@ function threadView(t, c) {
       e.preventDefault();
       if (!text.value.trim()) return;
       send.disabled = true;
-      // A message counts as a change of its thread: the thread is read again, at its new version, with it.
-      api("POST", target + "/messages", { body: text.value }).then(() => api("GET", target)).then((next) => { reply = null; changed(next); },
-        (err) => { send.disabled = false; fail(err); });
+      api("POST", target + "/messages", { body: text.value }).then((m) => {
+        reply = null;
+        t = { ...t, messages: [...(t.messages || []), m] };
+        draw();
+        // A message counts as a change of its thread, which is read again for the version Resolve names; a read that
+        // fails leaves the reply shown, posted, and Resolve then asks the viewer to try again.
+        api("GET", target).then(changed, () => {});
+      }, (err) => { send.disabled = false; fail(err); });
     };
     text.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
     reply = h("form", { class: "diff-thread-reply", onsubmit: submit }, text,
@@ -89,7 +94,7 @@ function threadView(t, c) {
     }
     const actions = [c.post ? h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: replying }, "Reply") : null,
       may() ? h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: toggle }, icon("circle-check"), "Resolve") : null,
-      h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: () => openInConversation(t.id) }, "Open in conversation")];
+      h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: () => openThread(t.id) }, "Open in conversation")];
     el.replaceChildren(h("div", { class: "diff-thread-comment" }, (t.messages || []).map(messageView),
       reply || h("div", { class: "diff-thread-actions" }, actions)), error);
   };
@@ -108,13 +113,4 @@ function messageView(m) {
     h("div", { class: "diff-thread-text" }, h("div", { class: "chat-message-header" }, h("strong", {}, name),
       agent ? h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent") : null,
       h("time", { datetime: m.createdAt, title: whenExactly(m.createdAt) }, ago(m.createdAt))), body));
-}
-
-// openInConversation shows thread id in the conversation pane: the page's address names it, which the pane opens at
-// once it draws, or scrolls to when it shows the branch's conversation already.
-function openInConversation(id) {
-  history.replaceState(history.state, "", location.pathname + location.search + "#thread-" + id);
-  if (paneElement().hidden) return setOpen(true);
-  const shown = document.getElementById("thread-" + id);
-  if (shown) shown.scrollIntoView({ block: "start", behavior: "smooth" });
 }
