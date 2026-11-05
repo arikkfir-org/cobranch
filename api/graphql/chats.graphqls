@@ -72,6 +72,12 @@ type ChatMessage {
   taskId: ID
   "That task's number in its organization."
   taskNumber: Int
+  "The task it asked an agent for; null for a message that asked nobody, and once the task is deleted."
+  askedTaskId: ID
+  "That task's number in its organization."
+  askedTaskNumber: Int
+  "The agent it asked."
+  askedAgent: CommitPrincipal
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
 }
@@ -116,6 +122,8 @@ input ChatThreadInput {
   anchor: ChatAnchorInput
   "Its first message's Markdown, at most 20,000 characters."
   body: String!
+  "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent."
+  ask: ID
 }
 
 "A message to post."
@@ -124,6 +132,8 @@ input ChatMessageInput {
   id: ID
   "Its Markdown, at most 20,000 characters."
   body: String!
+  "One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there."
+  ask: ID
 }
 
 extend type Mutation {

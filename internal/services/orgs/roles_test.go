@@ -240,3 +240,31 @@ func testKeepsAnOwner(t *testing.T, f *fixture) {
 		t.Errorf("revoking one of two Owners: error = %v", err)
 	}
 }
+
+// TestRolePermissionLabels holds the labels to the permissions a role may hold: each labelled once, with its group and
+// its label, and each group in one run, since the Console lists the groups in the order they first appear.
+func TestRolePermissionLabels(t *testing.T) {
+	seen, groups := map[string]bool{}, map[string]bool{}
+	last := ""
+	for _, p := range orgs.RolePermissionLabels {
+		for _, tt := range []struct {
+			fails bool
+			what  string
+		}{
+			{fails: !slices.Contains(orgs.RolePermissions(), p.ID), what: "isn't a permission a role may hold"},
+			{fails: seen[p.ID], what: "is labelled twice"},
+			{fails: p.Group == "" || p.Label == "", what: "has no group or no label"},
+			{fails: p.Group != last && groups[p.Group], what: "comes apart from the rest of its group " + p.Group},
+		} {
+			if tt.fails {
+				t.Errorf("%s %s", p.ID, tt.what)
+			}
+		}
+		seen[p.ID], groups[p.Group], last = true, true, p.Group
+	}
+	for _, id := range orgs.RolePermissions() {
+		if !seen[id] {
+			t.Errorf("%s, which a role may hold, has no label", id)
+		}
+	}
+}

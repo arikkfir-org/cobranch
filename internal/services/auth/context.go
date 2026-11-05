@@ -55,3 +55,12 @@ func TaskOf(ctx context.Context, principalID uuid.UUID) (TaskGrant, bool) {
 	}
 	return a.Credential.Task, true
 }
+
+// PrivateFor answers whose private records the request ctx reads for principalID: principalID's own, or, under the
+// token of a task asked in its assigner's private conversation, that assigner's, for whom the task works there.
+func PrivateFor(ctx context.Context, principalID uuid.UUID) uuid.UUID {
+	if g, ok := TaskOf(ctx, principalID); ok && g.Private {
+		return g.AssignerID
+	}
+	return principalID
+}

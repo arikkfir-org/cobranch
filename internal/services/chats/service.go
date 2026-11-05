@@ -68,6 +68,9 @@ type Store interface {
 	// Updates lists at most limit of the subject's chat updates after cursor after, in order, each with its thread and
 	// message as they are now.
 	Updates(ctx context.Context, subj Subject, after int64, limit int) ([]Update, error)
+	// Transact runs fn in one transaction that acts for actor, which the store's changes and the agents' store's join
+	// through fn's context: none of them commits unless fn succeeds.
+	Transact(ctx context.Context, actor uuid.UUID, fn func(ctx context.Context) error) error
 }
 
 // Notifier tells the servers that follow a chat when it may have changed.
@@ -93,6 +96,8 @@ type Service struct {
 	notifier Notifier
 	markdown code.Renderer
 	authz    *auth.Authorizer
+	agents   Agents
+	tasks    Tasks
 }
 
 // NewService returns a Service over store, rendering messages with markdown and checking permissions with authz;
@@ -132,6 +137,16 @@ var (
 type access struct {
 	post, moderate bool
 	rules          rules
+	// thread is the one thread the viewer reaches, a task's in another's conversation; uuid.Nil for every thread.
+	thread uuid.UUID
+}
+
+// reaches answers repos.ErrNotFound for a thread the viewer doesn't reach, as for one that isn't there.
+func (a access) reaches(threadID uuid.UUID) error {
+	if a.thread != uuid.Nil && a.thread != threadID {
+		return repos.ErrNotFound
+	}
+	return nil
 }
 
 // forbidden is the refusal of a change that takes permission, which the viewer lacks where the chat's rules hold it.
@@ -140,20 +155,27 @@ func (a access) forbidden(permission, what string) error {
 }
 
 // holds returns what v may do in the subject's chat: repos.ErrNotFound when v doesn't see its subject, or it is
-// another's conversation, and auth.ErrForbidden when v sees it but doesn't read its chat.
+// another's conversation but for the thread of a task its owner asked v for there, and auth.ErrForbidden when v sees
+// it but doesn't read its chat.
 func (s *Service) holds(ctx context.Context, v Viewer, subj Subject) (access, error) {
 	if subj.Private() && subj.OwnerID != v.ID {
-		return access{}, repos.ErrNotFound
+		return s.holdsForTask(ctx, v, subj)
 	}
+	r, scopeID := rulesOf(subj)
+	return s.holdsBy(ctx, v, r, scopeID)
+}
+
+// rulesOf is the rules of the subject's chat, and the ID of the scope where they hold.
+func rulesOf(subj Subject) (rules, uuid.UUID) {
 	switch subj.Kind() {
 	case KindIssue:
-		return s.holdsBy(ctx, v, issueRules, subj.OrgID)
+		return issueRules, subj.OrgID
 	case KindOrganization, KindAgent:
-		return s.holdsBy(ctx, v, orgConversationRules, subj.OrgID)
+		return orgConversationRules, subj.OrgID
 	case KindRepository:
-		return s.holdsBy(ctx, v, repoConversationRules, subj.RepoID)
+		return repoConversationRules, subj.RepoID
 	}
-	return s.holdsBy(ctx, v, branchRules, subj.RepoID)
+	return branchRules, subj.RepoID
 }
 
 // holdsBy returns what v may do in a chat of r's rules whose scope is scopeID, as holds does.
@@ -252,12 +274,13 @@ func (s *Service) Agent(ctx context.Context, v Viewer, orgID, agentID uuid.UUID)
 }
 
 // conversation checks that v reads the conversation's subject by r's rules at scopeID, then finds v's conversation
-// about the organization, its repository repoID or its agent agentID.
+// about the organization, its repository repoID or its agent agentID; under the token of a task asked in a private
+// conversation, the conversation of the task's assigner, where the task talks.
 func (s *Service) conversation(ctx context.Context, span trace.Span, v Viewer, r rules, scopeID, orgID, repoID, agentID uuid.UUID) (Subject, error) {
 	if _, err := s.holdsBy(ctx, v, r, scopeID); err != nil {
 		return Subject{}, failed(span, "finding the conversation", err)
 	}
-	subj, err := s.store.Conversation(ctx, v.ID, orgID, repoID, agentID)
+	subj, err := s.store.Conversation(ctx, auth.PrivateFor(ctx, v.ID), orgID, repoID, agentID)
 	return subj, failed(span, "finding the conversation", err)
 }
 
@@ -270,8 +293,12 @@ func (s *Service) Threads(ctx context.Context, v Viewer, subj Subject, before uu
 	if limit < 1 || limit > MaxPage {
 		return Page{}, &orgs.ValidationError{Field: "limit", Code: "limit.invalid", Message: fmt.Sprintf("a page holds 1 to %d threads", MaxPage)}
 	}
-	if _, err := s.holds(ctx, v, subj); err != nil {
+	can, err := s.holds(ctx, v, subj)
+	if err != nil {
 		return Page{}, failed(span, "listing the threads", err)
+	}
+	if can.thread != uuid.Nil {
+		return s.threadPage(ctx, span, subj, can.thread)
 	}
 	threads, after, err := s.store.Threads(ctx, subj, before, limit+1)
 	if err != nil {
@@ -290,13 +317,35 @@ func (s *Service) Threads(ctx context.Context, v Viewer, subj Subject, before uu
 	return page, nil
 }
 
+// threadPage is the page of the one thread of the subject's chat that a task reaches in another's conversation, with
+// where the chat's updates stand; empty while the thread isn't the subject's.
+func (s *Service) threadPage(ctx context.Context, span trace.Span, subj Subject, id uuid.UUID) (Page, error) {
+	_, after, err := s.store.Threads(ctx, subj, uuid.Nil, 1)
+	if err != nil {
+		return Page{}, failed(span, "listing the threads", err)
+	}
+	page := Page{After: after}
+	t, err := s.store.Thread(ctx, subj, id)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return page, nil
+	case err != nil:
+		return Page{}, failed(span, "listing the threads", err)
+	}
+	if err := s.present(ctx, subj, &t); err != nil {
+		return Page{}, failed(span, "listing the threads", err)
+	}
+	page.Threads = []Thread{t}
+	return page, nil
+}
+
 // Thread finds one of the chat's threads with its messages; it takes repo.read, or issues.read for an issue's. One that
 // isn't there is repos.ErrNotFound.
 func (s *Service) Thread(ctx context.Context, v Viewer, subj Subject, id uuid.UUID) (Thread, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.Thread", trace.WithAttributes(on(subj)...))
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.thread.id", id.String()))
-	if _, err := s.holds(ctx, v, subj); err != nil {
+	if err := s.reach(ctx, v, subj, id); err != nil {
 		return Thread{}, failed(span, "reading the thread", err)
 	}
 	t, err := s.store.Thread(ctx, subj, id)
@@ -312,7 +361,7 @@ func (s *Service) Message(ctx context.Context, v Viewer, subj Subject, threadID,
 	ctx, span := tracer.Start(ctx, "chats.Service.Message", trace.WithAttributes(on(subj)...))
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.message.id", id.String()))
-	if _, err := s.holds(ctx, v, subj); err != nil {
+	if err := s.reach(ctx, v, subj, threadID); err != nil {
 		return Message{}, failed(span, "reading the message", err)
 	}
 	m, err := s.message(ctx, subj, threadID, id)
@@ -323,15 +372,28 @@ func (s *Service) Message(ctx context.Context, v Viewer, subj Subject, threadID,
 }
 
 // StartThread starts a thread on the chat for the viewer with its first message, perhaps anchored to lines of a file at
-// one of the repository's commits; it takes messages.post, or issues.write for an issue's, whose threads have no
-// anchor. Starting the viewer's thread again by its ID answers it as it is; an ID of another thread is ErrIDTaken.
+// one of the repository's commits, perhaps asking one of the organization's agents, whose task then talks in the
+// thread; it takes messages.post, or issues.write for an issue's, whose threads have no anchor, and agents.assign to
+// ask. In an agent's conversation, a thread asks that agent unless it asks another. Starting the viewer's thread again
+// by its ID answers it as it is; an ID of another thread is ErrIDTaken.
 func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in ThreadInput) (Thread, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.StartThread", trace.WithAttributes(on(subj)...))
 	defer span.End()
-	if _, err := s.poster(ctx, v, subj); err != nil {
+	can, err := s.poster(ctx, v, subj)
+	if err != nil {
 		return Thread{}, failed(span, "starting the thread", err)
 	}
+	if can.thread != uuid.Nil {
+		return Thread{}, failed(span, "starting the thread", fmt.Errorf("%w: a task talks in its own thread of another's conversation alone", auth.ErrForbidden))
+	}
 	if err := s.validateThread(ctx, subj, in); err != nil {
+		return Thread{}, failed(span, "starting the thread", err)
+	}
+	if in.Ask == uuid.Nil && subj.Kind() == KindAgent && s.agents != nil {
+		in.Ask = subj.AgentID
+	}
+	task, err := s.asking(ctx, v, subj, in.Ask, in.Body)
+	if err != nil {
 		return Thread{}, failed(span, "starting the thread", err)
 	}
 	id, err := orNew(in.ID)
@@ -343,9 +405,18 @@ func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in Th
 		return Thread{}, failed(span, "starting the thread", fmt.Errorf("naming the message: %w", err))
 	}
 	span.SetAttributes(attribute.String("cobranch.chat.thread.id", id.String()))
-	t, created, err := s.store.StartThread(ctx, poster(ctx, v), subj, id, messageID, in.Anchor, in.Body)
-	if err == nil && !created && (t.StartedBy == nil || t.StartedBy.ID != v.ID) {
-		err = ErrIDTaken
+	var t Thread
+	err = s.record(ctx, v, task, func(ctx context.Context) (uuid.UUID, bool, error) {
+		var created bool
+		var err error
+		t, created, err = s.store.StartThread(ctx, asker(ctx, v, task), subj, id, messageID, in.Anchor, in.Body)
+		if err == nil && !created && (t.StartedBy == nil || t.StartedBy.ID != v.ID) {
+			err = ErrIDTaken
+		}
+		return id, created, err
+	})
+	if err == nil && task != nil {
+		t, err = s.store.Thread(ctx, subj, id)
 	}
 	if err == nil {
 		err = s.present(ctx, subj, &t)
@@ -384,14 +455,19 @@ func (s *Service) validateThread(ctx context.Context, subj Subject, in ThreadInp
 	return nil
 }
 
-// Post posts a message to one of the chat's threads for the viewer; it takes messages.post, or issues.write for an
-// issue's. Posting the viewer's message to the thread again by its ID answers it as it is; an ID of another message is
-// ErrIDTaken.
+// Post posts a message to one of the chat's threads for the viewer, perhaps asking one of the organization's agents,
+// whose task then talks in the thread, once no other task talks there; it takes messages.post, or issues.write for an
+// issue's, and agents.assign to ask. Posting the viewer's message to the thread again by its ID answers it as it is;
+// an ID of another message is ErrIDTaken.
 func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uuid.UUID, in MessageInput) (Message, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.Post", trace.WithAttributes(on(subj)...))
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.thread.id", threadID.String()))
-	if _, err := s.poster(ctx, v, subj); err != nil {
+	can, err := s.poster(ctx, v, subj)
+	if err == nil {
+		err = can.reaches(threadID)
+	}
+	if err != nil {
 		return Message{}, failed(span, "posting the message", err)
 	}
 	if err := validateID(in.ID); err != nil {
@@ -400,13 +476,26 @@ func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uui
 	if err := ValidateBody(in.Body); err != nil {
 		return Message{}, failed(span, "posting the message", err)
 	}
+	task, err := s.asking(ctx, v, subj, in.Ask, in.Body)
+	if err != nil {
+		return Message{}, failed(span, "posting the message", err)
+	}
 	id, err := orNew(in.ID)
 	if err != nil {
 		return Message{}, failed(span, "posting the message", err)
 	}
-	m, created, err := s.store.Post(ctx, poster(ctx, v), subj, threadID, id, in.Body)
-	if err == nil && !created && (m.Author == nil || m.Author.ID != v.ID) {
-		err = ErrIDTaken
+	var m Message
+	err = s.record(ctx, v, task, func(ctx context.Context) (uuid.UUID, bool, error) {
+		var created bool
+		var err error
+		m, created, err = s.store.Post(ctx, asker(ctx, v, task), subj, threadID, id, in.Body)
+		if err == nil && !created && (m.Author == nil || m.Author.ID != v.ID) {
+			err = ErrIDTaken
+		}
+		return threadID, created, err
+	})
+	if err == nil && task != nil {
+		m, err = s.store.Message(ctx, subj, id)
 	}
 	if err == nil {
 		err = s.render(ctx, subj, &m)
@@ -421,7 +510,11 @@ func (s *Service) Edit(ctx context.Context, v Viewer, subj Subject, threadID, id
 	ctx, span := tracer.Start(ctx, "chats.Service.Edit", trace.WithAttributes(on(subj)...))
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.message.id", id.String()))
-	if _, err := s.poster(ctx, v, subj); err != nil {
+	can, err := s.poster(ctx, v, subj)
+	if err == nil {
+		err = can.reaches(threadID)
+	}
+	if err != nil {
 		return Message{}, failed(span, "editing the message", err)
 	}
 	if err := ValidateBody(body); err != nil {
@@ -453,6 +546,9 @@ func (s *Service) Delete(ctx context.Context, v Viewer, subj Subject, threadID, 
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.message.id", id.String()))
 	can, err := s.holds(ctx, v, subj)
+	if err == nil {
+		err = can.reaches(threadID)
+	}
 	if err != nil {
 		return failed(span, "deleting the message", err)
 	}
@@ -483,6 +579,9 @@ func (s *Service) Resolve(ctx context.Context, v Viewer, subj Subject, id uuid.U
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.chat.thread.id", id.String()), attribute.Bool("cobranch.chat.resolved", resolved))
 	can, err := s.holds(ctx, v, subj)
+	if err == nil {
+		err = can.reaches(id)
+	}
 	if err != nil {
 		return Thread{}, failed(span, "resolving the thread", err)
 	}
@@ -506,6 +605,15 @@ func (s *Service) Resolve(ctx context.Context, v Viewer, subj Subject, id uuid.U
 		err = s.present(ctx, subj, &t)
 	}
 	return t, failed(span, "resolving the thread", err)
+}
+
+// reach checks that v reads the subject's chat and reaches its thread threadID.
+func (s *Service) reach(ctx context.Context, v Viewer, subj Subject, threadID uuid.UUID) error {
+	can, err := s.holds(ctx, v, subj)
+	if err != nil {
+		return err
+	}
+	return can.reaches(threadID)
 }
 
 // message finds a message of the chat's thread, or repos.ErrNotFound.
@@ -608,16 +716,17 @@ func (s *Service) watch(subj Subject) (<-chan struct{}, func()) {
 // branch's head now, by an issue's identifier now, or by a conversation's subject now: repos.ErrNotFound once the
 // issue, or the repository or agent a conversation is about, is gone.
 func (s *Service) read(ctx context.Context, v Viewer, subj Subject, after int64) ([]Update, error) {
-	if _, err := s.holds(ctx, v, subj); err != nil {
-		return nil, err
-	}
-	subj, err := s.now(ctx, subj)
+	can, err := s.holds(ctx, v, subj)
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.store.Updates(ctx, subj, after, MaxUpdates)
+	subj, err = s.now(ctx, subj)
 	if err != nil {
-		return nil, fmt.Errorf("listing the chat's updates: %w", err)
+		return nil, err
+	}
+	list, err := s.updates(ctx, subj, can, after)
+	if err != nil {
+		return nil, err
 	}
 	for i := range list {
 		if err := s.present(ctx, subj, &list[i].Thread); err != nil {
@@ -630,6 +739,25 @@ func (s *Service) read(ctx context.Context, v Viewer, subj Subject, after int64)
 		}
 	}
 	return list, nil
+}
+
+// updates lists at most MaxUpdates of the chat's updates after cursor after, in order, of the thread can reaches
+// alone when it reaches one: past as many updates of other threads as come before the first of it.
+func (s *Service) updates(ctx context.Context, subj Subject, can access, after int64) ([]Update, error) {
+	for {
+		list, err := s.store.Updates(ctx, subj, after, MaxUpdates)
+		if err != nil {
+			return nil, fmt.Errorf("listing the chat's updates: %w", err)
+		}
+		if can.thread == uuid.Nil {
+			return list, nil
+		}
+		kept := slices.DeleteFunc(slices.Clone(list), func(u Update) bool { return u.Thread.ID != can.thread })
+		if len(kept) > 0 || len(list) < MaxUpdates {
+			return kept, nil
+		}
+		after = list[len(list)-1].Cursor
+	}
 }
 
 // now is the subject as it is now: a branch at its head now, an issue by its identifier now and a conversation by its

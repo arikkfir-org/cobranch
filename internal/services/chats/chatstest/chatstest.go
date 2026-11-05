@@ -5,36 +5,42 @@ package chatstest
 import (
 	"cmp"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/agents/agentstest"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/repos"
 )
 
 // Store is a chats.Store in memory: each repository's branches by name, the commits it holds, each organization's
 // issues by number, the organizations, repositories and agents conversations are about, and the chats' threads,
-// messages and updates. Names names the principals by ID, and Tasks numbers
-// the agents' tasks by ID; Now is the time it records changes at. It is safe for concurrent use, so a test may change
-// it while a follower reads.
+// messages and updates. Names names the principals by ID, Tasks numbers
+// the agents' tasks by ID, and TaskAgents names their agents; Now is the time it records changes at. Transact undoes
+// what its function changed when it fails. It is safe for concurrent use, so a test may change it while a follower
+// reads.
 type Store struct {
-	mu       sync.Mutex
-	branches map[uuid.UUID]map[string]chats.Subject
-	issues   map[uuid.UUID]map[int]chats.Subject
-	orgs     map[uuid.UUID]string
-	repos    map[uuid.UUID]map[uuid.UUID]chats.Subject
-	agents   map[uuid.UUID]map[uuid.UUID]string
-	heads    map[uuid.UUID]string
-	commits  map[uuid.UUID]map[string]bool
-	threads  map[uuid.UUID]*thread
-	messages map[uuid.UUID]*chats.Message
-	updates  []update
-	Names    map[uuid.UUID]string
-	Tasks    map[uuid.UUID]int64
-	Now      time.Time
+	mu         sync.Mutex
+	branches   map[uuid.UUID]map[string]chats.Subject
+	issues     map[uuid.UUID]map[int]chats.Subject
+	orgs       map[uuid.UUID]string
+	repos      map[uuid.UUID]map[uuid.UUID]chats.Subject
+	agents     map[uuid.UUID]map[uuid.UUID]string
+	heads      map[uuid.UUID]string
+	commits    map[uuid.UUID]map[string]bool
+	threads    map[uuid.UUID]*thread
+	messages   map[uuid.UUID]*chats.Message
+	asks       map[uuid.UUID]uuid.UUID
+	updates    []update
+	Names      map[uuid.UUID]string
+	Tasks      map[uuid.UUID]int64
+	TaskAgents map[uuid.UUID]chats.Principal
+	Now        time.Time
 }
 
 type thread struct {
@@ -56,8 +62,8 @@ var _ chats.Store = (*Store)(nil)
 func NewStore() *Store {
 	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, orgs: map[uuid.UUID]string{},
 		repos: map[uuid.UUID]map[uuid.UUID]chats.Subject{}, agents: map[uuid.UUID]map[uuid.UUID]string{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
-		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, Names: map[uuid.UUID]string{},
-		Tasks: map[uuid.UUID]int64{}}
+		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, asks: map[uuid.UUID]uuid.UUID{}, Names: map[uuid.UUID]string{},
+		Tasks: map[uuid.UUID]int64{}, TaskAgents: map[uuid.UUID]chats.Principal{}}
 }
 
 // SetBranch makes subj's branch live at its head in its repository, and the repository hold the head, and answers
@@ -90,6 +96,30 @@ func (s *Store) SetIssue(subj chats.Subject) chats.Subject {
 	}
 	s.issues[subj.OrgID][subj.Number] = subj
 	return subj
+}
+
+// NameTask tells the store an agent's task's number and agent, as the database's join reads them.
+func (s *Store) NameTask(id uuid.UUID, number int64, agent chats.Principal) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Tasks[id], s.TaskAgents[id] = number, agent
+}
+
+// AgentTasks is the agents' store as a chat records the tasks its messages ask for (chats.Tasks), which tells Chats
+// each task's number and agent once it is assigned.
+type AgentTasks struct {
+	*agentstest.Store
+	Chats *Store
+}
+
+// Assign assigns the task in the agents' store, and names it to Chats.
+func (t AgentTasks) Assign(ctx context.Context, actor uuid.UUID, task agents.Task) (agents.Task, error) {
+	out, err := t.Store.Assign(ctx, actor, task)
+	if err != nil {
+		return agents.Task{}, err //nolint:wrapcheck // the fake's own error, as the service reads it
+	}
+	t.Chats.NameTask(out.ID, out.Number, chats.Principal{ID: out.Agent.ID, DisplayName: out.Agent.DisplayName})
+	return out, nil
 }
 
 // SetOrganization makes an organization of its ID and slug, which conversations may be about.
@@ -270,7 +300,7 @@ func (s *Store) withMessages(t chats.Thread) chats.Thread {
 	t.Messages = []chats.Message{}
 	for _, m := range s.messages {
 		if m.ThreadID == t.ID {
-			t.Messages = append(t.Messages, *m)
+			t.Messages = append(t.Messages, s.view(m))
 		}
 	}
 	slices.SortFunc(t.Messages, func(a, b chats.Message) int {
@@ -291,7 +321,40 @@ func (s *Store) message(subj chats.Subject, id uuid.UUID) (chats.Message, error)
 	if !ok || s.threads[m.ThreadID].subject != subj.ID() {
 		return chats.Message{}, repos.ErrNotFound
 	}
-	return *m, nil
+	return s.view(m), nil
+}
+
+// view is m as a read answers it, with the task it asked for.
+func (s *Store) view(m *chats.Message) chats.Message {
+	out := *m
+	if task, ok := s.asks[m.ID]; ok {
+		if number, ok := s.Tasks[task]; ok {
+			out.Asked = &chats.Asked{TaskRef: chats.TaskRef{ID: task, Number: number}, Agent: s.TaskAgents[task]}
+		}
+	}
+	return out
+}
+
+// Transact runs fn, and undoes what it changed in the store when it fails.
+func (s *Store) Transact(ctx context.Context, _ uuid.UUID, fn func(ctx context.Context) error) error {
+	s.mu.Lock()
+	threads, messages, asks, updates := map[uuid.UUID]*thread{}, map[uuid.UUID]*chats.Message{}, maps.Clone(s.asks), slices.Clone(s.updates)
+	for id, t := range s.threads {
+		c := *t
+		threads[id] = &c
+	}
+	for id, m := range s.messages {
+		c := *m
+		messages[id] = &c
+	}
+	s.mu.Unlock()
+	if err := fn(ctx); err != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.threads, s.messages, s.asks, s.updates = threads, messages, asks, updates
+		return err
+	}
+	return nil
 }
 
 // principal is the principal of id, by its name.
@@ -325,6 +388,7 @@ func (s *Store) StartThread(_ context.Context, by chats.Poster, subj chats.Subje
 	s.threads[id] = &thread{subject: subj.ID(), Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(by.ID), CreatedAt: s.Now, Version: 1}}
 	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now,
 		Version: 1}
+	s.ask(messageID, by)
 	s.record(subj, chats.ThreadStarted, id, &messageID)
 	return s.withMessages(s.threads[id].Thread), true, nil
 }
@@ -340,12 +404,20 @@ func (s *Store) Post(_ context.Context, by chats.Poster, subj chats.Subject, thr
 		if m.ThreadID != threadID {
 			return chats.Message{}, false, chats.ErrIDTaken
 		}
-		return *m, false, nil
+		return s.view(m), false, nil
 	}
 	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now, Version: 1}
+	s.ask(id, by)
 	s.threads[threadID].Version++
 	s.record(subj, chats.MessagePosted, threadID, &id)
-	return *s.messages[id], true, nil
+	return s.view(s.messages[id]), true, nil
+}
+
+// ask records the task the message by posts asks for, if any.
+func (s *Store) ask(messageID uuid.UUID, by chats.Poster) {
+	if by.Asks != uuid.Nil {
+		s.asks[messageID] = by.Asks
+	}
 }
 
 // Edit changes the body of a live message of the subject's, at version or at any version, or chats.ErrChanged.
@@ -418,7 +490,7 @@ func (s *Store) Updates(_ context.Context, subj chats.Subject, after int64, limi
 		}
 		next := chats.Update{Cursor: u.cursor, Kind: u.kind, Thread: s.threads[u.thread].Thread}
 		if u.message != nil {
-			m := *s.messages[*u.message]
+			m := s.view(s.messages[*u.message])
 			next.Message = &m
 		}
 		out = append(out, next)

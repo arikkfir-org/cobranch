@@ -18,17 +18,21 @@ import (
 
 // chatCase is a task that talks in a chat: where it works, the thread it has, its transcript and its model's turns.
 type chatCase struct {
-	name     string
-	branch   string
-	issue    int64
-	thread   uuid.UUID
-	threads  map[uuid.UUID]*thread
-	entries  []agents.Entry
-	turns    []harness.Turn
-	postErr  error
-	checkout *checkout
-	state    agents.TaskState
-	waits    []wait
+	name   string
+	branch string
+	issue  int64
+	// conversation is the private conversation the task was asked in, and tasks the organization's tasks, oldest first.
+	conversation *agents.Conversation
+	tasks        []agents.Task
+	tasksErr     error
+	thread       uuid.UUID
+	threads      map[uuid.UUID]*thread
+	entries      []agents.Entry
+	turns        []harness.Turn
+	postErr      error
+	checkout     *checkout
+	state        agents.TaskState
+	waits        []wait
 	// kind, when set, handles the task, of kind review.
 	kind    *kind
 	wantErr bool
@@ -54,7 +58,7 @@ func keyed(c harness.Call, key uuid.UUID) harness.Call {
 }
 
 func TestChat(t *testing.T) {
-	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases()) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases(), conversationCases()) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			runChat(t, tc)
@@ -253,9 +257,9 @@ func prompts(t *testing.T, m *model, want, not []string) {
 func runChat(t *testing.T, tc chatCase) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel,
-		work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue, AgentEmail: "agent@agents.example",
-			Task: agents.Task{Number: 7, Title: "Sweep", State: cmp.Or(tc.state, agents.TaskRunning), Agent: agents.Principal{DisplayName: "Scout"},
+	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel, tasks: tc.tasks, tasksErr: tc.tasksErr,
+		work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue, AgentEmail: "agent@agents.example", Conversation: tc.conversation,
+			Task: agents.Task{Number: 7, Title: "Sweep", State: cmp.Or(tc.state, agents.TaskRunning), Agent: agents.Principal{ID: scout, DisplayName: "Scout"},
 				RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}
 	m := &model{turns: tc.turns}
 	h := harness.New(c, m, 0, &echo{})

@@ -1,6 +1,10 @@
 package harness
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/google/uuid"
+)
 
 // request is what the model is asked for its next turn, from the transcript's state.
 func (r *run) request(s state) Request {
@@ -40,12 +44,11 @@ func (r *run) system() string {
 func (r *run) where() string {
 	var out string
 	if chat, ok := r.chat(); ok {
-		name := "branch " + chat.Branch + "'s chat"
-		if chat.Branch == "" {
-			name = "issue #" + strconv.FormatInt(chat.Issue, 10) + "'s chat"
+		out += "\n\n" + r.followers(chat) + ": read it with read_thread, post there with post_message, and ask there " +
+			"with ask when you can't go on without an answer."
+		if ownAgent(chat, r.work.Task.Agent.ID) {
+			out += " When they ask about your work, tasks lists what you work on, your queue and what you ended last."
 		}
-		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, post there with " +
-			"post_message, and ask there with ask when you can't go on without an answer."
 	}
 	switch c := r.clone; {
 	case c.Commit != "":
@@ -59,4 +62,28 @@ func (r *run) where() string {
 		}
 	}
 	return out
+}
+
+// followers says who follows the task in its chat's thread, and where.
+func (r *run) followers(chat Chat) string {
+	assigner := "its assigner"
+	if a := r.work.Task.AssignedBy; a != nil {
+		assigner = a.DisplayName
+	}
+	switch {
+	case ownAgent(chat, r.work.Task.Agent.ID):
+		return assigner + " follows the task in a thread of their private conversation with you, which no one else reads"
+	case chat.Conversation && chat.Agent != uuid.Nil:
+		return assigner + " follows the task in a thread of their private conversation with another agent of the " +
+			"organization, which no one else reads"
+	case chat.Conversation && chat.Repo != "":
+		return assigner + " follows the task in a thread of their private conversation about repository " + chat.Repo +
+			", which no one else reads"
+	case chat.Conversation:
+		return assigner + " follows the task in a thread of their private conversation about the organization, which no " +
+			"one else reads"
+	case chat.Branch != "":
+		return "People follow the task in a thread of branch " + chat.Branch + "'s chat"
+	}
+	return "People follow the task in a thread of issue #" + strconv.FormatInt(chat.Issue, 10) + "'s chat"
 }

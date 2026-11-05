@@ -79,7 +79,7 @@ func task(t agents.Task) Task {
 		Title: t.Title, Instructions: t.Instructions, RepositoryId: optionalID(t.RepoID), RepositorySlug: optional(t.RepoSlug),
 		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), Sha: optional(t.SHA), State: TaskState(t.State),
 		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), Spent: usd(t.Spent), InputTokens: t.InputTokens,
-		OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap), CreatedAt: t.CreatedAt.UTC(), Version: t.Version}
+		OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap), CreatedAt: t.CreatedAt.UTC(), Version: t.Version, Private: &t.Private}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()
 		out.StartedAt = &at

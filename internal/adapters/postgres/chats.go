@@ -212,7 +212,7 @@ func withMessages(ctx context.Context, q *queries.Queries, threads []chats.Threa
 	}
 	for _, r := range rows {
 		i := at[r.ChatMessage.ThreadID]
-		threads[i].Messages = append(threads[i].Messages, chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName, r.TaskNumber))
+		threads[i].Messages = append(threads[i].Messages, chatMessageOf(queries.ChatMessagesByIDRow(r)))
 	}
 	return nil
 }
@@ -252,7 +252,7 @@ func chatMessages(ctx context.Context, q *queries.Queries, subj chats.Subject, i
 	out := make(map[uuid.UUID]chats.Message, len(rows))
 	for _, r := range rows {
 		if _, ours := threads[r.ChatMessage.ThreadID]; ours {
-			out[r.ChatMessage.ID] = chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName, r.TaskNumber)
+			out[r.ChatMessage.ID] = chatMessageOf(r)
 		}
 	}
 	return out, nil
@@ -416,7 +416,7 @@ func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj
 		return false, fmt.Errorf("inserting thread %s: %w", id, err)
 	}
 	if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &by.ID,
-		Body: body, TaskID: taskOf(by)}); err != nil {
+		Body: body, TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks)}); err != nil {
 		return false, fmt.Errorf("inserting message %s: %w", messageID, err)
 	}
 	return true, nil
@@ -436,7 +436,7 @@ func (s *ChatStore) Post(ctx context.Context, by chats.Poster, subj chats.Subjec
 			return "", chatEvent{}, repos.ErrNotFound
 		}
 		_, err = q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: id, ThreadID: threadID, OrgID: subj.OrgID, AuthorID: &by.ID, Body: body,
-			TaskID: taskOf(by)})
+			TaskID: taskOf(by), AskedTaskID: idOrNil(by.Asks)})
 		if errors.Is(err, pgx.ErrNoRows) { // one of its ID is there
 			out, err = chatMessage(ctx, q, subj, id)
 			if errors.Is(err, repos.ErrNotFound) || err == nil && out.ThreadID != threadID {
@@ -581,21 +581,29 @@ func chatThreadOf(t queries.ChatThread, starter, resolver, reviewed *string) cha
 	return out
 }
 
-// chatMessageOf is the domain's view of a chat_messages row, with the display names of its author and deleter, and
-// the number of the task it came from.
-func chatMessageOf(m queries.ChatMessage, author, deleter *string, taskNumber *int64) chats.Message {
-	out := chats.Message{ID: m.ID, ThreadID: m.ThreadID, Body: m.Body, Author: principalOf(m.AuthorID, author), CreatedAt: m.CreatedAt,
-		EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: principalOf(m.DeletedBy, deleter), Version: m.Version}
-	if m.TaskID != nil && taskNumber != nil {
-		out.Task = &chats.TaskRef{ID: *m.TaskID, Number: *taskNumber}
+// chatMessageOf is the domain's view of a chat_messages row, with the display names of its author and deleter, the
+// number of the task it came from, and the number and agent of the task it asked for.
+func chatMessageOf(r queries.ChatMessagesByIDRow) chats.Message {
+	m := r.ChatMessage
+	out := chats.Message{ID: m.ID, ThreadID: m.ThreadID, Body: m.Body, Author: principalOf(m.AuthorID, r.AuthorName), CreatedAt: m.CreatedAt,
+		EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: principalOf(m.DeletedBy, r.DeleterName), Version: m.Version}
+	if m.TaskID != nil && r.TaskNumber != nil {
+		out.Task = &chats.TaskRef{ID: *m.TaskID, Number: *r.TaskNumber}
+	}
+	if m.AskedTaskID != nil && r.AskedNumber != nil && r.AskedAgentID != nil {
+		out.Asked = &chats.Asked{TaskRef: chats.TaskRef{ID: *m.AskedTaskID, Number: *r.AskedNumber},
+			Agent: chats.Principal{ID: *r.AskedAgentID, DisplayName: orEmpty(r.AskedAgentName)}}
 	}
 	return out
 }
 
 // taskOf is the task by works, for a chat_messages row; nil for none.
 func taskOf(by chats.Poster) *uuid.UUID {
-	if by.Task == uuid.Nil {
-		return nil
-	}
-	return &by.Task
+	return idOrNil(by.Task)
+}
+
+// Transact runs fn in one transaction that acts for actor, which the store's changes and the agents' store's join
+// through fn's context (chats.Store).
+func (s *ChatStore) Transact(ctx context.Context, actor uuid.UUID, fn func(ctx context.Context) error) error {
+	return transact(ctx, s.pool, s.q, "changing the chat", actor, func(ctx context.Context, _ *queries.Queries) error { return fn(ctx) })
 }

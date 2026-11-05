@@ -67,7 +67,8 @@ together. One that still fails shows “The Console couldn’t load” instead o
 Console loads no more modules: every page’s is already in.
 
 - **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
-  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/` and `fonts/` (its `templates`,
+  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/`, each tabbed page's directory
+  (`pages/org/settings/`) and `fonts/` (its `templates`,
   at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
   the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
   REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
@@ -119,6 +120,15 @@ own paths are the organization slugs no organization may take.
   `/<part>`, as an organization's page does at `/acme/<part>`: Settings and Help so far. Only sign-in and welcome stay
   named in the router, since they draw outside the shell. Their paths are among the slugs no organization may take,
   which a test holds.
+- **A page's tabs are files too.** A page whose views are tabs keeps them in a directory of its own name:
+  `pages/org/settings/` holds Settings' General (`index.js`, at `/acme/settings`), Members, Roles, API keys,
+  Secrets, Models and Usage, each at `/acme/settings/<file>`. The shell names each such directory, one
+  entry in `index.html` (`pages/org/settings/` so far, so a new tabbed page adds its own), and Caddy writes its files'
+  names in beside the others; `lib/tabs.js` draws the tab bar from the modules' `tab` (`{ label, order }`),
+  `allowed` and `count`. A slice that adds a tab adds a file there, and no organization slug: the old addresses of
+  Members, Roles, API keys and Secrets (`/acme/members`) stay files of `pages/org/` that open their tab.
+  **Rejected: each tab a page `under` Settings** (`pages/org/members.js`): every new tab would take an organization
+  slug, and a tab named like a page of the organization, such as Agents, would clash with it (`/acme/agents`).
 
 ## The app shell
 
@@ -131,8 +141,8 @@ The shell names no page: a new page that exports `nav` takes its place in the si
 at a phone’s width the sidebar goes off-canvas.
 
 - **Everything in the shell comes from the page modules.** The sidebar lists the organization's pages whose `nav` places
-  them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Members, Roles,
-  API keys and Secrets under Settings; Tasks under Agents); `place: "foot"` puts Settings at the sidebar's foot. A page
+  them there, in `nav.order`; a page whose `nav` names another page it is `under` is a tab of that page (Tasks under
+  Agents), and Settings draws its tabs from its own directory; `place: "foot"` puts Settings at the sidebar's foot. A page
   with `nav.items` is a section, which shows five sub items: those the viewer opened last in this browser, as the
   section's items have them now, then its own newest. A page that shows one of them (a repository, an issue, an agent's
   tasks) puts it first.
@@ -159,7 +169,9 @@ at a phone’s width the sidebar goes off-canvas.
 ![What a page module exports: its page, and what its frame needs before drawing it](console/contract.svg)
 
 An organization’s page exports the same, but `under` and `accepts`: its route is `/acme/<part>/…`, and its module reads
-the rest of the path itself. Every export but `default` is optional.
+the rest of the path itself. Every export but `default` is optional. A tab's module (`pages/org/settings/<tab>.js`)
+exports `default`, `tab`, `allowed`, `count` and `view`; its `default` draws into the page's main element and fills
+`actions`, the heading's slot for the tab's own buttons.
 
 | Export | Of | Means | Without it |
 | --- | --- | --- | --- |
@@ -167,7 +179,9 @@ the rest of the path itself. Every export but `default` is optional.
 | `nav` | Both | `{ label, order }`: its link in the sidebar or the repository's tabs, sorted by `order`. An organization's page adds `icon`; `items({ org, can })`, its section's sub items (`{ items, count, whole }`); `under`, the page whose tab it is, with `tab` the parent's own tab's label and `description` the heading's line; and `place: "foot"` | No link; opened from other pages |
 | `crumbs` | Both | Its breadcrumbs after the organization's and the repository's: a list of `{ label, href }`, or a function of what the page shows that returns one | Only the organization's and the repository's |
 | `subject(ctx)` | Both | The conversation the pane shows: `{ key, title, scope, chat, … }`, or a promise of one | The organization's, or the repository's |
-| `heading` | Repository | Whether the repository's heading and tabs draw above it, or a function of the rest of the path | They draw |
+| `heading` | Both | A repository's: whether the repository's heading and tabs draw above it, or a function of the rest of the path. An organization's: a function of `{ org, can, sub, rest, root }` that returns the page's heading, its tab bar included, whose actions slot the page's tab fills | A repository's draw; an organization's page has the heading of its tabs, or none |
+| `tab` | Tab | `{ label, order }`: its tab in its page's tab bar | Not a tab |
+| `count(ctx)` | Tab | A promise of the number its tab shows | No number |
 | `allowed(can)` | Both | Whether the viewer may open it, from the permissions they hold there | Anyone who reads the organization or repository |
 | `view` | Both | The name its page views report, or a function of the rest of the path that returns one | `organization.<part>` or `repository.<part>` |
 | `under` | Repository | The tab it lights, as a file and a commit light Code (`""`) | Its own tab |

@@ -51,6 +51,7 @@ type AgentTask struct {
 	Version      int64
 	IssueID      *uuid.UUID
 	Sha          *string
+	Private      bool
 }
 
 type AgentTaskEntry struct {
@@ -93,17 +94,18 @@ type Blob struct {
 }
 
 type ChatMessage struct {
-	ID        uuid.UUID
-	ThreadID  uuid.UUID
-	OrgID     uuid.UUID
-	AuthorID  *uuid.UUID
-	Body      string
-	CreatedAt time.Time
-	EditedAt  *time.Time
-	DeletedAt *time.Time
-	DeletedBy *uuid.UUID
-	Version   int64
-	TaskID    *uuid.UUID
+	ID          uuid.UUID
+	ThreadID    uuid.UUID
+	OrgID       uuid.UUID
+	AuthorID    *uuid.UUID
+	Body        string
+	CreatedAt   time.Time
+	EditedAt    *time.Time
+	DeletedAt   *time.Time
+	DeletedBy   *uuid.UUID
+	Version     int64
+	TaskID      *uuid.UUID
+	AskedTaskID *uuid.UUID
 }
 
 type ChatThread struct {

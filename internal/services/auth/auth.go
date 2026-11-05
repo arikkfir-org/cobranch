@@ -226,6 +226,10 @@ type Credential struct {
 // the token may do nothing.
 type TaskGrant struct {
 	ID, OrgID, AssignerID uuid.UUID
+	// Private is whether the task was asked in its assigner's private conversation, which its token then reaches, in
+	// ThreadID alone, the thread it talks in; uuid.Nil for a task that talks in none yet.
+	Private  bool
+	ThreadID uuid.UUID
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.

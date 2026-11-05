@@ -540,6 +540,30 @@ func TestLeavingAndRemoving(t *testing.T) {
 	})
 }
 
+func TestMemberEmails(t *testing.T) {
+	f := newFixture(t)
+	for _, tt := range []struct {
+		name   string
+		viewer orgs.Viewer
+		want   bool
+	}{
+		{name: "an Owner, who manages members", viewer: f.olivia, want: true},
+		{name: "a Guest, who only reads the organization", viewer: f.gwen, want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			members, err := f.service.Members(t.Context(), tt.viewer, f.acme.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range members {
+				if (m.Email != "") != tt.want {
+					t.Errorf("%s's email = %q, want shown %t", m.DisplayName, m.Email, tt.want)
+				}
+			}
+		})
+	}
+}
+
 func TestMembers(t *testing.T) {
 	f := newFixture(t)
 	members, err := f.service.Members(t.Context(), f.gwen, f.acme.ID)
@@ -550,8 +574,8 @@ func TestMembers(t *testing.T) {
 		t.Errorf("an outsider's Members() error = %v, want not found", err)
 	}
 	roles, err := f.service.Roles(t.Context(), f.gwen, f.acme.ID)
-	if err != nil || len(roles) != 4 || roles[0].Name != "Owner" {
-		t.Errorf("Roles() = %+v, %v", roles, err)
+	if err != nil || len(roles) != 4 || roles[0].Name != "Owner" || roles[0].Holders != 1 {
+		t.Errorf("Roles() = %+v, %v, want Owner first, held by Olivia alone", roles, err)
 	}
 	if _, err := f.service.Roles(t.Context(), f.nia, f.acme.ID); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("an outsider's Roles() error = %v, want not found", err)

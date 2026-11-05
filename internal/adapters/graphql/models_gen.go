@@ -357,6 +357,12 @@ type ChatMessage struct {
 	TaskID *string `json:"taskId,omitempty"`
 	// That task's number in its organization.
 	TaskNumber *int `json:"taskNumber,omitempty"`
+	// The task it asked an agent for; null for a message that asked nobody, and once the task is deleted.
+	AskedTaskID *string `json:"askedTaskId,omitempty"`
+	// That task's number in its organization.
+	AskedTaskNumber *int `json:"askedTaskNumber,omitempty"`
+	// The agent it asked.
+	AskedAgent *CommitPrincipal `json:"askedAgent,omitempty"`
 	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 }
@@ -367,6 +373,8 @@ type ChatMessageInput struct {
 	ID *string `json:"id,omitempty"`
 	// Its Markdown, at most 20,000 characters.
 	Body string `json:"body"`
+	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused (BAD_USER_INPUT, ask.busy) while another task talks in the thread, which reads what is posted there.
+	Ask *string `json:"ask,omitempty"`
 }
 
 // A page of a branch's chat.
@@ -408,6 +416,8 @@ type ChatThreadInput struct {
 	Anchor *ChatAnchorInput `json:"anchor,omitempty"`
 	// Its first message's Markdown, at most 20,000 characters.
 	Body string `json:"body"`
+	// One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
+	Ask *string `json:"ask,omitempty"`
 }
 
 // A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is.
@@ -980,7 +990,7 @@ type ModelProvider struct {
 type Mutation struct {
 }
 
-// The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
+// The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in.
 type MyTask struct {
 	Organization string `json:"organization"`
 	Task         *Task  `json:"task"`
@@ -992,6 +1002,14 @@ type MyTask struct {
 	IssueNumber *int `json:"issueNumber,omitempty"`
 	// The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none.
 	IssueKey *string `json:"issueKey,omitempty"`
+	// The private conversation the task talks in, its assigner's; null for none.
+	Conversation *MyTaskConversation `json:"conversation,omitempty"`
+}
+
+// The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names.
+type MyTaskConversation struct {
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+	AgentID        *string `json:"agentId,omitempty"`
 }
 
 // What makes an artifact with its first version.
@@ -1464,8 +1482,10 @@ type Task struct {
 	// Counts the organization's tasks from 1.
 	Number int              `json:"number"`
 	Agent  *CommitPrincipal `json:"agent"`
-	// What it is for: assigned for a task a principal assigned.
+	// What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
 	Kind string `json:"kind"`
+	// Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works.
+	Private bool `json:"private"`
 	// Its assigner, whose permissions cap it; null once they are gone, when it may do nothing.
 	AssignedBy *CommitPrincipal `json:"assignedBy,omitempty"`
 	Title      string           `json:"title"`
@@ -1477,7 +1497,7 @@ type Task struct {
 	// The branch of that repository it works on; null for none.
 	BranchID *string `json:"branchId,omitempty"`
 	Branch   *string `json:"branch,omitempty"`
-	// The thread of that branch's chat it talks in; null for none.
+	// The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none.
 	ThreadID *string `json:"threadId,omitempty"`
 	// The commit it works at, such as the head a review task reviews; null for none.
 	Sha   *string   `json:"sha,omitempty"`

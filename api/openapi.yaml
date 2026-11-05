@@ -595,12 +595,17 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [permissions]
+                required: [permissions, labels]
                 properties:
                   permissions:
                     type: array
                     items:
                       type: string
+                  labels:
+                    type: array
+                    description: Every permission of permissions as people read it, by area, in the order a role editor lists them.
+                    items:
+                      $ref: "#/components/schemas/PermissionLabel"
         "401":
           $ref: "#/components/responses/Problem"
         default:
@@ -7126,7 +7131,7 @@ components:
           description: The Console's page.
           enum: [sign-in, welcome, settings, help, help.components, organization, organization.members,
             organization.roles, organization.api-keys, organization.settings, organization.new-repository, organization.issues,
-            organization.agents, organization.tasks, organization.secrets, repository.code, repository.file,
+            organization.agents, organization.tasks, organization.secrets, organization.usage, repository.code, repository.file,
             repository.commits, repository.commit, repository.branches, repository.branch, repository.changes,
             repository.runs, repository.environments, repository.secrets, repository.access, repository.settings]
         navigation:
@@ -7303,6 +7308,9 @@ components:
           type: string
           format: uuid
           description: The organization a custom role belongs to; absent on a built-in role.
+        holders:
+          type: integer
+          description: How many principals (members, API keys, agents) hold it at the organization; only on the organization's list of roles.
     Repository:
       type: object
       description: One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -8152,6 +8160,16 @@ components:
           type: integer
           format: int64
           description: That task's number in its organization.
+        askedTaskId:
+          type: string
+          format: uuid
+          description: The task it asked an agent for; absent for a message that asked nobody, and once the task is deleted.
+        askedTaskNumber:
+          type: integer
+          format: int64
+          description: That task's number in its organization.
+        askedAgent:
+          $ref: "#/components/schemas/Principal"
         version:
           type: integer
           format: int64
@@ -8170,6 +8188,13 @@ components:
         body:
           type: string
           description: Its first message's Markdown, at most 20,000 characters.
+        ask:
+          type: string
+          format: uuid
+          description: >-
+            One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned
+            by the poster and capped by their permissions, that talks in the thread, private in a private conversation.
+            Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
     ChatThreadPatch:
       type: object
       description: How a thread changes.
@@ -8190,6 +8215,13 @@ components:
         body:
           type: string
           description: Its Markdown, at most 20,000 characters.
+        ask:
+          type: string
+          format: uuid
+          description: >-
+            One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned
+            by the poster and capped by their permissions, that talks in the thread, private in a private conversation.
+            Refused with ask.busy while another task talks in the thread, which reads what is posted there.
     ChatMessagePatch:
       type: object
       description: How a message changes.
@@ -8737,6 +8769,9 @@ components:
           format: uuid
         displayName:
           type: string
+        email:
+          type: string
+          description: An email of theirs, a verified one first; only to a viewer with org.members.manage, and absent for anyone else.
         joinedAt:
           type: string
           format: date-time
@@ -8744,6 +8779,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Role"
+    PermissionLabel:
+      type: object
+      description: A permission as people read it, the area of Cobranch it is about and what it lets its holder do.
+      required: [id, group, label]
+      properties:
+        id:
+          type: string
+        group:
+          type: string
+          description: The area it is about, such as Organization, Repositories or Issues.
+        label:
+          type: string
+          description: What it lets its holder do, such as Read code.
     Invitation:
       type: object
       description: An invitation to an email, which only a user holding it, verified, accepts.
@@ -9813,7 +9861,15 @@ components:
           $ref: "#/components/schemas/Principal"
         kind:
           type: string
-          description: What it is for; assigned for a task a principal assigned.
+          description: >-
+            What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat
+            or a private conversation, and issue_chat for one asked in an issue's.
+        private:
+          type: boolean
+          description: >-
+            Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its
+            number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason
+            and summary are empty and nothing says who assigned it or where it works.
         assignedBy:
           $ref: "#/components/schemas/Principal"
         title:
@@ -9835,7 +9891,7 @@ components:
         threadId:
           type: string
           format: uuid
-          description: The thread of that branch's chat it talks in; absent for none.
+          description: The thread of the chat it talks in, its branch's, its issue's or a private conversation; absent for none.
         sha:
           type: string
           description: The commit it works at, such as the head a review task reviews; absent for none.
@@ -9880,8 +9936,8 @@ components:
       type: object
       description: >-
         The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing
-        instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks
-        in.
+        instructions, which the task starts from, and email, which its commits carry, and the issue or the private
+        conversation whose chat it talks in.
       required: [organization, task, agentInstructions, agentEmail]
       properties:
         organization:
@@ -9903,6 +9959,19 @@ components:
           description: >-
             The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME
             in ACME-42; absent for none.
+        conversation:
+          $ref: "#/components/schemas/MyTaskConversation"
+    MyTaskConversation:
+      type: object
+      description: >-
+        The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about
+        the organization, about the repository repositorySlug names, or with the agent agentId names.
+      properties:
+        repositorySlug:
+          type: string
+        agentId:
+          type: string
+          format: uuid
     TaskUsage:
       type: object
       description: A call of a task's model, as the model proxy of its pod reports it.

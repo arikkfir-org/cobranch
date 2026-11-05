@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -27,8 +28,11 @@ func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, e
 	t := task(taskRow{t: r.AgentTask, agent: r.AgentName, assigner: r.AssignerName, canceller: r.CancellerName, repo: r.RepoSlug, branchOf: r.BranchName,
 		spent: r.Spent, input: r.InputTokens, output: r.OutputTokens, cap: r.Cap})
 	w := agents.Work{Task: t, OrgSlug: r.OrgSlug, AgentInstructions: r.AgentInstructions, AgentEmail: agents.Email(t.Agent.ID)}
-	if r.IssueNumber != nil {
-		w.IssueKey, w.IssueNumber = r.IssueKey, int64(*r.IssueNumber)
+	if issue := cmp.Or(r.IssueNumber, r.ThreadIssueNumber); issue != nil {
+		w.IssueKey, w.IssueNumber = r.IssueKey, int64(*issue)
+	}
+	if r.ConversationID != nil {
+		w.Conversation = &agents.Conversation{RepoSlug: orEmpty(r.ConversationRepoSlug), AgentID: orNil(r.ConversationAgentID)}
 	}
 	return w, nil
 }

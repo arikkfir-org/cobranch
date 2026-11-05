@@ -62,6 +62,9 @@ type Role struct {
 	BuiltIn     bool
 	// OrgID is the organization a custom role belongs to; uuid.Nil for a built-in role, which every organization grants.
 	OrgID uuid.UUID
+	// Holders is how many principals (members, API keys, agents) hold it at the organization, as Roles lists it; 0
+	// wherever else a role is read.
+	Holders int
 }
 
 // RoleInput is what defines a custom role: a name, a description, and the permissions it holds, from
@@ -76,6 +79,49 @@ type RoleInput struct {
 // repository permissions, as the built-in Owner holds both.
 func RolePermissions() []string {
 	return slices.Concat(auth.OrganizationPermissions, auth.RepositoryPermissions)
+}
+
+// PermissionLabel is a permission as people read it: the area of Cobranch it is about and what it lets its holder do.
+type PermissionLabel struct {
+	ID    string
+	Group string
+	Label string
+}
+
+// RolePermissionLabels labels every permission of RolePermissions, by area in the order the Console's role editor lists
+// them, so a person ticks what a role may do rather than reading permission names. A test holds it to RolePermissions.
+var RolePermissionLabels = []PermissionLabel{
+	{ID: "org.read", Group: "Organization", Label: "Read the organization"},
+	{ID: "org.manage", Group: "Organization", Label: "Manage settings"},
+	{ID: "org.members.manage", Group: "Organization", Label: "Manage members"},
+	{ID: "org.grants.manage", Group: "Organization", Label: "Manage roles and who holds them"},
+	{ID: "org.principals.manage", Group: "Organization", Label: "Manage API keys, agents and models"},
+	{ID: "org.audit.read", Group: "Organization", Label: "Read the audit log"},
+	{ID: "repos.create", Group: "Repositories", Label: "Create repositories"},
+	{ID: "repo.read", Group: "Repositories", Label: "Read code"},
+	{ID: "repo.push", Group: "Repositories", Label: "Push and create branches"},
+	{ID: "repo.merge", Group: "Repositories", Label: "Merge"},
+	{ID: "repo.bypass", Group: "Repositories", Label: "Bypass a branch's rules"},
+	{ID: "repo.manage", Group: "Repositories", Label: "Manage repository settings"},
+	{ID: "jobs.run", Group: "Repositories", Label: "Run jobs"},
+	{ID: "delivery.run", Group: "Repositories", Label: "Deliver to environments"},
+	{ID: "reviews.submit", Group: "Reviews", Label: "Review and approve"},
+	{ID: "annotations.write", Group: "Reviews", Label: "Annotate commits"},
+	{ID: "annotations.delete_any", Group: "Reviews", Label: "Delete anyone's annotations"},
+	{ID: "messages.post", Group: "Reviews", Label: "Post in chats"},
+	{ID: "messages.moderate", Group: "Reviews", Label: "Moderate chats"},
+	{ID: "issues.read", Group: "Issues", Label: "Read issues"},
+	{ID: "issues.write", Group: "Issues", Label: "Create and edit issues"},
+	{ID: "issues.manage", Group: "Issues", Label: "Manage labels and delete issues"},
+	{ID: "agents.assign", Group: "Agents", Label: "Ask agents"},
+	{ID: "agents.create", Group: "Agents", Label: "Create agents"},
+	{ID: "secrets.read", Group: "Secrets", Label: "Read secrets"},
+	{ID: "secrets.manage", Group: "Secrets", Label: "Manage secrets"},
+	{ID: "artifacts.create", Group: "Artifacts", Label: "Create artifacts"},
+	{ID: "artifacts.list", Group: "Artifacts", Label: "List artifacts"},
+	{ID: "artifacts.read", Group: "Artifacts", Label: "Read artifacts"},
+	{ID: "artifacts.write", Group: "Artifacts", Label: "Edit artifacts"},
+	{ID: "artifacts.manage", Group: "Artifacts", Label: "Share and delete artifacts"},
 }
 
 // ValidateRole checks a custom role's definition and returns it normalized: the name and description trimmed, the
@@ -192,8 +238,11 @@ func ValidateAPIKey(in APIKeyInput) (APIKeyInput, error) {
 type Member struct {
 	UserID      uuid.UUID
 	DisplayName string
-	JoinedAt    time.Time
-	Roles       []Role
+	// Email is an email of theirs, a verified one first, for a viewer who manages the organization's members; empty
+	// for anyone else, and for a member who holds none.
+	Email    string
+	JoinedAt time.Time
+	Roles    []Role
 }
 
 // State is where an invitation or a join request stands.

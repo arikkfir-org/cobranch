@@ -183,8 +183,11 @@ type Task struct {
 	// IssueID is the issue it works on, for a task its assignment to the issue gave it; uuid.Nil for none.
 	IssueID uuid.UUID
 	// SHA is the commit it works at, such as the head a review task reviews; empty for none.
-	SHA   string
-	State TaskState
+	SHA string
+	// Private is whether its assigner asked for it in their private conversation: it shows what it is and where it
+	// works to them alone, and to others only Redacted, as a place in its agent's queue.
+	Private bool
+	State   TaskState
 	// Reason says why it failed or was cancelled; empty otherwise.
 	Reason string
 	// Summary is what the agent said it did, once it ended.
@@ -208,6 +211,19 @@ type Task struct {
 // ByCobranch reports whether Cobranch started the task itself, so its agent's own grants alone cap it.
 func (t Task) ByCobranch() bool {
 	return t.AssignedBy != nil && t.AssignedBy.ID == t.Agent.ID
+}
+
+// HiddenFrom reports whether the task is private to someone other than viewer, the principal whose private records a
+// request reads (auth.PrivateFor): a private task once its assigner is gone is everyone's to keep out of.
+func (t Task) HiddenFrom(viewer uuid.UUID) bool {
+	return t.Private && (t.AssignedBy == nil || t.AssignedBy.ID != viewer)
+}
+
+// Redacted is the task as others than its assigner see a private one: its number, agent, kind, state and times, which
+// place it in its agent's queue, and nothing of who asked for it, what it is, where it works or how it went.
+func (t Task) Redacted() Task {
+	return Task{ID: t.ID, OrgID: t.OrgID, Number: t.Number, Agent: t.Agent, Kind: t.Kind, Private: true, State: t.State,
+		CreatedAt: t.CreatedAt, StartedAt: t.StartedAt, EndedAt: t.EndedAt, Version: t.Version}
 }
 
 // TaskInput is a task to assign: its title and instructions, and perhaps where it works. A branch takes its repository,

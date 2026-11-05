@@ -1,0 +1,4 @@
+/* Settings' Usage: each repository's share of the organization's Git data, as a 120px Meter beside its percentage. */
+.share { display: flex; align-items: center; gap: var(--space-12); }
+.share .meter-share { flex: none; width: 120px; }
+.usage-unread { color: var(--color-fg-muted); font: var(--text-caption); }

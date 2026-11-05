@@ -58,6 +58,9 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 	if w.IssueNumber != 0 {
 		out.IssueNumber, out.IssueKey = &w.IssueNumber, &w.IssueKey
 	}
+	if c := w.Conversation; c != nil {
+		out.Conversation = &MyTaskConversation{RepositorySlug: optional(c.RepoSlug), AgentId: optionalID(c.AgentID)}
+	}
 	return out, nil
 }
 

@@ -769,6 +769,7 @@ const (
 	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
 	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
 	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
+	PageViewPageOrganizationUsage         PageViewPage = "organization.usage"
 	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
 	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
@@ -812,6 +813,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganizationSettings:
 		return true
 	case PageViewPageOrganizationTasks:
+		return true
+	case PageViewPageOrganizationUsage:
 		return true
 	case PageViewPageRepositoryAccess:
 		return true
@@ -1635,6 +1638,15 @@ type ChatAnchor struct {
 
 // ChatMessage One of a thread's messages, in Markdown.
 type ChatMessage struct {
+	// AskedAgent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	AskedAgent *Principal `json:"askedAgent,omitempty"`
+
+	// AskedTaskId The task it asked an agent for; absent for a message that asked nobody, and once the task is deleted.
+	AskedTaskId *openapi_types.UUID `json:"askedTaskId,omitempty"`
+
+	// AskedTaskNumber That task's number in its organization.
+	AskedTaskNumber *int64 `json:"askedTaskNumber,omitempty"`
+
 	// Author Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Author *Principal `json:"author,omitempty"`
 
@@ -1668,6 +1680,9 @@ type ChatMessage struct {
 
 // ChatMessageInput A message to post.
 type ChatMessageInput struct {
+	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Refused with ask.busy while another task talks in the thread, which reads what is posted there.
+	Ask *openapi_types.UUID `json:"ask,omitempty"`
+
 	// Body Its Markdown, at most 20,000 characters.
 	Body string `json:"body"`
 
@@ -1714,6 +1729,9 @@ type ChatThread struct {
 type ChatThreadInput struct {
 	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
+
+	// Ask One of the organization's agents the message asks, which takes agents.assign: the agent gets a task, assigned by the poster and capped by their permissions, that talks in the thread, private in a private conversation. Left out, the message asks nobody, but in an agent's conversation, where it asks that agent.
+	Ask *openapi_types.UUID `json:"ask,omitempty"`
 
 	// Body Its first message's Markdown, at most 20,000 characters.
 	Body string `json:"body"`
@@ -2357,10 +2375,13 @@ type LinkedBy string
 
 // Member A user who belongs to the organization, with the roles they hold there.
 type Member struct {
-	DisplayName string             `json:"displayName"`
-	JoinedAt    time.Time          `json:"joinedAt"`
-	Roles       []Role             `json:"roles"`
-	UserId      openapi_types.UUID `json:"userId"`
+	DisplayName string `json:"displayName"`
+
+	// Email An email of theirs, a verified one first; only to a viewer with org.members.manage, and absent for anyone else.
+	Email    *string            `json:"email,omitempty"`
+	JoinedAt time.Time          `json:"joinedAt"`
+	Roles    []Role             `json:"roles"`
+	UserId   openapi_types.UUID `json:"userId"`
 }
 
 // MergeInput How to merge a branch into its base.
@@ -2482,13 +2503,16 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
-// MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
+// MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue or the private conversation whose chat it talks in.
 type MyTask struct {
 	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
 	AgentEmail string `json:"agentEmail"`
 
 	// AgentInstructions The standing instructions, in Markdown, of the task's agent; empty for none.
 	AgentInstructions string `json:"agentInstructions"`
+
+	// Conversation The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names.
+	Conversation *MyTaskConversation `json:"conversation,omitempty"`
 
 	// IssueKey The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; absent for none.
 	IssueKey *string `json:"issueKey,omitempty"`
@@ -2499,6 +2523,12 @@ type MyTask struct {
 
 	// Task A task of one of the organization's agents, which the organization numbers.
 	Task Task `json:"task"`
+}
+
+// MyTaskConversation The private conversation a task talks in, its assigner's, which its token reaches in its own thread alone: about the organization, about the repository repositorySlug names, or with the agent agentId names.
+type MyTaskConversation struct {
+	AgentId        *openapi_types.UUID `json:"agentId,omitempty"`
+	RepositorySlug *string             `json:"repositorySlug,omitempty"`
 }
 
 // NewArtifact What makes an artifact with its first version.
@@ -2631,6 +2661,16 @@ type PageViewPage string
 // PageViews defines model for PageViews.
 type PageViews struct {
 	Views []PageView `json:"views"`
+}
+
+// PermissionLabel A permission as people read it, the area of Cobranch it is about and what it lets its holder do.
+type PermissionLabel struct {
+	// Group The area it is about, such as Organization, Repositories or Issues.
+	Group string `json:"group"`
+	Id    string `json:"id"`
+
+	// Label What it lets its holder do, such as Read code.
+	Label string `json:"label"`
 }
 
 // Person A commit's author or committer as the commit writes them.
@@ -2881,10 +2921,13 @@ type ReviewState string
 
 // Role A role granted at the organization, built in or its own.
 type Role struct {
-	BuiltIn     bool               `json:"builtIn"`
-	Description string             `json:"description"`
-	Id          openapi_types.UUID `json:"id"`
-	Name        string             `json:"name"`
+	BuiltIn     bool   `json:"builtIn"`
+	Description string `json:"description"`
+
+	// Holders How many principals (members, API keys, agents) hold it at the organization; only on the organization's list of roles.
+	Holders *int               `json:"holders,omitempty"`
+	Id      openapi_types.UUID `json:"id"`
+	Name    string             `json:"name"`
 
 	// OrgId The organization a custom role belongs to; absent on a built-in role.
 	OrgId       *openapi_types.UUID `json:"orgId,omitempty"`
@@ -3112,7 +3155,7 @@ type Task struct {
 	InputTokens  int64  `json:"inputTokens"`
 	Instructions string `json:"instructions"`
 
-	// Kind What it is for; assigned for a task a principal assigned.
+	// Kind What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
@@ -3120,6 +3163,9 @@ type Task struct {
 
 	// OutputTokens The tokens its model wrote so far.
 	OutputTokens int64 `json:"outputTokens"`
+
+	// Private Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works.
+	Private *bool `json:"private,omitempty"`
 
 	// Reason Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
@@ -3141,7 +3187,7 @@ type Task struct {
 	// Summary What the agent said it did, once it ended.
 	Summary string `json:"summary"`
 
-	// ThreadId The thread of that branch's chat it talks in; absent for none.
+	// ThreadId The thread of the chat it talks in, its branch's, its issue's or a private conversation; absent for none.
 	ThreadId *openapi_types.UUID `json:"threadId,omitempty"`
 	Title    string              `json:"title"`
 
@@ -35753,7 +35799,9 @@ type ListPermissionsResponseObject interface {
 }
 
 type ListPermissions200JSONResponse struct {
-	Permissions []string `json:"permissions"`
+	// Labels Every permission of permissions as people read it, by area, in the order a role editor lists them.
+	Labels      []PermissionLabel `json:"labels"`
+	Permissions []string          `json:"permissions"`
 }
 
 func (response ListPermissions200JSONResponse) VisitListPermissionsResponse(w http.ResponseWriter) error {

@@ -56,7 +56,7 @@ function pageOf(parts) {
   const named = (m, name, after = rest) => typeof m.view === "function" ? m.view(after) : m.view || name;
   if (consolePages.has(org)) return named(consolePages.get(org), org, parts.slice(1));
   if (!org || reserved.includes(org)) return "welcome";
-  if (orgPages.has(page)) return named(orgPages.get(page), "organization." + page);
+  if (orgPages.has(page)) return named(orgPages.get(page), "organization." + page, parts.slice(2));
   return repoPages.has(sub) ? named(repoPages.get(sub), "repository." + sub) : "repository.code";
 }
 // reportViews sends the views kept so far, 20 at a time, with keepalive so a tab that closes still sends them, and
