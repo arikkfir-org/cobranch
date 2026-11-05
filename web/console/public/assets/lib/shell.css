@@ -148,6 +148,11 @@ a.app-thread-lines:hover code { text-decoration: underline; }
 .chat-message:has(.chat-message-actions):is(:hover, :focus-within) { border-radius: var(--radius-md); background: var(--color-bg-sunken); }
 @media (hover: none) { .chat-message-actions { visibility: visible; } }
 .chat-message-body { color: var(--color-fg-default); font: var(--text-body-small); overflow-wrap: anywhere; }
+/* Under a message that asked an agent: the agent, and the task it asked for. */
+.chat-message-asked { display: flex; align-items: center; gap: var(--space-6); color: var(--color-fg-muted); font: var(--text-body-small); }
+.chat-message-asked .icon svg { width: calc(var(--space-12) + var(--space-2)); height: calc(var(--space-12) + var(--space-2)); }
+.chat-message-asked a { color: var(--color-fg-link); text-decoration: none; }
+.chat-message-asked a:hover { text-decoration: underline; }
 .chat-message-text { white-space: pre-wrap; }
 
 /* The composer, which starts a thread: Enter sends, Shift+Enter starts a new line. */
@@ -156,8 +161,27 @@ a.app-thread-lines:hover code { text-decoration: underline; }
 .app-pane-composer:focus-within { box-shadow: var(--shadow-focus-ring); }
 .app-pane-composer textarea { flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--color-fg-default); font: var(--text-body-small); resize: none; }
 .app-pane-composer textarea:focus-visible { box-shadow: none; }
+.app-pane-composer textarea:placeholder-shown { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .app-pane-composer[aria-disabled="true"] { border-color: var(--color-border-subtle); }
 .app-pane-composer textarea:disabled::placeholder { color: var(--color-fg-disabled); }
+/* Ask, at the composer's end, opens the organization's agents; the agent picked shows as its AI tag at the start, in
+   Ask's place, whose × asks nobody again. A thread's reply is the same box, under its actions. */
+.app-pane-ask { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; align-self: center; padding: 0; border: 0; background: none;
+  color: var(--color-status-ai-fg); font: var(--text-body-small-strong); cursor: pointer; }
+.app-pane-ask .icon svg { width: calc(var(--space-12) + var(--space-2)); height: calc(var(--space-12) + var(--space-2)); }
+.app-pane-asked { align-self: center; }
+.app-pane-asked button { display: inline-flex; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.app-pane-reply.app-pane-composer { margin: var(--space-4) 0 0; padding: var(--space-6) calc(var(--space-8) + var(--space-2)); border-radius: var(--radius-lg); background: var(--color-bg-surface); }
+/* The menu Ask opens, above the composer and as wide: Ask an agent, then a row per agent, its avatar, name and
+   description. */
+.app-ask-menu { gap: 0; max-width: var(--size-pane); padding: 0; overflow: hidden; }
+.app-ask-menu-heading { padding: var(--space-8) var(--space-12); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-muted); font: var(--text-label-small); }
+.app-ask-menu .menu-item { height: auto; padding: var(--space-8) var(--space-12); border-radius: 0; }
+.app-ask-menu .menu-item:focus-visible { background: var(--color-bg-hover); box-shadow: none; }
+.app-ask-menu-text { display: grid; min-width: 0; }
+.app-ask-menu-text strong { color: var(--color-fg-default); font: var(--text-body-medium); }
+.app-ask-menu-text span { overflow: hidden; text-overflow: ellipsis; color: var(--color-fg-muted); font: var(--text-body-small); }
+.app-ask-menu-none { padding: var(--space-8) var(--space-12); color: var(--color-fg-muted); font: var(--text-body-small); }
 
 /* Narrower windows: below 1100px the pane lies over the content, at the body's right edge, with its close button; on
    a phone the sidebar slides in over a scrim from the menu button, and a page's header stacks its actions under its

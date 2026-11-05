@@ -1,4 +1,5 @@
 import { api } from "../../lib/api.js";
+import { agentSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { when } from "../../lib/format.js";
 import { go } from "../../lib/router.js";
@@ -7,6 +8,8 @@ import { base, me, roles, setAgents } from "../../lib/state.js";
 // nav puts Agents in the sidebar, with the organization's agents under it, a dot on each that works on a task now.
 export const nav = { label: "Agents", order: 50, icon: "bot", tab: "Agents", items: agentItems };
 export const crumbs = [{ label: "Agents" }];
+// subject is the viewer's conversation with an agent, on the agent's page.
+export const subject = ({ org, can, sub }) => sub ? api("GET", "/orgs/" + org.slug + "/agents/" + encodeURIComponent(sub)).then((a) => agentSubject(org, a, can), () => null) : null;
 export default ({ org, main, can }) => showAgents(org, main, can);
 
 // agentItems are the organization's agents as the sidebar lists them, each marked while one of its tasks runs; it

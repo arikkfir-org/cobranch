@@ -3,6 +3,7 @@ import { ask } from "./dialog.js";
 import { h } from "./dom.js";
 import { ago, shortSha, whenExactly } from "./format.js";
 import { avatar, icon } from "./icons.js";
+import { popover } from "./menu.js";
 import { agents, base, me } from "./state.js";
 
 // lineLabel names lines of a file a thread is on: its path, then its line or its first and last.
@@ -62,11 +63,32 @@ export const issueSubject = (org, number, identifier, can) => ({
   placeholder: "Comment on the issue", none: "Comments on the issue show here, to everyone who can see it.",
 });
 
+// privateSubject is the viewer's own conversation about an organization or one of its repositories, which every page of
+// it that names no other has: private to them, where a viewer who may ask the organization's agents (can's
+// agents.assign) brings one in by its tag.
+export const privateSubject = (key, title, code, chat, can) => ({
+  key, title, code, chat, post: true, moderate: true, ask: can("agents.assign"),
+  scope: can("agents.assign") ? "Private to you · tag an agent to bring it in" : "Private to you", placeholder: "Message " + title,
+  none: can("agents.assign") ? "Ask a question, or @mention an agent to give it work here." : "Write a note or a question; only you read it.",
+});
+
+// agentSubject is the viewer's conversation with one of the organization's agents, on the agent's page: private to
+// them, where every thread they start asks the agent, which takes agents.assign; the agent's task there sees its tasks
+// and its queue. A viewer who may not ask it reads the conversation and replies in its threads.
+export const agentSubject = (org, agent, can) => ({
+  key: "agent:" + org.slug + "/" + agent.id, title: agent.name, scope: "Private to you · every message asks " + agent.name,
+  chat: "/orgs/" + org.slug + "/agents/" + agent.id + "/conversation", post: true, moderate: true, ask: can("agents.assign"), asks: agent,
+  placeholder: "Message " + agent.name,
+  none: can("agents.assign") ? "Ask " + agent.name + " for work, or about its tasks and queue." : "Asking " + agent.name + " takes the Assign tasks permission.",
+});
+
 // conversation draws a subject's conversation for the pane (lib/pane.js), which it follows live until signal stops it:
 // its threads, oldest at the top, each perhaps on lines of a file at a commit, with their messages in Markdown, to
 // which a viewer who may post (s.post) replies, and which one who moderates (s.moderate) resolves and deletes; below
 // them the composer, which starts a thread. It reads the conversation's updates as they come, each read waiting up to
-// 15 seconds for one; a conversation that stays as it was (s.gone) shows to be read, and nothing follows it.
+// 15 seconds for one; a conversation that stays as it was (s.gone) shows to be read, and nothing follows it. A viewer
+// who may ask the organization's agents (s.ask) picks one with Ask, in the composer and in a reply, and the message
+// then gives the agent a task in its thread; in an agent's conversation (s.asks) every thread asks the agent.
 export async function conversation(s, signal) {
   const chat = s.chat;
   const [page, gone] = await Promise.all([apiPage(chat).catch((err) => err.status === 404 ? null : Promise.reject(err)),
@@ -85,6 +107,45 @@ export async function conversation(s, signal) {
   // atBottom says whether the viewer reads the newest messages, which the list then keeps in view as more come.
   const atBottom = () => messages.scrollHeight - messages.scrollTop - messages.clientHeight < 24;
   const keepDown = (was) => { if (was) messages.scrollTop = messages.scrollHeight; };
+  let roster = null; // the organization's agents, read once Ask first opens them
+  const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => d.agents, (err) => { roster = null; throw err; }));
+
+  // asker picks the agent a message asks, beside its text: Ask opens the organization's agents in a menu above form,
+  // as typing @ at the start of a word does, which then writes the agent's name after it. The agent picked shows as
+  // its tag at the start of form, in Ask's place, whose × asks nobody again, and the text's placeholder asks it.
+  const asker = (form, text) => {
+    const placeholder = text.placeholder;
+    let picked = null;
+    const ask = h("button", { class: "app-pane-ask", type: "button", "aria-haspopup": "menu", title: "Ask one of the organization's agents" }, icon("sparkles"), h("span", {}, "Ask"));
+    const tag = h("span", { class: "tag tone-ai app-pane-asked", hidden: true });
+    const pick = (a) => {
+      picked = a;
+      ask.hidden = !!a;
+      tag.hidden = !a;
+      text.placeholder = a ? "Ask " + a.name : placeholder;
+      tag.replaceChildren(...(a ? [icon("sparkles"), h("span", {}, a.name), h("button", { type: "button", "aria-label": "Ask nobody", title: "Ask nobody",
+        onclick: () => { pick(null); text.focus(); } }, icon("x"))] : []));
+    };
+    const menu = (list, mention) => (close) => [h("div", { class: "app-ask-menu-heading", "aria-hidden": "true" }, "Ask an agent"),
+      list.length ? list.map((a) => h("button", { class: "menu-item app-ask-menu-item", type: "button", role: "menuitem", onclick: () => {
+        close();
+        if (mention) text.setRangeText(a.name + " ", text.selectionStart, text.selectionEnd, "end");
+        pick(a);
+        text.focus();
+      } }, avatar(a.name, true, 24), h("span", { class: "app-ask-menu-text" }, h("strong", {}, a.name), a.description ? h("span", {}, a.description) : null)))
+        : h("p", { class: "app-ask-menu-none" }, "The organization has no agents yet.")];
+    const open = (mention) => agentsToAsk().then((list) => {
+      const el = popover(form, "above", menu(list, mention), "app-ask-menu");
+      if (el) el.style.width = form.offsetWidth + "px";
+    }).catch(fail);
+    ask.addEventListener("click", () => open(false));
+    text.addEventListener("input", (e) => {
+      if (e.inputType === "insertText" && e.data === "@" && /(^|\s)@$/.test(text.value.slice(0, text.selectionStart))) open(true);
+    });
+    return { tag, ask, agent: () => picked, clear: () => pick(null) };
+  };
+  // asking is what a message's input adds for the agent it asks, if any.
+  const asking = (picker) => (picker && picker.agent() ? { ask: picker.agent().id } : {});
 
   // message draws one of a thread's messages, or draws it again as it is now, unless its author is editing it.
   const message = (v, m) => {
@@ -130,13 +191,16 @@ export async function conversation(s, signal) {
     const name = m.author ? m.author.displayName : "Someone since gone";
     const tag = !agent ? null : m.taskNumber ? h("a", { class: "tag tone-ai", href: base + org + "/tasks/" + m.taskNumber, "data-nav": "",
       title: "An agent posted it, working task #" + m.taskNumber + "." }, icon("sparkles"), "Agent") : h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent");
+    // A message that asked an agent names it, and links the task it asked for.
+    const asked = m.askedTaskNumber ? h("p", { class: "chat-message-asked" }, icon("sparkles"), h("span", {}, "Asked " + (m.askedAgent ? m.askedAgent.displayName : "an agent since gone")),
+      "·", h("a", { href: base + org + "/tasks/" + m.askedTaskNumber, "data-nav": "" }, "#" + m.askedTaskNumber)) : null;
     return h("div", { class: "chat-message", id: "message-" + m.id }, avatar(name, agent, 32),
       h("div", { class: "chat-message-text-column" },
         h("div", { class: "chat-message-header" }, h("strong", {}, name), tag,
           h("time", { datetime: m.createdAt, title: whenExactly(m.createdAt) }, ago(m.createdAt)),
           m.editedAt ? h("span", { title: "Edited " + whenExactly(m.editedAt) }, "edited") : null,
           actions.length ? h("span", { class: "chat-message-actions" }, actions) : null),
-        content));
+        content, asked));
   };
   // head is a thread's anchor, when it has one: the lines it is on, whether a review opened it, and whether it is
   // resolved or the branch has moved on from them, which a line under it explains.
@@ -181,20 +245,44 @@ export async function conversation(s, signal) {
     return h("div", { class: "app-thread-foot" }, post ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => replying(v) }, "Reply") : null,
       may ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: toggle }, t.resolvedAt ? "Reopen" : "Resolve") : null);
   };
+  // replying opens a thread's reply under its actions: a box like the composer, where Enter sends and Escape closes it,
+  // with Ask for a viewer who may ask an agent, or a Reply button.
   const replying = (v) => {
     if (v.reply) return v.reply.querySelector("textarea").focus();
-    const text = h("textarea", { class: "textarea", name: "body", required: true, maxlength: 20000, rows: 2, placeholder: "Reply in Markdown", "aria-label": "Reply" });
-    const send = h("button", { class: "btn btn-primary btn-sm", type: "submit" }, "Reply");
     const close = () => { v.reply.remove(); v.reply = null; };
-    v.reply = h("form", { class: "app-pane-form", onsubmit: (e) => {
-      e.preventDefault();
-      send.disabled = true;
+    v.reply = composerBox("Reply in Markdown", "Reply", { ask: s.ask, button: "Reply", cancel: close }, (text, picker, done) => {
       const was = atBottom();
-      api("POST", chat + "/threads/" + v.t.id + "/messages", { body: text.value }).then((m) => { close(); message(v, m); keepDown(was); })
-        .catch(fail).finally(() => { send.disabled = false; });
-    } }, text, h("div", { class: "app-pane-form-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: close }, "Cancel"), send));
+      return api("POST", chat + "/threads/" + v.t.id + "/messages", { body: text.value, ...asking(picker) }).then((m) => { close(); message(v, m); keepDown(was); }).finally(done);
+    });
+    v.reply.classList.add("app-pane-reply");
     v.el.append(v.reply);
-    text.focus();
+    v.reply.querySelector("textarea").focus();
+  };
+  // composerBox is a form that sends one message: its text, which grows with what is written, Enter sending it and
+  // Shift+Enter starting a new line, Escape calling o.cancel when given; at its end Ask, when o.ask, or else the
+  // button o.button names, if any. submit(text, picker, done) sends it, calling done once it is through.
+  const composerBox = (placeholder, label, o, submit) => {
+    const { ask, button, cancel } = o;
+    const text = h("textarea", { name: "body", required: true, maxlength: 20000, rows: 1, placeholder, "aria-label": label });
+    const grow = () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 200) + "px"; };
+    const form = h("form", { class: "app-pane-composer" });
+    const picker = ask ? asker(form, text) : null;
+    const send = picker || !button ? null : h("button", { class: "btn btn-primary btn-sm", type: "submit", title: button + " (Enter), in Markdown; Shift+Enter starts a new line" }, button);
+    let busy = false;
+    text.addEventListener("input", grow);
+    text.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+      if (e.key === "Escape" && cancel) cancel();
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (busy || !text.value.trim()) return;
+      busy = true;
+      if (send) send.disabled = true;
+      submit(text, picker, () => { busy = false; if (send) send.disabled = false; }).then(() => { text.value = ""; grow(); if (picker) picker.clear(); }, fail);
+    });
+    form.append(...[picker && picker.tag, text, picker ? picker.ask : send].filter(Boolean));
+    return form;
   };
   // place draws a thread, or draws it again as it is now, with the messages it comes with: one of an older page at the
   // top, and a new one at the bottom, by the composer.
@@ -243,18 +331,12 @@ export async function conversation(s, signal) {
 
   let composer = gone ? h("div", { class: "app-pane-composer", "aria-disabled": "true" },
     h("textarea", { rows: 1, disabled: true, placeholder: "Read-only: the branch is gone", "aria-label": "New thread" })) : null;
-  if (post) {
-    const text = h("textarea", { name: "body", required: true, maxlength: 20000, rows: 1, placeholder: s.placeholder || "Message, in Markdown", "aria-label": "New thread" });
-    const send = h("button", { class: "btn btn-primary btn-sm", type: "submit", title: "Send (Enter), in Markdown; Shift+Enter starts a new line" }, "Send");
-    const grow = () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 200) + "px"; };
-    text.addEventListener("input", grow);
-    text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); composer.requestSubmit(); } });
-    composer = h("form", { class: "app-pane-composer", onsubmit: (e) => {
-      e.preventDefault();
-      if (!text.value.trim()) return;
-      send.disabled = true;
-      api("POST", chat + "/threads", { body: text.value }).then((t) => { text.value = ""; grow(); place(t); keepDown(true); }).catch(fail).finally(() => { send.disabled = false; });
-    } }, text, send);
+  // The composer starts a thread; in an agent's conversation every thread asks the agent, which a viewer who may not
+  // ask it can't start.
+  if (post && (!s.asks || s.ask)) {
+    const placeholder = (s.placeholder || "Message, in Markdown") + (s.ask && !s.asks ? ", or @mention an agent" : "");
+    composer = composerBox(placeholder, "New thread", { ask: s.ask && !s.asks, button: s.asks ? null : "Send" }, (text, picker, done) =>
+      api("POST", chat + "/threads", { body: text.value, ...asking(picker) }).then((t) => { place(t); keepDown(true); }).finally(done));
   }
   const el = h("div", { class: "app-pane-conversation" }, error, gone && shown.size ? goneBanner(s) : null, gone ? null : live, messages, composer);
   if (!gone) followChat(chat, page.data.after, apply, live, signal);
@@ -270,8 +352,9 @@ export async function conversation(s, signal) {
 // emptyState is what the pane shows while a subject has no conversation, or its conversation no threads yet: B's Empty
 // state, naming the subject, with what would start one.
 export const emptyState = (s) => h("div", { class: "empty app-pane-empty" }, h("div", { class: "empty-icon" }, icon("sparkles")),
-  h("h2", { class: "empty-title" }, s.chat && s.title ? ["There's no conversation about ", h(s.code ? "code" : "span", {}, s.title), " yet"] : "There's no conversation here yet"),
-  h("p", { class: "empty-description" }, s.chat ? s.none : "Pages of the organization get one with conversations; branches have theirs already."));
+  h("h2", { class: "empty-title" }, s.chat && s.title ? ["There's no conversation " + (s.asks ? "with " : "about "), h(s.code ? "code" : "span", {}, s.title), " yet"]
+    : "There's no conversation here yet"),
+  h("p", { class: "empty-description" }, s.chat ? s.none : "The Console's own pages have none; every page of an organization has one."));
 
 // goneState is what the pane shows of a deleted branch's conversation that had no threads; goneBanner tops one that
 // had: the branch is gone, and its conversation stays, to be read.

@@ -14,13 +14,17 @@ export const crumbs = ({ root, sub }) => [{ label: "Agents", href: root + "/agen
 export default ({ org, main, can, sub }) => sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
 
 const activeTask = (t) => ["queued", "running", "waiting"].includes(t.state);
-// taskByline says whose a task is, where it works, who assigned it and when.
+// taskByline says whose a task is, where it works, who assigned it and when; of a task asked in another's private
+// conversation, only whose it is and when.
 function taskByline(org, t) {
+  if (hidden(t)) return h("p", { class: "muted" }, t.agent.displayName, " · from a private conversation · ", whenExactly(t.createdAt));
   const where = !t.repositorySlug ? h("span", { class: "muted" }, "Anywhere") : [h("a", { href: base + org.slug + "/" + t.repositorySlug, "data-nav": "" }, t.repositorySlug),
     t.branch ? [" · ", h("a", { href: repoLinks(org, { slug: t.repositorySlug }).branchPage(t.branch), "data-nav": "" }, icon("git-branch"), t.branch)] : null];
   return h("p", { class: "muted" }, t.agent.displayName, " · ", where, " · ", t.assignedBy ? "assigned by " + t.assignedBy.displayName : "its assigner is gone",
     " · ", whenExactly(t.createdAt));
 }
+// hidden says whether t was asked in another's private conversation: the API answers its number, state and times alone.
+const hidden = (t) => t.private && !t.title;
 // The transcript's entry kinds, as the task's page names them.
 const entryKinds = { input: "Input", turn: "Model", result: "Tool result", state: "State" };
 // transcriptEntry draws an entry of a task's transcript: its text, the tools a turn calls, whether a tool failed or
@@ -150,7 +154,8 @@ async function showTasks(org, main, can) {
   };
   const row = (t) => h("tr", {},
     h("td", { class: "state" }, taskBadge(t.state)),
-    h("td", {}, h("a", { href: base + org.slug + "/tasks/" + t.number, "data-nav": "" }, t.title), " ", h("span", { class: "muted" }, "#" + t.number),
+    h("td", {}, hidden(t) ? h("span", { class: "muted" }, "Asked in private") : h("a", { href: base + org.slug + "/tasks/" + t.number, "data-nav": "" }, t.title),
+      " ", h("span", { class: "muted" }, "#" + t.number),
       t.reason ? h("p", {}, capitalized(t.reason)) : null, t.summary ? h("p", {}, t.summary) : null, taskByline(org, t)),
     h("td", { class: "actions" }, activeTask(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"))
       ? h("button", { class: "button small danger", type: "button", title: "Cancel #" + t.number, onclick: (e) => confirm("Cancel #" + t.number + ", " + t.title + "?") && cancel(t, e.currentTarget) }, "Cancel") : null));
