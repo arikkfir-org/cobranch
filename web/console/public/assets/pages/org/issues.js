@@ -9,19 +9,18 @@ import { avatar, icon } from "../../lib/icons.js";
 import { issueStates } from "../../lib/issues.js";
 import { pageHeading } from "../../lib/layout.js";
 import { rendered } from "../../lib/markdown.js";
-import { popover } from "../../lib/menu.js";
+import { closeMenu, popover } from "../../lib/menu.js";
 import { go } from "../../lib/router.js";
 import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
-import { taskBadge } from "../../lib/tasks.js";
 
 // nav puts Issues in the sidebar, counting the open ones, with the newest five open issues under it, after those the
 // viewer opened last.
 export const nav = { label: "Issues", order: 10, icon: "circle-dot",
   items: ({ org }) => api("GET", "/orgs/" + org.slug + "/issues?limit=5").then((d) => ({ count: d.counts.open, items: d.issues.map((i) => issueItem(org, i)) })) };
 export const allowed = (can) => can("issues.read");
-export const crumbs = ({ org, sub }) => [{ label: "Issues", href: base + org.slug + "/issues" },
-  ...(sub === "new" ? [{ label: "New" }] : sub === "labels" ? [{ label: "Labels" }] : sub ? [{ label: sub }] : [])];
+export const crumbs = ({ org, sub }) => sub === "labels" ? [{ label: "Labels" }] : [{ label: "Issues", href: base + org.slug + "/issues" },
+  ...(sub === "new" ? [{ label: "New" }] : sub ? [{ label: sub }] : [])];
 // subject is an issue's conversation, its comments, on the issue's page.
 export const subject = ({ org, can, sub }) => {
   const number = sub && /^(?:[A-Za-z][A-Za-z0-9]*-)?(\d+)$/.exec(sub);
@@ -32,7 +31,7 @@ export const subject = ({ org, can, sub }) => {
 // All; New issue's and Labels'; and none on an issue's page, which heads itself.
 export const heading = ({ org, can, sub }) => {
   if (sub === "new") return pageHeading({ title: "New issue", description: "Say what should change and why. Assign it to an agent to have it start." });
-  if (sub === "labels") return pageHeading({ title: "Labels", description: "What " + org.name + " tags its issues with, to find them by.", actions: [] });
+  if (sub === "labels") return pageHeading({ title: "Labels", description: org.name + "'s labels, shared by every repository's issues. A label an issue names that doesn't exist yet is created here.", actions: [] });
   if (sub) return null;
   const params = new URLSearchParams(location.search);
   return pageHeading({ title: "Issues", description: "What " + org.name + " has decided to do, across its repositories. Assign an issue to an agent and it opens a branch and a task.",
@@ -100,9 +99,14 @@ const labelColors = { gray: "Gray", blue: "Blue", green: "Green", yellow: "Yello
 const labelTag = (l) => h("span", { class: "tag tone-" + labelTones[l.color], title: l.description || l.name }, l.name);
 // person is a principal as a Person cell or fact shows them: their avatar, an agent's its own, and their name.
 const person = (p, agentIds) => h("span", { class: "cell-person" }, avatar(p.displayName, agentIds.has(p.id)), p.displayName);
-// item is a Menu item that checks one choice of several (radio) or toggles one (checkbox), and runs pick.
+// item is a Menu item that checks one choice of several (radio) or toggles one (checkbox), and runs pick; its word
+// may be a node, such as a label's Tag.
 const item = (word, checked, pick, lead, role = "menuitemradio") => h("button", { class: "menu-item", type: "button", role, "aria-checked": String(checked), onclick: pick },
   lead || null, h("span", {}, word));
+// filterNames are the list's filters, which the address names.
+const filterNames = ["repository", "assignee", "label", "q"];
+// menuAlign aligns a Menu of width wide to its button's start, or to its end when it would leave the window that way.
+const menuAlign = (button, wide) => (button.getBoundingClientRect().left + wide > document.documentElement.clientWidth ? "end" : "start");
 
 // showIssues is the Issues page's: the list, the form that creates one, the labels, or an issue's page, by what
 // follows issues/.
@@ -122,10 +126,11 @@ async function showIssueList(org, main, can, head) {
   const error = failure();
   const tbody = h("tbody", {});
   const table = h("table", { class: "table issues-table", hidden: true }, h("thead", {}, h("tr", {}, ["Issue", "Repository", "Assignee", "Branch", "Updated"].map((t) => h("th", {}, t)))), tbody);
-  const none = h("div", { class: "card", hidden: true });
+  const none = h("div", { class: "card issues-none", hidden: true });
   const count = h("span", { class: "filters-count" });
   const more = h("button", { class: "btn btn-sm", type: "button", hidden: true, onclick: () => load(next, true) }, "More issues");
   let next = null;
+  let totals = null;
   let typing = 0;
   const text = h("input", { type: "search", placeholder: "Filter issues", "aria-label": "Filter issues", value: new URLSearchParams(location.search).get("q") || "",
     oninput: () => {
@@ -136,27 +141,32 @@ async function showIssueList(org, main, can, head) {
       }, 250);
     } });
   // load reads the list's first page for the query the address names now, or the page at from, which more adds
-  // under those shown, and redraws the counts and the tabs' links to keep the filters.
+  // under those shown, and redraws the counts and the tabs' links to keep the filters. The tabs count every issue
+  // of theirs, and the count beside the filters what the filters match of them.
   async function load(from, adding) {
     const params = new URLSearchParams(location.search);
+    const filtered = filterNames.some((n) => params.get(n));
     more.disabled = true;
     try {
-      const page = await apiPage(from || listQuery(org, params));
+      const [page, all] = await Promise.all([apiPage(from || listQuery(org, params)),
+        filtered && !adding ? api("GET", "/orgs/" + org.slug + "/issues?limit=1").then((d) => d.counts) : null]);
       const { issues, counts } = page.data;
+      if (!adding) totals = all || counts;
       if (!adding) tbody.replaceChildren();
       tbody.append(...issues.map((i) => issueRow(org, i, choices.agentIds)));
       next = page.next;
       more.hidden = !next;
       const state = stateOf(params);
-      count.textContent = state === "all" ? (counts.open + counts.closed) + " issues" : (state === "open" ? counts.open : counts.closed) + " " + state;
+      const of = (c) => (state === "all" ? c.open + c.closed : state === "open" ? c.open : c.closed);
+      count.textContent = filtered ? of(counts) + " of " + of(totals) : of(counts) + " " + (state === "all" ? "issues" : state);
       table.hidden = !tbody.children.length;
       none.hidden = !table.hidden;
-      none.replaceChildren(noIssues(org, can, params, counts));
+      none.replaceChildren(noIssues(org, can, params, totals, choices));
       for (const tab of head?.querySelectorAll(".tab[data-state]") || []) {
         const s = tab.dataset.state;
         tab.href = base + listPath(org, params, { state: s === "open" ? "" : s }).slice(1);
         const n = tab.querySelector(".tab-count");
-        if (n) { n.textContent = String(s === "open" ? counts.open : counts.closed); n.hidden = false; }
+        if (n) { n.textContent = String(s === "open" ? totals.open : totals.closed); n.hidden = false; }
       }
     } catch (err) {
       error.fail(err);
@@ -164,7 +174,7 @@ async function showIssueList(org, main, can, head) {
       more.disabled = false;
     }
   }
-  main.replaceChildren(error.el, h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), text), ...issueFilters(org, choices), count),
+  main.replaceChildren(error.el, h("div", { class: "filters issues-filters" }, h("div", { class: "input" }, icon("search"), text), ...issueFilters(org, choices), count),
     table, none, h("div", {}, more));
   await load(null, false);
 }
@@ -174,46 +184,63 @@ function listQuery(org, params) {
   const query = new URLSearchParams({ limit: "100" });
   const state = stateOf(params);
   if (state !== "open") (state === "closed" ? closedStates : Object.keys(issueStates)).forEach((s) => query.append("state", s));
-  for (const name of ["repository", "assignee", "label", "q"]) if (params.get(name)) query.set(name, params.get(name));
+  for (const name of filterNames) if (params.get(name)) query.set(name, params.get(name));
   return "/orgs/" + org.slug + "/issues?" + query;
 }
 
 // issueFilters are the list's Repository, Assignee and Label buttons, each opening a Menu of its choices, the one the
-// query names checked, and saying it once one is; Label's ends with the way to the labels.
+// query names checked, and saying it once one is: Label by the label's name alone. Assignee's offers Me and Nobody,
+// then the members, then the agents; Label's ends with the way to the labels.
 function issueFilters(org, { members, agents, repositories, labels }) {
-  const pick = (name, label, options, extra) => {
+  const pick = (name, label, options, extra, says = (o) => label + ": " + o.text) => {
     const current = new URLSearchParams(location.search).get(name) || "";
     const chosen = current && options.find((o) => o.value === current);
-    const button = h("button", { class: "btn btn-sm", type: "button", "aria-haspopup": "menu" }, icon("chevron-down"), chosen ? label + ": " + chosen.word : label);
-    button.addEventListener("click", () => popover(button, "end", (close) => [
-      options.map((o) => item(o.word, o.value === current, () => { close(); go(listPath(org, new URLSearchParams(location.search), { [name]: o.value }), true); }, o.lead)),
-      extra || null]));
+    const button = h("button", { class: "btn btn-sm", type: "button", "aria-haspopup": "menu" }, icon("chevron-down"), chosen ? says(chosen) : label);
+    button.addEventListener("click", () => popover(button, menuAlign(button, 260), (close) => [
+      options.map((o) => (o.divider ? h("hr", { class: "menu-divider" })
+        : item(o.word, o.value === current, () => { close(); go(listPath(org, new URLSearchParams(location.search), { [name]: o.value }), true); }, o.lead))),
+      extra || null], "issues-menu"));
     return button;
   };
-  const people = [{ value: "", word: "Anyone" }, { value: me.id, word: "Me" }, { value: "none", word: "Nobody" },
-    ...members.filter((m) => m.userId !== me.id).map((m) => ({ value: m.userId, word: m.displayName, lead: avatar(m.displayName) })),
-    ...agents.map((a) => ({ value: a.id, word: a.name, lead: avatar(a.name, true) }))];
+  const option = (value, text, word = text, lead = null) => ({ value, text, word, lead });
+  const divider = { divider: true };
+  const people = [option("", "Anyone"), option(me.id, "Me", "Me", avatar(me.displayName)), option("none", "Nobody"),
+    ...(members.length ? [divider] : []), ...members.map((m) => option(m.userId, m.displayName, m.displayName, avatar(m.displayName))),
+    ...(agents.length ? [divider] : []), ...agents.map((a) => option(a.id, a.name, a.name, avatar(a.name, true)))];
   return [
-    pick("repository", "Repository", [{ value: "", word: "Any repository" }, { value: "none", word: "No repository" },
-      ...repositories.map((r) => ({ value: r.id, word: r.slug, lead: icon("folder-git-2") }))]),
+    pick("repository", "Repository", [option("", "Any repository", "Any repository", icon("folder")), option("none", "No repository", "No repository", icon("folder")),
+      ...repositories.map((r) => option(r.id, r.slug))]),
     pick("assignee", "Assignee", people),
-    pick("label", "Label", [{ value: "", word: "Any label" }, ...labels.map((l) => ({ value: l.id, word: l.name, lead: labelTag(l) }))],
-      [h("hr", { class: "menu-divider" }), h("a", { class: "menu-item", href: base + org.slug + "/issues/labels", "data-nav": "", role: "menuitem" }, h("span", {}, "Manage labels"))]),
+    pick("label", "Label", [option("", "Any label"), ...labels.map((l) => option(l.id, l.name, labelTag(l)))],
+      [h("hr", { class: "menu-divider" }), h("a", { class: "menu-item", href: base + org.slug + "/issues/labels", "data-nav": "", role: "menuitem" }, icon("pencil"), h("span", {}, "Manage labels"))],
+      (o) => o.text),
   ];
 }
 
 // noIssues is the card the list shows when it has none to show: none yet, none open or closed, or none the filters
-// match; New issue on those that invite one.
-function noIssues(org, can, params, counts) {
-  const filtered = ["repository", "assignee", "label", "q"].some((n) => params.get(n));
+// match, which says what they ask for and clears them; New issue on those that invite one.
+function noIssues(org, can, params, counts, choices) {
   const state = stateOf(params);
-  const [title, text, invite] = filtered ? ["No issue matches", "Nothing in this tab matches the filters.", false]
-    : state === "closed" ? ["No closed issues", "An issue shows here once it is done or canceled.", false]
-      : counts.closed ? ["No open issues", "Every issue of " + org.name + "'s is done or canceled.", true]
-        : ["No issues yet", "An issue says what should change and why. Assign one to an agent and it opens a branch for it.", true];
-  return h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("circle-dot")), h("h2", { class: "empty-title" }, title),
-    h("p", { class: "empty-description" }, text),
-    invite && can("issues.write") ? h("a", { class: "btn btn-primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null);
+  const newIssue = can("issues.write") ? h("a", { class: "btn btn-primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null;
+  const [glyph, title, text, action] = filterNames.some((n) => params.get(n))
+    ? ["circle-dot", "No issue matches", "No " + (state === "all" ? "" : state + " ") + "issue matches" + asked(params, choices) + ". Clear the filters, or widen the search.",
+      h("a", { class: "btn", href: base + listPath(org, params, { repository: "", assignee: "", label: "", q: "" }).slice(1), "data-nav": "" }, "Clear filters")]
+    : state === "closed" ? ["circle-x", "No closed issues", "Closing an issue moves it here, with the branch that did it and what changed.", null]
+      : counts.open + counts.closed ? ["circle-check", "No open issues", "Every issue is closed. New issue opens the next one; Closed shows what was done.", newIssue]
+        : ["circle-dot", "No issues yet", "An issue says what should change and why. Assign one to an agent and it opens a branch for it.", newIssue];
+  return h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon(glyph)), h("h2", { class: "empty-title" }, title),
+    h("p", { class: "empty-description" }, text), action);
+}
+
+// asked says what the filters params name ask for, as No issue matches puts it: the text, the label, the repository
+// and the assignee.
+function asked(params, { members, agents, repositories, labels }) {
+  const [q, repository, assignee, label] = ["q", "repository", "assignee", "label"].map((n) => params.get(n));
+  const named = (list, id, key) => list.find((x) => (x.userId || x.id) === id)?.[key];
+  const who = assignee === "none" ? "nobody" : assignee === me.id ? "you" : named(members, assignee, "displayName") || named(agents, assignee, "name");
+  return [q ? " “" + q + "”" : "", label ? " with label " + (named(labels, label, "name") || "that label") : "",
+    repository === "none" ? " in no repository" : repository ? " in " + (named(repositories, repository, "slug") || "that repository") : "",
+    assignee ? " assigned to " + (who || "them") : ""].join("");
 }
 
 // nothing is what an empty cell shows: a dash, as Table/Cell Kind=Unassigned draws it.
@@ -258,11 +285,11 @@ async function showNewIssue(org, main, can) {
     }
   } },
   h("div", { class: "card-body" },
-    field("Repository", selectBox(repository), "What it is about, if it is about one repository; its branches open there."),
+    field("Repository", selectBox(repository), "Optional. With a repository, its branch opens there; without one, the issue is the organization's."),
     field("Title", title),
     field("Description", description, "Markdown. Evidence and \"Done when\" help an agent act on it."),
-    field("Assignee", selectBox(assignee), assign ? "A person, an agent, or nobody yet." : "A person, or nobody yet."),
-    field("Labels", named, can("issues.manage") ? "Comma-separated; new ones are made." : "Comma-separated, of the organization's labels.")),
+    field("Assignee", selectBox(assignee), assign ? "Nobody yet, a member, or an agent, which starts on it." : "Nobody yet, or a member."),
+    field("Labels", named, can("issues.manage") ? "Comma-separated; new ones are created." : "Comma-separated, of the organization's labels.")),
   h("footer", { class: "card-footer" }, h("a", { class: "btn", href: base + org.slug + "/issues", "data-nav": "" }, "Cancel"), create)));
   title.focus();
 }
@@ -317,25 +344,26 @@ async function showIssue(org, main, can, identifier, notice) {
   main.replaceChildren(notice ? banner("warning", null, notice) : "", error.el, h("div", { class: "issue-columns" },
     h("div", { class: "issue-main" }, issueHeader(page), issue.descriptionHtml ? rendered(issue.descriptionHtml)
       : h("p", { class: "page-header-description" }, write ? "No description yet. Edit adds one." : "No description."),
-    branchesCard(org, issue, branches), issueActivity(events)),
+    branchesCard(org, issue, branches), issueActivity(issue, events)),
     h("aside", { class: "issue-side" }, h("section", { class: "card" }, h("div", { class: "facts" }, issueFacts(page))),
       write && can("agents.assign") && choices.agents.length ? assignToAgent(page) : null)));
 }
 
 // issueHeader is the top of an issue's page: its key line, its key and state, then, for a viewer with issues.write,
-// Edit, which edits its title and description, and More: its branch name to copy, and Delete for issues.manage; then
-// its title.
+// Edit, which edits its title and description, and More: its branch name and its link to copy, and Delete for
+// issues.manage; then its title.
 function issueHeader({ org, issue, can, save, fail, path, tag }) {
   const name = branchName(issue);
+  const copy = (word, glyph, text) => h("button", { class: "menu-item", type: "button", role: "menuitem", title: text,
+    onclick: () => { closeMenu(); navigator.clipboard.writeText(text).catch(fail); } }, icon(glyph), h("span", {}, word));
   const more = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-haspopup": "menu", "aria-label": "More", title: "More" }, icon("ellipsis"));
-  more.addEventListener("click", () => popover(more, "end", (close) => [
-    h("button", { class: "menu-item", type: "button", role: "menuitem", title: name, onclick: () => { close(); navigator.clipboard.writeText(name).catch(fail); } },
-      icon("copy"), h("span", {}, "Copy branch name")),
+  more.addEventListener("click", () => popover(more, "end", (close) => [copy("Copy branch name", "git-branch", name),
+    copy("Copy link", "link", location.origin + base + issuePath(org, issue).slice(1)),
     can("issues.manage") ? [h("hr", { class: "menu-divider" }), h("button", { class: "menu-item menu-item-danger", type: "button", role: "menuitem", onclick: () => {
       close();
       ask("Delete " + issue.identifier + "?", "It goes with its activity and comments. An issue that won't be done is Canceled instead.", "Delete",
         () => api("DELETE", path, undefined, { "If-Match": tag }).then(() => go("/" + org.slug + "/issues")));
-    } }, icon("trash-2"), h("span", {}, "Delete issue"))] : null]));
+    } }, icon("x"), h("span", {}, "Delete issue"))] : null], "issue-more-menu"));
   const edit = () => {
     const title = input({ name: "title", required: true, maxlength: 200, value: issue.title });
     const description = textarea({ name: "description", rows: 10, maxlength: 65536 });
@@ -358,19 +386,20 @@ function branchesCard(org, issue, branches) {
   b.deleted ? h("span", { class: "tag" }, "Deleted") : b.status ? branchBadge(b.status) : null);
   return h("section", { class: "card" }, h("header", { class: "card-header" }, h("h2", { class: "card-title" }, "Branches"), h("span", { class: "card-meta" }, branches.length + " linked")),
     branches.length ? h("ul", { class: "list" }, branches.map(row))
-      : h("div", { class: "card-body" }, h("p", { class: "page-header-description" }, "No branch works on it yet: push one whose name holds ",
-        h("code", {}, issue.identifier.toLowerCase()), ", or link one from its page.")));
+      : h("p", { class: "card-body card-note" }, "No branch works on it yet: push one whose name holds " + issue.identifier.toLowerCase() + ", or link one from its page."));
 }
 
-// issueActivity is an issue's activity, oldest first: each event a line of who did what, and when.
-const issueActivity = (events) => h("section", { class: "issue-activity" },
+// issueActivity is an issue's activity, newest first: each event a line of who did what, and when.
+const issueActivity = (issue, events) => h("section", { class: "issue-activity" },
   h("div", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Activity"))),
-  h("ol", { class: "issue-events" }, events.map((e) => h("li", { class: "event-row" }, h("span", {}, (e.actor ? e.actor.displayName : "Someone since gone") + " " + eventWords(e)),
+  h("ol", { class: "issue-events" }, [...events].reverse().map((e) => h("li", { class: "event-row" },
+    h("span", {}, (e.actor ? e.actor.displayName : "Someone since gone") + " " + eventWords(issue, e)),
     h("time", { datetime: e.at, title: whenExactly(e.at) }, since(e.at))))));
 
-// eventWords says what an event did, a change each field it changed, joined by dots.
-function eventWords(e) {
-  if (e.kind === "issue.created") return "created it";
+// eventWords says what an event did to issue, a change each field it changed, joined by dots.
+function eventWords(issue, e) {
+  if (e.kind === "issue.created") return "opened " + issue.identifier;
+  if (e.kind === "issue.task_started") return "started task #" + e.task.number + (e.task.branch ? " on " + e.task.branch : "");
   if (e.kind === "issue.branch_linked" || e.kind === "issue.branch_unlinked") {
     const b = e.branch;
     const what = b && b.name ? b.repository + "/" + b.name : "a branch of a repository you don't read";
@@ -391,6 +420,9 @@ function eventWords(e) {
     return "changed its " + c.field;
   }).join(" · ");
 }
+
+// taskAtWork are the states of a task still at work on its issue, which the issue's Task row shows as a Quiet badge.
+const taskAtWork = { queued: { word: "Queued", tone: "neutral" }, running: { word: "Running", tone: "ai" }, waiting: { word: "Waiting", tone: "neutral" } };
 
 // issueFacts are an issue's properties as Fact rows: its state, priority, assignee, the task its agent works on it
 // in, labels, repository, and when and by whom it was created and closed. For a viewer with issues.write each of the
@@ -417,8 +449,8 @@ function issueFacts({ org, issue, can, choices, save }) {
     menu("Assignee", issue.assignee ? issue.assignee.displayName : "Nobody", (close) => [item("Nobody", !issue.assignee, () => { close(); save({ assigneeId: null }); }),
       members.map((m) => item(m.displayName + (m.userId === me.id ? " (you)" : ""), m.userId === issue.assignee?.id, () => { close(); save({ assigneeId: m.userId }); }, avatar(m.displayName))),
       offered.map((a) => item(a.name, a.id === issue.assignee?.id, () => { close(); save({ assigneeId: a.id }); }, avatar(a.name, true)))]),
-    issue.task ? fact("Task", h("a", { class: "cell-person", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: issue.assignee.id }), "data-nav": "" },
-      "#" + issue.task.number), taskBadge(issue.task.state)) : null,
+    issue.task && taskAtWork[issue.task.state] ? fact("Task", h("a", { class: "issue-task", href: base + org.slug + "/tasks/" + issue.task.number, "data-nav": "" }, "#" + issue.task.number),
+      h("span", { class: "badge-quiet tone-" + taskAtWork[issue.task.state].tone }, taskAtWork[issue.task.state].word)) : null,
     menu("Labels", issue.labels.length ? issue.labels.map((l) => l.name).join(", ") : "None", (close) => labels.length
       ? labels.map((l) => item(l.name, held.includes(l.id), () => {
         close();
@@ -442,39 +474,55 @@ function assignToAgent({ issue, choices, save }) {
   return button;
 }
 
-// showLabels lists the organization's labels by name, each with what it is for and the issues that carry it; for a
-// viewer with issues.manage, New label and each row's Edit and Delete, from the version shown, in dialogs.
+// showLabels lists the organization's labels by name, each with what it is for and how many issues carry it, which
+// opens them; for a viewer with issues.manage, New label and each row's Edit and Delete, from the version shown, in
+// dialogs.
 async function showLabels(org, main, can, head) {
   const path = "/orgs/" + org.slug + "/labels";
   const labels = (await api("GET", path)).labels;
   const manage = can("issues.manage");
   const error = failure();
   const refresh = () => showLabels(org, main, can, head);
-  const color = (value) => h("select", { name: "color" }, Object.entries(labelColors).map(([c, word]) => h("option", { value: c, selected: c === value }, word)));
-  // edit opens the dialog that makes a label, or changes l from the version shown.
-  const edit = (l) => {
-    const name = input({ name: "name", required: true, maxlength: 50, value: l ? l.name : "" });
-    const hue = color(l ? l.color : "gray");
-    const description = input({ name: "description", maxlength: 200, value: l ? l.description : "" });
-    openDialog({ title: l ? "Edit " + l.name : "New label", action: l ? "Save" : "Create",
-      body: [field("Name", name), field("Colour", selectBox(hue), "One of the design system's tones, so it reads in both themes."), field("Description", description, "What it is for.")],
-      submit: () => (l ? api("PATCH", path + "/" + l.id, { name: name.value, color: hue.value, description: description.value },
-        { "Content-Type": "application/merge-patch+json", "If-Match": '"' + l.version + '"' }) : api("POST", path, { name: name.value, color: hue.value, description: description.value }))
-        .then(refresh) });
-    name.focus();
-  };
   const remove = (l) => ask("Delete " + l.name + "?", l.issues ? "It comes off " + (l.issues === 1 ? "its issue." : "its " + l.issues + " issues.") : "No issue carries it.", "Delete",
     () => api("DELETE", path + "/" + l.id, undefined, { "If-Match": '"' + l.version + '"' }).then(refresh));
   const actions = head?.querySelector(".page-header-actions");
-  if (actions) actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => edit(null) }, icon("plus"), "New label") : "");
+  if (actions) actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => labelDialog(path, null, refresh) }, icon("plus"), "New label") : "");
   const row = (l) => h("tr", {}, h("td", {}, labelTag(l)), h("td", { class: "cell-muted" }, l.description),
-    h("td", { class: "cell-number" }, h("a", { href: base + org.slug + "/issues?state=all&label=" + l.id, "data-nav": "" }, l.issues === 1 ? "1 issue" : l.issues + " issues")),
-    manage ? h("td", { class: "cell-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => edit(l) }, "Edit"),
-      h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => remove(l) }, "Delete")) : null);
+    h("td", { class: "cell-number" }, h("a", { href: base + org.slug + "/issues?state=all&label=" + l.id, "data-nav": "", title: l.issues === 1 ? "1 issue" : l.issues + " issues" }, String(l.issues))),
+    manage ? h("td", { class: "cell-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => labelDialog(path, l, refresh) }, "Edit"),
+      h("button", { class: "btn btn-ghost btn-sm tone-danger", type: "button", onclick: () => remove(l) }, "Delete")) : null);
   main.replaceChildren(error.el, labels.length
-    ? h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Label"), h("th", {}, "Description"), h("th", { class: "cell-number" }, "Issues"), manage ? h("th", {}, "") : null)),
+    ? h("table", { class: "table labels-table" }, h("thead", {}, h("tr", {}, h("th", {}, "Label"), h("th", {}, "Description"), h("th", {}, "Issues"), manage ? h("th", {}, "") : null)),
       h("tbody", {}, labels.map(row)))
     : h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("circle-dot")), h("h2", { class: "empty-title" }, "No labels yet"),
       h("p", { class: "empty-description" }, manage ? "A label tags issues to find them by. Make the first." : "Nobody has made a label yet."),
-      manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => edit(null) }, icon("plus"), "New label") : null)));
+      manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => labelDialog(path, null, refresh) }, icon("plus"), "New label") : null)));
+}
+
+// labelDialog makes a label, or changes l from the version shown, in a dialog: its name, in lower case, its colour
+// picked from Swatches that show the name as each colour's Tag, and its description; then refresh.
+function labelDialog(path, l, refresh) {
+  const name = input({ name: "name", required: true, maxlength: 50, value: l ? l.name : "", autocomplete: "off" });
+  const description = input({ name: "description", maxlength: 200, value: l ? l.description : "" });
+  const tags = [];
+  const swatches = h("div", { class: "swatches" }, Object.keys(labelTones).map((c) => {
+    const tag = h("span", { class: "tag tone-" + labelTones[c] }, icon("check"), h("span", {}, name.value || "label"));
+    tags.push(tag);
+    return h("label", { class: "swatch", title: labelColors[c] }, h("input", { type: "radio", name: "color", value: c, checked: c === (l ? l.color : "blue"), "aria-label": labelColors[c] }), tag);
+  }));
+  name.addEventListener("input", () => {
+    const at = name.selectionStart;
+    name.value = name.value.toLowerCase();
+    name.setSelectionRange(at, at);
+    for (const tag of tags) tag.lastChild.textContent = name.value || "label";
+  });
+  const body = () => ({ name: name.value, color: swatches.querySelector("input:checked").value, description: description.value });
+  openDialog({ title: l ? "Edit label" : "New label", action: l ? "Save" : "Create label",
+    body: [field("Name", name, "Lower case; shown as a tag on the issue."),
+      h("div", { class: "field", role: "radiogroup", "aria-label": "Colour" }, h("span", { class: "field-label" }, "Colour"), swatches,
+        h("span", { class: "field-help" }, "Blue reads as a topic, green as done, yellow as a warning, red as a bug.")),
+      field("Description", description, "Optional; shown on the Labels page and as the tag's tooltip.")],
+    submit: () => (l ? api("PATCH", path + "/" + l.id, body(), { "Content-Type": "application/merge-patch+json", "If-Match": '"' + l.version + '"' })
+      : api("POST", path, body())).then(refresh) });
+  name.focus();
 }

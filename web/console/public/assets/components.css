@@ -35,6 +35,8 @@
 .btn-primary:hover { background: var(--color-action-primary-bg-hover); }
 .btn-ghost { border: 0; background: none; color: var(--color-fg-default); }
 .btn-ghost:hover { background: var(--color-bg-hover); }
+/* A Ghost button that deletes, in a row (a label's Delete), reads in the danger tone. */
+.btn-ghost.tone-danger { color: var(--tone-fg); }
 .btn-danger { border: 0; background: var(--color-action-danger-bg); color: var(--color-action-danger-fg); }
 .btn-danger:hover { background: var(--color-action-danger-bg-hover); }
 .btn-sm { height: var(--size-control-sm); padding: 0 var(--space-8); }
@@ -202,10 +204,10 @@
   height: var(--size-control-md); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md);
   background: none; color: var(--color-fg-default); font: var(--text-body-small); text-align: left; text-decoration: none; white-space: nowrap; cursor: pointer;
 }
-.menu-item .icon { color: var(--color-fg-muted); }
+.menu-item > .icon { color: var(--color-fg-muted); }
 .menu-item:hover { background: var(--color-bg-hover); }
-.menu-item:hover .icon { color: var(--color-fg-default); }
-.menu-item-danger, .menu-item-danger .icon, .menu-item-danger:hover .icon { color: var(--color-status-danger-fg); }
+.menu-item:hover > .icon { color: var(--color-fg-default); }
+.menu-item-danger, .menu-item-danger > .icon, .menu-item-danger:hover > .icon { color: var(--color-status-danger-fg); }
 .menu-item-danger:hover { background: var(--color-status-danger-bg); }
 .menu-shortcut { margin-left: auto; color: var(--color-fg-subtle); font: var(--text-caption); }
 .menu-item[aria-checked="true"]::after {
@@ -231,7 +233,7 @@
 }
 
 /* Table/Header cell and Table/Cell: objects of one kind, in a table that is its own card. Header cells are 36px on the
-   sunken background in Label/Small; body cells are at least 32px, a second line grows them; body rows are divided by
+   sunken background in Label/Small; body cells are at least 36px, a second line grows them; body rows are divided by
    border/subtle and hovered; a cell holds text, Muted metadata, Mono names (SHAs, paths, branches), or a badge, an
    avatar or a button. */
 .table {
@@ -242,7 +244,7 @@
   height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-sunken); color: var(--color-fg-muted); font: var(--text-label-small); text-align: left; white-space: nowrap;
 }
-.table td { height: var(--size-row-sm); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
+.table td { height: var(--size-row); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
 /* Table/Row: State=Muted for a row that no longer counts (a revoked key, an archived repository), its cells muted;
@@ -260,6 +262,7 @@
 .table td.cell-actions > * + * { margin-left: var(--space-8); }
 .table td.cell-two-lines { padding-block: var(--space-12); }
 .table td a { color: inherit; text-decoration: none; }
+.table td.cell-number a { color: var(--color-fg-link); }
 .table td a:hover { text-decoration: underline; }
 .cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
 .cell-two-lines > :is(:first-child, .icon + *) { margin-top: 0; color: var(--color-fg-default); font: var(--text-body-medium); }
@@ -292,6 +295,8 @@
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
+/* A card's note: the muted Body/Small line a card shows in place of what it lists while it has none. */
+.card-body.card-note { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
 /* Card, Tone=Success for a card that announces a thing done and shown once, Tone=Danger for a danger zone: the border
    takes the tone's colour, and the header its tint, with the title in the tone. */
 .card:is(.card-success, .card-danger) { border-color: var(--tone-border); }
@@ -321,6 +326,16 @@
   padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
 }
 
+/* Swatch: one colour to pick for a label, drawn as the Tag it gives, in a wrapping row; the chosen one is ringed in
+   border/focus and its Tag shows the check. Its radio stays out of sight but takes the keyboard. Unchosen, 1px of
+   border keeps the ring's room. */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.swatch { position: relative; display: inline-flex; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); cursor: pointer; }
+.swatch > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.swatch:has(> input:checked) { padding: 1px; border: 2px solid var(--color-border-focus); }
+.swatch:has(> input:focus-visible) { box-shadow: var(--shadow-focus-ring); }
+.swatch > input:not(:checked) + .tag > .icon { display: none; }
+
 /* Fact row: one property of an object, in a card of them (an issue's, beside it): its label in Body/Small muted in a
    104px column, then its value, which wraps. Kind=Text is the value as text; Kind=Editable, for whoever may change
    it, a Small Ghost button holding the value as text and a chevron, which opens a menu. The card pads its rows by 8px
@@ -329,6 +344,8 @@
 .fact-row { display: flex; align-items: center; gap: var(--space-12); min-width: 0; padding: var(--space-8) var(--space-16); }
 .fact-label { flex: none; width: 104px; color: var(--color-fg-muted); font: var(--text-body-small); }
 .fact-value { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); flex: 1; min-width: 0; color: var(--color-fg-default); font: var(--text-body-small); }
+.fact-value > a { color: var(--color-fg-link); text-decoration: none; }
+.fact-value > a:hover { text-decoration: underline; }
 .fact-value > .btn-ghost { flex-wrap: wrap; justify-content: flex-start; height: auto; min-height: var(--size-control-sm); text-align: left; }
 
 /* Activity/Event: a line of an object's activity (an issue's): who did what, in Caption muted, and when, at its end. */
@@ -360,7 +377,7 @@
 .dialog::backdrop { background: var(--color-bg-overlay); }
 .dialog-header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-16) var(--space-20); }
 .dialog-title { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-heading-medium); letter-spacing: var(--text-heading-medium-tracking); }
-.dialog-body { display: grid; gap: var(--space-12); padding: 0 var(--space-20) var(--space-20); color: var(--color-fg-default); font: var(--text-body-medium); }
+.dialog-body { display: grid; gap: var(--space-16); padding: 0 var(--space-20) var(--space-20); color: var(--color-fg-default); font: var(--text-body-medium); }
 .dialog-body p { color: inherit; }
 .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-20); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
 

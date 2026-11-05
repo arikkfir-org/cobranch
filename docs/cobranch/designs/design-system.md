@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
-| Screens | 31 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 47 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -272,6 +272,7 @@ plan.
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
 | Fact row | Kind: Text, Editable | A muted 104px label and a value; Editable a Small Ghost button with a chevron, opening a menu | `.facts` in a `.card`, of `.fact-row` (`.fact-label`, `.fact-value`) |
 | Activity/Event | None | Who did what, and when | `.event-row` |
+| Swatch | Chosen | A label's colour as the Tag it gives; the chosen one ringed in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`) |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
@@ -328,7 +329,7 @@ only cue.
 
 ## Screens
 
-Thirty-one screens on the Screens page, at 1440 wide and built only from library instances. They follow one
+Forty-seven screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -345,7 +346,23 @@ Researcher waits for a task.
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
 | [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
 | [Issues · Filter set](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-17300) | A filter picked from its menu, which the button then names |
+| [Issues · Assignee menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20377) | The Assignee filter: anyone, you, nobody, then members, then agents |
+| [Issues · Label menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20839) | The Label filter: each label as its tag, and the way to the labels |
+| [Issues · No issues yet](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-12658) | The organization before its first issue |
+| [Issues · No open issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-20779) | Every issue closed; New issue opens the next |
+| [Issues · No closed issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21055) | The Closed tab before any issue closes |
+| [Issues · No issue matches](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21330) | Filters that match nothing, said back, with Clear filters |
+| [Issues · 1024](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22273) | Below 1100 wide the Branch column goes |
+| [Issues · Phone](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22902) | At 390: filters wrap, the table keeps Issue and Assignee |
+| [Issues · Labels](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-19483) | The organization's labels: each as its tag, what it is for, how many issues carry it |
+| [Issues · Labels · New label](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=164-20183) | Making a label, in a dialog: its name, its colour picked from swatches of its tag, its description |
+| [New issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=131-13409) | A card of an issue's repository, title, description, assignee and labels |
 | [Issue](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=15-1127) | Description, linked branches, a read-only activity timeline, properties changed from their menus, "Assign to an agent"; its comments live in the conversation pane |
+| [Issue · Agent working](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21606) | The task its agent works on it in, and its start in the activity |
+| [Issue · More menu](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-21914) | Copy branch name, Copy link, and Delete issue |
+| [Issue · New](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=168-22186) | An issue just opened: no description, no branch, one event |
+| [Issue · 1024](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-22671) | Below 1100 wide the properties go under the activity |
+| [Issue · Phone](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=169-23300) | At 390, stacked the same way |
 | [Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=68-2926) | Tabs Agents, Activity and Quotas; each agent's model, status and cap |
 | [Agents · Activity](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5230) | What the organization's agents did, newest first |
 | [Agents · Quotas](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=94-5627) | Spend this month, by agent against its cap and by model |
