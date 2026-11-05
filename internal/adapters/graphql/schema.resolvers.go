@@ -56,6 +56,11 @@ func (r *mutationResolver) DeleteSSHKey(ctx context.Context, id string) (bool, e
 	return r.deleteSSHKey(ctx, id)
 }
 
+// UpdatePreferences is the resolver for the updatePreferences field.
+func (r *mutationResolver) UpdatePreferences(ctx context.Context, input PreferencesPatch, expectedVersion *int) (*Preferences, error) {
+	return r.updatePreferences(ctx, input, expectedVersion)
+}
+
 // CreateOrganization is the resolver for the createOrganization field.
 func (r *mutationResolver) CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error) {
 	v, err := viewer(ctx)
@@ -478,6 +483,11 @@ func (r *userResolver) PersonalTokens(ctx context.Context, obj *User) ([]*Person
 // SSHKeys is the resolver for the sshKeys field.
 func (r *userResolver) SSHKeys(ctx context.Context, obj *User) ([]*SSHKey, error) {
 	return r.sshKeys(ctx)
+}
+
+// Preferences is the resolver for the preferences field.
+func (r *userResolver) Preferences(ctx context.Context, obj *User) (*Preferences, error) {
+	return r.preferences(ctx)
 }
 
 // Permissions is the resolver for the permissions field.

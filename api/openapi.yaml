@@ -253,6 +253,70 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/preferences:
+    get:
+      operationId: getMyPreferences
+      summary: >-
+        How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at
+        version 0, until they first change one. Only a person has preferences; any other credential answers 403.
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The preferences.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+        "304":
+          description: The preferences are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateMyPreferences
+      summary: >-
+        Changes the viewer's preferences the merge patch (RFC 7396) names. The change names the ETag it was made from
+        in If-Match ("0" before the first change, * for whichever is there); without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/ifMatchPreferences"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/PreferencesPatch"
+      responses:
+        "200":
+          description: The preferences as they now are.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/organizations:
     get:
       operationId: listMyOrganizations
@@ -6593,6 +6657,14 @@ components:
       description: The ETag of the label the change was made from; a change made meanwhile is refused with 412.
       schema:
         type: string
+    ifMatchPreferences:
+      name: If-Match
+      in: header
+      description: >-
+        The ETag of the preferences the change was made from, "0" before the first change, or * for whichever are
+        there; a change made meanwhile is refused with 412.
+      schema:
+        type: string
     ifMatchIssue:
       name: If-Match
       in: header
@@ -6913,6 +6985,27 @@ components:
           description: The permissions the user holds at the installation, such as orgs.create.
           items:
             type: string
+    Theme:
+      type: string
+      description: The colours the Console draws in; system follows the operating system's.
+      enum: [system, light, dark]
+    Preferences:
+      type: object
+      description: How Cobranch looks to a person, wherever they sign in.
+      required: [theme, version]
+      properties:
+        theme:
+          $ref: "#/components/schemas/Theme"
+        version:
+          type: integer
+          format: int64
+          description: Counts their changes, 0 before the first; their ETag.
+    PreferencesPatch:
+      type: object
+      description: What changes the preferences, as a merge patch; a field left out keeps its value.
+      properties:
+        theme:
+          $ref: "#/components/schemas/Theme"
     Email:
       type: object
       required: [email, verified]

@@ -116,7 +116,8 @@ function forms() {
   const select = (attrs = {}) => h("span", { class: "select" }, h("select", attrs, ["Anthropic", "OpenAI", "A local model"].map((m) => h("option", {}, m))));
   const textarea = (attrs = {}) => h("textarea", { class: "textarea", ...attrs }, "Work the issue or the branch you are given. Open a branch named after the issue, keep commits small, and ask in the chat before changing an API.");
   const check = (cls, type, label, attrs) => h("label", { class: cls }, h("input", { type, name: cls, ...attrs }), label);
-  const choices = themes.map((t) => h("button", { type: "button", onclick: () => setTheme(t) }, t[0].toUpperCase() + t.slice(1)));
+  // The switch draws the choice at once; the settings page is where a failed save is reported.
+  const choices = themes.map((t) => h("button", { type: "button", onclick: () => setTheme(t).catch(() => {}) }, t[0].toUpperCase() + t.slice(1)));
   const pressed = () => choices.forEach((c, i) => c.setAttribute("aria-pressed", themes[i] === theme() ? "true" : "false"));
   pressed();
   onThemeChange(() => { if (choices[0].isConnected) pressed(); });
