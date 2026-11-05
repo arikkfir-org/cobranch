@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
-| Screens | 22 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 28 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
