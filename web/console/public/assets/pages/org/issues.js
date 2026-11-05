@@ -4,7 +4,7 @@ import { issueSubject } from "../../lib/chat.js";
 import { ask, openDialog } from "../../lib/dialog.js";
 import { h } from "../../lib/dom.js";
 import { banner, failure, field, input, selectBox, textarea } from "../../lib/forms.js";
-import { since, when, whenExactly } from "../../lib/format.js";
+import { ago, capitalized, since, when, whenExactly } from "../../lib/format.js";
 import { avatar, icon } from "../../lib/icons.js";
 import { issueStates } from "../../lib/issues.js";
 import { pageHeading } from "../../lib/layout.js";
@@ -394,7 +394,7 @@ const issueActivity = (issue, events) => h("section", { class: "issue-activity" 
   h("div", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Activity"))),
   h("ol", { class: "issue-events" }, [...events].reverse().map((e) => h("li", { class: "event-row" },
     h("span", {}, (e.actor ? e.actor.displayName : "Someone since gone") + " " + eventWords(issue, e)),
-    h("time", { datetime: e.at, title: whenExactly(e.at) }, since(e.at))))));
+    h("time", { datetime: e.at, title: whenExactly(e.at) }, capitalized(ago(e.at)))))));
 
 // eventWords says what an event did to issue, a change each field it changed, joined by dots.
 function eventWords(issue, e) {
@@ -446,7 +446,7 @@ function issueFacts({ org, issue, can, choices, save }) {
       item(st.word, s === issue.state, () => { close(); save({ state: s }); }, icon(st.icon)))),
     menu("Priority", issuePriorities[issue.priority].word, (close) => Object.entries(issuePriorities).map(([p, pr]) =>
       item(pr.word, p === issue.priority, () => { close(); save({ priority: p }); }, icon(pr.icon)))),
-    menu("Assignee", issue.assignee ? issue.assignee.displayName : "Nobody", (close) => [item("Nobody", !issue.assignee, () => { close(); save({ assigneeId: null }); }),
+    menu("Assignee", issue.assignee ? issue.assignee.displayName : "Nobody yet", (close) => [item("Nobody", !issue.assignee, () => { close(); save({ assigneeId: null }); }),
       members.map((m) => item(m.displayName + (m.userId === me.id ? " (you)" : ""), m.userId === issue.assignee?.id, () => { close(); save({ assigneeId: m.userId }); }, avatar(m.displayName))),
       offered.map((a) => item(a.name, a.id === issue.assignee?.id, () => { close(); save({ assigneeId: a.id }); }, avatar(a.name, true)))]),
     issue.task && taskAtWork[issue.task.state] ? fact("Task", h("a", { class: "issue-task", href: base + org.slug + "/tasks/" + issue.task.number, "data-nav": "" }, "#" + issue.task.number),
@@ -460,10 +460,13 @@ function issueFacts({ org, issue, can, choices, save }) {
     menu("Repository", issue.repository ? issue.repository.slug : "No repository", (close) => [
       item("No repository", !issue.repository, () => { close(); save({ repositoryId: null }); }),
       repositories.map((r) => item(r.slug, r.id === issue.repository?.id, () => { close(); save({ repositoryId: r.id }); }, icon("folder-git-2")))]),
-    fact("Created", h("span", { title: whenExactly(issue.createdAt) }, when(issue.createdAt) + " by " + (issue.createdBy ? issue.createdBy.displayName : "someone since gone"))),
+    fact("Created", h("span", { title: whenExactly(issue.createdAt) }, created(issue.createdAt) + " by " + (issue.createdBy ? issue.createdBy.displayName : "someone since gone"))),
     issue.closedAt ? fact("Closed", h("span", { title: whenExactly(issue.closedAt) }, when(issue.closedAt))) : null,
   ];
 }
+
+// created is when an issue was opened, as its properties say it: how long ago on its first day, its date after.
+const created = (at) => Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000 ? capitalized(since(at)) : when(at);
 
 // assignToAgent is Assign to an agent, which opens a Menu of the organization's agents and assigns the issue to the
 // one picked, which takes it as a task.
