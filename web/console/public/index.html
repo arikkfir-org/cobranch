@@ -31,7 +31,8 @@
     "restUrl" (env "COBRANCH_REST_URL") "authUrl" (env "COBRANCH_AUTH_URL") "consoleUrl" (env "COBRANCH_CONSOLE_URL")
     "gitUrl" (env "COBRANCH_GIT_URL") "gitSshUrl" (env "COBRANCH_GIT_SSH_URL") "release" (env "COBRANCH_RELEASE")
     "files" (dict "" (listFiles "/assets") "lib/" (listFiles "/assets/lib") "pages/" (listFiles "/assets/pages")
-      "pages/org/" (listFiles "/assets/pages/org") "pages/repo/" (listFiles "/assets/pages/repo") "fonts/" (listFiles "/assets/fonts"))
+      "pages/org/" (listFiles "/assets/pages/org") "pages/repo/" (listFiles "/assets/pages/repo")
+      "pages/org/settings/" (listFiles "/assets/pages/org/settings") "fonts/" (listFiles "/assets/fonts"))
     | toJson }}</script>
   <script type="module">
     // The configuration names the Console's root, where its modules are, and their release; a page at any depth knows

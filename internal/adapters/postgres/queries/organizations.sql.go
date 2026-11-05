@@ -193,7 +193,10 @@ func (q *Queries) MemberByEmail(ctx context.Context, orgID uuid.UUID, email stri
 }
 
 const members = `-- name: Members :many
-SELECT m.user_id, m.joined_at, p.display_name FROM memberships m JOIN principals p ON p.id = m.user_id
+SELECT m.user_id, m.joined_at, p.display_name,
+       coalesce((SELECT e.email FROM principal_emails e WHERE e.principal_id = m.user_id
+                 ORDER BY e.verified DESC, e.created_at, e.email LIMIT 1), '')::text AS email
+FROM memberships m JOIN principals p ON p.id = m.user_id
 WHERE m.org_id = $1 ORDER BY p.display_name, m.user_id
 `
 
@@ -201,9 +204,11 @@ type MembersRow struct {
 	UserID      uuid.UUID
 	JoinedAt    time.Time
 	DisplayName string
+	Email       string
 }
 
-// Members lists an organization's members, by display name.
+// Members lists an organization's members, by display name, each with an email of theirs: a verified one, the oldest
+// first, or else their oldest, or none.
 func (q *Queries) Members(ctx context.Context, orgID uuid.UUID) ([]MembersRow, error) {
 	rows, err := q.db.Query(ctx, members, orgID)
 	if err != nil {
@@ -213,7 +218,12 @@ func (q *Queries) Members(ctx context.Context, orgID uuid.UUID) ([]MembersRow, e
 	var items []MembersRow
 	for rows.Next() {
 		var i MembersRow
-		if err := rows.Scan(&i.UserID, &i.JoinedAt, &i.DisplayName); err != nil {
+		if err := rows.Scan(
+			&i.UserID,
+			&i.JoinedAt,
+			&i.DisplayName,
+			&i.Email,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

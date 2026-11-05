@@ -766,6 +766,7 @@ const (
 	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
 	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
 	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
+	PageViewPageOrganizationUsage         PageViewPage = "organization.usage"
 	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
 	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
@@ -809,6 +810,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganizationSettings:
 		return true
 	case PageViewPageOrganizationTasks:
+		return true
+	case PageViewPageOrganizationUsage:
 		return true
 	case PageViewPageRepositoryAccess:
 		return true
@@ -2351,10 +2354,13 @@ type LinkedBy string
 
 // Member A user who belongs to the organization, with the roles they hold there.
 type Member struct {
-	DisplayName string             `json:"displayName"`
-	JoinedAt    time.Time          `json:"joinedAt"`
-	Roles       []Role             `json:"roles"`
-	UserId      openapi_types.UUID `json:"userId"`
+	DisplayName string `json:"displayName"`
+
+	// Email An email of theirs, a verified one first; only to a viewer with org.members.manage, and absent for anyone else.
+	Email    *string            `json:"email,omitempty"`
+	JoinedAt time.Time          `json:"joinedAt"`
+	Roles    []Role             `json:"roles"`
+	UserId   openapi_types.UUID `json:"userId"`
 }
 
 // MergeInput How to merge a branch into its base.
@@ -2627,6 +2633,16 @@ type PageViews struct {
 	Views []PageView `json:"views"`
 }
 
+// PermissionLabel A permission as people read it, the area of Cobranch it is about and what it lets its holder do.
+type PermissionLabel struct {
+	// Group The area it is about, such as Organization, Repositories or Issues.
+	Group string `json:"group"`
+	Id    string `json:"id"`
+
+	// Label What it lets its holder do, such as Read code.
+	Label string `json:"label"`
+}
+
 // Person A commit's author or committer as the commit writes them.
 type Person struct {
 	At    time.Time `json:"at"`
@@ -2875,10 +2891,13 @@ type ReviewState string
 
 // Role A role granted at the organization, built in or its own.
 type Role struct {
-	BuiltIn     bool               `json:"builtIn"`
-	Description string             `json:"description"`
-	Id          openapi_types.UUID `json:"id"`
-	Name        string             `json:"name"`
+	BuiltIn     bool   `json:"builtIn"`
+	Description string `json:"description"`
+
+	// Holders How many principals (members, API keys, agents) hold it at the organization; only on the organization's list of roles.
+	Holders *int               `json:"holders,omitempty"`
+	Id      openapi_types.UUID `json:"id"`
+	Name    string             `json:"name"`
 
 	// OrgId The organization a custom role belongs to; absent on a built-in role.
 	OrgId       *openapi_types.UUID `json:"orgId,omitempty"`
@@ -35093,7 +35112,9 @@ type ListPermissionsResponseObject interface {
 }
 
 type ListPermissions200JSONResponse struct {
-	Permissions []string `json:"permissions"`
+	// Labels Every permission of permissions as people read it, by area, in the order a role editor lists them.
+	Labels      []PermissionLabel `json:"labels"`
+	Permissions []string          `json:"permissions"`
 }
 
 func (response ListPermissions200JSONResponse) VisitListPermissionsResponse(w http.ResponseWriter) error {

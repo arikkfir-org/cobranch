@@ -530,12 +530,17 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [permissions]
+                required: [permissions, labels]
                 properties:
                   permissions:
                     type: array
                     items:
                       type: string
+                  labels:
+                    type: array
+                    description: Every permission of permissions as people read it, by area, in the order a role editor lists them.
+                    items:
+                      $ref: "#/components/schemas/PermissionLabel"
         "401":
           $ref: "#/components/responses/Problem"
         default:
@@ -6968,7 +6973,7 @@ components:
           description: The Console's page.
           enum: [sign-in, welcome, settings, help, help.components, organization, organization.members,
             organization.roles, organization.api-keys, organization.settings, organization.new-repository, organization.issues,
-            organization.agents, organization.tasks, organization.secrets, repository.code, repository.file,
+            organization.agents, organization.tasks, organization.secrets, organization.usage, repository.code, repository.file,
             repository.commits, repository.commit, repository.branches, repository.branch, repository.changes,
             repository.runs, repository.environments, repository.secrets, repository.access, repository.settings]
         navigation:
@@ -7145,6 +7150,9 @@ components:
           type: string
           format: uuid
           description: The organization a custom role belongs to; absent on a built-in role.
+        holders:
+          type: integer
+          description: How many principals (members, API keys, agents) hold it at the organization; only on the organization's list of roles.
     Repository:
       type: object
       description: One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -8579,6 +8587,9 @@ components:
           format: uuid
         displayName:
           type: string
+        email:
+          type: string
+          description: An email of theirs, a verified one first; only to a viewer with org.members.manage, and absent for anyone else.
         joinedAt:
           type: string
           format: date-time
@@ -8586,6 +8597,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Role"
+    PermissionLabel:
+      type: object
+      description: A permission as people read it, the area of Cobranch it is about and what it lets its holder do.
+      required: [id, group, label]
+      properties:
+        id:
+          type: string
+        group:
+          type: string
+          description: The area it is about, such as Organization, Repositories or Issues.
+        label:
+          type: string
+          description: What it lets its holder do, such as Read code.
     Invitation:
       type: object
       description: An invitation to an email, which only a user holding it, verified, accepts.

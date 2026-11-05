@@ -1,0 +1,6 @@
+/* General: a card's fields side by side, three to a row as the Settings · General screen lays them out, one below the
+   other on a narrow screen. Layout only; the fields are components.css's. */
+.general-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16); align-items: start; }
+@media (max-width: 768px) {
+  .general-fields { grid-template-columns: minmax(0, 1fr); }
+}

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -133,15 +134,11 @@ func TestOrgStoreMembers(t *testing.T) {
 	if err != nil || len(members) != 2 {
 		t.Fatalf("Members() = %+v, %v", members, err)
 	}
-	var names []string
-	for _, m := range members {
-		for _, r := range m.Roles {
-			names = append(names, r.Name)
-		}
-	}
-	slices.Sort(names)
-	if !slices.Equal(names, []string{"Member", "Owner"}) {
+	if names := roleNames(members); !slices.Equal(names, []string{"Member", "Owner"}) {
 		t.Errorf("roles held = %v, want a Member and an Owner", names)
+	}
+	if emails, want := memberEmails(members), map[uuid.UUID]string{f.olivia: "olivia@example.com", f.max: "max@example.com"}; !maps.Equal(emails, want) {
+		t.Errorf("members' emails = %v, want %v", emails, want)
 	}
 	m, err := f.s.Member(ctx, f.acme.ID, f.max)
 	if err != nil || len(m.Roles) != 1 || m.Roles[0].ID != auth.RoleMember || m.JoinedAt.IsZero() {
@@ -172,6 +169,27 @@ func TestOrgStoreMembers(t *testing.T) {
 	if kinds := eventKinds(t, f.pool); kinds[len(kinds)-1] != "member.removed" {
 		t.Errorf("last event = %s, want member.removed", kinds[len(kinds)-1])
 	}
+}
+
+// roleNames is the names of the roles members hold, sorted.
+func roleNames(members []orgs.Member) []string {
+	var names []string
+	for _, m := range members {
+		for _, r := range m.Roles {
+			names = append(names, r.Name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// memberEmails is each member's email, by their ID.
+func memberEmails(members []orgs.Member) map[uuid.UUID]string {
+	emails := make(map[uuid.UUID]string, len(members))
+	for _, m := range members {
+		emails[m.UserID] = m.Email
+	}
+	return emails
 }
 
 func TestOrgStoreInvitations(t *testing.T) {
@@ -353,6 +371,11 @@ func TestOrgStoreRolesAndExpiry(t *testing.T) {
 	roles, err := f.s.Roles(ctx, f.acme.ID)
 	if err != nil || len(roles) != 4 || roles[0].Name != "Automation" || !roles[0].BuiltIn {
 		t.Errorf("Roles() = %+v, %v, want Automation, Guest, Member and Owner", roles, err)
+	}
+	for _, r := range roles {
+		if want := map[string]int{"Automation": 1, "Member": 1, "Owner": 1}[r.Name]; r.Holders != want { // Automation: the AI reviewer
+			t.Errorf("%s's holders = %d, want %d", r.Name, r.Holders, want)
+		}
 	}
 	if r, err := f.s.Role(ctx, auth.RoleOwner); err != nil || r.Name != "Owner" || !slices.Contains(r.Permissions, "org.manage") {
 		t.Errorf("Role(Owner) = %+v, %v", r, err)

@@ -326,6 +326,9 @@ func (s *Store) Member(_ context.Context, org, user uuid.UUID) (orgs.Member, err
 		return orgs.Member{}, orgs.ErrNotFound
 	}
 	m := orgs.Member{UserID: user, DisplayName: s.Names[user]}
+	if emails := s.Emails[user]; len(emails) > 0 {
+		m.Email = emails[0]
+	}
 	for _, g := range s.Grants {
 		if g.Principal == user && g.Scope == auth.ScopeOrganization && g.ScopeID == org {
 			if r, ok := s.role(g.Role); ok {
@@ -537,6 +540,13 @@ func (s *Store) Roles(_ context.Context, org uuid.UUID) ([]orgs.Role, error) {
 	var out []orgs.Role
 	for _, r := range s.RoleList {
 		if r.OrgID == uuid.Nil || r.OrgID == org {
+			holders := map[uuid.UUID]bool{}
+			for _, g := range s.Grants {
+				if org != uuid.Nil && g.Role == r.ID && g.Scope == auth.ScopeOrganization && g.ScopeID == org {
+					holders[g.Principal] = true
+				}
+			}
+			r.Holders = len(holders)
 			out = append(out, r)
 		}
 	}

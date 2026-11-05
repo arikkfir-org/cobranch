@@ -315,7 +315,7 @@ func (s *OrgStore) Members(ctx context.Context, orgID uuid.UUID) ([]orgs.Member,
 	}
 	out := make([]orgs.Member, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, orgs.Member{UserID: r.UserID, DisplayName: r.DisplayName, JoinedAt: r.JoinedAt, Roles: held[r.UserID]})
+		out = append(out, orgs.Member{UserID: r.UserID, DisplayName: r.DisplayName, Email: r.Email, JoinedAt: r.JoinedAt, Roles: held[r.UserID]})
 	}
 	return out, nil
 }
@@ -606,16 +606,26 @@ func (s *OrgStore) Role(ctx context.Context, id uuid.UUID) (orgs.Role, error) {
 	return role(r), nil
 }
 
-// Roles lists the roles granted at the organization: the built-in organization roles first, then its own; for
-// uuid.Nil, the built-in ones alone.
+// Roles lists the roles granted at the organization: the built-in organization roles first, then its own, each with
+// how many principals hold it there; for uuid.Nil, the built-in ones alone.
 func (s *OrgStore) Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error) {
 	rows, err := s.q.OrganizationRoles(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the roles: %w", err)
 	}
+	holders, err := s.q.RoleHolders(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("counting the roles' holders: %w", err)
+	}
+	held := make(map[uuid.UUID]int, len(holders))
+	for _, h := range holders {
+		held[h.RoleID] = int(h.Holders)
+	}
 	out := make([]orgs.Role, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, role(r))
+		each := role(r)
+		each.Holders = held[r.ID]
+		out = append(out, each)
 	}
 	return out, nil
 }

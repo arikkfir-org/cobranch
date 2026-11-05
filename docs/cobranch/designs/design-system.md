@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 41 components: controls, badges, avatars, menus, tables, cards, dialogs, the app shell, list rows, brand |
-| Screens | 22 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 28 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -244,19 +244,20 @@ plan.
 | Button | Style: Primary, Secondary, Ghost, Danger × Size: Medium 32, Small 28 × State: Default, Hover, Disabled | Label, leading icon, trailing icon (each optional, swappable) | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm` |
 | Icon button | Style: Secondary, Ghost × Size: Medium, Small | Icon | `.icon-btn`, `.icon-btn-ghost`, `.icon-btn-sm` |
 | Input, Select, Textarea | State: Default, Focus, Error, Disabled | Label, value, helper text (each optional); Input also a leading icon | `.field` with `.field-label` and `.field-help`, around `.input`, `.select` or `.textarea` |
+| Copy field | None | Label, value, helper text; a Ghost Small copy Icon button inside | `.copy-field` in a `.field`, holding a `code` and an `.icon-btn` (`copyField()` in `lib/forms.js`) |
 | Checkbox, Radio | Checked: Off, On × State: Default, Disabled | Label | `.checkbox`, `.radio`: a label around the native input |
 | Segmented control | Selected: 1, 2, 3 | Three options (the theme: Light, Dark, System) | `.segmented`, with `aria-pressed` on the chosen button |
 | Tab | State: Default, Selected | Label, icon, count | `.tab-bar`, `.tab`, `.tab-count` |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked | `.menu`, `.menu-item`, `.menu-item-danger`, `.menu-shortcut`, `.menu-divider` |
 | Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | `.nav-item`, `.nav-sub-item` (`lib/shell.css`) |
-| Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono | Text | `.table`, `.cell-muted`, `.cell-mono` |
+| Table/Header cell, Table/Cell, Table/Row | Cell kind: Text, Muted, Mono, Number, Actions, Two lines; Row state: Default, Muted, Selected | Text; Actions a small Ghost button; Two lines a title over its meta | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines`; `.row-muted`, `.row-selected` on a `tr` |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone | `.badge` with a `.tone-*` class |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None | `.badge` with a `.tone-*` class |
 | Badge/Review | Approved, Changes requested, Neutral | None | `.badge` with a `.tone-*` class |
 | Badge/Quiet | Tone: Neutral, Info, Success, Warning, Danger, AI | Label: a dot and a word, for lists | `.badge-quiet` with a `.tone-*` class |
 | Tag | Tone: Neutral, Info, Success, Warning, Danger, AI | Label, icon | `.tag` with a `.tone-*` class |
 | Avatar | Kind: User, Unclaimed, Agent, Machine × Size: 20, 24, 32, 40 | Initials (people), glyph (machines) | `.avatar`, `.avatar-unclaimed`, `.avatar-agent`, `.avatar-machine`, `.avatar-24`, `.avatar-32`, `.avatar-40` |
-| Card, Page header | None | Title, meta, action, body; description, actions | `.card`, `.page-header` |
+| Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action, body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
 | Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`; `.tooltip`, or `data-tooltip` on what it labels |
@@ -267,6 +268,9 @@ plan.
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
 | Chat message | Author: Person, Agent | Name, time, body, code reference | `.chat-message` (`lib/shell.css`) |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
+| Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
+| Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
+| Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
 place a node inside an instance (Figma refuses it; compose rows beside it).
@@ -322,7 +326,7 @@ only cue.
 
 ## Screens
 
-Twenty-two screens on the Screens page, at 1440 wide and built only from library instances. They follow one
+Twenty-eight screens on the Screens page, at 1440 wide and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -345,14 +349,19 @@ Researcher waits for a task.
 | [Agent · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-5663) | An agent with no tasks yet |
 | [Repository · Artifacts](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-3941) | What agents generated for the repository: documents, diagrams, reports and pages |
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
-| [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | Settings as tabs; a request to join, members with roles, invited people |
+| [Settings · General](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-7859) | Settings as tabs; the organization's name, slug and issue key, who joins with what role, and its identity providers |
+| [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | A request to join, members with roles, invited people |
+| [Settings · Roles](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-8281) | Built-in and custom roles, each a set of permissions |
+| [Settings · API keys](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-8694) | The organization's keys with their roles and secrets, made, rotated and revoked |
+| [Settings · API keys · New key](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9086) | Making a key, in a dialog, and its secret shown once |
+| [Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9367) | The organization's own secrets, which its repositories' jobs share |
+| [Settings · Usage](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9789) | What the organization uses against the installation's limits, and each repository's Git data |
 | [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
 | [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-Not drawn yet: files and diffs, jobs, delivery and environments, the other settings tabs (General, Roles, API keys,
-Secrets, Usage), and error states.
+Not drawn yet: files and diffs, jobs, delivery and environments, and error states.
 
 ### Sign in
 

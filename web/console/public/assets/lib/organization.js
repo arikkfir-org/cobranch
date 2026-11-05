@@ -30,7 +30,7 @@ export function subjectOf(m, ctx, fallback) {
 const orgSubject = (org) => ({ key: "org:" + org.slug, title: org.name, scope: "Nothing to follow on this page", chat: null });
 
 // tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under, as
-// Members is under Settings): the parent's, labelled by its nav's tab or its label, then those under it, in order of
+// Tasks is under Agents): the parent's, labelled by its nav's tab or its label, then those under it, in order of
 // their nav; null for a page with none.
 function tabsOf(org, can, part, m) {
   const parent = m.nav && m.nav.under ? m.nav.under : part;
@@ -48,8 +48,10 @@ function tabsOf(org, can, part, m) {
 // ({ label, order, icon }, with items for a section and place "foot" for the sidebar's foot) or under another page,
 // as one of its tabs ({ label, order, under }); its allowed(can), when it has one, says whether the viewer may open
 // it, which sends anyone else to the organization's home; its crumbs name it in the breadcrumbs after the
-// organization, and its subject the conversation the pane shows (lib/pane.js). Every other part of the route is a
-// repository's slug: no repository takes a page's (repos.ReservedSlugs).
+// organization, its heading(ctx), when it has one, draws the heading above it (a page whose views are tabs of its
+// own, lib/tabs.js), which its default export is given too, and its subject the conversation the pane shows
+// (lib/pane.js). Every other part of the route is a repository's slug: no repository takes a page's
+// (repos.ReservedSlugs).
 export async function showOrganization(slug, page, sub, rest) {
   let org;
   try {
@@ -69,9 +71,9 @@ export async function showOrganization(slug, page, sub, rest) {
   const ctx = { org, can, sub, rest, root: base + org.slug };
   const tabs = tabsOf(org, can, page, shown);
   const part = tabs ? tabs.parent : page;
-  const main = frame({ org, can, part, crumbs: [crumb, ...crumbsOf(shown, ctx)], subject: subjectOf(shown, ctx, orgSubject(org)),
-    head: tabs ? pageHeading({ title: tabs.title, description: tabs.description, tabs: tabs.tabs }) : null });
-  return shown.default({ org, main, can, sub, rest });
+  const head = tabs ? pageHeading({ title: tabs.title, description: tabs.description, tabs: tabs.tabs }) : shown.heading ? shown.heading(ctx) : null;
+  const main = frame({ org, can, part, crumbs: [crumb, ...crumbsOf(shown, ctx)], subject: subjectOf(shown, ctx, orgSubject(org)), head });
+  return shown.default({ org, main, can, sub, rest, head });
 }
 
 // showConsolePage draws one of the Console's own pages (consolePages, pages/<part>.js) in the app shell, with the

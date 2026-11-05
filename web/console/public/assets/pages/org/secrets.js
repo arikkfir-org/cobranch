@@ -1,16 +1,4 @@
-import { api } from "../../lib/api.js";
-import { h } from "../../lib/dom.js";
-import { secretsSections } from "../../lib/secrets.js";
+import { go } from "../../lib/router.js";
 
-export const nav = { label: "Secrets", order: 70, under: "settings" };
-export const crumbs = ({ root }) => [{ label: "Settings", href: root + "/settings" }, { label: "Secrets" }];
-export const allowed = (can) => can("secrets.manage");
-export default ({ org, main, can }) => showOrgSecrets(org, main, can);
-
-// showOrgSecrets renders the organization's own secrets, which its repositories' jobs share.
-async function showOrgSecrets(org, main, can) {
-  const error = h("p", { class: "alert", hidden: true });
-  const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-  const repos = can("org.grants.manage") ? (await api("GET", "/orgs/" + org.slug + "/repos")).repositories : [];
-  main.replaceChildren(error, ...await secretsSections(org, "/orgs/" + org.slug + "/secrets", can("org.grants.manage"), fail, repos));
-}
+// Secrets is a tab of Settings now (pages/org/settings/secrets.js): its old address opens it.
+export default ({ org }) => go("/" + org.slug + "/settings/secrets" + location.search + location.hash, true);
