@@ -157,7 +157,7 @@ async function showIssueList(org, main, can, head) {
       next = page.next;
       more.hidden = !next;
       const state = stateOf(params);
-      const of = (c) => (state === "all" ? c.open + c.closed : state === "open" ? c.open : c.closed);
+      const of = (c, s = state) => (s === "all" ? c.open + c.closed : s === "open" ? c.open : c.closed);
       count.textContent = filtered ? of(counts) + " of " + of(totals) : of(counts) + " " + (state === "all" ? "issues" : state);
       table.hidden = !tbody.children.length;
       none.hidden = !table.hidden;
@@ -166,7 +166,7 @@ async function showIssueList(org, main, can, head) {
         const s = tab.dataset.state;
         tab.href = base + listPath(org, params, { state: s === "open" ? "" : s }).slice(1);
         const n = tab.querySelector(".tab-count");
-        if (n) { n.textContent = String(s === "open" ? totals.open : totals.closed); n.hidden = false; }
+        if (n) { n.textContent = String(of(totals, s)); n.hidden = false; }
       }
     } catch (err) {
       error.fail(err);
