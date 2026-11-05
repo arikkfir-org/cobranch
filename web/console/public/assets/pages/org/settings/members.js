@@ -7,6 +7,7 @@ import { avatar, icon } from "../../../lib/icons.js";
 import { popover } from "../../../lib/menu.js";
 import { roleSelect } from "../../../lib/organization.js";
 import { base, me, roles } from "../../../lib/state.js";
+import { recount } from "../../../lib/tabs.js";
 
 export const tab = { label: "Members", order: 10 };
 export const count = ({ org }) => api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members.length);
@@ -30,6 +31,7 @@ async function showMembers(org, main, can, actions) {
     manage ? api("GET", "/orgs/" + org.slug + "/invitations").then((d) => d.invitations) : [],
     manage ? api("GET", "/orgs/" + org.slug + "/join-requests").then((d) => d.joinRequests) : [],
   ]);
+  recount("members", members.length);
   actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => invite(org, refresh) }, icon("plus"), "Invite people") : "");
   const membership = roles.find((r) => r.id === org.membershipRoleId);
 

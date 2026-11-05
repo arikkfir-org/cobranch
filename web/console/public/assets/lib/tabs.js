@@ -20,11 +20,20 @@ export const tabsOf = (dir, can) => [...(tabPages.get(dir) || [])]
 export function tabBar(tabs, part, href, ctx, label) {
   return h("nav", { class: "tab-bar", "aria-label": label }, tabs.map(([p, m]) => {
     const count = m.count ? h("span", { class: "tab-count", hidden: true }) : null;
-    if (count) Promise.resolve().then(() => m.count(ctx)).then((n) => {
-      if (n === null || n === undefined) return;
-      count.textContent = String(n);
-      count.hidden = false;
-    }).catch(() => { /* the tab shows no count */ });
-    return h("a", { class: "tab", href: href(p), "data-nav": "", "aria-current": p === part ? "page" : null }, m.tab.label, count);
+    if (count) Promise.resolve().then(() => m.count(ctx)).then((n) => showCount(count, n)).catch(() => { /* the tab shows no count */ });
+    return h("a", { class: "tab", href: href(p), "data-nav": "", "data-tab": p, "aria-current": p === part ? "page" : null }, m.tab.label, count);
   }));
+}
+
+// recount shows n beside the tab at part of the page's tab bar, as a tab does once it changes what it counts.
+export const recount = (part, n) => {
+  const count = document.querySelector('.tab-bar .tab[data-tab="' + part + '"] .tab-count');
+  if (count) showCount(count, n);
+};
+
+// showCount writes n into a tab's count, which stays hidden for none.
+function showCount(count, n) {
+  if (n === null || n === undefined) return;
+  count.textContent = String(n);
+  count.hidden = false;
 }

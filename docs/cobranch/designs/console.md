@@ -121,14 +121,14 @@ own paths are the organization slugs no organization may take.
   named in the router, since they draw outside the shell. Their paths are among the slugs no organization may take,
   which a test holds.
 - **A page's tabs are files too.** A page whose views are tabs keeps them in a directory of its own name:
-  `pages/org/settings/` holds Settings' General (`index.js`, at `/acme/settings`), Members, Roles, API keys, Agents,
+  `pages/org/settings/` holds Settings' General (`index.js`, at `/acme/settings`), Members, Roles, API keys,
   Secrets, Models and Usage, each at `/acme/settings/<file>`. The shell names each such directory, one
   entry in `index.html` (`pages/org/settings/` so far, so a new tabbed page adds its own), and Caddy writes its files'
   names in beside the others; `lib/tabs.js` draws the tab bar from the modules' `tab` (`{ label, order }`),
   `allowed` and `count`. A slice that adds a tab adds a file there, and no organization slug: the old addresses of
   Members, Roles, API keys and Secrets (`/acme/members`) stay files of `pages/org/` that open their tab.
   **Rejected: each tab a page `under` Settings** (`pages/org/members.js`): every new tab would take an organization
-  slug, and Settings' Agents tab would clash with the Agents page at `/acme/agents`.
+  slug, and a tab named like a page of the organization, such as Agents, would clash with it (`/acme/agents`).
 
 ## The app shell
 
