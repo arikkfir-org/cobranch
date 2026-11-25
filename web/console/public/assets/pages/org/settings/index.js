@@ -36,7 +36,7 @@ async function showGeneral(org, main, can) {
     error.el.hidden = saved.hidden = true;
     button.disabled = true;
     try {
-      const updated = await api("PATCH", "/orgs/" + org.slug, fields);
+      const updated = await api("PATCH", "/orgs/" + org.slug, fields, { "If-Match": `"${org.version}"` });
       setOrgs((await api("GET", "/me/organizations")).organizations);
       if (updated.slug !== org.slug) return go("/" + updated.slug + "/settings");
       // The whole page draws again, so the sidebar, breadcrumb and heading take a new name too.

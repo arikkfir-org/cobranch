@@ -292,6 +292,12 @@ func TestOrganizationMutations(t *testing.T) {
 		{name: "update", viewer: olivia, document: func(f *orgFixture) string {
 			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme-inc", name: "Acme Inc", membershipRoleId: "` + auth.RoleGuest.String() + `", acceptsJoinRequests: false, providers: ["google"]}) { slug name providers acceptsJoinRequests } }`
 		}, want: []string{`"slug":"acme-inc","name":"Acme Inc","providers":["google"],"acceptsJoinRequests":false`}},
+		{name: "update at its version", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme Inc", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}, expectedVersion: 1) { name version } }`
+		}, want: []string{`"name":"Acme Inc","version":2`}},
+		{name: "update one that changed", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme Inc", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}, expectedVersion: 2) { name } }`
+		}, wantCode: conflict, wantReason: "precondition.failed"},
 		{name: "update as a member", viewer: maxim, document: func(f *orgFixture) string {
 			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}) { slug } }`
 		}, wantCode: forbidden},

@@ -213,13 +213,13 @@ func TestIssueKeyAPI(t *testing.T) {
 					t.Errorf("organization = %s", body)
 				}
 			}},
-		{name: "an owner changes it", viewer: olivia, method: http.MethodPatch, path: fixed("/v1/orgs/acme"), body: `{"issueKey":"AC"}`, wantStatus: 200,
+		{name: "an owner changes it", viewer: olivia, method: http.MethodPatch, path: fixed("/v1/orgs/acme"), body: `{"issueKey":"AC"}`, header: ifMatchHeader("*"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if o := decode[Organization](t, body); o.IssueKey != "AC" {
 					t.Errorf("organization = %s", body)
 				}
 			}},
-		{name: "a key that isn't one", viewer: olivia, method: http.MethodPatch, path: fixed("/v1/orgs/acme"), body: `{"issueKey":"ac"}`,
+		{name: "a key that isn't one", viewer: olivia, method: http.MethodPatch, path: fixed("/v1/orgs/acme"), body: `{"issueKey":"ac"}`, header: ifMatchHeader("*"),
 			wantStatus: 400, wantCode: "issue_key.invalid"},
 	})
 }

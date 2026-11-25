@@ -26,7 +26,7 @@ type Organizations interface {
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
-	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
+	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64, settings orgs.Settings) (orgs.Organization, error)
 	Delete(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64) error
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
 	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)

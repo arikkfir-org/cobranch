@@ -23,7 +23,7 @@ func deleted(ctx context.Context, t *testing.T, f *fixture, key orgs.APIKey) {
 			t.Errorf("Get(%s) error = %v, want not found", slug, err)
 		}
 	}
-	if _, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember}); !errors.Is(err, orgs.ErrNotFound) {
+	if _, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember}); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Update() of a deleted organization error = %v, want not found", err)
 	}
 	if list, err := f.service.Organizations(ctx, f.max); err != nil || len(list) != 1 || list[0].ID != f.globex.ID {

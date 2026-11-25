@@ -158,8 +158,8 @@ extend type User {
 extend type Mutation {
   "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!
-  "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
-  updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
+  "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
+  updateOrganization(id: ID!, input: OrganizationSettings!, expectedVersion: Int): Organization!
   "Deletes an organization with everything it holds, and answers true; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
   deleteOrganization(id: ID!, expectedVersion: Int): Boolean!
   "Invites an email to the organization with a role; takes org.members.manage and the role's permissions."
@@ -212,7 +212,7 @@ type Organization {
   "The identity providers its members may sign in with, or null for all of the installation's."
   providers: [String!]
   createdAt: Time!
-  "Counts its changes from 1: what deleteOrganization's expectedVersion names."
+  "Counts its changes from 1: what updateOrganization's and deleteOrganization's expectedVersion name."
   version: Int!
   "The permissions the viewer holds here."
   viewerPermissions: [String!]!

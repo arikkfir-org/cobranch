@@ -674,9 +674,12 @@ paths:
           $ref: "#/components/responses/Problem"
     patch:
       operationId: updateOrganization
-      summary: Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
+      summary: >-
+        Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names
+        the ETag it was made from in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifMatchOrganization"
       requestBody:
         required: true
         content:
@@ -7511,7 +7514,7 @@ components:
     ifMatchOrganization:
       name: If-Match
       in: header
-      description: The ETag of the organization the deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
+      description: The ETag of the organization the change or deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
       schema:
         type: string
     ifMatchSecret:
@@ -7875,7 +7878,7 @@ components:
         version:
           type: integer
           format: int64
-          description: Counts its changes; its ETag, which deleting it names in If-Match.
+          description: Counts its changes; its ETag, which changing or deleting it names in If-Match.
         viewerPermissions:
           type: array
           description: The permissions the viewer holds at the organization.

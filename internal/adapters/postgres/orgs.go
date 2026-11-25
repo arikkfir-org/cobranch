@@ -236,11 +236,15 @@ func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, e
 // Update writes the organization's settings, claiming its slug when it changed: one of its own former slugs comes back
 // to it, another organization's is taken. It holds the organization's row, so it never claims a slug for one being
 // deleted, and answers its version since.
-func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization) (int64, error) {
+func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization, expected int64) (int64, error) {
 	var version int64
 	err := s.transact(ctx, "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
-		if _, err := q.LockOrganization(ctx, org.ID); err != nil {
+		current, err := q.LockOrganizationVersion(ctx, org.ID)
+		if err != nil {
 			return wrapOrg("locking the organization", err)
+		}
+		if expected != orgs.AnyVersion && expected != current {
+			return orgs.ErrChanged
 		}
 		before, err := q.OrganizationByID(ctx, org.ID)
 		if err != nil {

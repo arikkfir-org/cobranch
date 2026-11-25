@@ -307,9 +307,12 @@ func (s *Store) ByID(_ context.Context, id uuid.UUID) (orgs.Organization, error)
 }
 
 // Update writes the organization, claiming a new slug, and answers its version since.
-func (s *Store) Update(_ context.Context, _ uuid.UUID, org orgs.Organization) (int64, error) {
+func (s *Store) Update(_ context.Context, _ uuid.UUID, org orgs.Organization, version int64) (int64, error) {
 	if s.Fail != nil {
 		return 0, s.Fail
+	}
+	if version != orgs.AnyVersion && version != s.Orgs[org.ID].Version {
+		return 0, orgs.ErrChanged
 	}
 	if owner, taken := s.Slugs[org.Slug]; taken && owner != org.ID {
 		return 0, orgs.ErrSlugTaken

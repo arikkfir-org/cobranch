@@ -40,7 +40,7 @@ func newDeletionFixture(t *testing.T) *deletionFixture {
 	renamed := f.acme
 	renamed.Slug = "acme-corp"
 	var err error
-	if f.version, err = f.o.Update(ctx, f.olivia, renamed); err != nil {
+	if f.version, err = f.o.Update(ctx, f.olivia, renamed, orgs.AnyVersion); err != nil {
 		t.Fatal(err)
 	}
 	f.task = f.assigned(t, "Look around", false, uuid.Nil)
@@ -113,7 +113,7 @@ func (f *deletionFixture) checkDeleting(t *testing.T) {
 			t.Errorf("BySlug(%s) = %v, want %v", slug, err, orgs.ErrNotFound)
 		}
 	}
-	if _, err := f.o.Update(ctx, f.olivia, f.acme); !errors.Is(err, orgs.ErrNotFound) {
+	if _, err := f.o.Update(ctx, f.olivia, f.acme, orgs.AnyVersion); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Update() = %v, want %v", err, orgs.ErrNotFound)
 	}
 	if n, err := f.o.Created(ctx, f.olivia); n != 0 || err != nil {

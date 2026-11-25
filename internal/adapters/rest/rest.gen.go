@@ -3043,7 +3043,7 @@ type Organization struct {
 	// Slug The current slug; a request by an old one gets the organization with this one.
 	Slug string `json:"slug"`
 
-	// Version Counts its changes; its ETag, which deleting it names in If-Match.
+	// Version Counts its changes; its ETag, which changing or deleting it names in If-Match.
 	Version int64 `json:"version"`
 
 	// ViewerPermissions The permissions the viewer holds at the organization.
@@ -4206,7 +4206,7 @@ type CreateOrganizationJSONBody struct {
 
 // DeleteOrganizationParams defines parameters for DeleteOrganization.
 type DeleteOrganizationParams struct {
-	// IfMatch The ETag of the organization the deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
+	// IfMatch The ETag of the organization the change or deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
 	IfMatch *IfMatchOrganization `json:"If-Match,omitempty"`
 }
 
@@ -4214,6 +4214,12 @@ type DeleteOrganizationParams struct {
 type GetOrganizationParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateOrganizationParams defines parameters for UpdateOrganization.
+type UpdateOrganizationParams struct {
+	// IfMatch The ETag of the organization the change or deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
+	IfMatch *IfMatchOrganization `json:"If-Match,omitempty"`
 }
 
 // ListOrganizationActivityParams defines parameters for ListOrganizationActivity.
@@ -5307,9 +5313,9 @@ type ServerInterface interface {
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404. One being deleted answers 404.
 	// (GET /orgs/{org})
 	GetOrganization(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationParams)
-	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
-	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org)
+	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org, params UpdateOrganizationParams)
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams)
@@ -6486,8 +6492,32 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateOrganizationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOrganization
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateOrganization(w, r, org)
+		siw.Handler.UpdateOrganization(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18950,8 +18980,9 @@ func (response GetOrganizationdefaultApplicationProblemPlusJSONResponse) VisitGe
 }
 
 type UpdateOrganizationRequestObject struct {
-	Org  Org `json:"org"`
-	Body *UpdateOrganizationJSONRequestBody
+	Org    Org `json:"org"`
+	Params UpdateOrganizationParams
+	Body   *UpdateOrganizationJSONRequestBody
 }
 
 type UpdateOrganizationResponseObject interface {
@@ -39371,7 +39402,7 @@ type StrictServerInterface interface {
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404. One being deleted answers 404.
 	// (GET /orgs/{org})
 	GetOrganization(ctx context.Context, request GetOrganizationRequestObject) (GetOrganizationResponseObject, error)
-	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
@@ -40657,10 +40688,11 @@ func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request,
 }
 
 // UpdateOrganization operation middleware
-func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org, params UpdateOrganizationParams) {
 	var request UpdateOrganizationRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	var body UpdateOrganizationJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {

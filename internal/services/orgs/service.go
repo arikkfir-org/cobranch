@@ -25,9 +25,9 @@ type Store interface {
 	BySlug(ctx context.Context, slug string) (Organization, error)
 	// ByID finds an organization, or ErrNotFound.
 	ByID(ctx context.Context, id uuid.UUID) (Organization, error)
-	// Update writes the organization's settings, claiming its slug when it changed, and answers its version since; or
-	// ErrSlugTaken.
-	Update(ctx context.Context, actor uuid.UUID, org Organization) (int64, error)
+	// Update writes the organization's settings, claiming its slug when it changed, if it is at version (any with
+	// AnyVersion), and answers its version since; or ErrSlugTaken, or ErrChanged when it changed since version.
+	Update(ctx context.Context, actor uuid.UUID, org Organization, version int64) (int64, error)
 	// OrganizationsOf lists the organizations user belongs to, by name.
 	OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	// Created counts the organizations the user created for themselves, those that still exist.
@@ -273,8 +273,9 @@ func (s *Service) ViewerPermissions(ctx context.Context, v Viewer, orgID uuid.UU
 	return s.read(ctx, v, orgID)
 }
 
-// Update writes the organization's settings, its issue key among them; it takes org.manage.
-func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, settings Settings) (Organization, error) {
+// Update writes the organization's settings, its issue key among them, if it is at version (any with AnyVersion); it
+// takes org.manage. ErrChanged when it changed since version.
+func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, version int64, settings Settings) (Organization, error) {
 	org, _, err := s.require(ctx, v, orgID, PermManage)
 	if err != nil {
 		return Organization{}, err
@@ -297,11 +298,11 @@ func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, setting
 	if len(org.Providers) == 0 {
 		org.Providers = nil // all of the installation's, however a client spells it
 	}
-	version, err := s.store.Update(ctx, v.ID, org)
+	updated, err := s.store.Update(ctx, v.ID, org, version)
 	if err != nil {
 		return Organization{}, fmt.Errorf("updating the organization: %w", err)
 	}
-	org.Version = version
+	org.Version = updated
 	return org, nil
 }
 

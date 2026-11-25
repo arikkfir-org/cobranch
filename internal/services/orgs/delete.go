@@ -18,7 +18,7 @@ import (
 
 var tracer = otel.Tracer("cobranch.dev/internal/services/orgs")
 
-// AnyVersion deletes whichever version of an organization is there (If-Match: *).
+// AnyVersion deletes or updates whichever version of an organization is there (If-Match: *).
 const AnyVersion int64 = -1
 
 // PurgeWait is the longest a deleted organization's rows wait for its environments' teardowns: a cluster that never

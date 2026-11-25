@@ -75,7 +75,7 @@ func (r *mutationResolver) CreateOrganization(ctx context.Context, slug string, 
 }
 
 // UpdateOrganization is the resolver for the updateOrganization field.
-func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, input OrganizationSettings) (*Organization, error) {
+func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, input OrganizationSettings, expectedVersion *int) (*Organization, error) {
 	v, err := viewer(ctx)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,11 @@ func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, in
 	if err != nil {
 		return nil, err
 	}
-	org, err := r.Orgs.Update(ctx, v.User, orgID, s)
+	version, err := organizationVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	org, err := r.Orgs.Update(ctx, v.User, orgID, version, s)
 	if err != nil {
 		return nil, fail(ctx, err, "organization", "updating the organization")
 	}

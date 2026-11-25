@@ -831,7 +831,7 @@ type ComplexityRoot struct {
 		UpdateArtifact            func(childComplexity int, organizationID string, id string, input ArtifactPatch, expectedVersion *int) int
 		UpdateIssue               func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
 		UpdateLabel               func(childComplexity int, organizationID string, id string, input LabelPatch, expectedVersion *int) int
-		UpdateOrganization        func(childComplexity int, id string, input OrganizationSettings) int
+		UpdateOrganization        func(childComplexity int, id string, input OrganizationSettings, expectedVersion *int) int
 		UpdatePreferences         func(childComplexity int, input PreferencesPatch, expectedVersion *int) int
 		UpdateRepository          func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole                func(childComplexity int, organizationID string, id string, input RoleInput) int
@@ -1428,7 +1428,7 @@ type MutationResolver interface {
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
 	RevokeRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
 	CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error)
-	UpdateOrganization(ctx context.Context, id string, input OrganizationSettings) (*Organization, error)
+	UpdateOrganization(ctx context.Context, id string, input OrganizationSettings, expectedVersion *int) (*Organization, error)
 	DeleteOrganization(ctx context.Context, id string, expectedVersion *int) (bool, error)
 	InviteMember(ctx context.Context, organizationID string, email string, roleID string) (*Invitation, error)
 	CancelInvitation(ctx context.Context, organizationID string, id string) (bool, error)
@@ -5485,7 +5485,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.UpdateOrganization(childComplexity, args["id"].(string), args["input"].(OrganizationSettings)), true
+		return e.ComplexityRoot.Mutation.UpdateOrganization(childComplexity, args["id"].(string), args["input"].(OrganizationSettings), args["expectedVersion"].(*int)), true
 	case "Mutation.updatePreferences":
 		if e.ComplexityRoot.Mutation.UpdatePreferences == nil {
 			break
@@ -10542,8 +10542,8 @@ extend type User {
 extend type Mutation {
   "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!
-  "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
-  updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
+  "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
+  updateOrganization(id: ID!, input: OrganizationSettings!, expectedVersion: Int): Organization!
   "Deletes an organization with everything it holds, and answers true; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
   deleteOrganization(id: ID!, expectedVersion: Int): Boolean!
   "Invites an email to the organization with a role; takes org.members.manage and the role's permissions."
@@ -10596,7 +10596,7 @@ type Organization {
   "The identity providers its members may sign in with, or null for all of the installation's."
   providers: [String!]
   createdAt: Time!
-  "Counts its changes from 1: what deleteOrganization's expectedVersion names."
+  "Counts its changes from 1: what updateOrganization's and deleteOrganization's expectedVersion name."
   version: Int!
   "The permissions the viewer holds here."
   viewerPermissions: [String!]!
@@ -16125,6 +16125,14 @@ func (ec *executionContext) field_Mutation_updateOrganization_args(ctx context.C
 		return nil, err
 	}
 	args["input"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg2
 	return args, nil
 }
 
@@ -32029,7 +32037,7 @@ func (ec *executionContext) _Mutation_updateOrganization(ctx context.Context, fi
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateOrganization(ctx, fc.Args["id"].(string), fc.Args["input"].(OrganizationSettings))
+			return ec.Resolvers.Mutation().UpdateOrganization(ctx, fc.Args["id"].(string), fc.Args["input"].(OrganizationSettings), fc.Args["expectedVersion"].(*int))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *Organization) graphql.Marshaler {
