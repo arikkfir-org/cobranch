@@ -621,6 +621,7 @@ func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, er
 const scheduledSettings = `-- name: ScheduledSettings :many
 SELECT b.repo_id, b.org_id, b.head, f.settings
 FROM branches b JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+    JOIN organizations o ON o.id = b.org_id AND o.deleting_at IS NULL
 WHERE b.name = $1 AND b.deleted_at IS NULL AND jsonb_path_exists(f.settings, '$.jobs[*].on.schedule')
 `
 
@@ -631,8 +632,8 @@ type ScheduledSettingsRow struct {
 	Settings []byte
 }
 
-// ScheduledSettings lists the repositories whose default branch's /cobranch.yaml declares a job with a schedule, with
-// that branch's head and what the file says.
+// ScheduledSettings lists the repositories of live organizations whose default branch's /cobranch.yaml declares a job
+// with a schedule, with that branch's head and what the file says.
 func (q *Queries) ScheduledSettings(ctx context.Context, branch string) ([]ScheduledSettingsRow, error) {
 	rows, err := q.db.Query(ctx, scheduledSettings, branch)
 	if err != nil {

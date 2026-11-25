@@ -647,16 +647,25 @@ paths:
   /orgs/{org}:
     get:
       operationId: getOrganization
-      summary: An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
+      summary: An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404. One being deleted answers 404.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The organization, with its current slug.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Organization"
+        "304":
+          description: The organization is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -677,6 +686,9 @@ paths:
       responses:
         "200":
           description: The organization.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -690,6 +702,32 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrganization
+      summary: >-
+        Deletes an organization, with everything it holds; takes org.manage. It is gone for everyone at once: its slug
+        and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and
+        deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted
+        once they are, within a day. It can't be undone. The deletion names the ETag it was decided on in If-Match;
+        without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifMatchOrganization"
+      responses:
+        "204":
+          description: The organization is deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -7468,6 +7506,12 @@ components:
       name: If-Match
       in: header
       description: The ETag of the Viewed marks the change was made from, which refuses with 412 a change made meanwhile; * names whichever are there.
+      schema:
+        type: string
+    ifMatchOrganization:
+      name: If-Match
+      in: header
+      description: The ETag of the organization the deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
       schema:
         type: string
     ifMatchSecret:

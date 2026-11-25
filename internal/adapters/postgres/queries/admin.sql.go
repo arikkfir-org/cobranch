@@ -14,13 +14,13 @@ import (
 
 const adminOrganizations = `-- name: AdminOrganizations :many
 
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by, (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members,
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by, o.version, o.deleting_at, o.deleted_by, (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members,
     (SELECT count(*) FROM repositories r WHERE r.org_id = o.id) AS repositories,
     (SELECT coalesce(sum(p.size), 0) FROM packs p WHERE p.org_id = o.id AND p.state = 'active')::bigint AS git_data,
     l.repositories AS own_repositories, l.git_data AS own_git_data
 FROM organizations o
 LEFT JOIN organization_limits l ON l.org_id = o.id
-WHERE ($1::uuid IS NULL OR o.id < $1::uuid)
+WHERE o.deleting_at IS NULL AND ($1::uuid IS NULL OR o.id < $1::uuid)
     AND (o.slug ILIKE $2 OR o.name ILIKE $2)
 ORDER BY o.id DESC
 LIMIT $3
@@ -37,7 +37,7 @@ type AdminOrganizationsRow struct {
 
 // The Back-office's lists: every organization and every user, newest first by ID (a UUIDv7), a page after a cursor's
 // ID, matching a pattern (ILIKE, its wildcards escaped by the caller).
-// AdminOrganizations lists the organizations whose slug or name matches the pattern, with their member counts, what
+// AdminOrganizations lists the live organizations whose slug or name matches the pattern, with their member counts, what
 // they take of what their limits cap, and their own limits.
 func (q *Queries) AdminOrganizations(ctx context.Context, after *uuid.UUID, pattern string, maxRows int32) ([]AdminOrganizationsRow, error) {
 	rows, err := q.db.Query(ctx, adminOrganizations, after, pattern, maxRows)
@@ -58,6 +58,9 @@ func (q *Queries) AdminOrganizations(ctx context.Context, after *uuid.UUID, patt
 			&i.Organization.CreatedAt,
 			&i.Organization.IssueKey,
 			&i.Organization.CreatedBy,
+			&i.Organization.Version,
+			&i.Organization.DeletingAt,
+			&i.Organization.DeletedBy,
 			&i.Members,
 			&i.Repositories,
 			&i.GitData,

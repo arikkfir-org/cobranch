@@ -27,6 +27,7 @@ type Organizations interface {
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
+	Delete(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64) error
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
 	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)
 	CreateRole(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
@@ -126,7 +127,7 @@ func fail(ctx context.Context, err error, kind, what string) error {
 		return refuse(ctx, conflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
-	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged):
+	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged), errors.Is(err, orgs.ErrChanged):
 		return refuse(ctx, conflict, "precondition.failed", "it changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(ctx, forbidden, "", "you lack the permission this takes")
@@ -156,7 +157,19 @@ func parseID(ctx context.Context, id, kind string) (uuid.UUID, error) {
 // organization is o as the API shows it; its lazy fields resolve on their own.
 func organization(o orgs.Organization) *Organization {
 	return &Organization{ID: o.ID.String(), Slug: o.Slug, Name: o.Name, MembershipRoleID: o.MembershipRoleID.String(),
-		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt,
+		Version: int(o.Version)}
+}
+
+// organizationVersion is the version of an organization a mutation expects, orgs.AnyVersion without one.
+func organizationVersion(ctx context.Context, expectedVersion *int) (int64, error) {
+	if expectedVersion == nil {
+		return orgs.AnyVersion, nil
+	}
+	if *expectedVersion < 1 {
+		return 0, refuse(ctx, badUserInput, "version.invalid", "a version of the organization, from 1")
+	}
+	return int64(*expectedVersion), nil
 }
 
 func role(r orgs.Role) *Role {

@@ -96,8 +96,8 @@ func TestOrgStoreUpdate(t *testing.T) {
 	ctx := context.Background()
 	org := f.acme
 	org.Slug, org.Name, org.MembershipRoleID, org.AcceptsJoinRequests, org.Providers = "acme-inc", "Acme Inc", auth.RoleGuest, false, []string{"google"}
-	if err := f.s.Update(ctx, f.olivia, org); err != nil {
-		t.Fatal(err)
+	if version, err := f.s.Update(ctx, f.olivia, org); err != nil || version != 2 {
+		t.Fatalf("Update() = %d, %v, want version 2", version, err)
 	}
 	for _, slug := range []string{"acme", "acme-inc"} {
 		got, err := f.s.BySlug(ctx, slug)
@@ -110,15 +110,15 @@ func TestOrgStoreUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	other.Slug = "acme"
-	if err := f.s.Update(ctx, f.nia, other); !errors.Is(err, orgs.ErrSlugTaken) {
+	if _, err := f.s.Update(ctx, f.nia, other); !errors.Is(err, orgs.ErrSlugTaken) {
 		t.Errorf("Update() to an old slug error = %v, want slug taken", err)
 	}
 	// Acme takes its own old slug back.
 	org.Slug = "acme"
-	if err := f.s.Update(ctx, f.olivia, org); err != nil {
+	if _, err := f.s.Update(ctx, f.olivia, org); err != nil {
 		t.Errorf("Update() back to its own old slug error = %v", err)
 	}
-	if got, err := f.s.BySlug(ctx, "acme-inc"); err != nil || got.Slug != "acme" {
+	if got, err := f.s.BySlug(ctx, "acme-inc"); err != nil || got.Slug != "acme" || got.Version != 3 {
 		t.Errorf("BySlug(acme-inc) after renaming back = %+v, %v", got, err)
 	}
 	if _, err := f.s.ByID(ctx, uuid.New()); !errors.Is(err, orgs.ErrNotFound) {

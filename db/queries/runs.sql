@@ -97,6 +97,10 @@ SELECT id, repo_id, state, ended_at FROM job_runs WHERE id = ANY(@ids::uuid[]);
 -- name: OrganizationsAmong :many
 SELECT id FROM organizations WHERE id = ANY(@ids::uuid[]);
 
+-- RepositoriesLeft answers which of ids are repositories still.
+-- name: RepositoriesLeft :many
+SELECT id FROM repositories WHERE id = ANY(@ids::uuid[]);
+
 -- name: DeleteRunSteps :exec
 DELETE FROM job_run_steps WHERE run_id = $1;
 

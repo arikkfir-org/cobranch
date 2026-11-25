@@ -95,6 +95,26 @@ func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, in
 	return organization(org), nil
 }
 
+// DeleteOrganization is the resolver for the deleteOrganization field.
+func (r *mutationResolver) DeleteOrganization(ctx context.Context, id string, expectedVersion *int) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	orgID, err := parseID(ctx, id, "organization")
+	if err != nil {
+		return false, err
+	}
+	version, err := organizationVersion(ctx, expectedVersion)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Orgs.Delete(ctx, v.User, orgID, version); err != nil {
+		return false, fail(ctx, err, "organization", "deleting the organization")
+	}
+	return true, nil
+}
+
 // InviteMember is the resolver for the inviteMember field.
 func (r *mutationResolver) InviteMember(ctx context.Context, organizationID string, email string, roleID string) (*Invitation, error) {
 	v, err := viewer(ctx)

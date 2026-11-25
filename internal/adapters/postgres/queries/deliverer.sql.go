@@ -240,26 +240,32 @@ func (q *Queries) DeliveryTokenByHash(ctx context.Context, tokenHash []byte) (De
 }
 
 const dueEnvironments = `-- name: DueEnvironments :many
-SELECT e.id, e.repo_id FROM environments e
+SELECT e.id, e.repo_id, (o.deleting_at IS NOT NULL)::boolean AS org_deleting
+FROM environments e JOIN organizations o ON o.id = e.org_id
 WHERE e.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
       AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
-  AND coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
-      <= now() - make_interval(secs => $1::double precision)
-  AND ((e.revision IS NOT NULL AND NOT e.paused)
-    OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
-ORDER BY e.id
+  AND CASE WHEN o.deleting_at IS NOT NULL THEN NOT EXISTS (SELECT 1 FROM deliveries t WHERE t.environment_id = e.id
+          AND t.kind = 'teardown' AND t.queued_at >= o.deleting_at)
+      ELSE coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
+          <= now() - make_interval(secs => $1::double precision)
+        AND ((e.revision IS NOT NULL AND NOT e.paused)
+          OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
+      END
+ORDER BY o.deleting_at IS NULL, e.id
 LIMIT $2
 `
 
 type DueEnvironmentsRow struct {
-	ID     uuid.UUID
-	RepoID uuid.UUID
+	ID          uuid.UUID
+	RepoID      uuid.UUID
+	OrgDeleting bool
 }
 
-// DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at: none of their
-// deliveries is working or waits, the last ended @every ago or longer, and they hold a revision to resync and aren't
-// paused, or their branch is gone, which tears them down.
+// DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at, none of whose
+// deliveries is working or waits: those of organizations being deleted that had no teardown since, which tears them
+// down at once, and the others whose last delivery ended @every ago or longer, that hold a revision to resync and
+// aren't paused, or whose branch is gone, which tears them down. Each says whether its organization is being deleted.
 func (q *Queries) DueEnvironments(ctx context.Context, every float64, lim int32) ([]DueEnvironmentsRow, error) {
 	rows, err := q.db.Query(ctx, dueEnvironments, every, lim)
 	if err != nil {
@@ -269,7 +275,7 @@ func (q *Queries) DueEnvironments(ctx context.Context, every float64, lim int32)
 	var items []DueEnvironmentsRow
 	for rows.Next() {
 		var i DueEnvironmentsRow
-		if err := rows.Scan(&i.ID, &i.RepoID); err != nil {
+		if err := rows.Scan(&i.ID, &i.RepoID, &i.OrgDeleting); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -22,11 +22,12 @@ import (
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, and, given a number of
-// packs to compact at, deletes the packs nobody lists any more and compacts the repositories that have too many, and,
-// while objects move between stores, copies the old store over, and, given a retention, deletes the runs' logs kept
-// past it, once, and exits. The chart runs it as an hourly CronJob. A failure of one part leaves the others to run,
-// and fails the run.
+// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, purges the deleted
+// organizations whose environments are torn down, and, given a number of packs to compact at, deletes the packs nobody
+// lists any more and compacts the repositories that have too many, and, while objects move between stores, copies the
+// old store over, and, given a retention, deletes the runs' logs kept past it and those of repositories that are gone,
+// once, and exits. The chart runs it as an hourly CronJob. A failure of one part leaves the others to run, and fails
+// the run.
 func runMaintenance(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "maintenance", buildinfo.Version())
 	if err != nil {
@@ -42,11 +43,23 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("connecting to the database: %w", err)
 	}
 	defer pool.Close()
-	expired := deleteExpired(ctx, pool)
+	expired := errors.Join(deleteExpired(ctx, pool), purgeOrganizations(ctx, pool))
 	if cfg.CompactAt == 0 && cfg.BlobMoveFrom == "" && cfg.LogsRetention == 0 {
 		return expired
 	}
 	return errors.Join(expired, maintainStore(ctx, cfg, pool))
+}
+
+// purgeOrganizations deletes the rows of the deleted organizations whose environments are torn down, or that waited for
+// them long enough: before the store's upkeep, which then deletes their packs and logs.
+func purgeOrganizations(ctx context.Context, pool *pgxpool.Pool) error {
+	store := postgres.NewOrgStore(pool)
+	purged, err := orgs.NewService(store, auth.NewAuthorizer(store)).Purge(ctx)
+	slog.InfoContext(ctx, "Purged the deleted organizations", "organizations", purged)
+	if err != nil {
+		return fmt.Errorf("purging deleted organizations: %w", err)
+	}
+	return nil
 }
 
 // deleteExpired deletes the sign-in flows, sessions, task tokens, invitations and join requests that expired.
@@ -82,17 +95,21 @@ func maintainStore(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Po
 	if cfg.CompactAt != 0 {
 		compactErr = compactPacks(ctx, cfg, pool, stores.Bucket)
 	}
-	return errors.Join(compactErr, moveObjects(ctx, cfg, stores), expireLogs(ctx, cfg, stores.Bucket))
+	return errors.Join(compactErr, moveObjects(ctx, cfg, stores), expireLogs(ctx, cfg, pool, stores.Bucket))
 }
 
-// expireLogs deletes the runs' logs the store kept longer than cfg.LogsRetention, given one.
-func expireLogs(ctx context.Context, cfg config.Maintenance, bucket *gocloudblob.Bucket) error {
+// expireLogs deletes the runs' logs the store kept longer than cfg.LogsRetention, given one, and those of repositories
+// that are gone.
+func expireLogs(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Pool, bucket *gocloudblob.Bucket) error {
 	if cfg.LogsRetention == 0 {
 		return nil
 	}
-	deleted, err := blob.Logs{Bucket: bucket}.Expire(ctx, time.Now().Add(-cfg.LogsRetention))
+	logs := blob.Logs{Bucket: bucket}
+	deleted, expireErr := logs.Expire(ctx, time.Now().Add(-cfg.LogsRetention))
 	slog.InfoContext(ctx, "Deleted the runs' logs kept past their retention", "logs", deleted, "retention", cfg.LogsRetention.String())
-	if err != nil {
+	gone, goneErr := logs.DropGone(ctx, postgres.NewRunStore(pool).Repositories)
+	slog.InfoContext(ctx, "Deleted the runs' logs of repositories that are gone", "logs", gone)
+	if err := errors.Join(expireErr, goneErr); err != nil {
 		return fmt.Errorf("deleting runs' logs: %w", err)
 	}
 	return nil

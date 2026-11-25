@@ -772,6 +772,7 @@ type ComplexityRoot struct {
 		DeleteIssue               func(childComplexity int, organizationID string, number int, expectedVersion *int) int
 		DeleteIssueChatMessage    func(childComplexity int, organizationID string, number int, thread string, message string, expectedVersion *int) int
 		DeleteLabel               func(childComplexity int, organizationID string, id string, expectedVersion *int) int
+		DeleteOrganization        func(childComplexity int, id string, expectedVersion *int) int
 		DeleteRole                func(childComplexity int, organizationID string, id string) int
 		DeleteSSHKey              func(childComplexity int, id string) int
 		DeleteSecret              func(childComplexity int, organizationID string, id string, expectedVersion *int) int
@@ -888,6 +889,7 @@ type ComplexityRoot struct {
 		Task                    func(childComplexity int, number int) int
 		Tasks                   func(childComplexity int, agent *string, states []TaskState, repositoryID *string, first int, after *string) int
 		Usage                   func(childComplexity int) int
+		Version                 func(childComplexity int) int
 		ViewerPermissions       func(childComplexity int) int
 	}
 
@@ -1427,6 +1429,7 @@ type MutationResolver interface {
 	RevokeRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
 	CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error)
 	UpdateOrganization(ctx context.Context, id string, input OrganizationSettings) (*Organization, error)
+	DeleteOrganization(ctx context.Context, id string, expectedVersion *int) (bool, error)
 	InviteMember(ctx context.Context, organizationID string, email string, roleID string) (*Invitation, error)
 	CancelInvitation(ctx context.Context, organizationID string, id string) (bool, error)
 	AcceptInvitation(ctx context.Context, id string) (*Organization, error)
@@ -4823,6 +4826,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteLabel(childComplexity, args["organizationId"].(string), args["id"].(string), args["expectedVersion"].(*int)), true
+	case "Mutation.deleteOrganization":
+		if e.ComplexityRoot.Mutation.DeleteOrganization == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteOrganization_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteOrganization(childComplexity, args["id"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.deleteRole":
 		if e.ComplexityRoot.Mutation.DeleteRole == nil {
 			break
@@ -5848,6 +5862,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Usage(childComplexity), true
+	case "Organization.version":
+		if e.ComplexityRoot.Organization.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Version(childComplexity), true
 	case "Organization.viewerPermissions":
 		if e.ComplexityRoot.Organization.ViewerPermissions == nil {
 			break
@@ -10524,6 +10544,8 @@ extend type Mutation {
   createOrganization(slug: String!, name: String!): Organization!
   "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
   updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
+  "Deletes an organization with everything it holds, and answers true; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
+  deleteOrganization(id: ID!, expectedVersion: Int): Boolean!
   "Invites an email to the organization with a role; takes org.members.manage and the role's permissions."
   inviteMember(organizationId: ID!, email: String!, roleId: ID!): Invitation!
   "Cancels a pending invitation; takes org.members.manage."
@@ -10574,6 +10596,8 @@ type Organization {
   "The identity providers its members may sign in with, or null for all of the installation's."
   providers: [String!]
   createdAt: Time!
+  "Counts its changes from 1: what deleteOrganization's expectedVersion names."
+  version: Int!
   "The permissions the viewer holds here."
   viewerPermissions: [String!]!
   "The members and the roles they hold; takes org.read."
@@ -12330,6 +12354,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_providers(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Organization_createdAt(ctx, field)
+	case "version":
+		return ec.fieldContext_Organization_version(ctx, field)
 	case "viewerPermissions":
 		return ec.fieldContext_Organization_viewerPermissions(ctx, field)
 	case "members":
@@ -14259,6 +14285,28 @@ func (ec *executionContext) field_Mutation_deleteLabel_args(ctx context.Context,
 		return nil, err
 	}
 	args["expectedVersion"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteOrganization_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg1
 	return args, nil
 }
 
@@ -32015,6 +32063,50 @@ func (ec *executionContext) fieldContext_Mutation_updateOrganization(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_deleteOrganization(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteOrganization(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteOrganization(ctx, fc.Args["id"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteOrganization(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteOrganization_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_inviteMember(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33411,6 +33503,29 @@ func (ec *executionContext) _Organization_createdAt(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_Organization_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Organization", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Organization_version(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Organization", field, false, false, "Int")
 }
 
 func (ec *executionContext) _Organization_viewerPermissions(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
@@ -50578,6 +50693,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "deleteOrganization":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteOrganization(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "inviteMember":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_inviteMember(ctx, field)
@@ -50900,6 +51022,11 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 			}
 		case "createdAt":
 			out.Values[i] = ec._Organization_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "version":
+			out.Values[i] = ec._Organization_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

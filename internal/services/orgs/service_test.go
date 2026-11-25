@@ -47,8 +47,8 @@ func newFixture(t *testing.T) *fixture {
 		s.AddUser(v.ID, v.DisplayName, v.Emails[0].Email)
 	}
 	s.Grant(f.nia.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
-	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now}
-	f.globex = orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleGuest, AcceptsJoinRequests: true, CreatedAt: now}
+	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now, Version: 1}
+	f.globex = orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleGuest, AcceptsJoinRequests: true, CreatedAt: now, Version: 1}
 	for _, o := range []orgs.Organization{f.acme, f.globex} {
 		s.Orgs[o.ID], s.Slugs[o.Slug] = o, o.ID
 	}

@@ -1291,6 +1291,8 @@ type Organization struct {
 	// The identity providers its members may sign in with, or null for all of the installation's.
 	Providers []string  `json:"providers,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Counts its changes from 1: what deleteOrganization's expectedVersion names.
+	Version int `json:"version"`
 	// The permissions the viewer holds here.
 	ViewerPermissions []string `json:"viewerPermissions"`
 	// The members and the roles they hold; takes org.read.

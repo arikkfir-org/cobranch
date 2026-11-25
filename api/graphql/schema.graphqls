@@ -160,6 +160,8 @@ extend type Mutation {
   createOrganization(slug: String!, name: String!): Organization!
   "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
   updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
+  "Deletes an organization with everything it holds, and answers true; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. With expectedVersion, an organization at another version is refused (CONFLICT, precondition.failed)."
+  deleteOrganization(id: ID!, expectedVersion: Int): Boolean!
   "Invites an email to the organization with a role; takes org.members.manage and the role's permissions."
   inviteMember(organizationId: ID!, email: String!, roleId: ID!): Invitation!
   "Cancels a pending invitation; takes org.members.manage."
@@ -210,6 +212,8 @@ type Organization {
   "The identity providers its members may sign in with, or null for all of the installation's."
   providers: [String!]
   createdAt: Time!
+  "Counts its changes from 1: what deleteOrganization's expectedVersion names."
+  version: Int!
   "The permissions the viewer holds here."
   viewerPermissions: [String!]!
   "The members and the roles they hold; takes org.read."

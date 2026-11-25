@@ -267,6 +267,9 @@ one that times out fails, naming what remains.
   namespace anew.
 - **Pausing** holds back what a branch delivers, not its teardown: a paused environment whose branch is gone is torn
   down all the same.
+- **A deleted organization** ([ENG-261](https://linear.app/arikkfir/issue/ENG-261)) is torn down whole: within a minute,
+  the schedule queues one teardown of each of its live environments, paused or not, and queues nothing else for it
+  again; its rows go once those teardowns end ([deleting an organization](sign-in-and-organizations.md#deleting-one)).
 - **A merged branch** keeps its environment until it is deleted, as it keeps its other state.
 
 ## Health and revision
