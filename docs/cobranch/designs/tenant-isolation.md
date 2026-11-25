@@ -4,7 +4,7 @@
 > linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-25, and synced
 > again once Cobranch's shape settles.
 
-**Status**: Proposed 2026-11-25 · [ENG-268](https://linear.app/arikkfir/issue/ENG-268) · Replaces “a later hardening” in
+**Status**: Agreed 2026-11-25 · [ENG-268](https://linear.app/arikkfir/issue/ENG-268) · Replaces “a later hardening” in
 the [architecture’s data model](architecture.md#data-model) · Built on the stores’ `transact` and the [audit
 trail’s](sign-in-and-organizations.md#data-model) session variable · No change to the [Helm
 chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)
@@ -96,7 +96,7 @@ The chart, its values and the operator’s Secret stay as they are. An operator 
 | Table | Policy `organization` |
 | --- | --- |
 | The 39 tables whose rows always have an organization | Reads and writes rows where `org_id = current_org()` |
-| `principals`, `roles`, `events`, whose rows may have none | Also reads rows without an organization (a person, a built-in role); writes only its own |
+| `principals`, `roles`, `events`, whose rows may have none | A second policy, `installation`, for reads alone, shows it rows without an organization (a person, a built-in role). Every write, a delete included, is held to its own rows by `organization` |
 | `organizations` | Reads and writes the row whose `id = current_org()` |
 
 - **The connecting role isn't bound.** It owns the tables, and the policies name `cobranch_tenant` alone, so migrations,
@@ -120,7 +120,7 @@ The chart, its values and the operator’s Secret stay as they are. An operator 
 | Spanning work runs as the owner | It is explicit, greppable and reviewed where it runs | A session flag the policies honour: one more thing every policy must get right |
 | Pin and query in one batch | A read stays one round trip | `BEGIN`, pin, query, `COMMIT` for every read: four |
 | Policies on `org_id` tables only | The issue's bound; children are reached through parents | A policy on each child through its parent: a subquery on every row read, for later if a leak there shows up |
-| The filters stay for now | Queries that also run `Everywhere` need them; the rest drop them once the policies are live (owner, 2026-11-25) | Dropping them with the policies: one layer from day one |
+| The filters stay | A filter says which rows a query is about; the policy only says which it may reach. Work under `Everywhere` has nothing but its filters, and a query reads the same in either scope (owner, 2026-11-25) | Dropping them from queries that only run pinned: two shapes of query, and one layer where there were two |
 
 ## Security and failure modes
 
@@ -135,9 +135,9 @@ The chart, its values and the operator’s Secret stay as they are. An operator 
 
 ## Rollout
 
-**Three pull requests: the scopes, the policies, then the filters the policies made redundant**
+**Two pull requests: the scopes, then the policies**
 
-![Three pull requests: the scopes, the policies, then the filters the policies made redundant](tenant-isolation/rollout.svg)
+![Two pull requests: the scopes, then the policies](tenant-isolation/rollout.svg)
 
 Going back is the second migration’s Down: the policies go, and the scopes keep running as `cobranch_tenant` with
 nothing refused.
@@ -151,8 +151,6 @@ nothing refused.
 
 ## Open questions
 
-- **Which queries drop their filters** in the third pull request: those no `Everywhere` caller uses. The list is drawn
-  when the policies are live.
 - **Children without `org_id`:** whether any deserves a policy through its parent.
 - **The trace in the session**, which the house rules ask the wrapper to set too: nothing reads it yet, so it waits for
   the audit trail to want it.
