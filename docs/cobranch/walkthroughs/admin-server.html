@@ -37,7 +37,7 @@
 
 <section>
   <span class="eyebrow">Surface</span>
-  <h2>Twelve operations under /v1</h2>
+  <h2>Fifteen operations under /v1</h2>
   <div class="tw"><table>
     <tr><th>Route</th><th>Methods</th><th>Does</th><th>Adapter file</th></tr>
     <tr><td class="p">/version · /me</td><td>GET</td><td>The build, and the administrator with their installation permissions</td><td><code>api.go</code></td></tr>
@@ -46,7 +46,7 @@
     <tr><td class="p">/orgs/{org}/limits</td><td>GET · PATCH</td><td>One organization's quotas over the installation's</td><td><code>limits.go</code></td></tr>
     <tr><td class="p">/users</td><td>GET</td><td>Search every user</td><td><code>orgs.go</code></td></tr>
     <tr><td class="p">/settings</td><td>GET · PATCH</td><td>Sign-up policy, self-serve organizations, default limits; fields the chart's values set are locked</td><td><code>settings.go</code></td></tr>
-    <tr><td class="p">/providers[/{id}]</td><td>GET · POST · PATCH · DELETE</td><td>Identity providers beside the chart's, client secrets sealed</td><td><code>providers.go</code></td></tr>
+    <tr><td class="p">/providers · /providers/{provider}</td><td>GET · POST, then GET · PATCH · DELETE</td><td>Identity providers beside the chart's, client secrets sealed</td><td><code>providers.go</code></td></tr>
   </table></div>
 </section>
 
