@@ -137,7 +137,7 @@
     <div class="lead"><h3>7 · Six kinds of token</h3><p>Prefixes <code>cba_</code>, <code>cbd_</code>, <code>cbk_</code>, <code>cbp_</code>, <code>cbr_</code>, <code>cbs_</code> across auth, agents, runner and deliverer. Resolving is one switch in <code>auth.Service.Authenticate</code>; minting and hashing still live in four packages.</p></div>
     <div class="lead"><h3>8 · The web apps share nothing yet</h3><p>The Back-office is one 568-line HTML file beside the Console's 48 <code>lib/</code> modules; <code>web/ui</code> is still planned. In the Console, <code>api.js</code> answers a response two ways, and chats surface through three REST files.</p></div>
     <div class="lead"><h3>9 · Domain logic inside adapters</h3><p><code>followPush</code> orchestrates what a push sets off from inside <code>adapters/postgres/git.go</code>, and <code>gitserver/facts.go</code> holds rules about refs. Both read like service code. See <a href="push-worker.html">push-worker</a> and <a href="git-server.html">git-server</a>.</p></div>
-    <div class="lead"><h3>10 · The database wrapper against the house rule</h3><p><code>transact</code> sets the acting principal only: no tenant, no trace, no row-level security, and reads go straight to the pool. See <a href="postgresql.html">PostgreSQL</a>.</p></div>
+    <div class="lead"><h3>10 · The database wrapper against the house rule</h3><p>Scopes pin the organization for every query and <code>Transact</code> names the acting principal; a read names nobody, and nothing sets the trace. See <a href="postgresql.html">PostgreSQL</a>.</p></div>
   </div>
 </section>
 

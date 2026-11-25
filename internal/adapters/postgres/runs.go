@@ -28,7 +28,7 @@ func jobPrincipal(ctx context.Context, q *queries.Queries, orgID, repoID uuid.UU
 	if id, err = uuid.NewV7(); err != nil {
 		return uuid.Nil, fmt.Errorf("making an ID: %w", err)
 	}
-	inserted := transact(ctx, nil, q, "making job "+name+"'s principal", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	inserted := savepoint(ctx, "making job "+name+"'s principal", func(ctx context.Context, q *queries.Queries) error {
 		return q.InsertJob(ctx, queries.InsertJobParams{ID: id, Name: name, OrgID: orgID, RepoID: repoID})
 	})
 	var conflict *ConflictError
@@ -117,14 +117,14 @@ func insertRun(ctx context.Context, q *queries.Queries, r newRun, jobID uuid.UUI
 // Runs lists a page of the repository's runs that q's filters keep, newest first: at most q.Limit, numbered before
 // q.Before unless it is 0 (code.Store).
 func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery) ([]code.Run, error) {
-	rows, err := s.q.RunsOf(ctx, queries.RunsOfParams{RepoID: repoID, Before: q.Before, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch),
+	rows, err := s.db.Of(Repositories, repoID).RunsOf(ctx, queries.RunsOfParams{RepoID: repoID, Before: q.Before, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch),
 		States: statesOf(q.States), Query: q.Query, Lim: int32(q.Limit)})
 	if err != nil {
 		return nil, fmt.Errorf("listing the runs: %w", err)
 	}
 	out := make([]code.Run, 0, len(rows))
 	for _, r := range rows {
-		run, err := runOf(ctx, s.q, r.JobRun, r.Job, r.StartedByName)
+		run, err := runOf(ctx, s.db.Of(Repositories, repoID).Queries, r.JobRun, r.Job, r.StartedByName)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +136,7 @@ func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery
 
 // CountRuns counts the repository's runs that q's filters keep, whatever its page (code.Store).
 func (s *CodeStore) CountRuns(ctx context.Context, repoID uuid.UUID, q code.RunsQuery) (int, error) {
-	n, err := s.q.CountRuns(ctx, queries.CountRunsParams{RepoID: repoID, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch), States: statesOf(q.States),
+	n, err := s.db.Of(Repositories, repoID).CountRuns(ctx, queries.CountRunsParams{RepoID: repoID, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch), States: statesOf(q.States),
 		Query: q.Query})
 	if err != nil {
 		return 0, fmt.Errorf("counting the runs: %w", err)
@@ -163,14 +163,14 @@ func statesOf(states []jobs.State) []string {
 
 // Run finds one of the repository's runs by number, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (code.Run, error) {
-	row, err := s.q.RunByNumber(ctx, repoID, number)
+	row, err := s.db.Of(Repositories, repoID).RunByNumber(ctx, repoID, number)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return code.Run{}, repos.ErrNotFound
 	}
 	if err != nil {
 		return code.Run{}, fmt.Errorf("finding run #%d: %w", number, err)
 	}
-	run, err := runOf(ctx, s.q, row.JobRun, row.Job, row.StartedByName)
+	run, err := runOf(ctx, s.db.Of(Repositories, repoID).Queries, row.JobRun, row.Job, row.StartedByName)
 	if err != nil {
 		return code.Run{}, err
 	}
@@ -181,7 +181,7 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 // RunSteps lists the steps the controller kept of an ended run, in the order they ran; none when it kept none
 // (code.Store).
 func (s *CodeStore) RunSteps(ctx context.Context, runID uuid.UUID) ([]jobs.Step, error) {
-	rows, err := s.q.RunSteps(ctx, runID)
+	rows, err := s.db.Of(JobRuns, runID).RunSteps(ctx, runID)
 	if err != nil {
 		return nil, fmt.Errorf("listing run %s's steps: %w", runID, err)
 	}
@@ -196,7 +196,7 @@ func (s *CodeStore) RunSteps(ctx context.Context, runID uuid.UUID) ([]jobs.Step,
 // fails naming them, event run.cancelled names the run, and the branches at its commit get their status worked out
 // again (code.Store).
 func (s *CodeStore) CancelRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
-	err := transact(ctx, s.pool, s.q, "cancelling the run", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "cancelling the run", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueue(ctx, repoID); err != nil { // first, before the run, as every transaction that locks one
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}
@@ -233,7 +233,7 @@ func (s *CodeStore) CancelRun(ctx context.Context, actor uuid.UUID, repoID uuid.
 // StartRun queues a waiting run for actor, in one transaction that acts for actor and appends event run.started; its
 // job's annotation stays Pending, now Queued (code.Store).
 func (s *CodeStore) StartRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
-	err := transact(ctx, s.pool, s.q, "starting the run", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "starting the run", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueue(ctx, repoID); err != nil { // first, before the run, as every transaction that locks one
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}
@@ -265,7 +265,7 @@ func (s *CodeStore) StartRun(ctx context.Context, actor uuid.UUID, repoID uuid.U
 // chose this commit (code.Store).
 func (s *CodeStore) RerunRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
 	var rerun int64
-	err := transact(ctx, s.pool, s.q, "re-running the run", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "re-running the run", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueue(ctx, repoID); err != nil {
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}
@@ -337,7 +337,7 @@ func rerunOf(ctx context.Context, q *queries.Queries, row queries.RunForUpdateRo
 // actor, in one transaction that acts for actor and appends event job.run (code.Store).
 func (s *CodeStore) RunJob(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, branch, job string) (code.Run, error) {
 	var number int64
-	err := transact(ctx, s.pool, s.q, "running the job", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "running the job", actor, func(ctx context.Context, q *queries.Queries) error {
 		head, settings, err := settingsOf(ctx, q, repoID, branch)
 		if err != nil {
 			return err
@@ -373,7 +373,7 @@ func (s *CodeStore) RunJob(ctx context.Context, actor uuid.UUID, repoID uuid.UUI
 // for actor, in one transaction that acts for actor and appends event event.posted, and answers them (code.Store).
 func (s *CodeStore) PostEvent(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, in code.EventInput) ([]code.Run, error) {
 	var queued []int64
-	err := transact(ctx, s.pool, s.q, "posting the event", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "posting the event", actor, func(ctx context.Context, q *queries.Queries) error {
 		head, err := q.BranchSettings(ctx, repoID, in.Branch)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &orgs.ValidationError{Field: "branch", Code: "branch.unknown", Message: "the repository has no live branch of this name"}

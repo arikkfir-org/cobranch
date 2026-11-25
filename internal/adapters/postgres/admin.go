@@ -38,7 +38,7 @@ func after(id uuid.UUID) *uuid.UUID {
 
 // AllOrganizations lists a page of the organizations, newest first, with their member counts.
 func (s *OrgStore) AllOrganizations(ctx context.Context, page admin.Page) ([]admin.Organization, error) {
-	rows, err := s.q.AdminOrganizations(ctx, after(page.After), contains(page.Query), int32(page.Limit))
+	rows, err := s.db.Everywhere(adminAPI).AdminOrganizations(ctx, after(page.After), contains(page.Query), int32(page.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("listing the organizations: %w", err)
 	}
@@ -53,7 +53,7 @@ func (s *OrgStore) AllOrganizations(ctx context.Context, page admin.Page) ([]adm
 
 // AllUsers lists a page of the users, newest first.
 func (s *OrgStore) AllUsers(ctx context.Context, page admin.Page) ([]admin.User, error) {
-	rows, err := s.q.AdminUsers(ctx, after(page.After), contains(page.Query), int32(page.Limit))
+	rows, err := s.db.Everywhere(adminAPI).AdminUsers(ctx, after(page.After), contains(page.Query), int32(page.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("listing the users: %w", err)
 	}
@@ -71,7 +71,7 @@ func (s *OrgStore) AllUsers(ctx context.Context, page admin.Page) ([]admin.User,
 
 // VerifiedEmailHolder finds the user who holds email, verified.
 func (s *OrgStore) VerifiedEmailHolder(ctx context.Context, email string) (uuid.UUID, error) {
-	row, err := s.q.EmailHolder(ctx, email)
+	row, err := s.db.Everywhere(adminAPI).EmailHolder(ctx, email)
 	if err != nil {
 		return uuid.Nil, wrapOrg("finding the email's holder", err)
 	}
@@ -81,7 +81,7 @@ func (s *OrgStore) VerifiedEmailHolder(ctx context.Context, email string) (uuid.
 // Enter makes actor an Owner of the organization, with a grant of source entry, joining it first when they aren't a
 // member, and records the entry and its reason. It holds the organization's lock, as every grant does.
 func (s *OrgStore) Enter(ctx context.Context, actor, orgID uuid.UUID, reason string, at time.Time) error {
-	return s.transact(ctx, "entering the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Everywhere(adminAPI), "entering the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -129,7 +129,7 @@ func ownLimits(row queries.OrganizationLimit) admin.OwnLimits {
 
 // OwnLimits reads the organization's own limits, at version 0 while it has none.
 func (s *OrgStore) OwnLimits(ctx context.Context, orgID uuid.UUID) (admin.OwnLimits, error) {
-	row, err := s.q.OwnLimits(ctx, orgID)
+	row, err := s.db.Everywhere(adminAPI).OwnLimits(ctx, orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return admin.OwnLimits{}, nil
 	}
@@ -144,7 +144,7 @@ func (s *OrgStore) OwnLimits(ctx context.Context, orgID uuid.UUID) (admin.OwnLim
 // organization deleted meanwhile is orgs.ErrNotFound.
 func (s *OrgStore) ChangeOwnLimits(ctx context.Context, actor, orgID uuid.UUID, own admin.OwnLimits, at time.Time) (admin.OwnLimits, error) {
 	var written admin.OwnLimits
-	err := s.transact(ctx, "changing the organization's limits", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Everywhere(adminAPI), "changing the organization's limits", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}

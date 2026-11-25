@@ -22,13 +22,12 @@ import (
 // (db/migrations/00027_run_tokens.sql): runner.Store on PostgreSQL. What it changes is Cobranch's own doing, which
 // names nobody; each change of a run's state sets its job's annotation to match, as the job, in the same transaction.
 type RunStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewRunStore returns the runs' store on pool's database.
 func NewRunStore(pool *pgxpool.Pool) *RunStore {
-	return &RunStore{pool: pool, q: queries.New(pool)}
+	return &RunStore{db: newDB(pool)}
 }
 
 var _ runner.Store = (*RunStore)(nil)
@@ -42,7 +41,7 @@ type ranRun struct {
 // Claim claims the queued run that waited longest and that no controller holds, until leaseUntil
 // (runner.Store). A run whose definition doesn't decode fails, so that it isn't claimed again and again.
 func (s *RunStore) Claim(ctx context.Context, leaseUntil time.Time) (runner.Run, bool, error) {
-	row, err := s.q.ClaimRun(ctx, leaseUntil)
+	row, err := s.db.Everywhere(controllerQueues).ClaimRun(ctx, leaseUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return runner.Run{}, false, nil
 	}
@@ -63,13 +62,13 @@ func (s *RunStore) Claim(ctx context.Context, leaseUntil time.Time) (runner.Run,
 
 // Token records the run's token by its hash and hint, until expiresAt, replacing one made before (runner.Store).
 func (s *RunStore) Token(ctx context.Context, runID uuid.UUID, hash []byte, hint string, expiresAt time.Time) error {
-	err := s.q.InsertRunToken(ctx, queries.InsertRunTokenParams{RunID: runID, TokenHash: hash, Hint: hint, ExpiresAt: expiresAt})
+	err := s.db.Everywhere(controllerQueues).InsertRunToken(ctx, queries.InsertRunTokenParams{RunID: runID, TokenHash: hash, Hint: hint, ExpiresAt: expiresAt})
 	return wrapIf(err, "recording run "+runID.String()+"'s token")
 }
 
 // Defer puts a queued run off until until, its job's annotation saying why (runner.Store).
 func (s *RunStore) Defer(ctx context.Context, runID uuid.UUID, until time.Time, reason string) error {
-	return transact(ctx, s.pool, s.q, "putting the run off", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "putting the run off", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
 			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
 		}
@@ -88,7 +87,7 @@ func (s *RunStore) Defer(ctx context.Context, runID uuid.UUID, until time.Time, 
 // MarkRunning marks a queued run running and its job's annotation In progress (runner.Store).
 func (s *RunStore) MarkRunning(ctx context.Context, runID uuid.UUID) (bool, error) {
 	marked := false
-	err := transact(ctx, s.pool, s.q, "marking the run running", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "marking the run running", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
 			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
 		}
@@ -109,7 +108,7 @@ func (s *RunStore) MarkRunning(ctx context.Context, runID uuid.UUID) (bool, erro
 // of the branches at its commit again, and deletes its token (runner.Store).
 func (s *RunStore) Finish(ctx context.Context, runID uuid.UUID, state jobs.State, reason string) (bool, error) {
 	finished := false
-	err := transact(ctx, s.pool, s.q, "ending the run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "ending the run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
 			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
 		}
@@ -147,7 +146,7 @@ func annotateRun(ctx context.Context, q *queries.Queries, r ranRun, in code.Anno
 
 // Running lists the runs of pods and scripts that run, each with the timeout its job declared (runner.Store).
 func (s *RunStore) Running(ctx context.Context) ([]runner.Running, error) {
-	rows, err := s.q.RunningRuns(ctx)
+	rows, err := s.db.Everywhere(controllerQueues).RunningRuns(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing the running runs: %w", err)
 	}
@@ -156,7 +155,7 @@ func (s *RunStore) Running(ctx context.Context) ([]runner.Running, error) {
 
 // RunningWebhooks lists the webhook runs that run, waiting for their receivers to report (runner.Store).
 func (s *RunStore) RunningWebhooks(ctx context.Context) ([]runner.Running, error) {
-	rows, err := s.q.RunningWebhookRuns(ctx)
+	rows, err := s.db.Everywhere(controllerQueues).RunningWebhookRuns(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing the running webhook runs: %w", err)
 	}
@@ -183,7 +182,7 @@ func runningOf(rows []queries.RunningRunsRow) ([]runner.Running, error) {
 
 // Runs finds those of ids that are runs: where each stands, and its repository (runner.Store).
 func (s *RunStore) Runs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]runner.Standing, error) {
-	rows, err := s.q.RunsStanding(ctx, ids)
+	rows, err := s.db.Everywhere(controllerQueues).RunsStanding(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("finding the runs: %w", err)
 	}
@@ -196,20 +195,20 @@ func (s *RunStore) Runs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]run
 
 // Organizations answers which of ids are organizations still (runner.Store).
 func (s *RunStore) Organizations(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
-	out, err := s.q.OrganizationsAmong(ctx, ids)
+	out, err := s.db.Everywhere(controllerQueues).OrganizationsAmong(ctx, ids)
 	return out, wrapIf(err, "finding the organizations")
 }
 
 // DropTokens deletes the tokens of runs that ended without the controller, and those that expired (runner.Store).
 func (s *RunStore) DropTokens(ctx context.Context) (int64, error) {
-	n, err := s.q.DeleteDeadRunTokens(ctx)
+	n, err := s.db.Everywhere(controllerQueues).DeleteDeadRunTokens(ctx)
 	return n, wrapIf(err, "deleting the tokens of ended runs")
 }
 
 // Scheduled lists the repositories whose default branch's /cobranch.yaml declares jobs with schedules, with those jobs
 // (runner.Store).
 func (s *RunStore) Scheduled(ctx context.Context) ([]runner.Scheduled, error) {
-	rows, err := s.q.ScheduledSettings(ctx, git.DefaultBranch)
+	rows, err := s.db.Everywhere(controllerQueues).ScheduledSettings(ctx, git.DefaultBranch)
 	if err != nil {
 		return nil, fmt.Errorf("listing the scheduled jobs: %w", err)
 	}
@@ -234,7 +233,7 @@ func (s *RunStore) Scheduled(ctx context.Context) ([]runner.Scheduled, error) {
 // branch's head, in one transaction that names nobody, unless a controller recorded the slot already (runner.Store).
 func (s *RunStore) QueueSlot(ctx context.Context, repoID uuid.UUID, job string, slot time.Time) (bool, error) {
 	queued := false
-	err := transact(ctx, s.pool, s.q, "queueing a schedule's run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "queueing a schedule's run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		main, err := q.BranchSettings(ctx, repoID, git.DefaultBranch)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -263,14 +262,14 @@ func (s *RunStore) QueueSlot(ctx context.Context, repoID uuid.UUID, job string, 
 
 // DropSlots deletes the schedules' slots before a time (runner.Store).
 func (s *RunStore) DropSlots(ctx context.Context, before time.Time) (int64, error) {
-	n, err := s.q.DeleteScheduleSlots(ctx, before)
+	n, err := s.db.Everywhere(controllerQueues).DeleteScheduleSlots(ctx, before)
 	return n, wrapIf(err, "deleting the schedules' old slots")
 }
 
 // KeepSteps keeps the run's steps as they stood when it ended, in place of any kept before, in one transaction that
 // names nobody (runner.Store).
 func (s *RunStore) KeepSteps(ctx context.Context, runID uuid.UUID, steps []jobs.Step) error {
-	return transact(ctx, s.pool, s.q, "keeping the run's steps", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "keeping the run's steps", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.DeleteRunSteps(ctx, runID); err != nil {
 			return fmt.Errorf("forgetting run %s's steps: %w", runID, err)
 		}

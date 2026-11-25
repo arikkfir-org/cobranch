@@ -27,7 +27,7 @@ func (s *CodeStore) Activity(ctx context.Context, orgID uuid.UUID, repoIDs []uui
 	if before != (code.ActivityCursor{}) {
 		params.BeforeAt = &before.At
 	}
-	rows, err := s.q.OrganizationActivity(ctx, params)
+	rows, err := s.db.In(orgID).OrganizationActivity(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("listing the activity of organization %s: %w", orgID, err)
 	}

@@ -40,7 +40,7 @@ func readInstallationSettings(ctx context.Context, q *queries.Queries) (auth.Ins
 
 // InstallationSettings reads the settings the Back-office changes, for a sign-up.
 func (s *AuthStore) InstallationSettings(ctx context.Context) (auth.InstallationSettings, error) {
-	return readInstallationSettings(ctx, s.q)
+	return readInstallationSettings(ctx, s.db.Everywhere(installation).Queries)
 }
 
 // storedSettings is the Back-office's view of the installation_settings row: sign-up's settings and the limits.
@@ -53,7 +53,7 @@ func storedSettings(row queries.InstallationSetting) admin.StoredSettings {
 
 // InstallationSettings reads the settings the Back-office changes.
 func (s *OrgStore) InstallationSettings(ctx context.Context) (admin.StoredSettings, error) {
-	row, err := s.q.InstallationSettings(ctx)
+	row, err := s.db.Everywhere(installation).InstallationSettings(ctx)
 	if err != nil {
 		return admin.StoredSettings{}, wrap("reading the installation's settings", err)
 	}
@@ -74,7 +74,7 @@ func (s *OrgStore) ChangeInstallationSettings(ctx context.Context, actor uuid.UU
 		params.SignUp = &policy
 	}
 	var written admin.StoredSettings
-	err := s.transact(ctx, "changing the installation's settings", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Everywhere(installation), "changing the installation's settings", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.ChangeInstallationSettings(ctx, params)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return admin.ErrStale

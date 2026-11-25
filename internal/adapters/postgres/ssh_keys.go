@@ -30,7 +30,7 @@ func (s *AuthStore) AddSSHKey(ctx context.Context, k auth.Credential, hash []byt
 
 // SSHKeys lists a user's SSH keys, newest first.
 func (s *AuthStore) SSHKeys(ctx context.Context, userID uuid.UUID) ([]auth.Credential, error) {
-	rows, err := s.q.SSHKeys(ctx, userID)
+	rows, err := s.db.Everywhere(personal).SSHKeys(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the SSH keys: %w", err)
 	}

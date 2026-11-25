@@ -65,14 +65,14 @@ func TestAuthStoreSSHKeys(t *testing.T) {
 // checkSSHKeyRecords checks that the keys' events and audit rows name their user, and that no audit row keeps a hash.
 func checkSSHKeyRecords(t *testing.T, s *AuthStore, userID uuid.UUID) {
 	t.Helper()
-	kinds := eventKinds(t, s.pool)
+	kinds := eventKinds(t, s.db.pool)
 	if want := []string{"ssh_key.added", "ssh_key.added", "ssh_key.deleted", "ssh_key.added"}; !slices.Equal(kinds[len(kinds)-4:], want) {
 		t.Errorf("events = %v, want %v last", kinds, want)
 	}
-	if n := count(t, s.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND principal_id = $1", userID); n != 4 {
+	if n := count(t, s.db.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND principal_id = $1", userID); n != 4 {
 		t.Errorf("%d audit rows of the keys name Alice, want 4: three added, one deleted", n)
 	}
-	if n := count(t, s.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND (after ? 'token_hash' OR before ? 'token_hash')"); n != 0 {
+	if n := count(t, s.db.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND (after ? 'token_hash' OR before ? 'token_hash')"); n != 0 {
 		t.Errorf("%d audit rows keep a key's hash, want none", n)
 	}
 }

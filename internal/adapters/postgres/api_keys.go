@@ -52,7 +52,7 @@ func nilIfZero(t time.Time) *time.Time {
 // Credential finds a credential by its token's hash, with the principal it acts as: an API key, a user with their
 // emails, for a running run's token its job, or for a rendering delivery's token its target.
 func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
-	row, err := s.q.CredentialByToken(ctx, tokenHash)
+	row, err := s.db.Everywhere(authenticating).CredentialByToken(ctx, tokenHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c, u, err := s.runToken(ctx, tokenHash)
 		if errors.Is(err, auth.ErrNotFound) {
@@ -73,7 +73,7 @@ func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Cred
 // runToken finds the token of a run that hasn't ended by its hash, with the job it acts as: a credential named by its
 // run's ID, which does what the job declared on the run's repository.
 func (s *AuthStore) runToken(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
-	row, err := s.q.RunTokenByHash(ctx, tokenHash)
+	row, err := s.db.Everywhere(authenticating).RunTokenByHash(ctx, tokenHash)
 	if err != nil {
 		return auth.Credential{}, auth.User{}, wrap("reading the run's token", err)
 	}
@@ -92,7 +92,7 @@ func (s *AuthStore) runToken(ctx context.Context, tokenHash []byte) (auth.Creden
 // deliveryToken finds the token of a delivery that is queued or rendering by its hash, with the target it acts as: a
 // credential named by its delivery's ID, which reads the delivery's repository.
 func (s *AuthStore) deliveryToken(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
-	row, err := s.q.DeliveryTokenByHash(ctx, tokenHash)
+	row, err := s.db.Everywhere(authenticating).DeliveryTokenByHash(ctx, tokenHash)
 	if err != nil {
 		return auth.Credential{}, auth.User{}, wrap("reading the delivery's token", err)
 	}
@@ -106,12 +106,12 @@ func (s *AuthStore) deliveryToken(ctx context.Context, tokenHash []byte) (auth.C
 
 // TouchCredential records that credential id, of kind, was used at usedAt.
 func (s *AuthStore) TouchCredential(ctx context.Context, id uuid.UUID, kind auth.CredentialKind, usedAt time.Time) error {
-	touch := s.q.TouchCredential
+	touch := s.db.Everywhere(authenticating).TouchCredential
 	switch kind {
 	case auth.CredentialRunToken:
-		touch = s.q.TouchRunToken
+		touch = s.db.Everywhere(authenticating).TouchRunToken
 	case auth.CredentialDeliveryToken:
-		touch = s.q.TouchDeliveryToken
+		touch = s.db.Everywhere(authenticating).TouchDeliveryToken
 	}
 	if err := touch(ctx, usedAt, id); err != nil {
 		return fmt.Errorf("marking the credential used: %w", err)
@@ -133,7 +133,7 @@ func apiKey(p queries.Principal, roles []orgs.Role, secrets []orgs.Secret) orgs.
 
 // secretsHeld lists the secrets of each of the organization's keys, oldest first.
 func (s *OrgStore) secretsHeld(ctx context.Context, orgID uuid.UUID) (map[uuid.UUID][]orgs.Secret, error) {
-	rows, err := s.q.OrganizationCredentials(ctx, orgID)
+	rows, err := s.db.In(orgID).OrganizationCredentials(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the keys' secrets: %w", err)
 	}
@@ -146,7 +146,7 @@ func (s *OrgStore) secretsHeld(ctx context.Context, orgID uuid.UUID) (map[uuid.U
 
 // APIKeys lists the organization's API keys with their roles and secrets, by name.
 func (s *OrgStore) APIKeys(ctx context.Context, orgID uuid.UUID) ([]orgs.APIKey, error) {
-	rows, err := s.q.APIKeys(ctx, orgID)
+	rows, err := s.db.In(orgID).APIKeys(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the API keys: %w", err)
 	}
@@ -167,7 +167,7 @@ func (s *OrgStore) APIKeys(ctx context.Context, orgID uuid.UUID) ([]orgs.APIKey,
 
 // APIKey finds one of the organization's API keys with its roles and secrets.
 func (s *OrgStore) APIKey(ctx context.Context, orgID, id uuid.UUID) (orgs.APIKey, error) {
-	p, err := s.q.APIKey(ctx, id, orgID)
+	p, err := s.db.In(orgID).APIKey(ctx, id, orgID)
 	if err != nil {
 		return orgs.APIKey{}, wrapOrg("reading the API key", err)
 	}
@@ -195,7 +195,7 @@ func insertSecret(ctx context.Context, q *queries.Queries, actor, keyID uuid.UUI
 // CreateAPIKey makes the key's principal, grants it its roles at the organization and records its first secret and
 // the event, under the organization's lock, so a role being deleted meanwhile isn't granted.
 func (s *OrgStore) CreateAPIKey(ctx context.Context, actor uuid.UUID, key orgs.APIKey, sec orgs.Secret, hash []byte) error {
-	return s.transact(ctx, "recording the API key", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(key.OrgID), "recording the API key", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, key.OrgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -236,7 +236,7 @@ func lockedKey(ctx context.Context, q *queries.Queries, orgID, keyID uuid.UUID) 
 // AddSecret gives the key another secret, unless two act at `at`: ErrTwoSecrets, decided under the organization's
 // lock, so two rotations at once don't make a third.
 func (s *OrgStore) AddSecret(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID, sec orgs.Secret, hash []byte, at time.Time) error {
-	return s.transact(ctx, "adding the secret", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "adding the secret", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := lockedKey(ctx, q, orgID, keyID); err != nil {
 			return err
 		}
@@ -256,7 +256,7 @@ func (s *OrgStore) AddSecret(ctx context.Context, actor uuid.UUID, orgID, keyID 
 
 // RevokeSecret revokes one of the key's secrets at `at`.
 func (s *OrgStore) RevokeSecret(ctx context.Context, actor uuid.UUID, orgID, keyID, secretID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "revoking the secret", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "revoking the secret", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := lockedKey(ctx, q, orgID, keyID); err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ func (s *OrgStore) RevokeSecret(ctx context.Context, actor uuid.UUID, orgID, key
 
 // DeleteAPIKey deletes the key's principal, and with it its secrets and grants; the event keeps its name.
 func (s *OrgStore) DeleteAPIKey(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID) error {
-	return s.transact(ctx, "deleting the API key", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "deleting the API key", actor, func(ctx context.Context, q *queries.Queries) error {
 		p, err := lockedKey(ctx, q, orgID, keyID)
 		if err != nil {
 			return err
