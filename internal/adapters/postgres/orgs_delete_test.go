@@ -124,6 +124,11 @@ func (f *deletionFixture) checkDeleting(t *testing.T) {
 		f.task.ID, deletedReason, f.olivia); n != 1 {
 		t.Errorf("Scout's task cancelled by Olivia's deletion = %d, want 1", n)
 	}
+	late := agents.Task{ID: v7(), OrgID: f.acme.ID, Agent: agents.Principal{ID: f.scout.ID}, Kind: agents.KindAssigned,
+		AssignedBy: &agents.Principal{ID: f.max}, Title: "Too late", Instructions: "Look."}
+	if _, err := f.a.Assign(ctx, f.max, late); !errors.Is(err, orgs.ErrNotFound) {
+		t.Errorf("Assign() = %v, want %v: Scout gets no task once Acme is being deleted", err, orgs.ErrNotFound)
+	}
 }
 
 // checkAccessGone checks that nobody reaches Acme any more: its memberships, invitations, join requests and the
@@ -306,8 +311,8 @@ func (f *deliveryFixture) deletingWithEnvironments(t *testing.T) {
 }
 
 // checkNothingStarts checks that once Acme is being deleted, nothing starts work there but its teardowns: the push
-// worker processes feature/signup's push without queueing its run or its preview, and feature/login's preview can't be
-// redelivered.
+// worker processes feature/signup's push without queueing its run or its preview, and neither feature/login's preview's
+// redelivery, main's run's re-run nor a review of feature/login starts.
 func (f *deliveryFixture) checkNothingStarts(t *testing.T, preview code.Environment) {
 	t.Helper()
 	ctx := context.Background()
@@ -324,8 +329,18 @@ func (f *deliveryFixture) checkNothingStarts(t *testing.T, preview code.Environm
 	if envs, err := f.c.Environments(ctx, repo, ""); err != nil || len(envs) != 2 {
 		t.Errorf("Environments() = %+v, %v, want production and feature/login's preview only", envs, err)
 	}
-	if _, err := f.c.Redeliver(ctx, f.max, repo, preview.ID); !errors.Is(err, repos.ErrNotFound) {
-		t.Errorf("Redeliver() = %v, want repos.ErrNotFound", err)
+	main := int64(count(t, f.pool, "SELECT number FROM job_runs WHERE repo_id = $1 AND state = 'cancelled'", repo))
+	for _, c := range []struct {
+		name  string
+		start func() error
+	}{
+		{"Redeliver", func() error { _, err := f.c.Redeliver(ctx, f.max, repo, preview.ID); return err }},
+		{"RerunRun", func() error { _, err := f.c.RerunRun(ctx, f.max, repo, main); return err }},
+		{"RequestReview", func() error { _, err := f.c.RequestReview(ctx, f.max, repo, "feature/login"); return err }},
+	} {
+		if err := c.start(); !errors.Is(err, repos.ErrNotFound) {
+			t.Errorf("%s() = %v, want %v", c.name, err, repos.ErrNotFound)
+		}
 	}
 }
 

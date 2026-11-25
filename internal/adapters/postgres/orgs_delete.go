@@ -49,10 +49,10 @@ func (s *OrgStore) Delete(ctx context.Context, actor, orgID uuid.UUID, version i
 }
 
 // liveOrganization holds the organization of a repository against its deletion until the transaction ends and answers
-// whether it is live (HoldRepositoryOrganization). What would start work there (a push the push worker follows, a run,
-// a delivery other than a teardown) asks it first and queues nothing once the organization is being deleted, and a
-// deletion that comes later waits for the hold, then cancels what was queued under it. A repository that is gone isn't
-// live either.
+// whether it is live (HoldRepositoryOrganization). What would start work there (a push the push worker follows, a run
+// or a re-run, a review, a delivery other than a teardown) asks it first and queues nothing once the organization is
+// being deleted, and a deletion that comes later waits for the hold, then cancels what was queued under it. A
+// repository that is gone isn't live either.
 func liveOrganization(ctx context.Context, q *queries.Queries, repoID uuid.UUID) (bool, error) {
 	live, err := q.HoldRepositoryOrganization(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -60,6 +60,19 @@ func liveOrganization(ctx context.Context, q *queries.Queries, repoID uuid.UUID)
 	}
 	if err != nil {
 		return false, fmt.Errorf("holding repository %s's organization: %w", repoID, err)
+	}
+	return live, nil
+}
+
+// liveOrg is liveOrganization for work that starts from the organization rather than a repository: a task assigned
+// to one of its agents.
+func liveOrg(ctx context.Context, q *queries.Queries, orgID uuid.UUID) (bool, error) {
+	live, err := q.HoldOrganization(ctx, orgID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("holding organization %s: %w", orgID, err)
 	}
 	return live, nil
 }

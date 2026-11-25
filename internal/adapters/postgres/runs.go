@@ -262,10 +262,17 @@ func (s *CodeStore) StartRun(ctx context.Context, actor uuid.UUID, repoID uuid.U
 // RerunRun queues an ended run's definition again at its commit and ref, as the next attempt of the run its attempts
 // started from, for actor, in one transaction that acts for actor: it sets its job's annotation as it queues, appends
 // event run.rerun and works out the status of the branches at its commit again. It supersedes nothing: a member
-// chose this commit (code.Store).
+// chose this commit. An organization being deleted gets no re-run: repos.ErrNotFound (code.Store).
 func (s *CodeStore) RerunRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
 	var rerun int64
 	err := s.db.Of(Repositories, repoID).Transact(ctx, "re-running the run", actor, func(ctx context.Context, q *queries.Queries) error {
+		live, err := liveOrganization(ctx, q, repoID)
+		if err != nil {
+			return err
+		}
+		if !live {
+			return repos.ErrNotFound
+		}
 		if err := q.LockRunQueue(ctx, repoID); err != nil {
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}

@@ -149,6 +149,19 @@ func (q *Queries) DeleteScopeGrants(ctx context.Context, principalID uuid.UUID, 
 	return result.RowsAffected(), nil
 }
 
+const holdOrganization = `-- name: HoldOrganization :one
+SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR KEY SHARE
+`
+
+// HoldOrganization holds a live organization against its deletion until the transaction ends, as
+// HoldRepositoryOrganization does a repository's, and answers whether it is live.
+func (q *Queries) HoldOrganization(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, holdOrganization, id)
+	var live bool
+	err := row.Scan(&live)
+	return live, err
+}
+
 const holdRepositoryOrganization = `-- name: HoldRepositoryOrganization :one
 SELECT (o.deleting_at IS NULL)::boolean AS live
 FROM repositories r JOIN organizations o ON o.id = r.org_id

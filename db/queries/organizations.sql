@@ -107,6 +107,11 @@ FROM repositories r JOIN organizations o ON o.id = r.org_id
 WHERE r.id = $1
 FOR KEY SHARE OF o;
 
+-- HoldOrganization holds a live organization against its deletion until the transaction ends, as
+-- HoldRepositoryOrganization does a repository's, and answers whether it is live.
+-- name: HoldOrganization :one
+SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR KEY SHARE;
+
 -- MarkOrganizationDeleting makes the organization Deleting, for whoever deletes it.
 -- name: MarkOrganizationDeleting :exec
 UPDATE organizations SET deleting_at = @deleting_at::timestamptz, deleted_by = @deleted_by::uuid WHERE id = @id;

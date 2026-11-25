@@ -384,11 +384,19 @@ func findTask(ctx context.Context, q *queries.Queries, orgID uuid.UUID, number i
 		r.Cap}), nil
 }
 
-// Assign numbers the task in its organization and records it for actor, Queued, and answers it. Called with the
-// context of another store's transaction, it records the task in that transaction (agents.Store).
+// Assign numbers the task in its organization and records it for actor, Queued, and answers it; orgs.ErrNotFound
+// once the organization is being deleted. Called with the context of another store's transaction, it records the task
+// in that transaction (agents.Store).
 func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task) (agents.Task, error) {
 	var out agents.Task
 	err := s.db.In(t.OrgID).Transact(ctx, "recording the task", actor, func(ctx context.Context, q *queries.Queries) error {
+		live, err := liveOrg(ctx, q, t.OrgID)
+		if err != nil {
+			return err
+		}
+		if !live {
+			return orgs.ErrNotFound
+		}
 		number, err := q.NextTaskNumber(ctx, t.OrgID)
 		if err != nil {
 			return fmt.Errorf("numbering the task: %w", err)

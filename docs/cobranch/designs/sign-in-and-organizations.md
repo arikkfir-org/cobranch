@@ -222,8 +222,11 @@ There is no undo: a Deleting organization has lost its members and grants alread
   it, at its repositories, secrets and artifacts, and of its own roles), and its API keys' secrets. Its own jobs,
   agents, targets and API keys keep their grants until the purge: only its teardowns act with them, as its targets. Its
   waiting, queued and running runs and tasks are cancelled, and its deliveries that haven't started applying. From here
-  on nobody reaches it, an installation administrator's Back-office included, and nothing of it runs again. Its members
-  keep their accounts and their other organizations; one who belonged nowhere else returns to No organization.
+  on nobody reaches it, an installation administrator's Back-office included, and nothing of it runs again. What would
+  start work there (the push worker following a push, a run or a re-run, a review or another task, a delivery other than
+  a teardown) first holds the organization, finds it Deleting and queues nothing; a deletion that comes after the hold
+  waits for it, then cancels what was queued under it. Its members keep their accounts and their other organizations;
+  one who belonged nowhere else returns to No organization.
 - **Its environments are torn down first.** The deliverer's schedule queues one teardown of each of its live
   environments within a minute, and no more resyncs ([teardown](delivery.md#teardown)). A teardown that fails leaves
   what it couldn't delete in that cluster, and the purge logs it.

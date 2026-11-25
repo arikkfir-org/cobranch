@@ -101,8 +101,16 @@ func cancelStaleReviews(ctx context.Context, q *queries.Queries, repoID uuid.UUI
 // grants. A review a member asks for supersedes the branch's open one and starts at once; one a push brings waits for
 // a member when the push came from outside the organization, and none is queued for a head the branch has one for.
 // It answers the review; code.ErrNoReviewer, code.ErrReviewerNoModel, code.ErrReviewerSuspended or code.ErrReviewOff
-// when the reviewer reviews none of the branch, repos.ErrNotFound without the branch, errMovedOn or errReviewed.
+// when the reviewer reviews none of the branch, repos.ErrNotFound without the branch or once the organization is being
+// deleted, errMovedOn or errReviewed.
 func queueReview(ctx context.Context, q *queries.Queries, r reviewRequest) (code.AIReview, error) {
+	live, err := liveOrganization(ctx, q, r.repoID)
+	if err != nil {
+		return code.AIReview{}, err
+	}
+	if !live {
+		return code.AIReview{}, repos.ErrNotFound
+	}
 	reviewer, err := reviewerFor(ctx, q, r.repoID, r.branch)
 	if err != nil {
 		return code.AIReview{}, err
