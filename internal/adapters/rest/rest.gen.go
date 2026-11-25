@@ -3043,6 +3043,9 @@ type Organization struct {
 	// Slug The current slug; a request by an old one gets the organization with this one.
 	Slug string `json:"slug"`
 
+	// Version Counts its changes; its ETag, which deleting it names in If-Match.
+	Version int64 `json:"version"`
+
 	// ViewerPermissions The permissions the viewer holds at the organization.
 	ViewerPermissions []string `json:"viewerPermissions"`
 }

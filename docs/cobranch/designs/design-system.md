@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 57 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 67 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 69 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -338,7 +338,7 @@ only cue.
 
 ## Screens
 
-Sixty-seven screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Sixty-nine screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -400,7 +400,9 @@ Researcher waits for a task.
 | [Repository · Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-16506) | The organization's issues about the repository, under tabs Open, Closed and All, filtered by assignee and label |
 | [Repository · Artifacts](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-3941) | What agents generated for the repository: documents, diagrams, reports and pages |
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
-| [Settings · General](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-7859) | Settings as tabs; the organization's name, slug and issue key, who joins with what role, and its identity providers |
+| [Settings · General](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-7859) | Settings as tabs; the organization's name, slug and issue key, who joins with what role, its identity providers, and the Danger zone that deletes it |
+| [Settings · General · Delete organization](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=251-39366) | Deleting the organization, in a dialog that says what goes and waits for its name |
+| [Settings · General · Delete organization · Typed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=251-39767) | The same dialog once the name is typed, its button enabled |
 | [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | A request to join, members with roles, invited people |
 | [Settings · Roles](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-8281) | Built-in and custom roles, each a set of permissions |
 | [Settings · API keys](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-8694) | The organization's keys with their roles and secrets, made, rotated and revoked |

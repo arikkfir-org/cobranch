@@ -7845,7 +7845,7 @@ components:
     Organization:
       type: object
       description: An organization, with what the viewer may do there.
-      required: [id, slug, name, membershipRoleId, acceptsJoinRequests, issueKey, createdAt, viewerPermissions]
+      required: [id, slug, name, membershipRoleId, acceptsJoinRequests, issueKey, createdAt, version, viewerPermissions]
       properties:
         id:
           type: string
@@ -7872,6 +7872,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes; its ETag, which deleting it names in If-Match.
         viewerPermissions:
           type: array
           description: The permissions the viewer holds at the organization.

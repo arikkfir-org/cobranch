@@ -1,10 +1,11 @@
 import { api } from "../../../lib/api.js";
+import { openDialog } from "../../../lib/dialog.js";
 import { h } from "../../../lib/dom.js";
 import { banner, checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { icon } from "../../../lib/icons.js";
 import { roleSelect } from "../../../lib/organization.js";
 import { go, render } from "../../../lib/router.js";
-import { config, setOrgs } from "../../../lib/state.js";
+import { base, config, setOrgs } from "../../../lib/state.js";
 
 export const tab = { label: "General", order: 0 };
 export const view = "organization.settings";
@@ -20,9 +21,9 @@ const installationProviders = () => config.authUrl
   ? fetch(config.authUrl + "/providers", { headers: { Accept: "application/json" } }).then((r) => r.ok ? r.json() : { providers: [] }).then((d) => d.providers || [], () => [])
   : Promise.resolve([]);
 
-// showGeneral is how the organization is named and who may join it, a card each with its own Save, and the identity
-// providers its members may sign in with, a row each that turns one on or off. A viewer without org.manage sees them
-// as they are, with nothing to change.
+// showGeneral is how the organization is named and who may join it, a card each with its own Save, the identity
+// providers its members may sign in with, a row each that turns one on or off, and the Danger zone, which deletes it. A
+// viewer without org.manage sees the rest as they are, with nothing to change.
 async function showGeneral(org, main, can) {
   const manage = can("org.manage");
   const error = failure();
@@ -72,7 +73,36 @@ async function showGeneral(org, main, can) {
     card([h("div", { class: "general-fields" }, field("Default role", selectBox(role), "Given to everyone who joins, by invitation or request.")),
       h("div", { class: "field" }, checkbox(accepts, "Anyone signed in may request to join"), h("span", { class: "field-help" }, "Anyone who manages members approves the requests, on the Members tab."))],
     () => ({ membershipRoleId: role.value, acceptsJoinRequests: accepts.checked })),
-    ...(providers.length ? [sectionHeader("Identity providers", "How members sign in. At least one stays enabled."), providerRows(org, providers, manage, change)] : []));
+    ...(providers.length ? [sectionHeader("Identity providers", "How members sign in. At least one stays enabled."), providerRows(org, providers, manage, change)] : []),
+    ...(manage ? [sectionHeader("Danger zone", "These cannot be undone."), dangerZone(org)] : []));
+}
+
+// dangerZone is the card that deletes the organization.
+const dangerZone = (org) => h("section", { class: "card card-danger" },
+  h("div", { class: "card-row" },
+    h("div", { class: "card-row-text" }, h("span", { class: "card-row-title" }, "Delete this organization"),
+      h("span", { class: "card-row-meta" }, "Deletes its repositories, issues, agents and artifacts for every member. Members keep their accounts.")),
+    h("div", { class: "card-row-actions" }, h("button", { class: "btn btn-danger", type: "button", onclick: () => remove(org) }, "Delete organization"))));
+
+// remove asks the viewer to type the organization's name before it deletes the organization at the version they
+// read, then opens the Console's home, which finds them another organization of theirs, or none.
+function remove(org) {
+  const name = input({ name: "confirm", required: true, autocomplete: "off", spellcheck: false, placeholder: org.name });
+  const dialog = openDialog({ title: "Delete " + org.name + "?", action: "Delete organization", danger: true,
+    body: [h("p", {}, org.name + " goes for every member at once, with its repositories and their code, its issues, agents and their tasks, " +
+      "artifacts, secrets and API keys. Its environments are torn down. Members keep their accounts and their other organizations. This can’t be undone."),
+    field("Type " + org.name + " to confirm", name)],
+    submit: async () => {
+      await api("DELETE", "/orgs/" + org.slug, undefined, { "If-Match": `"${org.version}"` });
+      setOrgs((await api("GET", "/me/organizations")).organizations);
+      location.replace(base);
+    } });
+  // The action waits for the name, as typed.
+  const confirm = dialog.querySelector(".dialog-footer .btn-danger");
+  const check = () => { confirm.disabled = name.value.trim() !== org.name; };
+  name.addEventListener("input", check);
+  check();
+  name.focus();
 }
 
 // providerRows lists the installation's identity providers, each on or off for the organization's members, with what

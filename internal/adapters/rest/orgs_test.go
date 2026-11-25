@@ -367,7 +367,12 @@ func TestOrganizations(t *testing.T) {
 
 func TestOrganizationVersions(t *testing.T) {
 	runOrgCases(t, []orgCase{
-		{name: "get names its version", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 200, wantTag: `"1-`},
+		{name: "get names its version", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 200, wantTag: `"1-`,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if o := decode[Organization](t, body); o.Version != 1 {
+					t.Errorf("version = %d, want 1", o.Version)
+				}
+			}},
 		{name: "get unchanged", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 304,
 			headerFor: func(f *orgFixture) http.Header {
 				return http.Header{"If-None-Match": []string{f.call(&f.max, "GET", "/v1/orgs/acme", "").Header().Get("Etag")}}
