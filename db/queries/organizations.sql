@@ -94,23 +94,26 @@ SELECT id FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE;
 -- name: HoldsRole :one
 SELECT EXISTS (SELECT 1 FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'organization' AND scope_id = @org_id::uuid);
 
--- LockOrganizationVersion holds a live organization's row until the transaction ends, and answers its version.
+-- LockOrganizationVersion holds a live organization's row until the transaction ends, and answers its version. It locks
+-- FOR NO KEY UPDATE, which the rows other transactions write with a key to the organization don't wait for: one that
+-- locked some of its work's rows and then writes another row there would otherwise deadlock with a deletion waiting for
+-- that work.
 -- name: LockOrganizationVersion :one
-SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE;
+SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR NO KEY UPDATE;
 
 -- HoldRepositoryOrganization holds the organization of a repository against its deletion until the transaction ends,
--- since a deletion takes its row FOR UPDATE first, and answers whether it is live: false once it is being deleted. A
--- deletion that waited for the hold then cancels what was queued under it.
+-- since a deletion takes its row FOR NO KEY UPDATE first, and answers whether it is live: false once it is being
+-- deleted. A deletion that waited for the hold then cancels what was queued under it.
 -- name: HoldRepositoryOrganization :one
 SELECT (o.deleting_at IS NULL)::boolean AS live
 FROM repositories r JOIN organizations o ON o.id = r.org_id
 WHERE r.id = $1
-FOR KEY SHARE OF o;
+FOR SHARE OF o;
 
 -- HoldOrganization holds a live organization against its deletion until the transaction ends, as
 -- HoldRepositoryOrganization does a repository's, and answers whether it is live.
 -- name: HoldOrganization :one
-SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR KEY SHARE;
+SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR SHARE;
 
 -- MarkOrganizationDeleting makes the organization Deleting, for whoever deletes it.
 -- name: MarkOrganizationDeleting :exec

@@ -238,8 +238,9 @@ There is no undo: a Deleting organization has lost its members and grants alread
 - **Who did it.** The audit log names the Owner on the organization's row as it became Deleting; the purge's deletes are
   Cobranch's own, with no principal.
 - **Under row-level security** ([ENG-268](https://linear.app/arikkfir/issue/ENG-268)), the deletion runs inside the
-  organization; the purge lists the organizations due across the installation, then deletes each inside it. The cascades
-  bypass row security, as PostgreSQL's referential actions do.
+  organization; the purge, like the rest of maintenance, runs across the installation: it lists the organizations due
+  and deletes each with no organization pinned. The cascades bypass row security anyway, as PostgreSQL's referential
+  actions do.
 
 ## Roles and grants
 

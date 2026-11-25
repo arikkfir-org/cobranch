@@ -150,7 +150,7 @@ func (q *Queries) DeleteScopeGrants(ctx context.Context, principalID uuid.UUID, 
 }
 
 const holdOrganization = `-- name: HoldOrganization :one
-SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR KEY SHARE
+SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR SHARE
 `
 
 // HoldOrganization holds a live organization against its deletion until the transaction ends, as
@@ -166,12 +166,12 @@ const holdRepositoryOrganization = `-- name: HoldRepositoryOrganization :one
 SELECT (o.deleting_at IS NULL)::boolean AS live
 FROM repositories r JOIN organizations o ON o.id = r.org_id
 WHERE r.id = $1
-FOR KEY SHARE OF o
+FOR SHARE OF o
 `
 
 // HoldRepositoryOrganization holds the organization of a repository against its deletion until the transaction ends,
-// since a deletion takes its row FOR UPDATE first, and answers whether it is live: false once it is being deleted. A
-// deletion that waited for the hold then cancels what was queued under it.
+// since a deletion takes its row FOR NO KEY UPDATE first, and answers whether it is live: false once it is being
+// deleted. A deletion that waited for the hold then cancels what was queued under it.
 func (q *Queries) HoldRepositoryOrganization(ctx context.Context, id uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, holdRepositoryOrganization, id)
 	var live bool
@@ -284,10 +284,13 @@ func (q *Queries) LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID
 }
 
 const lockOrganizationVersion = `-- name: LockOrganizationVersion :one
-SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE
+SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR NO KEY UPDATE
 `
 
-// LockOrganizationVersion holds a live organization's row until the transaction ends, and answers its version.
+// LockOrganizationVersion holds a live organization's row until the transaction ends, and answers its version. It locks
+// FOR NO KEY UPDATE, which the rows other transactions write with a key to the organization don't wait for: one that
+// locked some of its work's rows and then writes another row there would otherwise deadlock with a deletion waiting for
+// that work.
 func (q *Queries) LockOrganizationVersion(ctx context.Context, id uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, lockOrganizationVersion, id)
 	var version int64

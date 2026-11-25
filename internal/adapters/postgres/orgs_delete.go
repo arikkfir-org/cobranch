@@ -65,7 +65,7 @@ func liveOrganization(ctx context.Context, q *queries.Queries, repoID uuid.UUID)
 }
 
 // liveOrg is liveOrganization for work that starts from the organization rather than a repository: a task assigned
-// to one of its agents.
+// to one of its agents, or cancelled, which must hold the organization before it locks the task.
 func liveOrg(ctx context.Context, q *queries.Queries, orgID uuid.UUID) (bool, error) {
 	live, err := q.HoldOrganization(ctx, orgID)
 	if errors.Is(err, pgx.ErrNoRows) {

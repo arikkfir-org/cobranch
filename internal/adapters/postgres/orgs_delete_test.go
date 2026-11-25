@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
@@ -230,6 +231,75 @@ func checkPurged(t *testing.T, pool *pgxpool.Pool, orgID uuid.UUID, repoIDs ...u
 			t.Errorf("%s rows by %s after the purge = %d, want none", c.table, c.name, n)
 		}
 	}
+}
+
+// TestOrgStoreDeletesWhileItsWorkMoves deletes Acme while another transaction has changed Scout's task and goes on to
+// write more of Acme's rows: an issue handed to another agent, which cancels the task and assigns the next agent its
+// own, and a task that moves and then writes a row of its organization's, as its answer in a chat would. The deletion
+// waits for that transaction, then cancels what it left active, and neither deadlocks.
+func TestOrgStoreDeletesWhileItsWorkMoves(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name string
+		// work changes Scout's task, calls meanwhile, which starts the deletion and waits until it waits, then writes
+		// more of Acme's rows, in one transaction.
+		work func(ctx context.Context, f *deletionFixture, meanwhile func()) error
+	}{
+		{"handing an issue over", func(ctx context.Context, f *deletionFixture, meanwhile func()) error {
+			next := agents.Task{ID: v7(), OrgID: f.acme.ID, Agent: agents.Principal{ID: f.scout.ID}, Kind: agents.KindAssigned,
+				AssignedBy: &agents.Principal{ID: f.max}, Title: "Take over", Instructions: "Look."}
+			return f.a.db.In(f.acme.ID).Transact(ctx, "handing the issue over", f.max, func(ctx context.Context, _ *queries.Queries) error {
+				if _, err := f.a.Cancel(ctx, f.max, f.acme.ID, f.task.Number, agents.AnyVersion); err != nil {
+					return err
+				}
+				meanwhile()
+				_, err := f.a.Assign(ctx, f.max, next)
+				return err
+			})
+		}},
+		{"a task that moves, then writes", func(ctx context.Context, f *deletionFixture, meanwhile func()) error {
+			return pgx.BeginFunc(ctx, f.pool, func(tx pgx.Tx) error {
+				if _, err := tx.Exec(ctx, "UPDATE agent_tasks SET title = 'Looking' WHERE id = $1", f.task.ID); err != nil {
+					return fmt.Errorf("moving the task: %w", err)
+				}
+				meanwhile()
+				if _, err := tx.Exec(ctx, "INSERT INTO labels (id, org_id, name) VALUES ($1, $2, 'found')", uuid.New(), f.acme.ID); err != nil {
+					return fmt.Errorf("writing a label: %w", err)
+				}
+				return nil
+			})
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			f := newDeletionFixture(t)
+			deleted := make(chan error, 1)
+			meanwhile := func() {
+				go func() { deleted <- f.o.Delete(context.Background(), f.olivia, f.acme.ID, orgs.AnyVersion, time.Now()) }()
+				waitForLockWaiter(t, f.pool)
+			}
+			if err := c.work(context.Background(), f, meanwhile); err != nil {
+				t.Fatalf("%s = %v", c.name, err)
+			}
+			if err := <-deleted; err != nil {
+				t.Fatalf("Delete() = %v", err)
+			}
+			if n := count(t, f.pool, "SELECT count(*) FROM agent_tasks WHERE org_id = $1 AND state = 'cancelled' AND reason = $2", f.acme.ID, deletedReason); n != 1 {
+				t.Errorf("tasks the deletion cancelled = %d, want the one the work left active", n)
+			}
+		})
+	}
+}
+
+// waitForLockWaiter waits until a session of the test's database waits for a lock.
+func waitForLockWaiter(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if count(t, pool, "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'") > 0 {
+			return
+		}
+	}
+	t.Fatal("no session waits for a lock")
 }
 
 // TestOrgStoreDeletesTearingDown deletes Acme while website's production holds what main delivered and its preview
