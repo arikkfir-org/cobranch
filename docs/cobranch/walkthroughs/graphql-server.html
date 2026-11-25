@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch graphql-server</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a class="cur" href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch graphql-server</span>
+  <h1>graphql-server: the same domain, as a graph</h1>
+  <p class="muted">A second complete transport over the services the <a href="rest-server.html">rest-server</a> uses, with subscriptions over WebSocket. It is built and wired exactly like the REST API; only the adapter differs.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas; reads <code>pods/log</code> in the job namespaces</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/server.go</code> (<code>graphqlServer</code>, pattern <code>/{$}</code>)</div>
+    <div class="fact"><b>Contract</b><code>api/graphql/*.graphqls</code>: 12 files, 2.9k lines → gqlgen → 62k generated</div>
+    <div class="fact"><b>Transport</b><code>adapters/graphql</code>: 6.2k hand-written lines</div>
+    <div class="fact"><b>Shape</b>6 root query fields, about 95 mutations, 3 subscriptions</div>
+    <div class="fact"><b>Callers today</b>Scripts and SDKs. The <a href="console.html">Console</a> calls only REST</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Request path</span>
+  <h2>Three transports into one executable schema</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <div class="tw"><table>
+    <tr><th>Piece</th><th>What it does</th></tr>
+    <tr><td class="p">handler.go</td><td>Builds the gqlgen server: GET, POST and WebSocket transports, introspection on, a field timer for metrics. A WebSocket accepts only the Console's origin and lives an hour at most, with a ping every 30 seconds</td></tr>
+    <tr><td class="p">resolver.go</td><td>The <code>Resolver</code> holds the services, as small interfaces (<code>Sessions</code>, <code>Orgs</code>, <code>Code</code>, …)</td></tr>
+    <tr><td class="p">&lt;area&gt;.resolvers.go</td><td>gqlgen's stubs, filled in: one method per field. A file per schema file</td></tr>
+    <tr><td class="p">&lt;area&gt;.go</td><td>The mapping between domain values and the generated models, cursors, and error translation</td></tr>
+    <tr><td class="p">viewer.go</td><td>The viewer from the request's context, as <code>server.Authenticate</code> put it there</td></tr>
+    <tr><td class="p">metrics.go</td><td>How long each field takes, exported over OpenTelemetry</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Live</span>
+  <h2>Subscriptions ride PostgreSQL's NOTIFY</h2>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <p class="cap">The three subscriptions are <code>chatUpdates</code>, <code>issueChatUpdates</code> and <code>conversationUpdates</code>. Each server keeps one listening connection outside its pool (<code>postgres.ListenChats</code>); a lost connection wakes every watcher, since it may have missed some. The REST API's long poll uses the same hub.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Schema</span>
+  <h2>Twelve schema files, one per area</h2>
+  <div class="hb" id="hb"></div>
+  <p class="cap">Lines of schema per file. <code>code.graphqls</code> mirrors the size of <code>services/code</code>.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>Who needs both transports?</h3><p>The Console uses REST alone, so GraphQL's 6.2k lines and 95 mutations serve API clients only. Either the two share their mapping layer, or one becomes the thin one.</p></div>
+    <div class="lead"><h3>Cursors, three ways</h3><p><code>activity.go</code>, <code>chats.go</code> and <code>jobs.go</code> each decode their own cursor, as their REST twins do.</p></div>
+    <div class="lead"><h3>Service interfaces declared twice</h3><p><code>rest</code> and <code>graphql</code> each declare <code>Sessions</code>, <code>Organizations</code>, <code>Code</code> and the rest. If they list the same methods, one set would do.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["c","act","API client"]],
+ [["m","adp","middleware\nCORS, health,\nAuthenticate"]],
+ [["g","adp","GET"],["p","adp","POST"],["w","adp","WebSocket\nsubscriptions"]],
+ [["x","adp","generated.go\nexecutable schema"]],
+ [["r","adp","*.resolvers.go\none method per field"]],
+ [["svc","svc","11 services\nthe same as REST's"]],
+ [["pg","store","PostgreSQL","postgresql"],["git","adp","git-server","git-server"]]],
+ [["c","m"],["m","g"],["m","p"],["m","w"],["g","x"],["p","x"],["w","x"],["x","r"],["r","svc"],["svc","pg"],["svc","git"]],{w:175,gap:30});
+seq("d2",[["Writer (any server)","adp"],["PostgreSQL","store","postgresql"],["ChatHub","adp"],["chats.Service","svc"],["Subscriber","act"]],[
+ [4,3,"subscribe chatUpdates(after: cursor)"],[3,2,"Watch(subject)"],[0,1,"insert a message; pg_notify('cobranch_chats', subject)"],[1,2,"notification on the hub's own connection"],
+ [2,3,"wake the subject's watchers"],[3,1,"read updates after the cursor"],[3,4,"ChatUpdate, with the next cursor",1]]);
+const R=[["code",764],["agents",386],["schema (viewer, orgs, tokens)",337],["issues",312],["artifacts",211],["environments",208],["chats",193],["jobs",180],["usage",122],["repositories",105],["secrets",69],["conversations",45]];
+const hb=document.getElementById("hb");
+for(const [n,c] of R){const a=document.createElement("div");a.textContent=n;const b=document.createElement("div"),s=document.createElement("span");s.style.width=(c/764*70)+"%";const e=document.createElement("em");e.textContent=c;e.style.left=(c/764*70)+"%";b.append(s,e);hb.append(a,b)}
+</script>
+
+</div>
+</body>
+</html>

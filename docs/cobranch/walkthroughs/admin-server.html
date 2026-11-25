@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch admin-server</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a class="cur" href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch admin-server</span>
+  <h1>admin-server: running the installation</h1>
+  <p class="muted">The Admin API the <a href="back-office.html">Back-office</a> calls: organizations, users, limits, settings and identity providers, across the whole installation. It is the smallest API and the one an operator can keep off the public internet.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 1 replica, no disk, no Kubernetes token</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/server.go</code>, shared with <a href="rest-server.html">rest-server</a> and <a href="graphql-server.html">graphql-server</a></div>
+    <div class="fact"><b>Contract</b><code>api/admin.yaml</code> (920 lines) → <code>adminapi.gen.go</code> (3.2k)</div>
+    <div class="fact"><b>Transport</b><code>adapters/adminapi</code> (654 hand-written lines)</div>
+    <div class="fact"><b>Domain</b><code>services/admin</code> (1.1k lines)</div>
+    <div class="fact"><b>Permissions</b><code>installation.manage</code>, <code>installation.users.manage</code></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Request path</span>
+  <h2>The same pipeline as every API, with the Back-office as its only origin</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap"><code>runServer</code> takes an <code>api</code> value: the mux pattern, which pages may call it, and the handler. The three API servers differ only in that value.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Surface</span>
+  <h2>Fifteen operations under /v1</h2>
+  <div class="tw"><table>
+    <tr><th>Route</th><th>Methods</th><th>Does</th><th>Adapter file</th></tr>
+    <tr><td class="p">/version · /me</td><td>GET</td><td>The build, and the administrator with their installation permissions</td><td><code>api.go</code></td></tr>
+    <tr><td class="p">/orgs</td><td>GET · POST</td><td>Search every organization; create one for a user, who becomes its first Owner</td><td><code>orgs.go</code></td></tr>
+    <tr><td class="p">/orgs/{org}/entries</td><td>POST</td><td>Enter an organization, with a reason that is recorded</td><td><code>orgs.go</code></td></tr>
+    <tr><td class="p">/orgs/{org}/limits</td><td>GET · PATCH</td><td>One organization's quotas over the installation's</td><td><code>limits.go</code></td></tr>
+    <tr><td class="p">/users</td><td>GET</td><td>Search every user</td><td><code>orgs.go</code></td></tr>
+    <tr><td class="p">/settings</td><td>GET · PATCH</td><td>Sign-up policy, self-serve organizations, default limits; fields the chart's values set are locked</td><td><code>settings.go</code></td></tr>
+    <tr><td class="p">/providers · /providers/{provider}</td><td>GET · POST, then GET · PATCH · DELETE</td><td>Identity providers beside the chart's, client secrets sealed</td><td><code>providers.go</code></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Things to know</span>
+  <h2>Conventions it shares with the REST API</h2>
+  <ul class="know">
+    <li><b>Every change needs <code>If-Match</code>.</b> The service methods take a <code>match</code> argument, compared with the row's <code>version</code>, which trigger <code>bump_version</code> raises (<a href="postgresql.html">PostgreSQL</a>).</li>
+    <li><b>Lists page with an opaque cursor</b> built in <code>adminapi/api.go</code>'s <code>page</code>.</li>
+    <li><b>Entering an organization</b> is an audited act with a stated reason, not a silent bypass: <code>admin.Service.Enter</code>.</li>
+    <li><b>Limits come in two layers:</b> the installation's (chart values or settings) and one organization's override. <code>services/limits</code> works out which applies.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>It builds services it never serves</h3><p><code>newServices</code> constructs all eleven services for every API workload. The admin-server's handler uses one, <code>administration</code>. Should each <code>api</code> value name what it needs?</p></div>
+    <div class="lead"><h3>A third copy of the API plumbing</h3><p><code>adminapi/api.go</code> has its own paging and error helpers beside those of <code>rest</code>. Candidates for <code>adapters/server</code>.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["bo","sys","Back-office\nin the browser","back-office"]],
+ [["cors","adp","server.AllowOrigin\nCORS for the Back-office"],["h","adp","server.Handler\nhealth, span, timing"],["a","adp","server.Authenticate\ncookie or bearer"]],
+ [["gen","adp","adminapi.gen.go\nrouter from admin.yaml"],["api","adp","adminapi\napi, orgs, limits,\nproviders, settings"]],
+ [["svc","svc","services/admin\nauthorize, then act"]],
+ [["authz","svc","auth.Authorizer"],["orgs","svc","services/orgs"],["lim","svc","services/limits"]],
+ [["pg","store","PostgreSQL","postgresql"]]],
+ [["bo","cors"],["cors","h"],["h","a"],["a","gen"],["gen","api"],["api","svc"],["svc","authz"],["svc","orgs"],["svc","lim"],["authz","pg"],["orgs","pg"],["lim","pg"]],{w:200,gap:40});
+</script>
+
+</div>
+</body>
+</html>

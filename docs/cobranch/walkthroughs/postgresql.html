@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch PostgreSQL</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a class="cur" href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Store · PostgreSQL</span>
+  <h1>PostgreSQL: the one store</h1>
+  <p class="muted">Rows, queues, the audit trail, live notifications and, by default, Git's packs. There is no broker, no cache and no search cluster, so most of what is unusual about Cobranch's design shows up here as a convention.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Schema</b><code>db/migrations/</code>: 61 files, 67 tables, applied by <a href="migrate.html">migrate</a></div>
+    <div class="fact"><b>Queries</b><code>db/queries/</code>: 46 files, 3.1k lines → sqlc → 15k generated lines</div>
+    <div class="fact"><b>Stores</b><code>adapters/postgres</code>: 11.6k lines, a store per service port</div>
+    <div class="fact"><b>Driver</b>pgx v5, one pool per workload, plus one extra connection per listener</div>
+    <div class="fact"><b>Session variables</b>One: <code>cobranch.principal_id</code></div>
+    <div class="fact"><b>Row-level security</b>None. Tenancy is in the queries</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The path of a write</span>
+  <h2>From a service call to an audited row</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <ul class="know">
+    <li><b>SQL is never written in Go.</b> A store method calls a generated query and converts its row to the domain's type. The one exception reads goose's version table.</li>
+    <li><b><code>transact(ctx, what, actor, fn)</code> is the wrapper for writes.</b> It begins a transaction, sets the actor, runs <code>fn</code>, and turns a unique violation into a <code>ConflictError</code> naming the constraint, which the store maps to "already there".</li>
+    <li><b>It is re-entrant.</b> The transaction rides the context, so a store method called inside another's transaction joins it as a savepoint instead of opening a second connection. The outer actor stands.</li>
+    <li><b>sqlc's settings matter:</b> at most 3 positional parameters before it generates a params struct, nullable columns become pointers, and <code>uuid</code> and <code>timestamptz</code> map to <code>uuid.UUID</code> and <code>time.Time</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Shared machinery</span>
+  <h2>Triggers and functions every table leans on</h2>
+  <div class="tw"><table>
+    <tr><th>Function</th><th>On</th><th>What it does</th><th>What you must do</th></tr>
+    <tr><td class="p">audit()</td><td>35 tables</td><td>After each insert, update or delete, writes a row of <code>audit_log</code>: table, action, the principal from <code>cobranch.principal_id</code>, the row before, and after (whole on insert, only the changed columns on update). An update that changes nothing writes nothing</td><td>Add the trigger to every table people manage. Pass columns to hide as arguments: <code>audit('token_hash')</code>, <code>audit('value')</code></td></tr>
+    <tr><td class="p">bump_version()</td><td>18 tables</td><td>Before each update, <code>version = version + 1</code>. The version is the row's ETag, compared with <code>If-Match</code></td><td>Add it to any table whose rows are updated through an API</td></tr>
+    <tr><td class="p">blobs_unlink()</td><td><code>blobs</code></td><td>Unlinks a row's large object when the row goes or its object changes</td><td>Nothing: delete the row</td></tr>
+    <tr><td class="p">delete_*_grants()</td><td><code>secrets</code>, <code>artifacts</code>, <code>principals</code></td><td>Takes the grants on a secret, an artifact or a person with it. A grant's <code>scope_id</code> points at different tables by <code>scope</code>, so no foreign key can cascade</td><td>A new grant scope needs its own cleanup trigger</td></tr>
+    <tr><td class="p">issue_key_from_slug() · default_issue_key()</td><td><code>organizations</code></td><td>Derives an organization's issue key (<code>ACME</code>) from its slug</td><td></td></tr>
+    <tr><td class="p">agent_email() · next_identity_provider_version() · artifact_permissions()</td><td>their tables</td><td>An agent's commit email; provider versions that never repeat under one ID; the permissions an audience gives on an artifact</td><td></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Who did it</span>
+  <h2>One session variable, set per transaction</h2>
+  <div class="two">
+    <div class="fig"><svg class="dg" id="d2"></svg></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <p><code>transact</code> runs <code>SELECT set_config('cobranch.principal_id', $1, true)</code>. The <code>true</code> makes it local to the transaction, which is what makes it safe on a pool that shares connections.</p>
+      <p><b>NULL means Cobranch itself:</b> a migration, a seed, maintenance's sweep, a session's touch, the controller following a pod. Passing <code>uuid.Nil</code> as the actor leaves the variable unset.</p>
+      <p><b>A nested <code>transact</code> does not rename the actor.</b> The savepoint acts for whoever the outer transaction named.</p>
+      <p><b>Not audited on purpose:</b> transient rows (<code>sign_in_flows</code>) and history the controller writes (<code>deliveries</code>, <code>job_runs</code>), whose "who" is in <code>events</code>. Sessions audit only their making, revocation and deletion, not each use.</p>
+      <p><code>events</code> is the domain's activity log, which pages show; <code>audit_log</code> is the row-level trail beneath it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Instead of a broker</span>
+  <h2>Queues are rows; wake-ups are NOTIFY</h2>
+  <div class="tw"><table>
+    <tr><th>Queue</th><th>Table</th><th>Claimed by</th><th>Query file</th></tr>
+    <tr><td class="p">Pushes to process</td><td><code>pushes</code></td><td><a href="push-worker.html">push-worker</a></td><td><code>git.sql</code></td></tr>
+    <tr><td class="p">Job runs</td><td><code>job_runs</code></td><td><a href="controller.html">controller</a> (runner)</td><td><code>runs.sql</code></td></tr>
+    <tr><td class="p">Agents' tasks</td><td><code>agent_tasks</code>, <code>agent_task_pods</code></td><td>controller (taskrunner)</td><td><code>task_pods.sql</code></td></tr>
+    <tr><td class="p">Deliveries</td><td><code>deliveries</code></td><td>controller (deliverer)</td><td><code>deliverer.sql</code></td></tr>
+  </table></div>
+  <p>Each claim is the same statement: select the row that has waited longest with <code>FOR UPDATE SKIP LOCKED</code>, set its <code>lease_until</code>, return it. A dead replica's rows come back when the lease expires. A row that must wait (no room in the namespace) is deferred by moving the same column forward.</p>
+  <div class="tw"><table>
+    <tr><th>Channel</th><th>Sent by</th><th>Heard by</th><th>Payload</th></tr>
+    <tr><td class="p">cobranch_pushes</td><td>The push's transaction in the <a href="git-server.html">git-server</a></td><td>Every push-worker, on a connection outside its pool</td><td>The push's ID; one wake however many arrive</td></tr>
+    <tr><td class="p">cobranch_chats</td><td>Any transaction that changes a chat</td><td>Every REST and GraphQL server's <code>ChatHub</code></td><td>The chat's subject, whose watchers wake</td></tr>
+  </table></div>
+  <p class="cap">A notification is only a hint. Every listener also polls or re-reads from a cursor, and a reconnect wakes everyone, since some may have been missed.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Conventions</span>
+  <h2>What holds across the schema</h2>
+  <div class="tw"><table>
+    <tr><th>Convention</th><th>In practice</th></tr>
+    <tr><td class="p">Keys</td><td><code>uuid</code> primary keys, mostly minted by the application, which lets a retried call write once; three tables default to <code>uuidv7()</code></td></tr>
+    <tr><td class="p">Tenancy</td><td>Every row an organization owns carries <code>org_id</code>, and every query filters by it. Nothing in the database enforces it</td></tr>
+    <tr><td class="p">Time</td><td><code>timestamptz</code> throughout, 110 columns</td></tr>
+    <tr><td class="p">Numbers people see</td><td>Counter tables per scope: <code>issue_numbers</code>, <code>run_numbers</code>, <code>task_numbers</code>, <code>delivery_numbers</code> hold the last number given</td></tr>
+    <tr><td class="p">Slugs</td><td><code>organization_slugs</code> and <code>repository_slugs</code> keep every slug a thing ever had, so old URLs still lead to it</td></tr>
+    <tr><td class="p">Principals</td><td>Users, agents, jobs, delivery targets and API keys are all rows of <code>principals</code>, told apart by <code>kind</code> (also <code>anonymous</code>, <code>automation</code>, <code>installation</code>), so one <code>grants</code> table serves them all</td></tr>
+    <tr><td class="p">Roles</td><td>Built-in roles have fixed UUIDs; their <code>permissions</code> is a <code>text[]</code> that migrations append to</td></tr>
+    <tr><td class="p">Secrets at rest</td><td>Token columns hold hashes plus a short hint. Secret values and provider client secrets are sealed with the installation's secrets key before they are stored</td></tr>
+    <tr><td class="p">Large objects</td><td><code>blobs</code> rows point at PostgreSQL large objects (<code>lo_put</code>, <code>lo_get</code>): Git packs and run logs, unless a bucket is named</td></tr>
+    <tr><td class="p">Checks in the schema</td><td>States, kinds and lengths are <code>CHECK</code> constraints, so a bad write fails in any workload</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">The tables</span>
+  <h2>Sixty-seven tables in eleven groups</h2>
+  <div class="tiers" id="tbl"></div>
+  <p class="cap">Blue chips carry the <code>audit</code> trigger. <code>internal_tokens</code> was created and later dropped.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>The house rule asks for more than <code>transact</code> does</h3><p>The house rules say every access runs in a transaction through one wrapper that sets the tenant, the user and the trace for row-level security. Today the wrapper sets the principal only, reads go straight to the pool (about 195 direct query calls), and there is no row-level security. Either the rule or the code should move.</p></div>
+    <div class="lead"><h3>Five copies of the same method</h3><p><code>AuthStore</code>, <code>OrgStore</code>, <code>RepoStore</code>, <code>SecretStore</code> and <code>ArtifactStore</code> each define an identical <code>transact</code> that forwards to the package's. An embedded base store would carry it once.</p></div>
+    <div class="lead"><h3>Four claim queries, one statement</h3><p>The four <code>SKIP LOCKED</code> claims differ in table and returned columns. sqlc cannot template them, but their lease, defer and retry columns could at least share names and a documented shape.</p></div>
+    <div class="lead"><h3>Tenancy rests on review</h3><p>With no row-level security, one query missing its <code>org_id</code> filter leaks across organizations. A test that scans <code>db/queries</code> for tables with <code>org_id</code> used without it would be cheap.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["s","svc","Service method\nauthorize first"]],[["st","adp","Store method\nrows ↔ domain types"]],[["t","adp","transact\nBEGIN, set the actor"]],[["q","adp","queries.*\ngenerated by sqlc"]],[["tb","store","the table\nbump_version"]],[["a","store","audit()\nAFTER trigger → audit_log"]]],
+ [["s","st"],["st","t"],["t","q"],["q","tb"],["tb","a"]],{w:190,gap:45});
+graph("d2",700,300,[
+ ["u",30,30,200,56,"act","a person's request\nactor = their principal"],["c",30,125,200,56,"act","Cobranch's own work\nactor = uuid.Nil"],
+ ["t",290,78,170,60,"adp","transact\nset_config(…, true)"],["g",520,78,160,60,"store","audit()\ncurrent_setting"],
+ ["l",520,210,160,56,"store","audit_log\nprincipal_id or NULL"]],
+ [["u","t"],["c","t","unset",1],["t","g"],["g","l"]]);
+const A=new Set("agent_tasks agents annotations artifact_versions artifacts branch_issues chat_messages chat_threads conversations credentials grants identities identity_providers installation_settings invitations issue_labels issues join_requests labels memberships model_providers models organization_limits organization_slugs organizations preferences principal_emails principals repositories repository_slugs reviews roles secrets sessions viewed_files".split(" "));
+const G=[["identity","principals principal_emails identities sign_in_flows sessions credentials identity_providers preferences"],["access","roles grants"],["tenancy","organizations organization_slugs memberships invitations join_requests organization_limits installation_settings"],
+["git","repositories repository_slugs refs packs pushes commits branches blobs settings_files merge_requirements"],["review","annotations reviews review_settings viewed_files branch_issues"],["jobs","jobs job_runs run_numbers run_tokens job_run_steps schedule_slots"],
+["delivery","delivery_targets environments deliveries delivery_numbers delivery_tokens delivery_renders environment_objects"],["agents","agents agent_tasks task_kinds task_numbers agent_task_tokens agent_task_entries agent_task_pods model_providers models task_spend"],
+["people's work","issues issue_numbers labels issue_labels chat_threads chat_messages conversations artifacts artifact_versions"],["secrets","secrets"],["logs","events audit_log"]];
+const T=document.getElementById("tbl");
+for(const [n,l] of G){const r=document.createElement("div");r.className="tier";const b=document.createElement("b");b.textContent=n;const c=document.createElement("div");c.className="chips";
+ for(const t of l.split(" ")){const s=document.createElement("span");s.className="chip";s.textContent=t;if(!A.has(t))s.style.background="var(--sunken)";c.append(s)}r.append(b,c);T.append(r)}
+</script>
+
+</div>
+</body>
+</html>

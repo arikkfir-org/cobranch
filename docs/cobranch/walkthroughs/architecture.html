@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a class="cur" href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Cobranch · architecture · main at 018e086</span>
+  <h1>Cobranch architecture</h1>
+  <p class="muted">Four zoom levels: the running system, the one binary, the layers, and the packages by how central they are. It ends with places that look worth a targeted review for duplication and reuse. Each workload, the database and the two web apps have a page of their own.</p>
+</header>
+
+<section>
+  <span class="eyebrow">Scale</span>
+  <h2>271k lines of Go, of which 73k are written by hand</h2>
+  <div class="bar">
+    <span style="flex:140.5;background:var(--gen);color:var(--fg)">generated 140.5k</span>
+    <span style="flex:72.9;background:var(--svc)">hand-written 72.9k</span>
+    <span style="flex:57.7;background:var(--test);color:#1a1205">tests 57.7k</span>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--gen)"></span>Generated from <code>api/</code> (oapi-codegen, gqlgen) and <code>db/queries/</code> (sqlc)</span>
+    <span>Console and Back-office: 9.3k JS, 2.0k CSS, no build step</span>
+    <span>Contracts: 11.4k OpenAPI, 2.9k GraphQL, 0.9k Admin</span>
+    <span>61 migrations, 3.1k lines of query SQL</span>
+  </div>
+  <div class="bar" style="height:26px">
+    <span style="flex:39;background:var(--adp)">adapters 39.0k</span>
+    <span style="flex:24.6;background:var(--svc)">services 24.6k</span>
+    <span style="flex:5.8;background:var(--test);color:#1a1205">fakes 5.8k</span>
+    <span style="flex:3.5;background:var(--sys)">cmd+system</span>
+  </div>
+  <p class="cap">The hand-written 73k by layer. Adapters outweigh the domain 3 to 2, and two of them, PostgreSQL stores and the two API transports, are 25k of the 39k.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Level 1 · the running system</span>
+  <h2>Ten workloads over one store</h2>
+  <p>Everything durable is in PostgreSQL, Git packs included unless the operator names a bucket. No broker, no leader: replicas claim rows with <code>FOR UPDATE SKIP LOCKED</code>. Only the Git server touches Git objects, and only the controller makes pods.</p>
+  <div class="fig"><svg class="dg" id="d-arch" role="img"></svg></div>
+  <div class="fig"><svg class="dg" id="d-push" role="img"></svg></div>
+  <p class="cap">A push, end to end. The synchronous part ends when PostgreSQL commits; everything after is rows being claimed.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Go deeper</span>
+  <h2>A page per workload, plus the database and the web apps</h2>
+  <div class="cards">
+    <a href="auth-server.html"><b>auth-server</b>Sign-in, sessions, OIDC</a>
+    <a href="rest-server.html"><b>rest-server</b>The API the Console and agents call</a>
+    <a href="graphql-server.html"><b>graphql-server</b>The same domain as a graph</a>
+    <a href="admin-server.html"><b>admin-server</b>The installation's administration</a>
+    <a href="git-server.html"><b>git-server</b>Fetch and push over HTTP and SSH</a>
+    <a href="push-worker.html"><b>push-worker</b>What follows a push</a>
+    <a href="controller.html"><b>controller</b>Runs, tasks and deliveries as pods</a>
+    <a href="maintenance.html"><b>maintenance</b>The hourly sweep</a>
+    <a href="migrate.html"><b>migrate</b>The schema moves first</a>
+    <a href="postgresql.html"><b>PostgreSQL</b>Conventions, tables, triggers, session variables</a>
+    <a href="console.html"><b>Console</b>The product people see</a>
+    <a href="back-office.html"><b>Back-office</b>The operator's console</a>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Level 2 · the repository</span>
+  <h2>One binary, three contracts, two static sites, one chart</h2>
+  <div class="fig"><pre class="tree">cobranch/
+├─ cmd/cobranch/        <em>1.4k  one binary, a subcommand per workload; wiring only</em>
+├─ internal/
+│  ├─ services/         <em>24.6k the domain, 20 packages, plus 10 *test packages of in-memory fakes</em>
+│  ├─ adapters/         <em>39.0k transports, stores, Git, Kubernetes, models; 26 packages</em>
+│  └─ system/           <em>1.1k  config (envconfig), telemetry, buildinfo</em>
+├─ api/                 <em>openapi.yaml, graphql/*.graphqls, admin.yaml  → server stubs + a REST client</em>
+├─ db/
+│  ├─ migrations/       <em>61 goose migrations, embedded; trigger audit() on every managed table</em>
+│  ├─ queries/          <em>46 .sql files → sqlc → adapters/postgres/queries (15k generated)</em>
+│  └─ seeds/            <em>demo data, behind COBRANCH_SEED</em>
+├─ web/console/         <em>native ES modules: lib/ (48 shared modules), pages/{org,repo}/ (a file per route)</em>
+├─ web/back-office/     <em>one 568-line index.html</em>
+├─ chart/cobranch/      <em>the Helm chart: _server.tpl and _site.tpl stamp out the Deployments</em>
+└─ docs/cobranch/designs/  <em>21 design snapshots</em></pre></div>
+  <div class="tw"><table>
+    <tr><th>Subcommand</th><th>Runs as</th><th>Drives</th></tr>
+    <tr><td class="p"><a href="auth-server.html">auth-server</a> · <a href="rest-server.html">rest-server</a> · <a href="graphql-server.html">graphql-server</a> · <a href="admin-server.html">admin-server</a></td><td>Deployments</td><td><code>authserver</code>, <code>rest</code>, <code>graphql</code>, <code>adminapi</code> over the shared <code>server</code> middleware</td></tr>
+    <tr><td class="p"><a href="git-server.html">git-server</a> · git-hook</td><td>Deployment · its pre-receive hook</td><td><code>gitserver</code>, <code>gitinternal</code>, <code>blob</code></td></tr>
+    <tr><td class="p"><a href="push-worker.html">push-worker</a></td><td>Deployment</td><td><code>pushworker</code> → <code>services/git</code>, <code>services/code</code></td></tr>
+    <tr><td class="p"><a href="controller.html">controller</a></td><td>Deployment</td><td><code>controller</code> → <code>runner</code>, <code>taskrunner</code>, <code>deliverer</code> over <code>jobcluster</code>, <code>incluster</code>, <code>remote</code>, <code>webhook</code></td></tr>
+    <tr><td class="p">checkout · render · agent · model-proxy</td><td>Containers of the controller's pods</td><td><code>checkout</code>; <code>render</code>; <code>harness</code> + <code>restclient</code> + <code>workspace</code>; <code>models</code></td></tr>
+    <tr><td class="p"><a href="maintenance.html">maintenance</a> · <a href="migrate.html">migrate</a></td><td>CronJob · Job</td><td>pack compaction and expiry sweeps; goose + seeds</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Level 3 · the layers</span>
+  <h2>Dependencies point inward, and the linter holds the line</h2>
+  <div class="fig"><svg class="dg" id="d-layers" role="img"></svg></div>
+  <p>Services never import adapters (<code>depguard</code>). Every permission check goes through one <code>auth.Authorizer</code>; every write a person makes runs in a store transaction that names them, so <code>audit()</code> records who. Within the domain, imports also only run one way:</p>
+  <div class="tiers">
+    <div class="tier"><b>top</b><div class="chips"><span class="chip">overview</span><span class="chip">reviewer</span></div></div>
+    <div class="tier"><b>features</b><div class="chips"><span class="chip">chats<i>5</i></span><span class="chip">issues<i>6</i></span><span class="chip">artifacts<i>5</i></span><span class="chip">delivery<i>3</i></span><span class="chip">deliverer<i>6</i></span><span class="chip">harness<i>5</i></span><span class="chip">taskrunner<i>3</i></span><span class="chip">admin<i>4</i></span></div></div>
+    <div class="tier"><b>core</b><div class="chips"><span class="chip">code<i>18</i></span><span class="chip">agents<i>17</i></span><span class="chip">runner<i>7</i></span></div></div>
+    <div class="tier"><b>tenancy</b><div class="chips"><span class="chip">secrets<i>10</i></span><span class="chip">repos<i>17</i></span><span class="chip">orgs<i>20</i></span></div></div>
+    <div class="tier"><b>base</b><div class="chips"><span class="chip">auth<i>31</i></span><span class="chip">limits<i>10</i></span><span class="chip">git<i>8</i></span><span class="chip">jobs<i>8</i></span></div></div>
+  </div>
+  <p class="cap">Each row imports only rows below it. The number is fan-in: how many other packages import it.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Level 4 · the packages</span>
+  <h2>Ranked by centrality, sized by hand-written lines</h2>
+  <div class="tw"><table id="pk">
+    <tr><th>Package</th><th>Lines</th><th>Fan-in</th><th>What it is for</th></tr>
+  </table></div>
+  <p class="cap">Lines exclude tests and generated code. Bars share one scale; the longest is <code>adapters/postgres</code>.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Places to look first</h2>
+  <p>These come from structure and a skim, not a line-by-line read. Each is a question to answer in a targeted pass, not a verdict.</p>
+  <div class="leads">
+    <div class="lead"><h3>1 · Three pod loops with one shape</h3><p><code>runner</code>, <code>taskrunner</code> and <code>deliverer</code> each carry <code>dispatch.go</code>, <code>follow.go</code>, <code>nopods.go</code>, <code>Follow</code> and <code>Sweep</code>. The two later ones already borrow <code>runner.Pod</code> and <code>runner.ErrNoPods</code>. Is there one claim-start-follow-sweep loop underneath?</p></div>
+    <div class="lead"><h3>2 · Two transports, written twice</h3><p><code>rest</code> (7.2k) and <code>graphql</code> (6.2k) mirror each other file for file: activity, agents, chats, code, tokens, usage. The Console calls only REST. How much mapping, cursor and error code could they share?</p></div>
+    <div class="lead"><h3>3 · <code>services/code</code> holds five subjects</h3><p>5.9k lines in 50 files: browsing, annotations and branch status, merges, reviews, job settings, triggers, runs and logs, environments and deliveries. Meanwhile <code>jobs</code> is 0.7k and <code>delivery</code> 0.3k. Are the boundaries where the names say?</p></div>
+    <div class="lead"><h3>4 · Cursors rolled by hand</h3><p>Separate encode and decode pairs in <code>issues</code>, <code>code/history</code>, <code>code/reviews</code>, <code>rest/activity</code>, <code>graphql/activity</code>, <code>graphql/chats</code>, <code>graphql/jobs</code> and <code>adminapi</code>. One opaque-cursor helper?</p></div>
+    <div class="lead"><h3>5 · Every store, implemented twice</h3><p>5.8k lines of in-memory fakes (<code>*test</code> packages) shadow the 11.6k PostgreSQL stores. Do both pass one contract suite, or can they drift?</p></div>
+    <div class="lead"><h3>6 · Store plumbing repeats</h3><p>Five stores (<code>auth</code>, <code>orgs</code>, <code>repos</code>, <code>secrets</code>, <code>artifacts</code>) each define an identical <code>transact</code> method over the package's one. 101 files in one package suggests more row-to-domain boilerplate worth a look.</p></div>
+    <div class="lead"><h3>7 · Six kinds of token</h3><p>Prefixes <code>cba_</code>, <code>cbd_</code>, <code>cbk_</code>, <code>cbp_</code>, <code>cbr_</code>, <code>cbs_</code> across auth, agents, runner and deliverer. Resolving is one switch in <code>auth.Service.Authenticate</code>; minting and hashing still live in four packages.</p></div>
+    <div class="lead"><h3>8 · The web apps share nothing yet</h3><p>The Back-office is one 568-line HTML file beside the Console's 48 <code>lib/</code> modules; <code>web/ui</code> is still planned. In the Console, <code>api.js</code> answers a response two ways, and chats surface through three REST files.</p></div>
+    <div class="lead"><h3>9 · Domain logic inside adapters</h3><p><code>followPush</code> orchestrates what a push sets off from inside <code>adapters/postgres/git.go</code>, and <code>gitserver/facts.go</code> holds rules about refs. Both read like service code. See <a href="push-worker.html">push-worker</a> and <a href="git-server.html">git-server</a>.</p></div>
+    <div class="lead"><h3>10 · The database wrapper against the house rule</h3><p><code>transact</code> sets the acting principal only: no tenant, no trace, no row-level security, and reads go straight to the pool. See <a href="postgresql.html">PostgreSQL</a>.</p></div>
+  </div>
+</section>
+
+
+<script>
+
+const P=[
+["Base and tenancy","svc"],
+["services/auth",1986,31,"Sign-in, sessions, tokens, SSH keys and the one Authorizer every permission check goes through"],
+["services/orgs",1373,20,"Organizations, members, invitations, roles, grants, API keys"],
+["services/repos",639,17,"Repositories and the grants on them"],
+["services/limits",245,10,"Quotas: what an installation and an organization may hold"],
+["services/secrets",506,10,"Sealed organization and repository secrets"],
+["Core domain","svc"],
+["services/code",5858,18,"What people see of a repository: files, history, branch status, merges, reviews, runs, environments"],
+["services/agents",1891,17,"Agents, their numbered tasks, tokens and transcripts"],
+["services/git",786,8,"What a fetch serves and the record of pushes"],
+["services/jobs",692,8,"Job definitions and run states from /cobranch.yaml"],
+["services/issues",1689,6,"Issues, labels, activity, the branch-to-issue link"],
+["services/chats",1435,5,"Branch and issue chats, private conversations, live updates"],
+["services/artifacts",1014,5,"Documents and pages in versions, with their grants"],
+["services/admin",1063,4,"The installation's administration"],
+["services/overview",252,5,"An organization's home page figures"],
+["Engines the controller drives","svc"],
+["services/runner",909,7,"Queued job runs → pods, followed to their end; webhook jobs"],
+["services/deliverer",1134,6,"Queued deliveries → render pod → apply, prune, health, teardown"],
+["services/taskrunner",604,3,"Queued agent tasks → pods, restarted while they wait"],
+["services/harness",1622,5,"The loop inside an agent's pod: model, tools, chat, transcript"],
+["services/reviewer",650,2,"AI review as a harness task with its own tools"],
+["services/delivery",288,3,"Targets and roots from the delivery key"],
+["Storage and Git","adp"],
+["adapters/postgres",11605,2,"Every Store port, over sqlc's queries; transact names the actor for audit"],
+["adapters/gitserver",4213,1,"Git over HTTPS and SSH, hooks, packs, merges, blame, diff"],
+["adapters/blob",685,1,"Packs and logs through gocloud.dev/blob, or PostgreSQL large objects"],
+["adapters/gitinternal",610,2,"The wire types of the API servers' call into the Git server"],
+["Transports","adp"],
+["adapters/rest",7226,1,"The REST API's handlers over 46k generated lines"],
+["adapters/graphql",6179,1,"The GraphQL resolvers over 62k generated lines"],
+["adapters/adminapi",654,1,"The Admin API the Back-office calls"],
+["adapters/server",383,4,"Shared HTTP: auth, CORS, health, request id, timing"],
+["adapters/authserver + oidc",427,1,"The sign-in flow and its OpenID Connect provider"],
+["Cluster","adp"],
+["adapters/jobcluster",1297,2,"Job namespaces, NetworkPolicies and the pods of runs, tasks and renders"],
+["adapters/cluster",951,2,"Apply, prune, health and teardown on a target cluster"],
+["adapters/incluster + remote",623,1,"The two ways to reach a target: this cluster, or a kubeconfig"],
+["adapters/render",520,1,"Helm charts, kustomizations and manifests into objects"],
+["Inside an agent's pod","adp"],
+["adapters/models",1050,1,"Model providers and the model-proxy that alone holds the key"],
+["adapters/restclient",948,1,"The harness's calls to the REST API, over a 13k generated client"],
+["adapters/workspace",748,1,"The file and shell tools over the task's checkout"],
+["Wiring","sys"],
+["cmd/cobranch",1430,0,"Signals, telemetry, configuration and wiring for every subcommand"],
+["system/config + telemetry",1081,6,"COBRANCH_ variables; slog, traces and metrics over OpenTelemetry"],
+];
+const t=document.getElementById("pk");
+for(const r of P){const tr=t.insertRow();
+  if(r.length===2){tr.className="grp";const c=tr.insertCell();c.colSpan=4;c.textContent=r[0];window._k=r[1];continue}
+  const a=tr.insertCell();a.className="p";a.textContent=r[0];
+  const b=tr.insertCell();b.className="n";b.textContent=r[1].toLocaleString("en-US");
+  const s=document.createElement("span");s.className="sz";s.style.width=Math.max(2,r[1]/11605*120)+"px";s.style.background="var(--"+window._k+")";b.appendChild(s);
+  const f=tr.insertCell();f.className="n";f.textContent=r[2]||"–";
+  tr.insertCell().textContent=r[3];}
+
+graph("d-arch",1400,580,[
+ ["B",20,70,170,52,"act","Browser"],["S",20,230,170,52,"act","Scripts, SDKs"],["G",20,430,170,52,"act","git client"],
+ ["BO",240,30,170,52,"sys","Back-office\nstatic, Caddy","back-office"],["CON",240,110,170,52,"sys","Console\nstatic, Caddy","console"],
+ ["ADM",490,40,170,52,"adp","admin-server","admin-server"],["AUTH",490,110,170,52,"adp","auth-server","auth-server"],["REST",490,190,170,52,"adp","rest-server","rest-server"],["GQL",490,260,170,52,"adp","graphql-server","graphql-server"],
+ ["GIT",490,430,170,52,"adp","git-server\nHTTPS and SSH","git-server"],
+ ["PG",760,150,210,130,"store","PostgreSQL\nrows, queues, audit log\nGit packs","postgresql"],
+ ["PW",1010,30,160,52,"adp","push-worker","push-worker"],["MAINT",1010,100,160,52,"adp","maintenance\nhourly CronJob","maintenance"],["MIG",1010,170,160,52,"adp","migrate\nJob per upgrade","migrate"],["CTRL",1010,340,160,52,"adp","controller","controller"],
+ ["LLM",1215,170,170,52,"act","Model providers"],
+ ["TASK",1215,284,170,52,"svc","agent task\nagent + model-proxy"],["RUN",1215,346,170,52,"svc","job run\ncheckout + script"],["REND",1215,408,170,52,"svc","delivery render"],
+ ["K8S",1215,510,170,52,"act","Target clusters"]],
+ [["B","BO"],["B","CON"],["CON","AUTH"],["CON","REST"],["S","REST"],["S","GQL"],["BO","ADM"],["G","GIT","HTTPS, SSH"],
+  ["GQL","GIT","REST and GraphQL read code here,\nwith the viewer's own token",1,-125,0],
+  ["ADM","PG"],["AUTH","PG"],["REST","PG"],["GQL","PG"],["GIT","PG","a push is committed\nbefore it answers",0,95,10],
+  ["PW","PG"],["MAINT","PG"],["MIG","PG"],["CTRL","PG","claims rows"],
+  ["CTRL","TASK"],["CTRL","RUN"],["CTRL","REND"],["TASK","LLM"],["CTRL","K8S","apply, prune, health",0,-90,10]],
+ [[478,10,194,314,"API servers"],[1203,250,194,222,"Pods, per organization"]]);
+graph("d-layers",1400,310,[
+ ["IN",20,40,330,150,"adp","Driving adapters\nrest · graphql · adminapi · authserver\ngitserver · pushworker · controller"],
+ ["DOM",535,40,330,150,"svc","internal/services\neach Service: span, authorize, logic\nports: Store, Cluster, Model, …"],
+ ["OUT",1050,40,330,150,"adp","Driven adapters\npostgres · blob · jobcluster · cluster\nmodels · oidc · markdown · webhook"],
+ ["CMD",535,250,330,46,"sys","cmd/cobranch"]],
+ [["IN","DOM","call"],["OUT","DOM","implement ports",1],["CMD","IN","wires"],["CMD","OUT","wires"]]);
+
+seq("d-push",[["git client","act"],["git-server","adp","git-server"],["PostgreSQL","store","postgresql"],["push-worker","adp","push-worker"],["controller","adp","controller"],["Kubernetes","sys"]],[
+ [0,1,"git push, over HTTP or SSH"],[1,1,"receive-pack and its hook: check the push, weigh it against the limit"],[1,2,"store the pack; record the push and its refs in one transaction"],[1,0,"ok",1],
+ [2,3,"NOTIFY cobranch_pushes"],[3,2,"claim the push; link issues, record merges; queue runs, deliveries, reviews"],
+ [4,2,"claim a queued run (SKIP LOCKED, lease)"],[4,5,"create the pod; follow it"],[4,2,"record the outcome; branch status changes"]]);
+
+</script>
+
+</div>
+</body>
+</html>

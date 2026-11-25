@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch controller</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a class="cur" href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch controller</span>
+  <h1>controller: the only one that makes pods</h1>
+  <p class="muted">The slow, retried, outward-facing work: job runs, agents' tasks and deliveries. One process runs three loops of the same shape, each claiming queued rows from PostgreSQL, starting a pod for them and following it to its end.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas, no leader: each claims under a lease</div>
+    <div class="fact"><b>Kubernetes access</b>Creates job namespaces and their policies; creates, polls and deletes pods and Secrets in them</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/controller.go</code></div>
+    <div class="fact"><b>Loop</b><code>adapters/controller</code>: 82 lines</div>
+    <div class="fact"><b>Engines</b><code>services/runner</code> (0.9k), <code>taskrunner</code> (0.6k), <code>deliverer</code> (1.1k)</div>
+    <div class="fact"><b>Cluster adapters</b><code>jobcluster</code> (1.3k), <code>cluster</code> (1.0k), <code>incluster</code>, <code>remote</code>, <code>webhook</code>, <code>egress</code></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Structure</span>
+  <h2>Three engines behind one three-method interface</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap"><code>controller.Runner</code> is <code>Dispatch</code>, <code>Follow</code>, <code>Sweep</code>. The runner and the deliverer are also a <code>Scheduler</code>. With <code>jobs.pods</code> off, each engine gets a <code>NoPods</code> cluster and only webhook jobs run.</p>
+</section>
+
+<section>
+  <span class="eyebrow">One pass</span>
+  <h2>Start up to 50, then follow everything that works</h2>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <ul class="know">
+    <li><b>Claim is the queue.</b> A <code>queued</code> row whose lease is due is taken with <code>FOR UPDATE SKIP LOCKED</code> and given a new <code>lease_until</code>. A replica that dies only delays its rows until the lease expires.</li>
+    <li><b>No room is not a failure.</b> When the namespace's quota is full, <code>Defer</code> puts the row off with the reason, which the Console shows.</li>
+    <li><b>Every pod gets a token of its own,</b> minted at dispatch: <code>cbr_</code> for a run, <code>cba_</code> for a task, <code>cbd_</code> for a render. The pod calls the <a href="rest-server.html">REST API</a> with it, as its own principal (<a href="auth-server.html">tokens</a>).</li>
+    <li><b>Ending twice ends once.</b> <code>Finish</code> and <code>MarkRunning</code> report whether they changed anything, so two replicas following one pod do no harm.</li>
+    <li><b>Sweep cleans what ended otherwise:</b> pods of runs that were cancelled or superseded, expired tokens, old schedule slots, old renders.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">The three engines</span>
+  <h2>Same loop, different lives</h2>
+  <div class="tw"><table>
+    <tr><th></th><th>runner</th><th>taskrunner</th><th>deliverer</th></tr>
+    <tr><td class="p">Works on</td><td><code>job_runs</code></td><td><code>agent_tasks</code>, <code>agent_task_pods</code></td><td><code>deliveries</code>, <code>environments</code></td></tr>
+    <tr><td class="p">Pod holds</td><td>An init container that checks the commit out (<code>cobranch checkout</code>), then the job's script</td><td><code>cobranch agent</code> (the harness) beside <code>cobranch model-proxy</code>, the one container with the model's key</td><td><code>cobranch render</code>, which uploads what the commit renders</td></tr>
+    <tr><td class="p">After the pod</td><td>Keep the logs, masked, in the object store; set the run's state</td><td>A task that waits loses its pod after the idle time and gets a new one when someone answers</td><td>Apply the render to the target, prune what it dropped, follow health until Healthy</td></tr>
+    <tr><td class="p">Schedules</td><td>Cron-triggered runs, every minute</td><td>None</td><td>A resync of each environment's last render, every 10 minutes</td></tr>
+    <tr><td class="p">Besides pods</td><td>Posts webhook jobs' runs, signed, to their receivers</td><td>Renews a long task's token</td><td>Tears an environment down when its branch goes</td></tr>
+    <tr><td class="p">Reaches out through</td><td><code>jobcluster</code>, <code>webhook</code></td><td><code>jobcluster</code></td><td><code>jobcluster</code> for the render; <code>incluster</code> or <code>remote</code> → <code>cluster</code> for the target</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Isolation</span>
+  <h2>Where the pods run</h2>
+  <ul class="know">
+    <li><b>A namespace per organization,</b> made with its first run or task (<code>jobcluster.Prepare</code>). Its NetworkPolicies admit no ingress, and egress only to DNS, the internet, and the installation's REST, GraphQL and Git servers.</li>
+    <li><b>Delivery targets are fenced separately.</b> In the installation's own cluster, <code>incluster</code> makes each environment's namespace and applies as an account bound there alone. In another cluster, <code>remote</code> opens the kubeconfig an organization secret holds, from addresses the chart's values admit.</li>
+    <li><b>Outbound calls are filtered.</b> <code>egress</code> refuses webhook receivers and cluster addresses inside ranges the operator excludes.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>One loop, written three times</h3><p>Each engine has <code>dispatch.go</code>, <code>follow.go</code>, <code>nopods.go</code>, and a <code>Store</code> with <code>Claim</code>, <code>Token</code>, <code>Defer</code>, a mark-running and a finish. The differences are real (restarts, apply, webhooks) but sit on top of a shared skeleton that isn't shared.</p></div>
+    <div class="lead"><h3><code>jobcluster</code> serves three masters</h3><p>One adapter implements <code>runner.Cluster</code>, <code>taskrunner.Cluster</code> and <code>deliverer.Pods</code> with parallel methods: <code>Start</code>, <code>StartTask</code>, <code>StartRender</code>; <code>Pods</code>, <code>TaskPods</code>, <code>Renders</code>; <code>Remove</code>, <code>RemoveTask</code>, <code>RemoveRender</code>. One pod port with a kind?</p></div>
+    <div class="lead"><h3>Settings repeat</h3><p><code>Pods</code>, <code>Lease</code>, <code>RoomRetry</code>, <code>Vanished</code>, <code>RESTURL</code> and <code>GitURL</code> are copied into three <code>Settings</code> structs in <code>controllerLoops</code>.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["run","adp","controller.Run\npoll, sweep, schedule"]],
+ [["r","svc","runner\njob runs"],["t","svc","taskrunner\nagents' tasks"],["d","svc","deliverer\ndeliveries"]],
+ [["st","adp","postgres\nRunStore · TaskPodStore\nDeliveryStore"],["jc","adp","jobcluster\nnamespaces and pods"],["tg","adp","incluster · remote\n→ cluster: apply, prune, health"],["v","svc","secrets (the vault)\nblob.Logs · webhook"]],
+ [["pg","store","PostgreSQL","postgresql"],["k","act","Job namespaces"],["k2","act","Target clusters"],["o","act","Object store · receivers"]]],
+ [["run","r"],["run","t"],["run","d"],["r","st"],["t","st"],["d","st"],["r","jc"],["t","jc"],["d","jc"],["d","tg"],["r","v"],["t","v"],["d","v"],["st","pg"],["jc","k"],["tg","k2"],["v","o"]],{w:260,gap:110});
+seq("d2",[["controller.Run","adp"],["engine","svc"],["PostgreSQL","store","postgresql"],["cluster adapter","adp"],["pod","act"]],[
+ [0,1,"Sweep (first, then every sweep interval)"],[0,1,"Schedule (every minute)"],[0,1,"Dispatch, up to 50 times"],[1,2,"Claim: a queued row, leased"],
+ [1,2,"mint the pod's token; read its secrets"],[1,3,"Prepare the namespace; Start the pod"],[3,4,"create"],[1,2,"MarkRunning"],
+ [0,1,"Follow"],[1,2,"what is running?"],[1,3,"its pods' states"],[4,2,"results through the REST API, with its token"],[1,2,"keep the logs; Finish"]]);
+</script>
+
+</div>
+</body>
+</html>
