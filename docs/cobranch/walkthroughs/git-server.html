@@ -14,7 +14,7 @@
 <header style="display:flex;flex-direction:column;gap:12px">
   <span class="eyebrow">Workload · cobranch git-server</span>
   <h1>git-server: the only one that touches Git</h1>
-  <p class="muted">Clone, fetch and push over HTTPS and SSH, and every read of code the APIs make. It keeps no repository on disk: each request builds a throwaway one from rows in PostgreSQL and packs from the object store, and a push is committed to PostgreSQL before Git answers the client.</p>
+  <p class="muted">Clone, fetch and push over HTTPS and SSH, and every read of code the APIs make. It keeps no repository on disk: each request builds a throwaway one, with its refs from one PostgreSQL query and its packs hard-linked from the pod's disk cache, which downloads a pack from the object store only the first time it is asked for, and a push is committed to PostgreSQL before Git answers the client.</p>
 </header>
 
 <section>
