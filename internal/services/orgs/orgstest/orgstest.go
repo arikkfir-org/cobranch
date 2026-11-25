@@ -4,6 +4,7 @@ package orgstest
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"time"
 
@@ -87,7 +88,19 @@ type Store struct {
 	Providers map[string]auth.StoredProvider
 	// CreatedBy maps each organization a user created for themselves to that user, against whom it counts.
 	CreatedBy map[uuid.UUID]uuid.UUID
-	Fail      error
+	// Deleting holds the organizations being deleted, out of Orgs, until Purge; TornDown the ones whose environments'
+	// teardowns ended, which Purgeable answers whenever they were deleted.
+	Deleting map[uuid.UUID]Deleting
+	TornDown map[uuid.UUID]bool
+	Fail     error
+}
+
+// Deleting is an organization being deleted: when, by whom, and how many of its environments live still.
+type Deleting struct {
+	Org              orgs.Organization
+	By               uuid.UUID
+	At               time.Time
+	LiveEnvironments int64
 }
 
 // ArtifactScope is where an artifact lives, the repository it is attached to (uuid.Nil for none), whose it is, and how
@@ -115,7 +128,7 @@ func NewStore() *Store {
 		Keys: map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: admin.StoredSettings{InstallationSettings: auth.InstallationSettings{Version: 1}},
 		Limits:       map[uuid.UUID]admin.OwnLimits{}, GitData: map[uuid.UUID]int64{}, Providers: map[string]auth.StoredProvider{},
-		CreatedBy: map[uuid.UUID]uuid.UUID{},
+		CreatedBy: map[uuid.UUID]uuid.UUID{}, Deleting: map[uuid.UUID]Deleting{}, TornDown: map[uuid.UUID]bool{},
 	}
 }
 
@@ -293,18 +306,22 @@ func (s *Store) ByID(_ context.Context, id uuid.UUID) (orgs.Organization, error)
 	return org, nil
 }
 
-// Update writes the organization, claiming a new slug.
-func (s *Store) Update(_ context.Context, _ uuid.UUID, org orgs.Organization) error {
+// Update writes the organization, claiming a new slug, and answers its version since.
+func (s *Store) Update(_ context.Context, _ uuid.UUID, org orgs.Organization, version int64) (int64, error) {
 	if s.Fail != nil {
-		return s.Fail
+		return 0, s.Fail
+	}
+	if version != orgs.AnyVersion && version != s.Orgs[org.ID].Version {
+		return 0, orgs.ErrChanged
 	}
 	if owner, taken := s.Slugs[org.Slug]; taken && owner != org.ID {
-		return orgs.ErrSlugTaken
+		return 0, orgs.ErrSlugTaken
 	}
+	org.Version = s.Orgs[org.ID].Version + 1
 	s.Slugs[org.Slug] = org.ID
 	s.Orgs[org.ID] = org
 	s.Events = append(s.Events, "org.updated")
-	return nil
+	return org.Version, nil
 }
 
 // OrganizationsOf lists a user's organizations.
@@ -813,4 +830,86 @@ func (s *Store) DeleteAPIKey(ctx context.Context, _ uuid.UUID, org, keyID uuid.U
 	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool { return g.Principal == keyID })
 	s.Events = append(s.Events, "api_key.deleted")
 	return nil
+}
+
+// Delete moves a live organization at version (any with orgs.AnyVersion) to Deleting: its slugs, memberships,
+// invitations and join requests go, and the grants there of whoever isn't one of its API keys, whose secrets go.
+func (s *Store) Delete(_ context.Context, actor, orgID uuid.UUID, version int64, at time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	org, ok := s.Orgs[orgID]
+	switch {
+	case !ok:
+		return orgs.ErrNotFound
+	case version != orgs.AnyVersion && version != org.Version:
+		return orgs.ErrChanged
+	}
+	org.Version++
+	delete(s.Orgs, orgID)
+	delete(s.CreatedBy, orgID)
+	s.Deleting[orgID] = Deleting{Org: org, By: actor, At: at}
+	maps.DeleteFunc(s.Slugs, func(_ string, id uuid.UUID) bool { return id == orgID })
+	delete(s.Memberships, orgID)
+	maps.DeleteFunc(s.Invites, func(_ uuid.UUID, i orgs.Invitation) bool { return i.OrgID == orgID })
+	maps.DeleteFunc(s.Reqs, func(_ uuid.UUID, r orgs.JoinRequest) bool { return r.OrgID == orgID })
+	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool {
+		key, own := s.Keys[g.Principal]
+		return (!own || key.OrgID != orgID) && s.orgOf(g) == orgID
+	})
+	for id, key := range s.Keys {
+		if key.OrgID == orgID {
+			for _, sec := range key.Secrets {
+				delete(s.Hashes, sec.ID)
+			}
+			key.Secrets = nil
+			s.Keys[id] = key
+		}
+	}
+	return nil
+}
+
+// orgOf is the organization a grant's scope is in: uuid.Nil at the installation or on a person.
+func (s *Store) orgOf(g Grant) uuid.UUID {
+	switch g.Scope {
+	case auth.ScopeOrganization:
+		return g.ScopeID
+	case auth.ScopeRepository:
+		return s.Repos[g.ScopeID]
+	case auth.ScopeSecret:
+		return s.Secrets[g.ScopeID][0]
+	case auth.ScopeArtifact:
+		return s.Artifacts[g.ScopeID].OrgID
+	}
+	return uuid.Nil
+}
+
+// Purgeable lists the organizations being deleted that TornDown names or that were deleted before `before`, the
+// earliest first.
+func (s *Store) Purgeable(_ context.Context, before time.Time) ([]orgs.Purgeable, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []orgs.Purgeable
+	for id, d := range s.Deleting {
+		if s.TornDown[id] || d.At.Before(before) {
+			out = append(out, orgs.Purgeable{ID: id, DeletingAt: d.At, LiveEnvironments: d.LiveEnvironments})
+		}
+	}
+	slices.SortFunc(out, func(a, b orgs.Purgeable) int { return a.DeletingAt.Compare(b.DeletingAt) })
+	return out, nil
+}
+
+// Purge forgets an organization being deleted, with its API keys and repositories.
+func (s *Store) Purge(_ context.Context, orgID uuid.UUID) (bool, error) {
+	if s.Fail != nil {
+		return false, s.Fail
+	}
+	if _, ok := s.Deleting[orgID]; !ok {
+		return false, nil
+	}
+	delete(s.Deleting, orgID)
+	maps.DeleteFunc(s.Keys, func(_ uuid.UUID, k orgs.APIKey) bool { return k.OrgID == orgID })
+	maps.DeleteFunc(s.Repos, func(_ uuid.UUID, org uuid.UUID) bool { return org == orgID })
+	return true, nil
 }

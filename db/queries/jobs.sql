@@ -104,11 +104,12 @@ LIMIT 1;
 -- name: NextAttempt :one
 SELECT (max(attempt) + 1)::integer FROM job_runs WHERE id = @first OR rerun_of = @first;
 
--- ScheduledSettings lists the repositories whose default branch's /cobranch.yaml declares a job with a schedule, with
--- that branch's head and what the file says.
+-- ScheduledSettings lists the repositories of live organizations whose default branch's /cobranch.yaml declares a job
+-- with a schedule, with that branch's head and what the file says.
 -- name: ScheduledSettings :many
 SELECT b.repo_id, b.org_id, b.head, f.settings
 FROM branches b JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+    JOIN organizations o ON o.id = b.org_id AND o.deleting_at IS NULL
 WHERE b.name = @branch AND b.deleted_at IS NULL AND jsonb_path_exists(f.settings, '$.jobs[*].on.schedule');
 
 -- InsertScheduleSlot records that a job's schedule fired for a slot, unless a controller recorded it first: no row

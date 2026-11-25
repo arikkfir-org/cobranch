@@ -206,17 +206,22 @@ FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
 WHERE e.deleted_at IS NULL AND e.health = 'progressing' AND e.revision IS NOT NULL
 ORDER BY e.id;
 
--- DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at: none of their
--- deliveries is working or waits, the last ended @every ago or longer, and they hold a revision to resync and aren't
--- paused, or their branch is gone, which tears them down.
+-- DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at, none of whose
+-- deliveries is working or waits: those of organizations being deleted that had no teardown since, which tears them
+-- down at once, and the others whose last delivery ended @every ago or longer, that hold a revision to resync and
+-- aren't paused, or whose branch is gone, which tears them down.
 -- name: DueEnvironments :many
-SELECT e.id, e.repo_id FROM environments e
+SELECT e.id, e.repo_id
+FROM environments e JOIN organizations o ON o.id = e.org_id
 WHERE e.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
       AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
-  AND coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
-      <= now() - make_interval(secs => @every::double precision)
-  AND ((e.revision IS NOT NULL AND NOT e.paused)
-    OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
-ORDER BY e.id
+  AND CASE WHEN o.deleting_at IS NOT NULL THEN NOT EXISTS (SELECT 1 FROM deliveries t WHERE t.environment_id = e.id
+          AND t.kind = 'teardown' AND t.queued_at >= o.deleting_at)
+      ELSE coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
+          <= now() - make_interval(secs => @every::double precision)
+        AND ((e.revision IS NOT NULL AND NOT e.paused)
+          OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
+      END
+ORDER BY o.deleting_at IS NULL, e.id
 LIMIT @lim;

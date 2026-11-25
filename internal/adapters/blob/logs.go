@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -86,6 +87,71 @@ func (l Logs) Expire(ctx context.Context, before time.Time) (int, error) {
 		}
 		if obj.IsDir || !obj.ModTime.Before(before) {
 			continue
+		}
+		if err := l.Bucket.Delete(ctx, obj.Key); err != nil {
+			errs = append(errs, fmt.Errorf("deleting %s: %w", obj.Key, err))
+			continue
+		}
+		deleted++
+	}
+}
+
+// DropGone deletes the logs of the repositories that are gone, past the failures to delete some, and counts those it
+// deleted: live answers which of the repositories the store keeps logs of are there still. Maintenance runs it, so the
+// logs of a deleted repository, or of a deleted organization's, go with it rather than past their retention. A
+// repository's logs never come before its row, so one made after the listing is never taken for gone.
+func (l Logs) DropGone(ctx context.Context, live func(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)) (int, error) {
+	repos, err := l.repositories(ctx)
+	if err != nil || len(repos) == 0 {
+		return 0, err
+	}
+	alive, err := live(ctx, repos)
+	if err != nil {
+		return 0, fmt.Errorf("finding the repositories the logs belong to: %w", err)
+	}
+	deleted := 0
+	var errs []error
+	for _, repoID := range repos {
+		if slices.Contains(alive, repoID) {
+			continue
+		}
+		n, err := l.deleteUnder(ctx, logsPrefix+repoID.String()+"/")
+		deleted += n
+		errs = append(errs, err)
+	}
+	return deleted, errors.Join(errs...)
+}
+
+// repositories lists the repositories the store keeps logs of; a key of another shape is left alone.
+func (l Logs) repositories(ctx context.Context) ([]uuid.UUID, error) {
+	var repos []uuid.UUID
+	it := l.Bucket.List(&blob.ListOptions{Prefix: logsPrefix, Delimiter: "/"})
+	for {
+		obj, err := it.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			return repos, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("listing %s: %w", logsPrefix, err)
+		}
+		if id, err := uuid.Parse(strings.TrimSuffix(strings.TrimPrefix(obj.Key, logsPrefix), "/")); err == nil && obj.IsDir {
+			repos = append(repos, id)
+		}
+	}
+}
+
+// deleteUnder deletes every object under prefix, past the failures to delete some, and counts those it deleted.
+func (l Logs) deleteUnder(ctx context.Context, prefix string) (int, error) {
+	deleted := 0
+	var errs []error
+	it := l.Bucket.List(&blob.ListOptions{Prefix: prefix})
+	for {
+		obj, err := it.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			return deleted, errors.Join(errs...)
+		}
+		if err != nil {
+			return deleted, errors.Join(append(errs, fmt.Errorf("listing %s: %w", prefix, err))...)
 		}
 		if err := l.Bucket.Delete(ctx, obj.Key); err != nil {
 			errs = append(errs, fmt.Errorf("deleting %s: %w", obj.Key, err))

@@ -61,7 +61,7 @@ func TestIssueKeys(t *testing.T) {
 		}
 	}
 	org.IssueKey = "ACM2"
-	if err := f.s.Update(ctx, f.olivia, org); err != nil {
+	if _, err := f.s.Update(ctx, f.olivia, org, orgs.AnyVersion); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := f.s.ByID(ctx, f.acme.ID); err != nil || got.IssueKey != "ACM2" {

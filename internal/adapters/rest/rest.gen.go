@@ -3043,6 +3043,9 @@ type Organization struct {
 	// Slug The current slug; a request by an old one gets the organization with this one.
 	Slug string `json:"slug"`
 
+	// Version Counts its changes; its ETag, which changing or deleting it names in If-Match.
+	Version int64 `json:"version"`
+
 	// ViewerPermissions The permissions the viewer holds at the organization.
 	ViewerPermissions []string `json:"viewerPermissions"`
 }
@@ -4091,6 +4094,9 @@ type IfMatchModel = string
 // IfMatchModelProvider defines model for ifMatchModelProvider.
 type IfMatchModelProvider = string
 
+// IfMatchOrganization defines model for ifMatchOrganization.
+type IfMatchOrganization = string
+
 // IfMatchPreferences defines model for ifMatchPreferences.
 type IfMatchPreferences = string
 
@@ -4196,6 +4202,24 @@ type CreateOrganizationJSONBody struct {
 
 	// Slug 2 to 39 lowercase letters, digits and single hyphens, unique among organizations and their old slugs.
 	Slug string `json:"slug"`
+}
+
+// DeleteOrganizationParams defines parameters for DeleteOrganization.
+type DeleteOrganizationParams struct {
+	// IfMatch The ETag of the organization the change or deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
+	IfMatch *IfMatchOrganization `json:"If-Match,omitempty"`
+}
+
+// GetOrganizationParams defines parameters for GetOrganization.
+type GetOrganizationParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateOrganizationParams defines parameters for UpdateOrganization.
+type UpdateOrganizationParams struct {
+	// IfMatch The ETag of the organization the change or deletion was decided on, which refuses with 412 one changed meanwhile; * names whichever is there.
+	IfMatch *IfMatchOrganization `json:"If-Match,omitempty"`
 }
 
 // ListOrganizationActivityParams defines parameters for ListOrganizationActivity.
@@ -5283,12 +5307,15 @@ type ServerInterface interface {
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(w http.ResponseWriter, r *http.Request)
-	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
+	// DeleteOrganization Deletes an organization, with everything it holds; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org})
+	DeleteOrganization(w http.ResponseWriter, r *http.Request, org Org, params DeleteOrganizationParams)
+	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404. One being deleted answers 404.
 	// (GET /orgs/{org})
-	GetOrganization(w http.ResponseWriter, r *http.Request, org Org)
-	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
+	GetOrganization(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationParams)
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
-	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org)
+	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org, params UpdateOrganizationParams)
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams)
@@ -6350,6 +6377,56 @@ func (siw *ServerInterfaceWrapper) CreateOrganization(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteOrganization operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOrganization(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOrganizationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOrganization
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOrganization(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOrganization operation middleware
 func (siw *ServerInterfaceWrapper) GetOrganization(w http.ResponseWriter, r *http.Request) {
 
@@ -6365,8 +6442,32 @@ func (siw *ServerInterfaceWrapper) GetOrganization(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOrganization(w, r, org)
+		siw.Handler.GetOrganization(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6391,8 +6492,32 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateOrganizationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOrganization
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateOrganization(w, r, org)
+		siw.Handler.UpdateOrganization(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16767,6 +16892,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/roles", wrapper.ListBuiltInRoles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/permissions", wrapper.ListPermissions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrganization)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}", wrapper.DeleteOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrganization)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/usage", wrapper.GetOrganizationUsage)
@@ -18655,26 +18781,155 @@ func (response CreateOrganizationdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type DeleteOrganizationRequestObject struct {
+	Org    Org `json:"org"`
+	Params DeleteOrganizationParams
+}
+
+type DeleteOrganizationResponseObject interface {
+	VisitDeleteOrganizationResponse(w http.ResponseWriter) error
+}
+
+type DeleteOrganization204Response struct {
+}
+
+func (response DeleteOrganization204Response) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOrganization401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteOrganization401ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganization403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganization403ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganization404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganization404ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganization412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganization412ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganization428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteOrganization428ApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOrganizationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteOrganizationdefaultApplicationProblemPlusJSONResponse) VisitDeleteOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOrganizationRequestObject struct {
-	Org Org `json:"org"`
+	Org    Org `json:"org"`
+	Params GetOrganizationParams
 }
 
 type GetOrganizationResponseObject interface {
 	VisitGetOrganizationResponse(w http.ResponseWriter) error
 }
 
-type GetOrganization200JSONResponse Organization
+type GetOrganization200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganization200JSONResponse struct {
+	Body    Organization
+	Headers GetOrganization200ResponseHeaders
+}
 
 func (response GetOrganization200JSONResponse) VisitGetOrganizationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetOrganization304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganization304Response struct {
+	Headers GetOrganization304ResponseHeaders
+}
+
+func (response GetOrganization304Response) VisitGetOrganizationResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetOrganization401ApplicationProblemPlusJSONResponse struct {
@@ -18725,23 +18980,32 @@ func (response GetOrganizationdefaultApplicationProblemPlusJSONResponse) VisitGe
 }
 
 type UpdateOrganizationRequestObject struct {
-	Org  Org `json:"org"`
-	Body *UpdateOrganizationJSONRequestBody
+	Org    Org `json:"org"`
+	Params UpdateOrganizationParams
+	Body   *UpdateOrganizationJSONRequestBody
 }
 
 type UpdateOrganizationResponseObject interface {
 	VisitUpdateOrganizationResponse(w http.ResponseWriter) error
 }
 
-type UpdateOrganization200JSONResponse Organization
+type UpdateOrganization200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateOrganization200JSONResponse struct {
+	Body    Organization
+	Headers UpdateOrganization200ResponseHeaders
+}
 
 func (response UpdateOrganization200JSONResponse) VisitUpdateOrganizationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -39132,10 +39396,13 @@ type StrictServerInterface interface {
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(ctx context.Context, request CreateOrganizationRequestObject) (CreateOrganizationResponseObject, error)
-	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
+	// DeleteOrganization Deletes an organization, with everything it holds; takes org.manage. It is gone for everyone at once: its slug and old slugs are free, its members keep their accounts and other organizations, and its runs, tasks and deliveries that haven't started applying are cancelled. Its environments are torn down, and its data deleted once they are, within a day. It can't be undone. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org})
+	DeleteOrganization(ctx context.Context, request DeleteOrganizationRequestObject) (DeleteOrganizationResponseObject, error)
+	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404. One being deleted answers 404.
 	// (GET /orgs/{org})
 	GetOrganization(ctx context.Context, request GetOrganizationRequestObject) (GetOrganizationResponseObject, error)
-	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
@@ -40366,11 +40633,39 @@ func (sh *strictHandler) CreateOrganization(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// DeleteOrganization operation middleware
+func (sh *strictHandler) DeleteOrganization(w http.ResponseWriter, r *http.Request, org Org, params DeleteOrganizationParams) {
+	var request DeleteOrganizationRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOrganization(ctx, request.(DeleteOrganizationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOrganization")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOrganizationResponseObject); ok {
+		if err := validResponse.VisitDeleteOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetOrganization operation middleware
-func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationParams) {
 	var request GetOrganizationRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetOrganization(ctx, request.(GetOrganizationRequestObject))
@@ -40393,10 +40688,11 @@ func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request,
 }
 
 // UpdateOrganization operation middleware
-func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org, params UpdateOrganizationParams) {
 	var request UpdateOrganizationRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	var body UpdateOrganizationJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {

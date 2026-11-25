@@ -90,7 +90,7 @@ func newOrgFixture() *orgFixture {
 	}
 	store.Grant(f.nia.User.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
 	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, IssueKey: "ACME",
-		CreatedAt: now}
+		CreatedAt: now, Version: 1}
 	store.Orgs[f.acme.ID], store.Slugs["acme"], store.Slugs["acme-corp"] = f.acme, f.acme.ID, f.acme.ID
 	store.AddMember(f.acme.ID, f.olivia.User.ID, auth.RoleOwner)
 	store.AddMember(f.acme.ID, f.max.User.ID, auth.RoleMember)
@@ -292,11 +292,45 @@ func TestOrganizationMutations(t *testing.T) {
 		{name: "update", viewer: olivia, document: func(f *orgFixture) string {
 			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme-inc", name: "Acme Inc", membershipRoleId: "` + auth.RoleGuest.String() + `", acceptsJoinRequests: false, providers: ["google"]}) { slug name providers acceptsJoinRequests } }`
 		}, want: []string{`"slug":"acme-inc","name":"Acme Inc","providers":["google"],"acceptsJoinRequests":false`}},
+		{name: "update at its version", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme Inc", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}, expectedVersion: 1) { name version } }`
+		}, want: []string{`"name":"Acme Inc","version":2`}},
+		{name: "update one that changed", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme Inc", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}, expectedVersion: 2) { name } }`
+		}, wantCode: conflict, wantReason: "precondition.failed"},
 		{name: "update as a member", viewer: maxim, document: func(f *orgFixture) string {
 			return `mutation { updateOrganization(id: "` + f.acme.ID.String() + `", input: {slug: "acme", name: "Acme", membershipRoleId: "` + auth.RoleMember.String() + `", acceptsJoinRequests: true}) { slug } }`
 		}, wantCode: forbidden},
 		{name: "update nonsense", viewer: olivia, document: fixed(`mutation { updateOrganization(id: "nope", input: {slug: "acme", name: "Acme", membershipRoleId: "x", acceptsJoinRequests: true}) { slug } }`),
 			wantCode: notFound, wantReason: "organization.not_found"},
+	})
+}
+
+// deleteAcme is the mutation that deletes Acme, with args after its ID.
+func deleteAcme(args string) func(f *orgFixture) string {
+	return func(f *orgFixture) string {
+		return `mutation { deleteOrganization(id: "` + f.acme.ID.String() + `"` + args + `) }`
+	}
+}
+
+func TestOrganizationDeletion(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "its version", viewer: maxim, document: fixed(`{ organization(slug: "acme") { version } }`), want: []string{`"version":1`}},
+		{name: "delete", viewer: olivia, document: deleteAcme(`, expectedVersion: 1`), want: []string{`"deleteOrganization":true`},
+			check: func(t *testing.T, f *orgFixture, _ string) {
+				if d, ok := f.store.Deleting[f.acme.ID]; !ok || d.By != f.olivia.User.ID {
+					t.Errorf("Deleting = %+v, %t, want Acme for Olivia", d, ok)
+				}
+				if body := f.query(&f.olivia, `{ organization(slug: "acme") { slug } }`); !strings.Contains(body, `"organization":null`) {
+					t.Errorf("a deleted organization = %s, want none", body)
+				}
+			}},
+		{name: "delete whichever version", viewer: olivia, document: deleteAcme(``), want: []string{`"deleteOrganization":true`}},
+		{name: "delete one that changed", viewer: olivia, document: deleteAcme(`, expectedVersion: 2`), wantCode: conflict, wantReason: "precondition.failed"},
+		{name: "delete as a member", viewer: maxim, document: deleteAcme(``), wantCode: forbidden},
+		{name: "delete as an outsider", viewer: nia, document: deleteAcme(``), wantCode: notFound, wantReason: "organization.not_found"},
+		{name: "delete nonsense", viewer: olivia, document: fixed(`mutation { deleteOrganization(id: "nope") }`), wantCode: notFound, wantReason: "organization.not_found"},
+		{name: "delete as anonymous", document: deleteAcme(``), wantCode: unauthenticated},
 	})
 }
 

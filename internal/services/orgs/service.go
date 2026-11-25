@@ -25,8 +25,9 @@ type Store interface {
 	BySlug(ctx context.Context, slug string) (Organization, error)
 	// ByID finds an organization, or ErrNotFound.
 	ByID(ctx context.Context, id uuid.UUID) (Organization, error)
-	// Update writes the organization's settings, claiming its slug when it changed, or ErrSlugTaken.
-	Update(ctx context.Context, actor uuid.UUID, org Organization) error
+	// Update writes the organization's settings, claiming its slug when it changed, if it is at version (any with
+	// AnyVersion), and answers its version since; or ErrSlugTaken, or ErrChanged when it changed since version.
+	Update(ctx context.Context, actor uuid.UUID, org Organization, version int64) (int64, error)
 	// OrganizationsOf lists the organizations user belongs to, by name.
 	OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	// Created counts the organizations the user created for themselves, those that still exist.
@@ -99,6 +100,16 @@ type Store interface {
 	DeleteAPIKey(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID) error
 	// DeleteExpired deletes the invitations and join requests that expired before now, and returns how many of each.
 	DeleteExpired(ctx context.Context, now time.Time) (invitations, requests int64, err error)
+	// Delete makes the organization Deleting at `at` for actor, if it is live and at version (any with AnyVersion):
+	// it frees its slugs, deletes its memberships, invitations and join requests, the grants there of whoever isn't
+	// its own and its API keys' secrets, and cancels its work, all in one transaction. ErrNotFound when it isn't
+	// live, ErrChanged when it is at another version.
+	Delete(ctx context.Context, actor, orgID uuid.UUID, version int64, at time.Time) error
+	// Purgeable lists the organizations being deleted whose rows may go (Purgeable), the earliest deleted first: those
+	// whose environments' teardowns all ended, and those deleted before `before`.
+	Purgeable(ctx context.Context, before time.Time) ([]Purgeable, error)
+	// Purge deletes an organization being deleted, with every row of its and its events; false when it isn't one.
+	Purge(ctx context.Context, orgID uuid.UUID) (bool, error)
 }
 
 // The permissions this slice checks.
@@ -262,8 +273,9 @@ func (s *Service) ViewerPermissions(ctx context.Context, v Viewer, orgID uuid.UU
 	return s.read(ctx, v, orgID)
 }
 
-// Update writes the organization's settings, its issue key among them; it takes org.manage.
-func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, settings Settings) (Organization, error) {
+// Update writes the organization's settings, its issue key among them, if it is at version (any with AnyVersion); it
+// takes org.manage. ErrChanged when it changed since version.
+func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, version int64, settings Settings) (Organization, error) {
 	org, _, err := s.require(ctx, v, orgID, PermManage)
 	if err != nil {
 		return Organization{}, err
@@ -286,9 +298,11 @@ func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, setting
 	if len(org.Providers) == 0 {
 		org.Providers = nil // all of the installation's, however a client spells it
 	}
-	if err := s.store.Update(ctx, v.ID, org); err != nil {
+	updated, err := s.store.Update(ctx, v.ID, org, version)
+	if err != nil {
 		return Organization{}, fmt.Errorf("updating the organization: %w", err)
 	}
+	org.Version = updated
 	return org, nil
 }
 
@@ -957,7 +971,7 @@ func wrap(what string, err error) error {
 		return nil
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrSlugTaken), errors.Is(err, ErrInvited), errors.Is(err, ErrRequested),
 		errors.Is(err, ErrAlreadyMember), errors.Is(err, ErrLastOwner), errors.Is(err, ErrRoleNameTaken),
-		errors.Is(err, ErrRoleInUse), errors.Is(err, ErrGranted), errors.Is(err, ErrTwoSecrets):
+		errors.Is(err, ErrRoleInUse), errors.Is(err, ErrGranted), errors.Is(err, ErrTwoSecrets), errors.Is(err, ErrChanged):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)

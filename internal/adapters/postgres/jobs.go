@@ -124,7 +124,7 @@ func pushEvent(ctx context.Context, q *queries.Queries, pushed jobs.Event, u ref
 // answers the numbers of the runs it queued. Jobs come from e's branch's head for events on a branch, which must still
 // be e's commit, and from the default branch's head for tags, posted events and schedules, read under the
 // repository's run lock, so a change queued meanwhile is seen. The branches at e's commit get their status worked out
-// again, unless they wait for the push worker, which then does.
+// again, unless they wait for the push worker, which then does. An organization being deleted gets no run.
 func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) ([]int64, error) {
 	orgID, err := q.CommitOrg(ctx, e.RepoID, e.SHA)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -132,6 +132,9 @@ func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) ([]int64, 
 	}
 	if err != nil {
 		return nil, fmt.Errorf("finding commit %s: %w", e.SHA, err)
+	}
+	if live, err := liveOrganization(ctx, q, e.RepoID); err != nil || !live {
+		return nil, err
 	}
 	if err := q.LockRunQueue(ctx, e.RepoID); err != nil {
 		return nil, fmt.Errorf("locking the repository's runs: %w", err)

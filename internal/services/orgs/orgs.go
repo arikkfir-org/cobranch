@@ -40,6 +40,8 @@ type Organization struct {
 	// IssueKey starts its issues' identifiers, such as ACME in ACME-42.
 	IssueKey  string
 	CreatedAt time.Time
+	// Version counts its changes: its ETag, which a deletion names.
+	Version int64
 }
 
 // Settings is what a manager changes about an organization.
@@ -295,6 +297,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrSlugTaken is a slug another organization has or had.
 	ErrSlugTaken = errors.New("another organization has this slug")
+	// ErrChanged is an organization that changed since the version a deletion names.
+	ErrChanged = errors.New("the organization changed since it was read")
 	// ErrAlreadyMember is a user who already belongs to the organization.
 	ErrAlreadyMember = errors.New("already a member")
 	// ErrNotMember is a user who doesn't belong to the organization.
@@ -365,7 +369,7 @@ func NewOrganization(slug, name string, at time.Time) (Organization, error) {
 		return Organization{}, fmt.Errorf("making an ID: %w", err)
 	}
 	return Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true,
-		IssueKey: DefaultIssueKey(slug), CreatedAt: at}, nil
+		IssueKey: DefaultIssueKey(slug), CreatedAt: at, Version: 1}, nil
 }
 
 // issueKeyPattern is 1 to 10 uppercase letters and digits, starting with a letter.

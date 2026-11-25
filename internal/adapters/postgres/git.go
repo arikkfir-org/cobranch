@@ -304,10 +304,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 			return fmt.Errorf("claiming a push: %w", err)
 		}
 		linkPush(ctx, claimed.Traceparent)
-		if err := s.attribute(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := followPush(ctx, q, claimed); err != nil {
+		if err := s.follow(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
@@ -323,6 +320,19 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
+}
+
+// follow attributes the claimed push's commits and does what the push brings (followPush), unless its organization is
+// being deleted: the push then brings nothing, since its organization's work is cancelled.
+func (s *GitStore) follow(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	live, err := liveOrganization(ctx, q, claimed.RepoID)
+	if err != nil || !live {
+		return err
+	}
+	if err := s.attribute(ctx, q, claimed); err != nil {
+		return err
+	}
+	return followPush(ctx, q, claimed)
 }
 
 // followPush does, in the push worker's transaction, what the claimed push brings once its commits are attributed:

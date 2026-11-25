@@ -293,6 +293,31 @@ func (q *Queries) OrganizationsAmong(ctx context.Context, ids []uuid.UUID) ([]uu
 	return items, nil
 }
 
+const repositoriesLeft = `-- name: RepositoriesLeft :many
+SELECT id FROM repositories WHERE id = ANY($1::uuid[])
+`
+
+// RepositoriesLeft answers which of ids are repositories still.
+func (q *Queries) RepositoriesLeft(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, repositoriesLeft, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const runTokenByHash = `-- name: RunTokenByHash :one
 SELECT t.run_id, t.hint, t.created_at, t.expires_at, t.last_used_at, r.org_id, r.repo_id,
        coalesce(r.definition -> 'permissions', '[]'::jsonb)::jsonb AS permissions, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by

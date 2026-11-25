@@ -178,7 +178,7 @@ func TestCustomRolesRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.acme.MembershipRoleID = release.ID
-	if err := f.s.Update(ctx, f.olivia, f.acme); err != nil {
+	if _, err := f.s.Update(ctx, f.olivia, f.acme, orgs.AnyVersion); err != nil {
 		t.Fatal(err)
 	}
 	schema := newSchema(t, f.pool, migrations.FS, migrations.Go...)

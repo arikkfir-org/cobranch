@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const cancelOrganizationWork = `-- name: CancelOrganizationWork :exec
+WITH runs AS (
+    UPDATE job_runs r SET state = 'cancelled', reason = $1::text, ended_at = now(), lease_until = NULL
+    WHERE r.org_id = $2::uuid AND r.state IN ('waiting', 'queued', 'running')
+), tasks AS (
+    UPDATE agent_tasks t SET state = 'cancelled', cancelled_by = $3::uuid, reason = $1::text, ended_at = now()
+    WHERE t.org_id = $2::uuid AND t.state IN ('queued', 'running', 'waiting')
+)
+UPDATE deliveries d SET state = 'cancelled', reason = $1::text, ended_at = now(), lease_until = NULL
+WHERE d.org_id = $2::uuid AND d.state IN ('waiting', 'queued', 'rendering')
+`
+
+// CancelOrganizationWork cancels, with the reason, the organization's runs and tasks that haven't ended and its
+// deliveries that haven't started applying.
+func (q *Queries) CancelOrganizationWork(ctx context.Context, reason string, organization uuid.UUID, cancelledBy uuid.UUID) error {
+	_, err := q.db.Exec(ctx, cancelOrganizationWork, reason, organization, cancelledBy)
+	return err
+}
+
 const claimSlug = `-- name: ClaimSlug :execrows
 INSERT INTO organization_slugs (slug, org_id) VALUES ($1, $2)
 ON CONFLICT (slug) DO UPDATE SET org_id = EXCLUDED.org_id WHERE organization_slugs.org_id = EXCLUDED.org_id
@@ -39,10 +58,10 @@ func (q *Queries) CountRoleHolders(ctx context.Context, roleID uuid.UUID, orgID 
 }
 
 const createdOrganizations = `-- name: CreatedOrganizations :one
-SELECT count(*) FROM organizations WHERE created_by = $1::uuid
+SELECT count(*) FROM organizations WHERE created_by = $1::uuid AND deleting_at IS NULL
 `
 
-// CreatedOrganizations counts the organizations the user created for themselves.
+// CreatedOrganizations counts the organizations the user created for themselves that aren't being deleted.
 func (q *Queries) CreatedOrganizations(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, createdOrganizations, userID)
 	var count int64
@@ -62,6 +81,61 @@ func (q *Queries) DeleteMembership(ctx context.Context, orgID uuid.UUID, userID 
 	return result.RowsAffected(), nil
 }
 
+const deleteOrganizationAccess = `-- name: DeleteOrganizationAccess :exec
+WITH slugs AS (
+    DELETE FROM organization_slugs s WHERE s.org_id = $1::uuid
+), members AS (
+    DELETE FROM memberships m WHERE m.org_id = $1::uuid
+), invited AS (
+    DELETE FROM invitations i WHERE i.org_id = $1::uuid
+)
+DELETE FROM join_requests j WHERE j.org_id = $1::uuid
+`
+
+// DeleteOrganizationAccess frees the organization's slugs and deletes its memberships, invitations and join requests.
+func (q *Queries) DeleteOrganizationAccess(ctx context.Context, organization uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationAccess, organization)
+	return err
+}
+
+const deleteOrganizationCredentials = `-- name: DeleteOrganizationCredentials :exec
+DELETE FROM credentials c USING principals p WHERE p.id = c.principal_id AND p.org_id = $1::uuid
+`
+
+// DeleteOrganizationCredentials deletes the secrets of the organization's API keys.
+func (q *Queries) DeleteOrganizationCredentials(ctx context.Context, organization uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationCredentials, organization)
+	return err
+}
+
+const deleteOrganizationEvents = `-- name: DeleteOrganizationEvents :exec
+DELETE FROM events WHERE org_id = $1::uuid
+`
+
+// DeleteOrganizationEvents deletes the events of an organization, which name it without a key.
+func (q *Queries) DeleteOrganizationEvents(ctx context.Context, orgID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationEvents, orgID)
+	return err
+}
+
+const deleteOrganizationGrants = `-- name: DeleteOrganizationGrants :exec
+DELETE FROM grants g USING principals p
+WHERE p.id = g.principal_id AND p.org_id IS DISTINCT FROM $1::uuid
+  AND ((g.scope = 'organization' AND g.scope_id = $1::uuid)
+    OR (g.scope = 'repository' AND g.scope_id IN (SELECT r.id FROM repositories r WHERE r.org_id = $1::uuid))
+    OR (g.scope = 'secret' AND g.scope_id IN (SELECT s.id FROM secrets s WHERE s.org_id = $1::uuid))
+    OR (g.scope = 'artifact' AND g.scope_id IN (SELECT a.id FROM artifacts a WHERE a.org_id = $1::uuid))
+    OR g.role_id IN (SELECT r.id FROM roles r WHERE r.org_id = $1::uuid))
+`
+
+// DeleteOrganizationGrants deletes every grant there of whoever isn't one of the organization's own principals: at the
+// organization, at its repositories, secrets and artifacts, and of its roles. Its own principals keep theirs until the
+// purge deletes them: its jobs, agents and API keys act no more, and its targets tear its environments down.
+func (q *Queries) DeleteOrganizationGrants(ctx context.Context, organization uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationGrants, organization)
+	return err
+}
+
 const deleteScopeGrants = `-- name: DeleteScopeGrants :execrows
 DELETE FROM grants WHERE principal_id = $1 AND scope = $2 AND scope_id = $3::uuid
 `
@@ -73,6 +147,36 @@ func (q *Queries) DeleteScopeGrants(ctx context.Context, principalID uuid.UUID, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const holdOrganization = `-- name: HoldOrganization :one
+SELECT (deleting_at IS NULL)::boolean AS live FROM organizations WHERE id = $1 FOR SHARE
+`
+
+// HoldOrganization holds a live organization against its deletion until the transaction ends, as
+// HoldRepositoryOrganization does a repository's, and answers whether it is live.
+func (q *Queries) HoldOrganization(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, holdOrganization, id)
+	var live bool
+	err := row.Scan(&live)
+	return live, err
+}
+
+const holdRepositoryOrganization = `-- name: HoldRepositoryOrganization :one
+SELECT (o.deleting_at IS NULL)::boolean AS live
+FROM repositories r JOIN organizations o ON o.id = r.org_id
+WHERE r.id = $1
+FOR SHARE OF o
+`
+
+// HoldRepositoryOrganization holds the organization of a repository against its deletion until the transaction ends,
+// since a deletion takes its row FOR NO KEY UPDATE first, and answers whether it is live: false once it is being
+// deleted. A deletion that waited for the hold then cancels what was queued under it.
+func (q *Queries) HoldRepositoryOrganization(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, holdRepositoryOrganization, id)
+	var live bool
+	err := row.Scan(&live)
+	return live, err
 }
 
 const holdsRole = `-- name: HoldsRole :one
@@ -167,16 +271,41 @@ func (q *Queries) InsertSlug(ctx context.Context, slug string, orgID uuid.UUID) 
 }
 
 const lockOrganization = `-- name: LockOrganization :one
-SELECT id FROM organizations WHERE id = $1 FOR UPDATE
+SELECT id FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE
 `
 
-// LockOrganization holds the organization's row until the transaction ends, so changes to who may act there
-// happen one at a time.
+// LockOrganization holds a live organization's row until the transaction ends, so changes to who may act there
+// happen one at a time, and none once it is being deleted.
 func (q *Queries) LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, lockOrganization, id)
 	var id_2 uuid.UUID
 	err := row.Scan(&id_2)
 	return id_2, err
+}
+
+const lockOrganizationVersion = `-- name: LockOrganizationVersion :one
+SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR NO KEY UPDATE
+`
+
+// LockOrganizationVersion holds a live organization's row until the transaction ends, and answers its version. It locks
+// FOR NO KEY UPDATE, which the rows other transactions write with a key to the organization don't wait for: one that
+// locked some of its work's rows and then writes another row there would otherwise deadlock with a deletion waiting for
+// that work.
+func (q *Queries) LockOrganizationVersion(ctx context.Context, id uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, lockOrganizationVersion, id)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
+const markOrganizationDeleting = `-- name: MarkOrganizationDeleting :exec
+UPDATE organizations SET deleting_at = $1::timestamptz, deleted_by = $2::uuid WHERE id = $3
+`
+
+// MarkOrganizationDeleting makes the organization Deleting, for whoever deletes it.
+func (q *Queries) MarkOrganizationDeleting(ctx context.Context, deletingAt time.Time, deletedBy uuid.UUID, iD uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markOrganizationDeleting, deletingAt, deletedBy, iD)
+	return err
 }
 
 const memberByEmail = `-- name: MemberByEmail :one
@@ -246,9 +375,10 @@ func (q *Queries) Membership(ctx context.Context, orgID uuid.UUID, userID uuid.U
 }
 
 const organizationByID = `-- name: OrganizationByID :one
-SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, issue_key, created_by FROM organizations WHERE id = $1
+SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, issue_key, created_by, version, deleting_at, deleted_by FROM organizations WHERE id = $1 AND deleting_at IS NULL
 `
 
+// OrganizationByID finds a live organization: one being deleted is gone for everyone.
 func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error) {
 	row := q.db.QueryRow(ctx, organizationByID, id)
 	var i Organization
@@ -262,19 +392,22 @@ func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organizat
 		&i.CreatedAt,
 		&i.IssueKey,
 		&i.CreatedBy,
+		&i.Version,
+		&i.DeletingAt,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const organizationBySlug = `-- name: OrganizationBySlug :one
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by, o.version, o.deleting_at, o.deleted_by FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1 AND o.deleting_at IS NULL
 `
 
 type OrganizationBySlugRow struct {
 	Organization Organization
 }
 
-// OrganizationBySlug finds an organization by any slug it has had.
+// OrganizationBySlug finds a live organization by any slug it has had.
 func (q *Queries) OrganizationBySlug(ctx context.Context, slug string) (OrganizationBySlugRow, error) {
 	row := q.db.QueryRow(ctx, organizationBySlug, slug)
 	var i OrganizationBySlugRow
@@ -288,6 +421,9 @@ func (q *Queries) OrganizationBySlug(ctx context.Context, slug string) (Organiza
 		&i.Organization.CreatedAt,
 		&i.Organization.IssueKey,
 		&i.Organization.CreatedBy,
+		&i.Organization.Version,
+		&i.Organization.DeletingAt,
+		&i.Organization.DeletedBy,
 	)
 	return i, err
 }
@@ -333,14 +469,15 @@ func (q *Queries) OrganizationGrants(ctx context.Context, orgID uuid.UUID) ([]Or
 }
 
 const organizationsOf = `-- name: OrganizationsOf :many
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by FROM organizations o JOIN memberships m ON m.org_id = o.id WHERE m.user_id = $1 ORDER BY o.name, o.slug
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key, o.created_by, o.version, o.deleting_at, o.deleted_by FROM organizations o JOIN memberships m ON m.org_id = o.id
+WHERE m.user_id = $1 AND o.deleting_at IS NULL ORDER BY o.name, o.slug
 `
 
 type OrganizationsOfRow struct {
 	Organization Organization
 }
 
-// OrganizationsOf lists the organizations a user belongs to, by name.
+// OrganizationsOf lists the live organizations a user belongs to, by name.
 func (q *Queries) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]OrganizationsOfRow, error) {
 	rows, err := q.db.Query(ctx, organizationsOf, userID)
 	if err != nil {
@@ -360,7 +497,54 @@ func (q *Queries) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Orga
 			&i.Organization.CreatedAt,
 			&i.Organization.IssueKey,
 			&i.Organization.CreatedBy,
+			&i.Organization.Version,
+			&i.Organization.DeletingAt,
+			&i.Organization.DeletedBy,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const organizationsToPurge = `-- name: OrganizationsToPurge :many
+SELECT o.id, o.deleting_at::timestamptz AS deleting_at,
+    (SELECT count(*) FROM environments e WHERE e.org_id = o.id AND e.deleted_at IS NULL) AS live_environments
+FROM organizations o
+WHERE o.deleting_at IS NOT NULL
+  AND (o.deleting_at < $1::timestamptz OR (
+    NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.org_id = o.id
+        AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
+    AND NOT EXISTS (SELECT 1 FROM environments e WHERE e.org_id = o.id AND e.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM deliveries t WHERE t.environment_id = e.id AND t.kind = 'teardown'
+            AND t.queued_at >= o.deleting_at))))
+ORDER BY o.deleting_at, o.id
+`
+
+type OrganizationsToPurgeRow struct {
+	ID               uuid.UUID
+	DeletingAt       time.Time
+	LiveEnvironments int64
+}
+
+// OrganizationsToPurge lists, the earliest deleted first, the organizations being deleted whose rows may go: nothing of
+// theirs delivers and each of their live environments had its teardown since, or they were deleted before @before,
+// whatever their teardowns do. Each comes with how many of its environments live still, which a teardown that failed
+// leaves.
+func (q *Queries) OrganizationsToPurge(ctx context.Context, before time.Time) ([]OrganizationsToPurgeRow, error) {
+	rows, err := q.db.Query(ctx, organizationsToPurge, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrganizationsToPurgeRow
+	for rows.Next() {
+		var i OrganizationsToPurgeRow
+		if err := rows.Scan(&i.ID, &i.DeletingAt, &i.LiveEnvironments); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -398,6 +582,20 @@ func (q *Queries) Permissions(ctx context.Context, principalID uuid.UUID, scope 
 	return items, nil
 }
 
+const purgeOrganization = `-- name: PurgeOrganization :execrows
+DELETE FROM organizations WHERE id = $1 AND deleting_at IS NOT NULL
+`
+
+// PurgeOrganization deletes an organization being deleted: its ON DELETE CASCADEs take every row that carries its
+// org_id.
+func (q *Queries) PurgeOrganization(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeOrganization, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const role = `-- name: Role :one
 SELECT id, scope, name, description, permissions, built_in, org_id FROM roles WHERE id = $1
 `
@@ -417,10 +615,11 @@ func (q *Queries) Role(ctx context.Context, id uuid.UUID) (Role, error) {
 	return i, err
 }
 
-const updateOrganization = `-- name: UpdateOrganization :execrows
+const updateOrganization = `-- name: UpdateOrganization :one
 UPDATE organizations SET slug = $1, name = $2, membership_role_id = $3,
     accepts_join_requests = $4, providers = $5, issue_key = $6
-WHERE id = $7
+WHERE id = $7 AND deleting_at IS NULL
+RETURNING version
 `
 
 type UpdateOrganizationParams struct {
@@ -433,8 +632,9 @@ type UpdateOrganizationParams struct {
 	ID                  uuid.UUID
 }
 
+// UpdateOrganization writes a live organization's settings and answers its version since.
 func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateOrganization,
+	row := q.db.QueryRow(ctx, updateOrganization,
 		arg.Slug,
 		arg.Name,
 		arg.MembershipRoleID,
@@ -443,8 +643,7 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.IssueKey,
 		arg.ID,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var version int64
+	err := row.Scan(&version)
+	return version, err
 }

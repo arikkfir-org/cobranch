@@ -47,8 +47,8 @@ func newFixture(t *testing.T) *fixture {
 		s.AddUser(v.ID, v.DisplayName, v.Emails[0].Email)
 	}
 	s.Grant(f.nia.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
-	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now}
-	f.globex = orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleGuest, AcceptsJoinRequests: true, CreatedAt: now}
+	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now, Version: 1}
+	f.globex = orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleGuest, AcceptsJoinRequests: true, CreatedAt: now, Version: 1}
 	for _, o := range []orgs.Organization{f.acme, f.globex} {
 		s.Orgs[o.ID], s.Slugs[o.Slug] = o, o.ID
 	}
@@ -176,7 +176,7 @@ func TestGetAndUpdate(t *testing.T) {
 			return got(err)
 		}},
 		{name: "an Owner changes the settings", run: func(ctx context.Context, f *fixture) error {
-			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme-inc", Name: "Acme Inc", MembershipRoleID: auth.RoleGuest, Providers: []string{"google"}})
+			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme-inc", Name: "Acme Inc", MembershipRoleID: auth.RoleGuest, Providers: []string{"google"}})
 			if err != nil {
 				return got(err)
 			}
@@ -187,15 +187,15 @@ func TestGetAndUpdate(t *testing.T) {
 			return nil
 		}, wantEvents: []string{"org.updated"}},
 		{name: "a Member may not", run: func(ctx context.Context, f *fixture) error {
-			_, err := f.service.Update(ctx, f.max, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			_, err := f.service.Update(ctx, f.max, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
 			return got(err)
 		}, wantErr: auth.ErrForbidden},
 		{name: "a slug another organization has", run: func(ctx context.Context, f *fixture) error {
-			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "globex", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "globex", Name: "Acme", MembershipRoleID: auth.RoleMember})
 			return got(err)
 		}, wantErr: orgs.ErrSlugTaken},
 		{name: "a membership role that isn't an organization's", run: func(ctx context.Context, f *fixture) error {
-			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleInstallationUser})
+			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleInstallationUser})
 			return got(err)
 		}, wantCode: "role.invalid"},
 		{name: "the viewer's permissions", run: func(ctx context.Context, f *fixture) error {
@@ -208,21 +208,42 @@ func TestGetAndUpdate(t *testing.T) {
 	})
 }
 
+func TestUpdateAtVersion(t *testing.T) {
+	runCases(t, []testCase{
+		{name: "the version it is at", run: func(ctx context.Context, f *fixture) error {
+			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme Inc", MembershipRoleID: auth.RoleMember})
+			if err != nil {
+				return got(err)
+			}
+			_, err = f.service.Update(ctx, f.olivia, f.acme.ID, org.Version, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			return got(err)
+		}, wantEvents: []string{"org.updated", "org.updated"}},
+		{name: "a version it changed since", run: func(ctx context.Context, f *fixture) error {
+			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme Inc", MembershipRoleID: auth.RoleMember})
+			if err != nil {
+				return got(err)
+			}
+			_, err = f.service.Update(ctx, f.olivia, f.acme.ID, org.Version-1, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			return got(err)
+		}, wantErr: orgs.ErrChanged, wantEvents: []string{"org.updated"}},
+	})
+}
+
 func TestIssueKey(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "an Owner changes the issue key", run: func(ctx context.Context, f *fixture) error {
-			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "AC2"})
+			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "AC2"})
 			if err == nil && org.IssueKey != "AC2" {
 				t.Errorf("Update() = %+v, want key AC2", org)
 			}
-			kept, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			kept, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
 			if err == nil && kept.IssueKey != "AC2" {
 				t.Errorf("Update() without a key = %+v, want key AC2 kept", kept)
 			}
 			return got(err)
 		}, wantEvents: []string{"org.updated", "org.updated"}},
 		{name: "an issue key that isn't one", run: func(ctx context.Context, f *fixture) error {
-			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "acme"})
+			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "acme"})
 			return got(err)
 		}, wantCode: "issue_key.invalid"},
 	})

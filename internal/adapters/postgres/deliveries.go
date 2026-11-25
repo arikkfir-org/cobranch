@@ -15,6 +15,7 @@ import (
 	"cobranch.dev/internal/services/delivery"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
+	"cobranch.dev/internal/services/repos"
 )
 
 // queueDeliveries queues, in the transaction of the push that moved e's branch, a delivery of e's commit to each of
@@ -192,9 +193,10 @@ func queueTeardown(ctx context.Context, q *queries.Queries, env queries.Environm
 const scheduleBatch = 100
 
 // Schedule queues, for each live environment the controller's schedule is due to look at, its teardown when its
-// branch is gone or the default branch's targets no longer give it one, and otherwise its resync, if it holds a
-// revision and isn't paused, each in a transaction of its own that holds the repository's delivery queue
-// (deliverer.Store). It goes on past an environment it fails to look at, and answers how many it queued.
+// organization is being deleted, its branch is gone or the default branch's targets no longer give it one, and
+// otherwise its resync, if it holds a revision and isn't paused, each in a transaction of its own that holds the
+// repository's delivery queue (deliverer.Store). It goes on past an environment it fails to look at, and answers how
+// many it queued.
 func (s *DeliveryStore) Schedule(ctx context.Context, every time.Duration) (int, error) {
 	due, err := s.db.Everywhere(controllerQueues).DueEnvironments(ctx, every.Seconds(), scheduleBatch)
 	if err != nil {
@@ -215,9 +217,15 @@ func (s *DeliveryStore) Schedule(ctx context.Context, every time.Duration) (int,
 	return queued, errors.Join(errs...)
 }
 
-// scheduleEnvironment queues one environment's teardown or resync, as Schedule says, unless it ended or a delivery of
-// it started meanwhile; it answers whether it queued one.
+// scheduleEnvironment queues one environment's teardown or resync, as Schedule says, its teardown whatever its branch
+// says when its organization is being deleted, unless it ended or a delivery of it started meanwhile; it answers
+// whether it queued one. It holds the organization first, so a deletion either came before and gets the teardown, or
+// waits and cancels the resync.
 func scheduleEnvironment(ctx context.Context, q *queries.Queries, repoID, envID uuid.UUID) (bool, error) {
+	live, err := liveOrganization(ctx, q, repoID)
+	if err != nil {
+		return false, err
+	}
 	if err := q.LockDeliveryQueue(ctx, repoID); err != nil {
 		return false, fmt.Errorf("locking the repository's deliveries: %w", err)
 	}
@@ -232,11 +240,16 @@ func scheduleEnvironment(ctx context.Context, q *queries.Queries, repoID, envID 
 	if err != nil || active {
 		return false, wrapIf(err, "finding environment "+envID.String()+"'s deliveries")
 	}
+	env := row.Environment
+	if !live {
+		_, err := enqueue(ctx, q, queuedDelivery{env: env, target: row.Target, kind: code.Teardown, trigger: code.TriggeredBySchedule,
+			state: code.DeliveryQueued})
+		return err == nil, err
+	}
 	main, err := mainSettings(ctx, q, repoID)
 	if err != nil {
 		return false, err
 	}
-	env := row.Environment
 	tip, err := tipOf(ctx, q, repoID, env.Branch)
 	if err != nil {
 		return false, err
@@ -432,8 +445,17 @@ type queuedDelivery struct {
 // enqueue numbers and records a delivery, superseding the environment's deliveries that haven't started applying. A
 // commit's sets the target's annotation on the commit, failing it, and the delivery, when another principal holds it
 // there. The environment turns Out of sync, but for a resync, which brings nothing newer. It answers the delivery's
-// number.
+// number. An organization being deleted gets teardowns only: another delivery there is repos.ErrNotFound.
 func enqueue(ctx context.Context, q *queries.Queries, d queuedDelivery) (int64, error) {
+	if d.kind != code.Teardown {
+		live, err := liveOrganization(ctx, q, d.env.RepoID)
+		if err != nil {
+			return 0, err
+		}
+		if !live {
+			return 0, repos.ErrNotFound
+		}
+	}
 	number, err := q.NextDeliveryNumber(ctx, d.env.RepoID)
 	if err != nil {
 		return 0, fmt.Errorf("numbering the delivery: %w", err)

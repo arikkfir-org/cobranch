@@ -199,6 +199,12 @@ func (s *RunStore) Organizations(ctx context.Context, ids []uuid.UUID) ([]uuid.U
 	return out, wrapIf(err, "finding the organizations")
 }
 
+// Repositories answers which of ids are repositories still: maintenance deletes the logs of the others.
+func (s *RunStore) Repositories(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	out, err := s.db.Everywhere(maintenance).RepositoriesLeft(ctx, ids)
+	return out, wrapIf(err, "finding the repositories")
+}
+
 // DropTokens deletes the tokens of runs that ended without the controller, and those that expired (runner.Store).
 func (s *RunStore) DropTokens(ctx context.Context) (int64, error) {
 	n, err := s.db.Everywhere(controllerQueues).DeleteDeadRunTokens(ctx)

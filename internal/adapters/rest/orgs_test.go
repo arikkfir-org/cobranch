@@ -94,7 +94,7 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	}
 	store.Grant(f.nia.User.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
 	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, IssueKey: "ACME",
-		CreatedAt: now}
+		CreatedAt: now, Version: 1}
 	store.Orgs[f.acme.ID], store.Slugs["acme"], store.Slugs["acme-corp"] = f.acme, f.acme.ID, f.acme.ID
 	store.AddMember(f.acme.ID, f.olivia.User.ID, auth.RoleOwner)
 	store.AddMember(f.acme.ID, f.max.User.ID, auth.RoleMember)
@@ -349,19 +349,59 @@ func TestOrganizations(t *testing.T) {
 				}
 			}},
 		{name: "get as an outsider", viewer: nia, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 404, wantCode: "organization.not_found"},
-		{name: "update", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Acme Inc","acceptsJoinRequests":false,"providers":["google"]}`, wantStatus: 200,
+		{name: "update", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Acme Inc","acceptsJoinRequests":false,"providers":["google"]}`, header: ifMatchHeader(`"1"`), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if o := decode[Organization](t, body); o.Name != "Acme Inc" || o.Slug != "acme" || o.AcceptsJoinRequests || o.Providers == nil || (*o.Providers)[0] != "google" {
 					t.Errorf("organization = %s", body)
 				}
 			}},
-		{name: "update clears the providers with an empty list", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"providers":[]}`, wantStatus: 200,
+		{name: "update clears the providers with an empty list", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"providers":[]}`, header: ifMatchHeader("*"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if o := decode[Organization](t, body); o.Providers != nil {
 					t.Errorf("organization = %s", body)
 				}
 			}},
-		{name: "update as a Member", viewer: maxim, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Mine"}`, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "update as a Member", viewer: maxim, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Mine"}`, header: ifMatchHeader("*"), wantStatus: 403, wantCode: "auth.forbidden"},
+	})
+}
+
+func TestOrganizationVersions(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "get names its version", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 200, wantTag: `"1-`,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if o := decode[Organization](t, body); o.Version != 1 {
+					t.Errorf("version = %d, want 1", o.Version)
+				}
+			}},
+		{name: "get unchanged", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme"), wantStatus: 304,
+			headerFor: func(f *orgFixture) http.Header {
+				return http.Header{"If-None-Match": []string{f.call(&f.max, "GET", "/v1/orgs/acme", "").Header().Get("Etag")}}
+			}},
+		{name: "update names its version since", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Acme Inc"}`, wantStatus: 200, wantTag: `"2-`,
+			headerFor: func(f *orgFixture) http.Header {
+				return ifMatchHeader(f.call(&f.olivia, "GET", "/v1/orgs/acme", "").Header().Get("Etag"))
+			}},
+		{name: "update without If-Match", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Acme Inc"}`, wantStatus: 428, wantCode: "precondition.required"},
+		{name: "update one that changed", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme"), body: `{"name":"Acme Inc"}`, header: ifMatchHeader(`"2-0a"`), wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "delete", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme"), wantStatus: 204,
+			headerFor: func(f *orgFixture) http.Header {
+				return ifMatchHeader(f.call(&f.olivia, "GET", "/v1/orgs/acme", "").Header().Get("Etag"))
+			},
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				if d, ok := f.store.Deleting[f.acme.ID]; !ok || d.By != f.olivia.User.ID || !d.At.Equal(now) {
+					t.Errorf("Deleting = %+v, %t, want Acme for Olivia", d, ok)
+				}
+				if rec := f.call(&f.olivia, "GET", "/v1/orgs/acme", ""); rec.Code != http.StatusNotFound {
+					t.Errorf("GET of a deleted organization = %d, want 404", rec.Code)
+				}
+			}},
+		{name: "delete whichever version", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader("*"), wantStatus: 204},
+		{name: "delete without If-Match", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme"), wantStatus: 428, wantCode: "precondition.required"},
+		{name: "delete naming no version", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader(`"v"`), wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "delete one that changed", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader(`"2-0a"`), wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "delete as a Member", viewer: maxim, method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader("*"), wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "delete as an outsider", viewer: nia, method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader("*"), wantStatus: 404, wantCode: "organization.not_found"},
+		{name: "delete as anonymous", method: "DELETE", path: fixed("/v1/orgs/acme"), header: ifMatchHeader("*"), wantStatus: 401, wantCode: "auth.unauthenticated"},
 	})
 }
 

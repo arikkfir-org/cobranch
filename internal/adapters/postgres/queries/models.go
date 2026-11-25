@@ -385,6 +385,9 @@ type Organization struct {
 	CreatedAt           time.Time
 	IssueKey            string
 	CreatedBy           *uuid.UUID
+	Version             int64
+	DeletingAt          *time.Time
+	DeletedBy           *uuid.UUID
 }
 
 type OrganizationLimit struct {

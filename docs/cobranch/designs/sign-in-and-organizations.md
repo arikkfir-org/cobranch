@@ -197,6 +197,51 @@ returns to No organization.
 - **What stays.** API keys and invitations the member made stay, since the organization owns them. A removed user who
   belongs nowhere else returns to No organization.
 
+### Deleting one
+
+**Proposed** ([ENG-261](https://linear.app/arikkfir/issue/ENG-261)): an Owner deletes the organization from Settings ·
+General's Danger zone. It is gone for everyone at once; its data goes once what it runs elsewhere is torn down.
+
+**Deleting an organization takes it from everyone at once, and its data once its environments are torn down**
+
+![Deleting an organization takes it from everyone at once, and its data once its environments are torn down](sign-in-and-organizations/delete-org.svg)
+
+The audit log names the Owner on the row that marked it Deleting; the purge’s deletes are Cobranch’s own, with no
+principal.
+
+**An organization is Live, then Deleting until its environments are torn down, then gone**
+
+![An organization is Live, then Deleting until its environments are torn down, then gone](sign-in-and-organizations/org-life.svg)
+
+There is no undo: a Deleting organization has lost its members and grants already. Restoring one is restoring a backup.
+
+- **Who.** `org.manage`, which among the built-in roles only Owner holds. The Console asks for the organization's name,
+  typed; the API takes its ETag in `If-Match` (`428` without one, `412` once it changed) and answers `204`.
+- **At once, in one transaction,** the organization becomes Deleting: its slug and old slugs are free for a new
+  organization; its memberships, invitations and join requests go, with every grant there of whoever isn't its own (at
+  it, at its repositories, secrets and artifacts, and of its own roles), and its API keys' secrets. Its own jobs,
+  agents, targets and API keys keep their grants until the purge: only its teardowns act with them, as its targets. Its
+  waiting, queued and running runs and tasks are cancelled, and its deliveries that haven't started applying. From here
+  on nobody reaches it, an installation administrator's Back-office included, and nothing of it runs again. What would
+  start work there (the push worker following a push, a run or a re-run, a review or another task, a delivery other than
+  a teardown) first holds the organization, finds it Deleting and queues nothing; a deletion that comes after the hold
+  waits for it, then cancels what was queued under it. Its members keep their accounts and their other organizations;
+  one who belonged nowhere else returns to No organization.
+- **Its environments are torn down first.** The deliverer's schedule queues one teardown of each of its live
+  environments within a minute, and no more resyncs ([teardown](delivery.md#teardown)). A teardown that fails leaves
+  what it couldn't delete in that cluster, and the purge logs it.
+- **The purge** is the hourly maintenance's: once nothing of the organization delivers and each of its live
+  environments' teardowns ended, or a day after the deletion whatever they do, one `DELETE` of its row, whose
+  `ON DELETE CASCADE`s reach every table that carries `org_id`, and of its events. The controller then drops its job
+  namespace, and maintenance deletes the Git packs no row names, where Git compaction runs, and the run logs of
+  repositories that are gone, where logs have a retention (the chart sets both).
+- **Who did it.** The audit log names the Owner on the organization's row as it became Deleting; the purge's deletes are
+  Cobranch's own, with no principal.
+- **Under row-level security** ([ENG-268](https://linear.app/arikkfir/issue/ENG-268)), the deletion runs inside the
+  organization; the purge, like the rest of maintenance, runs across the installation: it lists the organizations due
+  and deletes each with no organization pinned. The cascades bypass row security anyway, as PostgreSQL's referential
+  actions do.
+
 ## Roles and grants
 
 **Nobody grants or revokes more than they hold**
@@ -270,6 +315,7 @@ pages call the REST API, as its sign-in page already did; they switch to GraphQL
 | Create an organization | `orgs.create` |
 | See an organization, its members, roles and API keys | `org.read` |
 | Rename it, change its slug and settings | `org.manage` |
+| Delete it, with everything it holds | `org.manage` |
 | Invite, see and cancel invitations; see, approve or decline requests | `org.members.manage`; another role than the membership role adds the grant rules |
 | Remove a member | `org.members.manage` and every permission of their roles |
 | Ask to join, accept or decline an invitation, leave | The user, for themselves |
@@ -386,7 +432,13 @@ Cobranch’s own pull request previews sign in as seeded users.
 | An API key holds at most two secrets; rotating adds one | No downtime while scripts change secrets ([principals](principals-and-permissions.md#api-keys-and-personal-tokens)) | Agreed |
 | The maintenance CronJob arrives now, deleting expired rows | Flows and sessions grow with every sign-in | Agreed |
 | Previews sign in as seeded users, with seeding on only | A provider can't register a redirect URI per preview; reviewers try every role | Agreed |
-| Groups, personal tokens, SSH and signing keys, login-less users, mail, linked identities, and deleting accounts or organizations come later | Keeps this slice to its issue | Agreed |
+| Groups, personal tokens, SSH and signing keys, login-less users, mail, linked identities, and deleting accounts come later | Keeps this slice to its issue | Agreed |
+| Deleting an organization is two steps: Deleting at once, its rows purged later ([ENG-261](https://linear.app/arikkfir/issue/ENG-261)) | Its environments live in clusters, and the rows that find them must outlast their teardowns; a large organization's cascade runs off the request | Proposed |
+| A deleted organization's slugs are free at once: its slug is unique among live organizations only | A team that deleted one by mistake makes it again under the same name | Proposed |
+| The Console asks for the name typed; the API takes the ETag | A deletion nobody can undo takes a deliberate step; scripts keep the house rule for `DELETE` | Proposed |
+| The purge waits for teardowns at most a day | A cluster that never answers doesn't keep an organization's data | Proposed |
+| Maintenance deletes the run logs of repositories that are gone, not only those past retention | Its logs go with the organization, not 30 days later | Proposed |
+| No grace period and no undo | The design's Danger zone says it can't be undone; a backup restores one | Proposed |
 
 ## Settled questions
 

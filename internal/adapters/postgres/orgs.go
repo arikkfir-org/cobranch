@@ -36,7 +36,7 @@ var (
 // conflicts maps the constraints a unique violation names to the domain's errors.
 var conflicts = map[string]error{
 	"organization_slugs_pkey": orgs.ErrSlugTaken,
-	"organizations_slug_key":  orgs.ErrSlugTaken,
+	"organizations_live_slug": orgs.ErrSlugTaken,
 	"invitations_pending":     orgs.ErrInvited,
 	"join_requests_pending":   orgs.ErrRequested,
 	"memberships_pkey":        orgs.ErrAlreadyMember,
@@ -76,7 +76,8 @@ func wrapOrg(what string, err error) error {
 // organization is the domain's view of an organizations row.
 func organization(o queries.Organization) orgs.Organization {
 	return orgs.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, MembershipRoleID: o.MembershipRoleID,
-		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt,
+		Version: o.Version}
 }
 
 // issueKey is the organization's issue key, or its slug's default when it names none.
@@ -241,9 +242,18 @@ func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, e
 }
 
 // Update writes the organization's settings, claiming its slug when it changed: one of its own former slugs comes back
-// to it, another organization's is taken.
-func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
-	return s.transact(ctx, s.db.In(org.ID), "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+// to it, another organization's is taken. It holds the organization's row, so it never claims a slug for one being
+// deleted, and answers its version since.
+func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization, expected int64) (int64, error) {
+	var version int64
+	err := s.transact(ctx, s.db.In(org.ID), "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+		current, err := q.LockOrganizationVersion(ctx, org.ID)
+		if err != nil {
+			return wrapOrg("locking the organization", err)
+		}
+		if expected != orgs.AnyVersion && expected != current {
+			return orgs.ErrChanged
+		}
 		before, err := q.OrganizationByID(ctx, org.ID)
 		if err != nil {
 			return wrapOrg("reading the organization", err)
@@ -257,14 +267,16 @@ func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 				return orgs.ErrSlugTaken
 			}
 		}
-		if _, err := q.UpdateOrganization(ctx, queries.UpdateOrganizationParams{
+		version, err = q.UpdateOrganization(ctx, queries.UpdateOrganizationParams{
 			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
 			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, IssueKey: issueKey(org),
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("updating the organization: %w", err)
 		}
 		return orgEvent(ctx, q, &org.ID, actor, "org.updated", org.ID, map[string]any{"slug": org.Slug, "name": org.Name, "issueKey": issueKey(org)})
 	})
+	return version, err
 }
 
 // OrganizationsOf lists the organizations a user belongs to, by name.

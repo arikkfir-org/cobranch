@@ -26,7 +26,8 @@ type Organizations interface {
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
-	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
+	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64, settings orgs.Settings) (orgs.Organization, error)
+	Delete(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64) error
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
 	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)
 	CreateRole(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
@@ -139,7 +140,7 @@ func fail(err error, kind string) error {
 		return refuse(http.StatusRequestEntityTooLarge, "render.too_large", "A render is at most 16 MiB.")
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The annotation changed since you read it: read it again.")
-	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged):
+	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged), errors.Is(err, orgs.ErrChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "It changed since you read it: read it again.")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(http.StatusForbidden, "auth.forbidden", "You lack the permission this takes.")
@@ -159,7 +160,7 @@ func fail(err error, kind string) error {
 // organization is o as the API shows it, with what the viewer holds there.
 func organization(o orgs.Organization, held []string) Organization {
 	out := Organization{Id: o.ID, Slug: o.Slug, Name: o.Name, MembershipRoleId: o.MembershipRoleID,
-		AcceptsJoinRequests: o.AcceptsJoinRequests, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt, ViewerPermissions: nonNil(held)}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt, Version: o.Version, ViewerPermissions: nonNil(held)}
 	if o.Providers != nil {
 		out.Providers = &o.Providers
 	}
@@ -271,7 +272,14 @@ func (a api) GetOrganization(ctx context.Context, req GetOrganizationRequestObje
 	if err != nil {
 		return nil, err
 	}
-	return GetOrganization200JSONResponse(shown), nil
+	tag, err := versionTag(org.Version, shown)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetOrganization304Response{Headers: GetOrganization304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetOrganization200JSONResponse{Body: shown, Headers: GetOrganization200ResponseHeaders{ETag: tag}}, nil
 }
 
 // UpdateOrganization changes what the body names and keeps the rest.
@@ -307,7 +315,11 @@ func (a api) UpdateOrganization(ctx context.Context, req UpdateOrganizationReque
 	if b.IssueKey != nil {
 		settings.IssueKey = *b.IssueKey
 	}
-	updated, err := a.orgs.Update(ctx, v, org.ID, settings)
+	match, err := versionMatch(req.Params.IfMatch, orgs.AnyVersion)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := a.orgs.Update(ctx, v, org.ID, match, settings)
 	if err != nil {
 		return nil, fail(err, "organization")
 	}
@@ -315,7 +327,31 @@ func (a api) UpdateOrganization(ctx context.Context, req UpdateOrganizationReque
 	if err != nil {
 		return nil, err
 	}
-	return UpdateOrganization200JSONResponse(shown), nil
+	tag, err := versionTag(updated.Version, shown)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateOrganization200JSONResponse{Body: shown, Headers: UpdateOrganization200ResponseHeaders{ETag: tag}}, nil
+}
+
+// DeleteOrganization deletes the organization, at the version If-Match names, with everything it holds.
+func (a api) DeleteOrganization(ctx context.Context, req DeleteOrganizationRequestObject) (DeleteOrganizationResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	match, err := versionMatch(req.Params.IfMatch, orgs.AnyVersion)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.orgs.Delete(ctx, v, org.ID, match); err != nil {
+		return nil, fail(err, "organization")
+	}
+	return DeleteOrganization204Response{}, nil
 }
 
 // Deprecated routes announce their end with these headers (RFC 9745 and RFC 8594): /roles went when roles became

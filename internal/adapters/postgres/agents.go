@@ -384,11 +384,19 @@ func findTask(ctx context.Context, q *queries.Queries, orgID uuid.UUID, number i
 		r.Cap}), nil
 }
 
-// Assign numbers the task in its organization and records it for actor, Queued, and answers it. Called with the
-// context of another store's transaction, it records the task in that transaction (agents.Store).
+// Assign numbers the task in its organization and records it for actor, Queued, and answers it; orgs.ErrNotFound
+// once the organization is being deleted. Called with the context of another store's transaction, it records the task
+// in that transaction (agents.Store).
 func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task) (agents.Task, error) {
 	var out agents.Task
 	err := s.db.In(t.OrgID).Transact(ctx, "recording the task", actor, func(ctx context.Context, q *queries.Queries) error {
+		live, err := liveOrg(ctx, q, t.OrgID)
+		if err != nil {
+			return err
+		}
+		if !live {
+			return orgs.ErrNotFound
+		}
 		number, err := q.NextTaskNumber(ctx, t.OrgID)
 		if err != nil {
 			return fmt.Errorf("numbering the task: %w", err)
@@ -428,10 +436,20 @@ func idOrNil(id uuid.UUID) *uuid.UUID {
 }
 
 // Cancel cancels one of the organization's active tasks for actor, at version or at any version for
-// agents.AnyVersion, and answers it; agents.ErrEnded once it has ended, agents.ErrChanged (agents.Store).
+// agents.AnyVersion, and answers it; agents.ErrEnded once it has ended, agents.ErrChanged, orgs.ErrNotFound once the
+// organization is being deleted (agents.Store). It holds the organization before it locks the task, as a deletion
+// locks them, so a transaction that cancels a task and then assigns another, as an issue handed to another agent does,
+// never deadlocks with a deletion.
 func (s *AgentStore) Cancel(ctx context.Context, actor, orgID uuid.UUID, number, version int64) (agents.Task, error) {
 	var out agents.Task
 	err := s.db.In(orgID).Transact(ctx, "cancelling the task", actor, func(ctx context.Context, q *queries.Queries) error {
+		live, err := liveOrg(ctx, q, orgID)
+		if err != nil {
+			return err
+		}
+		if !live {
+			return orgs.ErrNotFound
+		}
 		row, err := q.CancelTask(ctx, queries.CancelTaskParams{CancelledBy: &actor, Reason: "Cancelled", OrgID: orgID, Number: number, Version: version})
 		if errors.Is(err, pgx.ErrNoRows) {
 			current, err := findTask(ctx, q, orgID, number)

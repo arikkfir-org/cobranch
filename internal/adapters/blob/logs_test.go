@@ -2,11 +2,14 @@ package blob_test
 
 import (
 	"context"
+	"errors"
 	"maps"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	gocloudblob "gocloud.dev/blob"
 	"gocloud.dev/blob/memblob"
 
 	"cobranch.dev/internal/adapters/blob"
@@ -75,5 +78,75 @@ func TestLogsExpire(t *testing.T) {
 	}
 	if got, err := logs.Read(ctx, repo, run); err != nil || len(got) != 0 {
 		t.Errorf("Read() of an expired run = %q, %v, want none", got, err)
+	}
+}
+
+func TestLogsDropGone(t *testing.T) {
+	kept, gone, other := uuid.New(), uuid.New(), uuid.New()
+	failing := errors.New("the database is down")
+	tests := []struct {
+		name     string
+		repos    []uuid.UUID // the repositories with logs
+		live     []uuid.UUID
+		liveErr  error
+		want     int
+		wantErr  bool
+		wantKept []uuid.UUID
+	}{
+		{name: "no logs", want: 0},
+		{name: "every repository there", repos: []uuid.UUID{kept, gone}, live: []uuid.UUID{kept, gone}, want: 0, wantKept: []uuid.UUID{kept, gone}},
+		{name: "one gone", repos: []uuid.UUID{kept, gone}, live: []uuid.UUID{kept}, want: 2, wantKept: []uuid.UUID{kept}},
+		{name: "all gone", repos: []uuid.UUID{kept, gone, other}, want: 6},
+		{name: "the store fails", repos: []uuid.UUID{kept, gone}, liveErr: failing, wantErr: true, wantKept: []uuid.UUID{kept, gone}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			bucket := memblob.OpenBucket(nil)
+			logs := blob.Logs{Bucket: bucket}
+			putRunLogs(t, logs, tt.repos)
+			if err := bucket.WriteAll(ctx, "logs/not-a-repository/x", []byte("left alone"), nil); err != nil {
+				t.Fatal(err)
+			}
+			var asked []uuid.UUID
+			n, err := logs.DropGone(ctx, func(_ context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+				asked = ids
+				return tt.live, tt.liveErr
+			})
+			if n != tt.want || (err != nil) != tt.wantErr {
+				t.Errorf("DropGone() = %d, %v, want %d deleted, error %t", n, err, tt.want, tt.wantErr)
+			}
+			if len(asked) != len(tt.repos) {
+				t.Errorf("DropGone() asked about %v, want the %d repositories with logs", asked, len(tt.repos))
+			}
+			checkLogsLeft(t, bucket, tt.repos, tt.wantKept)
+			if ok, err := bucket.Exists(ctx, "logs/not-a-repository/x"); !ok || err != nil {
+				t.Errorf("Exists(a key of another shape) = %t, %v, want it kept", ok, err)
+			}
+		})
+	}
+}
+
+// putRunLogs writes the logs of a run of each repository, of its checkout and its main step.
+func putRunLogs(t *testing.T, logs blob.Logs, repos []uuid.UUID) {
+	t.Helper()
+	for _, repo := range repos {
+		run := uuid.New()
+		for _, container := range []string{"cobranch-checkout", "main"} {
+			if err := logs.Put(context.Background(), repo, run, container, []byte("built")); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+// checkLogsLeft checks that of the repositories, those kept have logs left and the others none.
+func checkLogsLeft(t *testing.T, bucket *gocloudblob.Bucket, repos, kept []uuid.UUID) {
+	t.Helper()
+	for _, repo := range repos {
+		obj, err := bucket.List(&gocloudblob.ListOptions{Prefix: "logs/" + repo.String() + "/"}).Next(context.Background())
+		if left := err == nil && obj != nil; left != slices.Contains(kept, repo) {
+			t.Errorf("repository %s's logs left = %t, want %t", repo, left, slices.Contains(kept, repo))
+		}
 	}
 }
