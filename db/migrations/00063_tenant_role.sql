@@ -13,8 +13,7 @@
 -- +goose StatementBegin
 DO $$
 DECLARE
-    fix text := 'As a role that may, run: CREATE ROLE cobranch_tenant NOLOGIN; GRANT cobranch_tenant TO '
-        || quote_ident(current_user) || '; then migrate again.';
+    lend text := 'GRANT cobranch_tenant TO ' || quote_ident(current_user) || '; then migrate again.';
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cobranch_tenant') THEN
         BEGIN
@@ -23,7 +22,8 @@ BEGIN
             -- Another database's migration made it between the check and here.
             WHEN duplicate_object OR unique_violation THEN NULL;
             WHEN insufficient_privilege THEN
-                RAISE EXCEPTION 'role % may not create role cobranch_tenant', current_user USING HINT = fix;
+                RAISE EXCEPTION 'role % may not create role cobranch_tenant', current_user
+                    USING HINT = 'As a role that may, run: CREATE ROLE cobranch_tenant NOLOGIN; ' || lend;
         END;
     END IF;
     -- A superuser switches to any role; any other needs to be a member of it.
@@ -31,7 +31,8 @@ BEGIN
         BEGIN
             EXECUTE format('GRANT cobranch_tenant TO %I', current_user);
         EXCEPTION WHEN insufficient_privilege THEN
-            RAISE EXCEPTION 'role % may not work as role cobranch_tenant', current_user USING HINT = fix;
+            RAISE EXCEPTION 'role % may not work as role cobranch_tenant', current_user
+                USING HINT = 'As a role that may, run: ' || lend;
         END;
     END IF;
 END

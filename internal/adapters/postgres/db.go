@@ -183,8 +183,8 @@ type txKey struct{}
 
 // join admits work in s to the transaction r, or says why not. A transaction that spans organizations admits any; a
 // Deferred one is pinned by the first work that names an organization; one pinned to an organization admits work in
-// that organization or in a row's, which its policies then hold to it. Anything else would silently find less than it
-// asked for, so it is refused.
+// that organization or in a row's, which its policies then hold to it; one pinned by a row first learns which
+// organization that was. Anything else would silently find less than it asked for, so it is refused.
 func (r running) join(ctx context.Context, s Scope) error {
 	outer := *r.scope
 	switch {
@@ -201,9 +201,17 @@ func (r running) join(ctx context.Context, s Scope) error {
 		return nil
 	case s.everywhere:
 		return fmt.Errorf("a transaction in %s can't run work %s", outer, s)
-	case s.deferred, s.table != "", outer.table != "":
+	case s.deferred, s.table != "":
 		return nil // a row's organization isn't known here; the policies hold the work to the pinned one
-	case s.org != outer.org:
+	}
+	pinned := outer.org
+	if outer.table != "" {
+		// The transaction was pinned by a row, whose organization only the database knows.
+		if err := r.tx.QueryRow(ctx, "SELECT coalesce(current_org(), $1)", uuid.Nil).Scan(&pinned); err != nil {
+			return fmt.Errorf("reading the organization of %s: %w", outer, err)
+		}
+	}
+	if s.org != pinned {
 		return fmt.Errorf("a transaction in %s can't run work in %s", outer, s)
 	}
 	return nil
