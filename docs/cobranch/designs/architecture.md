@@ -200,7 +200,7 @@ background work](#events-and-background-work).
 - **Unknown authors get principals.** A commit author or committer whose email nobody holds becomes a login-less user,
   which a user who later verifies that email [claims](principals-and-permissions.md#emails-and-login-less-users).
 - **Scoping is the data layer's job.** **Agreed:** every query function takes its organization and runs pinned to it; row-level
-  security, in progress, holds a pinned query to its organization's rows ([tenant isolation](tenant-isolation.md)).
+  security holds a pinned query to its organization's rows ([tenant isolation](tenant-isolation.md)).
 
 ## Git storage and pushes
 

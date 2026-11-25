@@ -64,6 +64,11 @@
   organizations, with its reason. A scope's queries and its `Transact` pin the organization for their transaction. No
   store keeps a pool or calls `queries.New`, and a test fails one that does; the pin's own statements in `db.go` are
   the other SQL written in Go.
+- Every table with `org_id` has row-level security policy `organization`, which holds a pinned query to its
+  organization's rows (`db/migrations/00064_row_level_security.sql`). A migration that creates a table with `org_id`
+  ends with `SELECT isolate_organization('<table>');` (with `true` for a table whose rows without an organization
+  every organization reads), and a test fails one that doesn't. The policies sit under the queries' own `org_id`
+  filters, which stay.
 - Every table of data people manage (principals, their emails and identities, sessions, roles, grants, organizations,
   their slugs, memberships, invitations, join requests, and each such table a slice adds) carries trigger `audit()` (`db/migrations/00003_audit.sql`), which writes `audit_log` with the
   principal from session variable `cobranch.principal_id`; a new table gets the trigger in its migration, with the
