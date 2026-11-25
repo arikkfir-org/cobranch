@@ -22,7 +22,7 @@
     <div class="fact"><b>Runs as</b>Job whose name ends in a hash of its spec, so a new one runs with each version; deadline 10 minutes</div>
     <div class="fact"><b>Wiring</b><code>cmd/cobranch/migrate.go</code>, 60 lines</div>
     <div class="fact"><b>Engine</b>goose, wrapped by <code>postgres.Schema</code> (<code>adapters/postgres/postgres.go</code>)</div>
-    <div class="fact"><b>Migrations</b><code>db/migrations/</code>: 62 SQL files, embedded in the binary; no Go migrations yet</div>
+    <div class="fact"><b>Migrations</b><code>db/migrations/</code>: 63 SQL files, embedded in the binary; no Go migrations yet</div>
     <div class="fact"><b>Seeds</b><code>db/seeds/</code>: demo data, only with <code>COBRANCH_SEED</code></div>
     <div class="fact"><b>Acts as</b>Nobody: no principal in the <a href="postgresql.html">audit log</a></div>
   </div>
@@ -71,7 +71,7 @@
   <span class="eyebrow">Review leads</span>
   <h2>Worth a closer look</h2>
   <div class="leads">
-    <div class="lead"><h3>Sixty-one files for a product not yet released widely</h3><p>Before the first installation that must be upgraded in place, the history could be squashed into a handful of files per area. After that it cannot.</p></div>
+    <div class="lead"><h3>Sixty-three files for a product not yet released widely</h3><p>Before the first installation that must be upgraded in place, the history could be squashed into a handful of files per area. After that it cannot.</p></div>
     <div class="lead"><h3>The chart names Argo CD</h3><p><code>templates/migrate.yaml</code> carries an <code>argocd.argoproj.io/sync-wave</code> annotation and a comment about Argo CD. Cobranch is meant to assume no delivery tool; an operator-set annotations value would say the same without the name.</p></div>
     <div class="lead"><h3>Role permissions live in migrations</h3><p>Each slice appends to built-in roles by fixed UUID in SQL, while <code>auth/permissions.go</code> holds the catalog and tests hold the two together. One source that generates the other would remove the cross-check.</p></div>
   </div>

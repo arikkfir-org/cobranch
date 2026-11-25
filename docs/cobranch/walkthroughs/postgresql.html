@@ -19,12 +19,12 @@
 
 <section>
   <div class="facts">
-    <div class="fact"><b>Schema</b><code>db/migrations/</code>: 62 files, 67 tables, applied by <a href="migrate.html">migrate</a></div>
+    <div class="fact"><b>Schema</b><code>db/migrations/</code>: 63 files, 67 tables, applied by <a href="migrate.html">migrate</a></div>
     <div class="fact"><b>Queries</b><code>db/queries/</code>: 46 files, 3.1k lines → sqlc → 15k generated lines</div>
     <div class="fact"><b>Stores</b><code>adapters/postgres</code>: 11.6k lines, a store per service port</div>
     <div class="fact"><b>Driver</b>pgx v5, one pool per workload, plus one extra connection per listener</div>
     <div class="fact"><b>Session variables</b>Two: <code>cobranch.principal_id</code> and <code>cobranch.org_id</code></div>
-    <div class="fact"><b>Row-level security</b>None. Tenancy is in the queries</div>
+    <div class="fact"><b>Row-level security</b>Policy <code>organization</code> on every table with <code>org_id</code>, under the queries' own filters</div>
   </div>
 </section>
 
@@ -121,7 +121,7 @@
     <div class="lead"><h3>The house rule asks for more than the scopes do</h3><p>The house rules say every access runs in a transaction through one wrapper that sets the tenant, the user and the trace for row-level security. Every query now runs through a scope, which sets the organization; only <code>Transact</code> sets the principal, so a read names nobody, and nothing sets the trace.</p></div>
     <div class="lead"><h3>Five copies of the same method</h3><p><code>AuthStore</code>, <code>OrgStore</code>, <code>RepoStore</code>, <code>SecretStore</code> and <code>ArtifactStore</code> each define an identical <code>transact</code> that forwards to the package's. An embedded base store would carry it once.</p></div>
     <div class="lead"><h3>Four claim queries, one statement</h3><p>The four <code>SKIP LOCKED</code> claims differ in table and returned columns. sqlc cannot template them, but their lease, defer and retry columns could at least share names and a documented shape.</p></div>
-    <div class="lead"><h3>Tenancy rests on review</h3><p>With no row-level security, one query missing its <code>org_id</code> filter leaks across organizations. A test that scans <code>db/queries</code> for tables with <code>org_id</code> used without it would be cheap.</p></div>
+    <div class="lead"><h3>Tenancy rests on the scope a store names</h3><p>Row-level security holds a pinned query to its organization, so a query missing its <code>org_id</code> filter no longer leaks. Work under <code>Everywhere</code> is bound by nothing but its own filters: each such call names its reason, and those are the ones to review.</p></div>
   </div>
 </section>
 
