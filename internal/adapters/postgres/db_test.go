@@ -33,19 +33,19 @@ func TestTransactNested(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	q := queries.New(pool)
+	db := newDB(pool).Everywhere("a test of transactions")
 	actor, outer, kept, dropped := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	errInner := errors.New("inner failure")
-	err = transact(t.Context(), pool, q, "outer", actor, func(ctx context.Context, q *queries.Queries) error {
+	err = db.Transact(t.Context(), "outer", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := insertPrincipal(ctx, q, outer); err != nil {
 			return err
 		}
-		if err := transact(ctx, pool, q, "kept", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := db.Transact(ctx, "kept", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 			return insertPrincipal(ctx, q, kept)
 		}); err != nil {
 			return err
 		}
-		err := transact(ctx, pool, q, "dropped", actor, func(ctx context.Context, q *queries.Queries) error {
+		err := db.Transact(ctx, "dropped", actor, func(ctx context.Context, q *queries.Queries) error {
 			if err := insertPrincipal(ctx, q, dropped); err != nil {
 				return err
 			}

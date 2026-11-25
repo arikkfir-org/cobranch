@@ -21,7 +21,7 @@ func entry(r queries.AgentTaskEntry) agents.Entry {
 // TaskByID finds a task by its ID, with its organization's slug, its agent's standing instructions and email, and
 // its issue's key and number (agents.Store).
 func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, error) {
-	r, err := s.q.TaskByID(ctx, id)
+	r, err := s.db.Of(AgentTasks, id).TaskByID(ctx, id)
 	if err != nil {
 		return agents.Work{}, fmt.Errorf("finding task %s: %w", id, notFound(err))
 	}
@@ -39,7 +39,7 @@ func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, e
 
 // Entries lists at most limit of a task's transcript entries numbered above after, in order (agents.Store).
 func (s *AgentStore) Entries(ctx context.Context, taskID uuid.UUID, after, limit int) ([]agents.Entry, error) {
-	rows, err := s.q.Entries(ctx, taskID, int32(min(after, math.MaxInt32)), int32(min(limit, agents.MaxEntriesPage))) //nolint:gosec // both bounded just above
+	rows, err := s.db.Of(AgentTasks, taskID).Entries(ctx, taskID, int32(min(after, math.MaxInt32)), int32(min(limit, agents.MaxEntriesPage))) //nolint:gosec // both bounded just above
 	if err != nil {
 		return nil, fmt.Errorf("listing the transcript: %w", err)
 	}
@@ -56,7 +56,7 @@ func (s *AgentStore) Entries(ctx context.Context, taskID uuid.UUID, after, limit
 func (s *AgentStore) Append(ctx context.Context, actor, taskID uuid.UUID, e agents.Entry, change *agents.StateChange) (agents.Entry, bool, error) {
 	var out agents.Entry
 	created := false
-	err := transact(ctx, s.pool, s.q, "appending to the transcript", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(AgentTasks, taskID).Transact(ctx, "appending to the transcript", actor, func(ctx context.Context, q *queries.Queries) error {
 		t, err := q.LockTask(ctx, taskID)
 		if err != nil {
 			return fmt.Errorf("locking the task: %w", notFound(err))

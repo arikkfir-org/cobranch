@@ -20,13 +20,12 @@ import (
 
 // IssueStore is issues.Store on PostgreSQL.
 type IssueStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewIssueStore returns issues' store on pool's database.
 func NewIssueStore(pool *pgxpool.Pool) *IssueStore {
-	return &IssueStore{pool: pool, q: queries.New(pool)}
+	return &IssueStore{db: newDB(pool)}
 }
 
 var _ issues.Store = (*IssueStore)(nil)
@@ -36,7 +35,7 @@ var _ issues.Store = (*IssueStore)(nil)
 // actor (issues.Store).
 func (s *IssueStore) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
 	var out issues.Issue
-	err := transact(ctx, s.pool, s.q, "creating the issue", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(issue.OrgID).Transact(ctx, "creating the issue", actor, func(ctx context.Context, q *queries.Queries) error {
 		number, err := q.NextIssueNumber(ctx, issue.OrgID)
 		if err != nil {
 			return fmt.Errorf("numbering the issue: %w", err)
@@ -76,7 +75,7 @@ func (s *IssueStore) Get(ctx context.Context, orgID uuid.UUID, number int) (issu
 	if number < 1 || number > maxInt32 {
 		return issues.Issue{}, issues.ErrNotFound
 	}
-	row, err := s.q.IssueByNumber(ctx, orgID, int32(number))
+	row, err := s.db.In(orgID).IssueByNumber(ctx, orgID, int32(number))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Issue{}, issues.ErrNotFound
 	}
@@ -100,7 +99,7 @@ func (s *IssueStore) List(ctx context.Context, orgID uuid.UUID, q issues.Query) 
 	if labels == nil {
 		labels = []uuid.UUID{}
 	}
-	rows, err := s.q.ListIssues(ctx, queries.ListIssuesParams{OrgID: orgID, States: states, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID, LabelIds: labels,
+	rows, err := s.db.In(orgID).ListIssues(ctx, queries.ListIssuesParams{OrgID: orgID, States: states, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID, LabelIds: labels,
 		Pattern: pattern(q.Text), Number: narrow(q.Number), Below: narrow(q.Below), Lim: int32(q.Limit + 1)})
 	if err != nil {
 		return nil, false, fmt.Errorf("listing the issues: %w", err)
@@ -126,7 +125,7 @@ func (s *IssueStore) Counts(ctx context.Context, orgID uuid.UUID, q issues.Query
 	if labels == nil {
 		labels = []uuid.UUID{}
 	}
-	row, err := s.q.IssueCounts(ctx, queries.IssueCountsParams{Open: open, OrgID: orgID, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID, LabelIds: labels,
+	row, err := s.db.In(orgID).IssueCounts(ctx, queries.IssueCountsParams{Open: open, OrgID: orgID, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID, LabelIds: labels,
 		Pattern: pattern(q.Text), Number: narrow(q.Number)})
 	if err != nil {
 		return 0, 0, fmt.Errorf("counting the issues: %w", err)
@@ -155,7 +154,7 @@ func pattern(text string) string {
 // transaction that acts for actor (issues.Store).
 func (s *IssueStore) Update(ctx context.Context, actor uuid.UUID, issue issues.Issue, version int64, changes []issues.Change) (issues.Issue, error) {
 	out := issue
-	err := transact(ctx, s.pool, s.q, "changing the issue", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(issue.OrgID).Transact(ctx, "changing the issue", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.UpdateIssue(ctx, queries.UpdateIssueParams{ID: issue.ID, Version: version, Title: issue.Title, Description: issue.Description,
 			State: string(issue.State), Priority: int16(issue.Priority), AssigneeID: principalID(issue.Assignee), RepoID: repositoryID(issue.Repository),
 			ClosedAt: issue.ClosedAt})
@@ -193,7 +192,7 @@ func gone(ctx context.Context, q *queries.Queries, issue issues.Issue) error {
 // Delete deletes the issue at version and its activity, and appends event issue.deleted at its organization, in one
 // transaction that acts for actor (issues.Store).
 func (s *IssueStore) Delete(ctx context.Context, actor uuid.UUID, issue issues.Issue, version int64) error {
-	return transact(ctx, s.pool, s.q, "deleting the issue", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.In(issue.OrgID).Transact(ctx, "deleting the issue", actor, func(ctx context.Context, q *queries.Queries) error {
 		deleted, err := q.DeleteIssue(ctx, issue.ID, version)
 		if err != nil {
 			return fmt.Errorf("deleting the issue: %w", err)
@@ -212,7 +211,7 @@ func (s *IssueStore) Delete(ctx context.Context, actor uuid.UUID, issue issues.I
 
 // Activity lists the issue's events, oldest first (issues.Store).
 func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.Event, error) {
-	rows, err := s.q.IssueEvents(ctx, &issueID)
+	rows, err := s.db.Of(Issues, issueID).IssueEvents(ctx, &issueID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the issue's events: %w", err)
 	}
@@ -241,7 +240,7 @@ func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.
 		}
 		out = append(out, e)
 	}
-	tasks, err := s.q.IssueTaskStarts(ctx, &issueID)
+	tasks, err := s.db.Of(Issues, issueID).IssueTaskStarts(ctx, &issueID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the issue's tasks: %w", err)
 	}
@@ -263,7 +262,7 @@ func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.
 
 // Assignee finds one of the organization's members or agents, or issues.ErrNotFound (issues.Store).
 func (s *IssueStore) Assignee(ctx context.Context, orgID, principalID uuid.UUID) (issues.Principal, error) {
-	row, err := s.q.IssueAssignee(ctx, principalID, orgID)
+	row, err := s.db.In(orgID).IssueAssignee(ctx, principalID, orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Principal{}, issues.ErrNotFound
 	}
@@ -276,12 +275,12 @@ func (s *IssueStore) Assignee(ctx context.Context, orgID, principalID uuid.UUID)
 // Transact runs fn in one transaction that acts for actor, which the writes of the stores it calls with its context
 // join (issues.Store).
 func (s *IssueStore) Transact(ctx context.Context, actor uuid.UUID, fn func(ctx context.Context) error) error {
-	return transact(ctx, s.pool, s.q, "changing the issue", actor, func(ctx context.Context, _ *queries.Queries) error { return fn(ctx) })
+	return s.db.Deferred().Transact(ctx, "changing the issue", actor, func(ctx context.Context, _ *queries.Queries) error { return fn(ctx) })
 }
 
 // Repository finds one of the organization's repositories, or issues.ErrNotFound (issues.Store).
 func (s *IssueStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (issues.Repository, error) {
-	row, err := s.q.OrganizationRepository(ctx, orgID, repoID)
+	row, err := s.db.In(orgID).OrganizationRepository(ctx, orgID, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Repository{}, issues.ErrNotFound
 	}

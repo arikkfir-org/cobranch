@@ -22,7 +22,7 @@ import (
 
 // ByID finds an issue by its ID, or issues.ErrNotFound (issues.Store).
 func (s *IssueStore) ByID(ctx context.Context, issueID uuid.UUID) (issues.Issue, error) {
-	row, err := s.q.IssueByID(ctx, issueID)
+	row, err := s.db.Of(Issues, issueID).IssueByID(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Issue{}, issues.ErrNotFound
 	}
@@ -34,7 +34,7 @@ func (s *IssueStore) ByID(ctx context.Context, issueID uuid.UUID) (issues.Issue,
 
 // Branches lists the branches linked to the issue, the live ones first, by repository and name (issues.Store).
 func (s *IssueStore) Branches(ctx context.Context, issueID uuid.UUID) ([]issues.LinkedBranch, error) {
-	rows, err := s.q.IssueBranches(ctx, &issueID)
+	rows, err := s.db.Of(Issues, issueID).IssueBranches(ctx, &issueID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the issue's branches: %w", err)
 	}
@@ -53,7 +53,7 @@ func (s *IssueStore) Branches(ctx context.Context, issueID uuid.UUID) ([]issues.
 // Branch finds a live branch of the organization's repository by name, with its link, or issues.ErrBranchNotFound
 // (issues.Store).
 func (s *IssueStore) Branch(ctx context.Context, orgID, repoID uuid.UUID, name string) (issues.Branch, error) {
-	row, err := s.q.LinkedLiveBranch(ctx, orgID, repoID, name)
+	row, err := s.db.In(orgID).LinkedLiveBranch(ctx, orgID, repoID, name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Branch{}, issues.ErrBranchNotFound
 	}
@@ -74,7 +74,7 @@ func (s *IssueStore) Branch(ctx context.Context, orgID, repoID uuid.UUID, name s
 // Link links a live branch to an issue by hand, or unlinks it by hand for nil, in place of the issue it works on, in
 // one transaction that acts for actor (issues.Store).
 func (s *IssueStore) Link(ctx context.Context, actor uuid.UUID, branch issues.Branch, issueID *uuid.UUID) error {
-	return transact(ctx, s.pool, s.q, "linking the branch", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Of(Branches, branch.ID).Transact(ctx, "linking the branch", actor, func(ctx context.Context, q *queries.Queries) error {
 		current, err := q.LockBranchLink(ctx, branch.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return issues.ErrBranchNotFound

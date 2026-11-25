@@ -245,7 +245,7 @@ func insertReview(ctx context.Context, q *queries.Queries, actor uuid.UUID, t ag
 // (code.Store).
 func (s *CodeStore) RequestReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, branch string) (code.AIReview, error) {
 	var out code.AIReview
-	err := transact(ctx, s.pool, s.q, "requesting a review", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "requesting a review", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueue(ctx, repoID); err != nil {
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}

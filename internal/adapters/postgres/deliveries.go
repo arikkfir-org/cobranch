@@ -196,14 +196,14 @@ const scheduleBatch = 100
 // revision and isn't paused, each in a transaction of its own that holds the repository's delivery queue
 // (deliverer.Store). It goes on past an environment it fails to look at, and answers how many it queued.
 func (s *DeliveryStore) Schedule(ctx context.Context, every time.Duration) (int, error) {
-	due, err := s.q.DueEnvironments(ctx, every.Seconds(), scheduleBatch)
+	due, err := s.db.Everywhere(controllerQueues).DueEnvironments(ctx, every.Seconds(), scheduleBatch)
 	if err != nil {
 		return 0, fmt.Errorf("listing the environments due: %w", err)
 	}
 	queued := 0
 	var errs []error
 	for _, d := range due {
-		err := transact(ctx, s.pool, s.q, "scheduling environment "+d.ID.String(), uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		err := s.db.Everywhere(controllerQueues).Transact(ctx, "scheduling environment "+d.ID.String(), uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 			ok, err := scheduleEnvironment(ctx, q, d.RepoID, d.ID)
 			if ok {
 				queued++
@@ -404,7 +404,7 @@ func targetPrincipal(ctx context.Context, q *queries.Queries, orgID, repoID uuid
 	if id, err = uuid.NewV7(); err != nil {
 		return uuid.Nil, fmt.Errorf("making an ID: %w", err)
 	}
-	inserted := transact(ctx, nil, q, "making target "+name+"'s principal", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	inserted := savepoint(ctx, "making target "+name+"'s principal", func(ctx context.Context, q *queries.Queries) error {
 		return q.InsertTarget(ctx, queries.InsertTargetParams{ID: id, Name: name, OrgID: orgID, RepoID: repoID})
 	})
 	var conflict *ConflictError

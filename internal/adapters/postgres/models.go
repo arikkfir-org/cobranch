@@ -28,7 +28,7 @@ func modelProvider(p queries.ModelProvider, secretName, creator *string) agents.
 
 // ModelProviders lists the providers the organization added, by name (agents.Store).
 func (s *AgentStore) ModelProviders(ctx context.Context, orgID uuid.UUID) ([]agents.ModelProvider, error) {
-	rows, err := s.q.ModelProviders(ctx, orgID)
+	rows, err := s.db.In(orgID).ModelProviders(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the model providers: %w", err)
 	}
@@ -41,7 +41,7 @@ func (s *AgentStore) ModelProviders(ctx context.Context, orgID uuid.UUID) ([]age
 
 // ModelProvider finds a provider the organization added (agents.Store).
 func (s *AgentStore) ModelProvider(ctx context.Context, orgID uuid.UUID, name string) (agents.ModelProvider, error) {
-	return findModelProvider(ctx, s.q, orgID, name)
+	return findModelProvider(ctx, s.db.In(orgID).Queries, orgID, name)
 }
 
 // findModelProvider finds a provider the organization added.
@@ -59,7 +59,7 @@ func findModelProvider(ctx context.Context, q *queries.Queries, orgID uuid.UUID,
 func (s *AgentStore) SetModelProvider(ctx context.Context, actor, orgID uuid.UUID, name string, secretID uuid.UUID, version int64) (agents.ModelProvider, bool, error) {
 	var out agents.ModelProvider
 	var created bool
-	err := transact(ctx, s.pool, s.q, "setting the model provider", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(orgID).Transact(ctx, "setting the model provider", actor, func(ctx context.Context, q *queries.Queries) error {
 		if version == agents.NoVersion {
 			added, err := q.InsertModelProvider(ctx, queries.InsertModelProviderParams{OrgID: orgID, Provider: name, SecretID: &secretID, CreatedBy: &actor})
 			switch {
@@ -97,7 +97,7 @@ func (s *AgentStore) SetModelProvider(ctx context.Context, actor, orgID uuid.UUI
 // RemoveModelProvider removes the provider for actor under its row's lock, at version or at any version for
 // agents.AnyVersion; agents.ErrChanged, agents.ErrProviderInUse while agents run on it (agents.Store).
 func (s *AgentStore) RemoveModelProvider(ctx context.Context, actor, orgID uuid.UUID, name string, version int64) error {
-	return transact(ctx, s.pool, s.q, "removing the model provider", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.In(orgID).Transact(ctx, "removing the model provider", actor, func(ctx context.Context, q *queries.Queries) error {
 		at, err := q.LockModelProvider(ctx, orgID, name)
 		switch {
 		case err != nil:
@@ -122,7 +122,7 @@ func (s *AgentStore) RemoveModelProvider(ctx context.Context, actor, orgID uuid.
 // SecretRepository finds one of the organization's secrets and answers the repository holding it: uuid.Nil for the
 // organization's own (agents.Store).
 func (s *AgentStore) SecretRepository(ctx context.Context, orgID, secretID uuid.UUID) (uuid.UUID, error) {
-	repoID, err := s.q.SecretRepository(ctx, secretID, orgID)
+	repoID, err := s.db.In(orgID).SecretRepository(ctx, secretID, orgID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("finding secret %s: %w", secretID, notFound(err))
 	}
@@ -190,7 +190,7 @@ func (s *AgentStore) SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID,
 // left it.
 func (s *AgentStore) changeAgent(ctx context.Context, actor, orgID, id uuid.UUID, what string, change func(ctx context.Context, q *queries.Queries) error) (agents.Agent, error) {
 	var out agents.Agent
-	err := transact(ctx, s.pool, s.q, what, actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(orgID).Transact(ctx, what, actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockAgent(ctx, id, orgID); err != nil {
 			return fmt.Errorf("locking agent %s: %w", id, notFound(err))
 		}

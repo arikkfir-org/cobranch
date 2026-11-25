@@ -239,7 +239,7 @@ func TestAgentStoreAssignInATransaction(t *testing.T) {
 	f := newAgentFixture(t)
 	ctx := context.Background()
 	rollBack := errors.New("roll back")
-	err := transact(ctx, f.pool, queries.New(f.pool), "another slice's change", f.max, func(ctx context.Context, _ *queries.Queries) error {
+	err := newDB(f.pool).Deferred().Transact(ctx, "another slice's change", f.max, func(ctx context.Context, _ *queries.Queries) error {
 		task := agents.Task{ID: v7(), OrgID: f.acme.ID, Agent: agents.Principal{ID: f.scout.ID}, Kind: agents.KindAssigned,
 			AssignedBy: &agents.Principal{ID: f.max}, Title: "Within"}
 		if _, err := f.a.Assign(ctx, f.max, task); err != nil {

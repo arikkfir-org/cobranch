@@ -21,13 +21,12 @@ import (
 // PostgreSQL. What it changes is Cobranch's own doing, which names nobody; each change of a delivery's state sets its
 // target's annotation on its commit to match, as the target, in the same transaction.
 type DeliveryStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewDeliveryStore returns the deliveries' store on pool's database.
 func NewDeliveryStore(pool *pgxpool.Pool) *DeliveryStore {
-	return &DeliveryStore{pool: pool, q: queries.New(pool)}
+	return &DeliveryStore{db: newDB(pool)}
 }
 
 var _ deliverer.Store = (*DeliveryStore)(nil)
@@ -56,7 +55,7 @@ func annotate(ctx context.Context, q *queries.Queries, d targeted, in code.Annot
 // Claim claims the queued delivery that waited longest, that no controller holds and whose environment isn't applying
 // or deleting another, until leaseUntil (deliverer.Store).
 func (s *DeliveryStore) Claim(ctx context.Context, leaseUntil time.Time) (deliverer.Delivery, bool, error) {
-	row, err := s.q.ClaimDelivery(ctx, leaseUntil)
+	row, err := s.db.Everywhere(controllerQueues).ClaimDelivery(ctx, leaseUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return deliverer.Delivery{}, false, nil
 	}
@@ -71,13 +70,13 @@ func (s *DeliveryStore) Claim(ctx context.Context, leaseUntil time.Time) (delive
 // Token records the delivery's token by its hash and hint, until expiresAt, replacing one made before
 // (deliverer.Store).
 func (s *DeliveryStore) Token(ctx context.Context, deliveryID uuid.UUID, hash []byte, hint string, expiresAt time.Time) error {
-	err := s.q.InsertDeliveryToken(ctx, queries.InsertDeliveryTokenParams{DeliveryID: deliveryID, TokenHash: hash, Hint: hint, ExpiresAt: expiresAt})
+	err := s.db.Everywhere(controllerQueues).InsertDeliveryToken(ctx, queries.InsertDeliveryTokenParams{DeliveryID: deliveryID, TokenHash: hash, Hint: hint, ExpiresAt: expiresAt})
 	return wrapIf(err, "recording delivery "+deliveryID.String()+"'s token")
 }
 
 // Defer puts a queued delivery off until until, its target's annotation saying why (deliverer.Store).
 func (s *DeliveryStore) Defer(ctx context.Context, deliveryID uuid.UUID, until time.Time, reason string) error {
-	return transact(ctx, s.pool, s.q, "putting the delivery off", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "putting the delivery off", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.DeferDelivery(ctx, until, reason, deliveryID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -92,7 +91,7 @@ func (s *DeliveryStore) Defer(ctx context.Context, deliveryID uuid.UUID, until t
 // MarkRendering marks a queued delivery rendering and its target's annotation In progress (deliverer.Store).
 func (s *DeliveryStore) MarkRendering(ctx context.Context, deliveryID uuid.UUID) (bool, error) {
 	marked := false
-	err := transact(ctx, s.pool, s.q, "marking the delivery rendering", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "marking the delivery rendering", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.MarkDeliveryRendering(ctx, deliveryID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -108,7 +107,7 @@ func (s *DeliveryStore) MarkRendering(ctx context.Context, deliveryID uuid.UUID)
 
 // MarkDeleting marks a queued teardown deleting (deliverer.Store).
 func (s *DeliveryStore) MarkDeleting(ctx context.Context, deliveryID uuid.UUID) (bool, error) {
-	n, err := s.q.MarkDeliveryDeleting(ctx, deliveryID)
+	n, err := s.db.Everywhere(controllerQueues).MarkDeliveryDeleting(ctx, deliveryID)
 	if err != nil {
 		return false, fmt.Errorf("marking teardown %s deleting: %w", deliveryID, err)
 	}
@@ -118,7 +117,7 @@ func (s *DeliveryStore) MarkDeleting(ctx context.Context, deliveryID uuid.UUID) 
 // Working lists the deliveries that render, those whose apply a controller left, and the teardowns no controller holds
 // (deliverer.Store).
 func (s *DeliveryStore) Working(ctx context.Context) ([]deliverer.Working, error) {
-	rows, err := s.q.WorkingDeliveries(ctx)
+	rows, err := s.db.Everywhere(controllerQueues).WorkingDeliveries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing the deliveries that render and apply: %w", err)
 	}
@@ -136,7 +135,7 @@ func (s *DeliveryStore) Working(ctx context.Context) ([]deliverer.Working, error
 func (s *DeliveryStore) TakeApply(ctx context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Apply, bool, error) {
 	var a deliverer.Apply
 	taken := false
-	err := transact(ctx, s.pool, s.q, "taking the delivery's apply", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "taking the delivery's apply", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.TakeDeliveryApply(ctx, leaseUntil, deliveryID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -193,7 +192,7 @@ func renderOf(ctx context.Context, q *queries.Queries, kind code.DeliveryKind, d
 // when its lease lapsed, records nothing more: the environment's inventory may be a newer delivery's by then.
 func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 	a := o.Apply
-	return transact(ctx, s.pool, s.q, "recording the delivery's apply", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "recording the delivery's apply", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.DeleteDeliveryToken(ctx, a.ID); err != nil {
 			return fmt.Errorf("deleting delivery %s's token: %w", a.ID, err)
 		}
@@ -226,14 +225,14 @@ func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 // TakeTeardown holds a teardown that deletes until leaseUntil, once no controller holds it, and answers what its
 // environment holds (deliverer.Store).
 func (s *DeliveryStore) TakeTeardown(ctx context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Teardown, bool, error) {
-	row, err := s.q.TakeTeardown(ctx, leaseUntil, deliveryID)
+	row, err := s.db.Everywhere(controllerQueues).TakeTeardown(ctx, leaseUntil, deliveryID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return deliverer.Teardown{}, false, nil
 	}
 	if err != nil {
 		return deliverer.Teardown{}, false, fmt.Errorf("taking teardown %s: %w", deliveryID, err)
 	}
-	inventory, err := objectsOf(ctx, s.q, row.EnvironmentID)
+	inventory, err := objectsOf(ctx, s.db.Everywhere(controllerQueues).Queries, row.EnvironmentID)
 	if err != nil {
 		return deliverer.Teardown{}, false, err
 	}
@@ -245,7 +244,7 @@ func (s *DeliveryStore) TakeTeardown(ctx context.Context, deliveryID uuid.UUID, 
 
 // LookAgain holds a teardown that deletes until at (deliverer.Store).
 func (s *DeliveryStore) LookAgain(ctx context.Context, deliveryID uuid.UUID, at time.Time) error {
-	return wrapIf(s.q.LeaseTeardown(ctx, at, deliveryID), "holding teardown "+deliveryID.String())
+	return wrapIf(s.db.Everywhere(controllerQueues).LeaseTeardown(ctx, at, deliveryID), "holding teardown "+deliveryID.String())
 }
 
 // EndTeardown ends a teardown in state with reason, in one transaction that holds the repository's delivery queue
@@ -257,7 +256,7 @@ func (s *DeliveryStore) LookAgain(ctx context.Context, deliveryID uuid.UUID, at 
 func (s *DeliveryStore) EndTeardown(ctx context.Context, t deliverer.Teardown, remaining []deliverer.Object, state code.DeliveryState,
 	reason string) error {
 	envID := t.Environment.ID
-	return transact(ctx, s.pool, s.q, "ending the teardown", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "ending the teardown", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockDeliveryQueue(ctx, t.RepoID); err != nil {
 			return fmt.Errorf("locking the repository's deliveries: %w", err)
 		}
@@ -290,7 +289,7 @@ func (s *DeliveryStore) EndTeardown(ctx context.Context, t deliverer.Teardown, r
 // environment Out of sync and deletes its token (deliverer.Store).
 func (s *DeliveryStore) Finish(ctx context.Context, deliveryID uuid.UUID, state code.DeliveryState, reason string) (bool, error) {
 	finished := false
-	err := transact(ctx, s.pool, s.q, "ending the delivery", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "ending the delivery", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.DeleteDeliveryToken(ctx, deliveryID); err != nil {
 			return fmt.Errorf("deleting delivery %s's token: %w", deliveryID, err)
 		}
@@ -316,7 +315,7 @@ func (s *DeliveryStore) Finish(ctx context.Context, deliveryID uuid.UUID, state 
 
 // Deliveries finds those of ids that are deliveries: where each stands, and its repository (deliverer.Store).
 func (s *DeliveryStore) Deliveries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]deliverer.Standing, error) {
-	rows, err := s.q.DeliveriesStanding(ctx, ids)
+	rows, err := s.db.Everywhere(controllerQueues).DeliveriesStanding(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("finding the deliveries: %w", err)
 	}
@@ -329,14 +328,14 @@ func (s *DeliveryStore) Deliveries(ctx context.Context, ids []uuid.UUID) (map[uu
 
 // DropTokens deletes the tokens of deliveries that no longer render, and those that expired (deliverer.Store).
 func (s *DeliveryStore) DropTokens(ctx context.Context) (int64, error) {
-	n, err := s.q.DeleteDeadDeliveryTokens(ctx)
+	n, err := s.db.Everywhere(controllerQueues).DeleteDeadDeliveryTokens(ctx)
 	return n, wrapIf(err, "deleting the tokens of ended deliveries")
 }
 
 // DropRenders deletes each environment's renders past its newest keep, but those of deliveries that haven't ended and
 // its last to succeed (deliverer.Store).
 func (s *DeliveryStore) DropRenders(ctx context.Context, keep int) (int64, error) {
-	n, err := s.q.DeleteOldRenders(ctx, int32(min(keep, math.MaxInt32))) //nolint:gosec // min caps it
+	n, err := s.db.Everywhere(controllerQueues).DeleteOldRenders(ctx, int32(min(keep, math.MaxInt32))) //nolint:gosec // min caps it
 	if err != nil {
 		return 0, fmt.Errorf("deleting old renders: %w", err)
 	}
@@ -345,7 +344,7 @@ func (s *DeliveryStore) DropRenders(ctx context.Context, keep int) (int64, error
 
 // Progressing lists the live environments whose health is Progressing (deliverer.Store).
 func (s *DeliveryStore) Progressing(ctx context.Context) ([]deliverer.Environment, error) {
-	rows, err := s.q.ProgressingEnvironments(ctx)
+	rows, err := s.db.Everywhere(controllerQueues).ProgressingEnvironments(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing the environments that are progressing: %w", err)
 	}
@@ -359,14 +358,14 @@ func (s *DeliveryStore) Progressing(ctx context.Context) ([]deliverer.Environmen
 
 // Objects lists what an environment holds, in order (deliverer.Store).
 func (s *DeliveryStore) Objects(ctx context.Context, environmentID uuid.UUID) ([]deliverer.Object, error) {
-	return objectsOf(ctx, s.q, environmentID)
+	return objectsOf(ctx, s.db.Everywhere(controllerQueues).Queries, environmentID)
 }
 
 // SetHealth records the health of an environment's objects and its own and, when its own changed, sets the annotation
 // of its revision's delivery to report (deliverer.Store).
 func (s *DeliveryStore) SetHealth(ctx context.Context, environmentID uuid.UUID, objects []deliverer.Object, health code.Health,
 	report code.AnnotationInput) error {
-	return transact(ctx, s.pool, s.q, "recording the environment's health", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(controllerQueues).Transact(ctx, "recording the environment's health", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		p := queries.SetObjectHealthsParams{EnvironmentID: environmentID}
 		for i, o := range objects {
 			p.Positions, p.Healths, p.Messages = append(p.Positions, int32(i)), append(p.Healths, string(o.Health)), append(p.Messages, o.Message) //nolint:gosec // an inventory holds far fewer than 2^31 objects

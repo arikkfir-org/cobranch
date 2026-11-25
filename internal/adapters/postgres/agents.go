@@ -21,13 +21,12 @@ import (
 // another store's transaction joins it, so a slice that assigns tasks along with changes of its own records both at
 // once.
 type AgentStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewAgentStore returns the agents' store on pool's database.
 func NewAgentStore(pool *pgxpool.Pool) *AgentStore {
-	return &AgentStore{pool: pool, q: queries.New(pool)}
+	return &AgentStore{db: newDB(pool)}
 }
 
 var _ agents.Store = (*AgentStore)(nil)
@@ -52,9 +51,9 @@ func nameTaken(err error) error {
 // Roles lists the roles the organization grants at a scope, the organization or its repositories, the built-in ones
 // first (agents.Store).
 func (s *AgentStore) Roles(ctx context.Context, orgID uuid.UUID, scope auth.Scope) ([]orgs.Role, error) {
-	list := s.q.OrganizationRoles
+	list := s.db.In(orgID).OrganizationRoles
 	if scope == auth.ScopeRepository {
-		list = s.q.RepositoryRoles
+		list = s.db.In(orgID).RepositoryRoles
 	}
 	rows, err := list(ctx, orgID)
 	if err != nil {
@@ -69,7 +68,7 @@ func (s *AgentStore) Roles(ctx context.Context, orgID uuid.UUID, scope auth.Scop
 
 // Repository finds one of the organization's repositories by ID and answers its slug (agents.Store).
 func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (string, error) {
-	slug, err := s.q.RepositorySlug(ctx, repoID, orgID)
+	slug, err := s.db.In(orgID).RepositorySlug(ctx, repoID, orgID)
 	if err != nil {
 		return "", fmt.Errorf("finding repository %s: %w", repoID, notFound(err))
 	}
@@ -117,7 +116,7 @@ func withGrants(ctx context.Context, q *queries.Queries, list []agents.Agent) er
 
 // Agents lists the organization's agents by name, each with its grants (agents.Store).
 func (s *AgentStore) Agents(ctx context.Context, orgID uuid.UUID) ([]agents.Agent, error) {
-	rows, err := s.q.Agents(ctx, orgID)
+	rows, err := s.db.In(orgID).Agents(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the agents: %w", err)
 	}
@@ -129,12 +128,12 @@ func (s *AgentStore) Agents(ctx context.Context, orgID uuid.UUID) ([]agents.Agen
 		}
 		out = append(out, a)
 	}
-	return out, withGrants(ctx, s.q, out)
+	return out, withGrants(ctx, s.db.In(orgID).Queries, out)
 }
 
 // Agent finds one of the organization's agents with its grants (agents.Store).
 func (s *AgentStore) Agent(ctx context.Context, orgID, id uuid.UUID) (agents.Agent, error) {
-	return findAgent(ctx, s.q, orgID, id)
+	return findAgent(ctx, s.db.In(orgID).Queries, orgID, id)
 }
 
 // findAgent finds one of the organization's agents with its grants.
@@ -157,7 +156,7 @@ func findAgent(ctx context.Context, q *queries.Queries, orgID, id uuid.UUID) (ag
 // CreateAgent records the agent, its principal and its grants for actor, under its organization's lock, as every
 // grant is; agents.ErrNameTaken for a name taken (agents.Store).
 func (s *AgentStore) CreateAgent(ctx context.Context, actor uuid.UUID, a agents.Agent) error {
-	err := transact(ctx, s.pool, s.q, "recording the agent", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(a.OrgID).Transact(ctx, "recording the agent", actor, func(ctx context.Context, q *queries.Queries) error {
 		return insertAgent(ctx, q, actor, a)
 	})
 	return nameTaken(err)
@@ -203,7 +202,7 @@ func insertAgent(ctx context.Context, q *queries.Queries, actor uuid.UUID, a age
 // agents.AnyVersion, and answers it; agents.ErrChanged, or agents.ErrNameTaken for a name taken (agents.Store).
 func (s *AgentStore) UpdateAgent(ctx context.Context, actor, orgID, id uuid.UUID, version int64, c agents.Change) (agents.Agent, error) {
 	var out agents.Agent
-	err := transact(ctx, s.pool, s.q, "changing the agent", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(orgID).Transact(ctx, "changing the agent", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockAgent(ctx, id, orgID); err != nil {
 			return fmt.Errorf("locking agent %s: %w", id, notFound(err))
 		}
@@ -236,7 +235,7 @@ func (s *AgentStore) UpdateAgent(ctx context.Context, actor, orgID, id uuid.UUID
 // DeleteAgent deletes one of the organization's agents for actor, with its principal, grants and tasks, at version or
 // at any version for agents.AnyVersion; agents.ErrChanged (agents.Store).
 func (s *AgentStore) DeleteAgent(ctx context.Context, actor, orgID, id uuid.UUID, version int64) error {
-	return transact(ctx, s.pool, s.q, "deleting the agent", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.In(orgID).Transact(ctx, "deleting the agent", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return fmt.Errorf("locking the organization: %w", notFound(err))
 		}
@@ -256,7 +255,7 @@ func (s *AgentStore) DeleteAgent(ctx context.Context, actor, orgID, id uuid.UUID
 
 // Branch finds one of the repository's live branches, by ID or else by name, and answers both (agents.Store).
 func (s *AgentStore) Branch(ctx context.Context, repoID, id uuid.UUID, name string) (uuid.UUID, string, error) {
-	row, err := s.q.TaskBranch(ctx, repoID, idOrNil(id), name)
+	row, err := s.db.Of(Repositories, repoID).TaskBranch(ctx, repoID, idOrNil(id), name)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("finding the branch: %w", notFound(err))
 	}
@@ -265,7 +264,7 @@ func (s *AgentStore) Branch(ctx context.Context, repoID, id uuid.UUID, name stri
 
 // ThreadBranch answers the branch a chat thread belongs to, uuid.Nil for an issue's (agents.Store).
 func (s *AgentStore) ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid.UUID, error) {
-	id, err := s.q.ThreadBranch(ctx, threadID)
+	id, err := s.db.Of(ChatThreads, threadID).ThreadBranch(ctx, threadID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("finding thread %s: %w", threadID, notFound(err))
 	}
@@ -279,7 +278,7 @@ func (s *AgentStore) ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid
 // with the context of another store's transaction, it reads in that transaction (agents.Store).
 func (s *AgentStore) ActiveTask(ctx context.Context, threadID uuid.UUID) (int64, error) {
 	var number int64
-	err := transact(ctx, s.pool, s.q, "finding the thread's task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(ChatThreads, threadID).Transact(ctx, "finding the thread's task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		var err error
 		number, err = q.ActiveThreadTask(ctx, &threadID)
 		return notFound(err)
@@ -358,7 +357,7 @@ func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFi
 	if f.Before > 0 {
 		p.Before = &f.Before
 	}
-	rows, err := s.q.Tasks(ctx, p)
+	rows, err := s.db.In(orgID).Tasks(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("listing the tasks: %w", err)
 	}
@@ -372,7 +371,7 @@ func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFi
 
 // Task finds one of the organization's tasks by its number (agents.Store).
 func (s *AgentStore) Task(ctx context.Context, orgID uuid.UUID, number int64) (agents.Task, error) {
-	return findTask(ctx, s.q, orgID, number)
+	return findTask(ctx, s.db.In(orgID).Queries, orgID, number)
 }
 
 // findTask finds one of the organization's tasks by its number.
@@ -389,7 +388,7 @@ func findTask(ctx context.Context, q *queries.Queries, orgID uuid.UUID, number i
 // context of another store's transaction, it records the task in that transaction (agents.Store).
 func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task) (agents.Task, error) {
 	var out agents.Task
-	err := transact(ctx, s.pool, s.q, "recording the task", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(t.OrgID).Transact(ctx, "recording the task", actor, func(ctx context.Context, q *queries.Queries) error {
 		number, err := q.NextTaskNumber(ctx, t.OrgID)
 		if err != nil {
 			return fmt.Errorf("numbering the task: %w", err)
@@ -432,7 +431,7 @@ func idOrNil(id uuid.UUID) *uuid.UUID {
 // agents.AnyVersion, and answers it; agents.ErrEnded once it has ended, agents.ErrChanged (agents.Store).
 func (s *AgentStore) Cancel(ctx context.Context, actor, orgID uuid.UUID, number, version int64) (agents.Task, error) {
 	var out agents.Task
-	err := transact(ctx, s.pool, s.q, "cancelling the task", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(orgID).Transact(ctx, "cancelling the task", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.CancelTask(ctx, queries.CancelTaskParams{CancelledBy: &actor, Reason: "Cancelled", OrgID: orgID, Number: number, Version: version})
 		if errors.Is(err, pgx.ErrNoRows) {
 			current, err := findTask(ctx, q, orgID, number)

@@ -19,13 +19,12 @@ import (
 // principals set on its commits (db/migrations/00015_annotations.sql) and the reviews they submit of them
 // (db/migrations/00023_reviews.sql): code.Store on PostgreSQL, through the queries sqlc generates from db/queries.
 type CodeStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewCodeStore returns the code's store on pool's database.
 func NewCodeStore(pool *pgxpool.Pool) *CodeStore {
-	return &CodeStore{pool: pool, q: queries.New(pool)}
+	return &CodeStore{db: newDB(pool)}
 }
 
 var _ code.Store = (*CodeStore)(nil)
@@ -33,7 +32,7 @@ var _ code.Store = (*CodeStore)(nil)
 // Branches lists the repository's live branches, each with its head commit when a push recorded it, its status and
 // what a merge into it needs (code.Store).
 func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Branch, error) {
-	rows, err := s.q.LiveBranches(ctx, repoID)
+	rows, err := s.db.Of(Repositories, repoID).LiveBranches(ctx, repoID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the branches: %w", err)
 	}
@@ -62,7 +61,7 @@ func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Bran
 // OpenBranches lists, latest moved first, at most limit of the live branches of the repositories of repoIDs that stand
 // Blocked, Ready or Processing, each with its head commit and its repository (code.Store).
 func (s *CodeStore) OpenBranches(ctx context.Context, repoIDs []uuid.UUID, limit int) ([]code.RepoBranch, error) {
-	rows, err := s.q.OpenBranchesIn(ctx, repoIDs, int32(min(limit, 1000))) //nolint:gosec // at most 1000
+	rows, err := s.db.OfAny(Repositories, repoIDs).OpenBranchesIn(ctx, repoIDs, int32(min(limit, 1000))) //nolint:gosec // at most 1000
 	if err != nil {
 		return nil, fmt.Errorf("listing the open branches: %w", err)
 	}
@@ -102,7 +101,7 @@ func liveRow(r queries.OpenBranchesInRow) queries.LiveBranchesRow {
 // Branch finds one of the repository's live branches, with its head commit, its status and what a merge into it
 // needs, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (code.Branch, error) {
-	r, err := s.q.LiveBranch(ctx, repoID, name)
+	r, err := s.db.Of(Repositories, repoID).LiveBranch(ctx, repoID, name)
 	if err != nil {
 		return code.Branch{}, wrapRepo("finding the branch", err)
 	}
@@ -122,7 +121,7 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 
 // DeletedBranch finds the latest deletion of the repository's branch of name, with its head commit (code.Store).
 func (s *CodeStore) DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (code.DeletedBranch, error) {
-	r, err := s.q.DeletedBranch(ctx, repoID, name)
+	r, err := s.db.Of(Repositories, repoID).DeletedBranch(ctx, repoID, name)
 	if err != nil {
 		return code.DeletedBranch{}, wrapRepo("finding the deleted branch", err)
 	}
@@ -193,7 +192,7 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 
 // Tags lists the repository's tags by name, each with the object its ref names (code.Store).
 func (s *CodeStore) Tags(ctx context.Context, repoID uuid.UUID) ([]code.Tag, error) {
-	rows, err := s.q.Tags(ctx, repoID)
+	rows, err := s.db.Of(Repositories, repoID).Tags(ctx, repoID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the tags: %w", err)
 	}
@@ -206,7 +205,7 @@ func (s *CodeStore) Tags(ctx context.Context, repoID uuid.UUID) ([]code.Tag, err
 
 // Slugs finds the repository's slug and its organization's (code.Store).
 func (s *CodeStore) Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error) {
-	row, err := s.q.Slugs(ctx, repoID)
+	row, err := s.db.Of(Repositories, repoID).Slugs(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", repos.ErrNotFound
 	}
@@ -222,7 +221,7 @@ func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 	if len(shas) == 0 {
 		return nil, nil
 	}
-	rows, err := s.q.CommitsAt(ctx, repoID, shas)
+	rows, err := s.db.Of(Repositories, repoID).CommitsAt(ctx, repoID, shas)
 	if err != nil {
 		return nil, fmt.Errorf("reading the commits: %w", err)
 	}
@@ -230,7 +229,7 @@ func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 	if err != nil {
 		return nil, err
 	}
-	reviews, err := reviewsAt(ctx, s.q, repoID, shas)
+	reviews, err := reviewsAt(ctx, s.db.Of(Repositories, repoID).Queries, repoID, shas)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +245,7 @@ func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 // FirstParents lists at most limit of the repository's commits from sha along first parents whose message holds grep,
 // nearest first, with their annotations and reviews (code.Store).
 func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string, limit int) ([]code.Commit, error) {
-	rows, err := s.q.FirstParents(ctx, queries.FirstParentsParams{RepoID: repoID, Sha: sha, Grep: grep, Max: int32(min(limit, code.MaxPageSize+1))})
+	rows, err := s.db.Of(Repositories, repoID).FirstParents(ctx, queries.FirstParentsParams{RepoID: repoID, Sha: sha, Grep: grep, Max: int32(min(limit, code.MaxPageSize+1))})
 	if err != nil {
 		return nil, fmt.Errorf("walking the first parents of %s: %w", sha, err)
 	}
@@ -258,7 +257,7 @@ func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha, gre
 	if err != nil {
 		return nil, err
 	}
-	reviews, err := reviewsAt(ctx, s.q, repoID, shas)
+	reviews, err := reviewsAt(ctx, s.db.Of(Repositories, repoID).Queries, repoID, shas)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +273,7 @@ func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha, gre
 // CountFirstParents counts the repository's commits from sha along first parents whose message holds grep
 // (code.Store).
 func (s *CodeStore) CountFirstParents(ctx context.Context, repoID uuid.UUID, sha, grep string) (int, error) {
-	n, err := s.q.CountFirstParents(ctx, grep, repoID, sha)
+	n, err := s.db.Of(Repositories, repoID).CountFirstParents(ctx, grep, repoID, sha)
 	if err != nil {
 		return 0, fmt.Errorf("counting the first parents of %s: %w", sha, err)
 	}
@@ -292,7 +291,7 @@ func (s *CodeStore) Commit(ctx context.Context, repoID uuid.UUID, sha string) (c
 	if !ok {
 		return code.Commit{}, code.Push{}, repos.ErrNotFound
 	}
-	p, err := s.q.PushOf(ctx, repoID, c.FirstPush)
+	p, err := s.db.Of(Repositories, repoID).PushOf(ctx, repoID, c.FirstPush)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return code.Commit{}, code.Push{}, fmt.Errorf("finding push %s, which brought commit %s: none", c.FirstPush, sha)
 	}

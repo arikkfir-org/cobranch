@@ -15,7 +15,7 @@ import (
 
 // Labels lists the organization's labels by name, with how many issues carry each (issues.LabelStore).
 func (s *IssueStore) Labels(ctx context.Context, orgID uuid.UUID) ([]issues.Label, error) {
-	rows, err := s.q.OrganizationLabels(ctx, orgID)
+	rows, err := s.db.In(orgID).OrganizationLabels(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the labels: %w", err)
 	}
@@ -28,7 +28,7 @@ func (s *IssueStore) Labels(ctx context.Context, orgID uuid.UUID) ([]issues.Labe
 
 // Label finds one of the organization's labels, or issues.ErrLabelNotFound (issues.LabelStore).
 func (s *IssueStore) Label(ctx context.Context, orgID, labelID uuid.UUID) (issues.Label, error) {
-	row, err := s.q.LabelByID(ctx, orgID, labelID)
+	row, err := s.db.In(orgID).LabelByID(ctx, orgID, labelID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Label{}, issues.ErrLabelNotFound
 	}
@@ -40,7 +40,7 @@ func (s *IssueStore) Label(ctx context.Context, orgID, labelID uuid.UUID) (issue
 
 // LabelsOf finds those of ids that are the organization's labels, by name (issues.LabelStore).
 func (s *IssueStore) LabelsOf(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]issues.IssueLabel, error) {
-	rows, err := s.q.OrganizationLabelsOf(ctx, orgID, ids)
+	rows, err := s.db.In(orgID).OrganizationLabelsOf(ctx, orgID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("finding the labels: %w", err)
 	}
@@ -54,7 +54,7 @@ func (s *IssueStore) LabelsOf(ctx context.Context, orgID uuid.UUID, ids []uuid.U
 // CreateLabel records the label and appends event label.created at its organization, in one transaction that acts
 // for actor (issues.LabelStore).
 func (s *IssueStore) CreateLabel(ctx context.Context, actor uuid.UUID, label issues.Label) (issues.Label, error) {
-	err := transact(ctx, s.pool, s.q, "creating the label", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(label.OrgID).Transact(ctx, "creating the label", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertLabel(ctx, queries.InsertLabelParams{ID: label.ID, OrgID: label.OrgID, Name: label.Name, Color: string(label.Color),
 			Description: label.Description, CreatedAt: label.CreatedAt}); err != nil {
 			return fmt.Errorf("inserting the label: %w", err)
@@ -72,7 +72,7 @@ func (s *IssueStore) CreateLabel(ctx context.Context, actor uuid.UUID, label iss
 // (issues.LabelStore).
 func (s *IssueStore) UpdateLabel(ctx context.Context, actor uuid.UUID, label issues.Label, version int64) (issues.Label, error) {
 	out := label
-	err := transact(ctx, s.pool, s.q, "changing the label", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(label.OrgID).Transact(ctx, "changing the label", actor, func(ctx context.Context, q *queries.Queries) error {
 		cur, err := q.LabelByID(ctx, label.OrgID, label.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return issues.ErrLabelNotFound
@@ -105,7 +105,7 @@ func (s *IssueStore) UpdateLabel(ctx context.Context, actor uuid.UUID, label iss
 // DeleteLabel deletes the label at version, which takes it off its issues after counting a change on them, and
 // appends event label.deleted, in one transaction that acts for actor (issues.LabelStore).
 func (s *IssueStore) DeleteLabel(ctx context.Context, actor uuid.UUID, label issues.Label, version int64) error {
-	return transact(ctx, s.pool, s.q, "deleting the label", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.In(label.OrgID).Transact(ctx, "deleting the label", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.RenewLabelledIssues(ctx, label.ID); err != nil {
 			return fmt.Errorf("renewing the label's issues: %w", err)
 		}

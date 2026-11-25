@@ -15,7 +15,7 @@ import (
 
 // Crowded lists the repositories that have at least threshold active packs (git.PackStore).
 func (s *GitStore) Crowded(ctx context.Context, threshold int) ([]uuid.UUID, error) {
-	ids, err := s.q.CrowdedRepositories(ctx, int64(threshold))
+	ids, err := s.db.Everywhere(maintenance).CrowdedRepositories(ctx, int64(threshold))
 	if err != nil {
 		return nil, fmt.Errorf("finding repositories of %d active packs or more: %w", threshold, err)
 	}
@@ -25,7 +25,7 @@ func (s *GitStore) Crowded(ctx context.Context, threshold int) ([]uuid.UUID, err
 // Compact lists the compacted pack and supersedes the packs it replaces in one transaction that locks the repository,
 // so it applies between two pushes, never beside one (git.PackStore). Cobranch's own change, it names nobody.
 func (s *GitStore) Compact(ctx context.Context, repoID uuid.UUID, pack git.Pack, superseded []string) error {
-	return transact(ctx, s.pool, s.q, "listing a compacted pack", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Everywhere(maintenance).Transact(ctx, "listing a compacted pack", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		orgID, err := q.LockRepository(ctx, repoID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return git.ErrNotFound
@@ -50,7 +50,7 @@ func (s *GitStore) Compact(ctx context.Context, repoID uuid.UUID, pack git.Pack,
 
 // Superseded lists the packs superseded before the time (git.PackStore).
 func (s *GitStore) Superseded(ctx context.Context, before time.Time) ([]git.Superseded, error) {
-	rows, err := s.q.SupersededPacks(ctx, before)
+	rows, err := s.db.Everywhere(maintenance).SupersededPacks(ctx, before)
 	if err != nil {
 		return nil, fmt.Errorf("listing packs superseded before %s: %w", before, err)
 	}
@@ -63,7 +63,7 @@ func (s *GitStore) Superseded(ctx context.Context, before time.Time) ([]git.Supe
 
 // Forget deletes a superseded pack's row, unless a push made it active again (git.PackStore).
 func (s *GitStore) Forget(ctx context.Context, p git.Superseded) error {
-	if err := s.q.ForgetPack(ctx, p.RepoID, p.Pack.Name, p.Pack.Upload); err != nil {
+	if err := s.db.Everywhere(maintenance).ForgetPack(ctx, p.RepoID, p.Pack.Name, p.Pack.Upload); err != nil {
 		return fmt.Errorf("forgetting pack %s of repository %s: %w", p.Pack.Name, p.RepoID, err)
 	}
 	return nil
@@ -71,7 +71,7 @@ func (s *GitStore) Forget(ctx context.Context, p git.Superseded) error {
 
 // Uploads lists every upload a pack's row names (git.PackStore).
 func (s *GitStore) Uploads(ctx context.Context) ([]uuid.UUID, error) {
-	ids, err := s.q.PackUploads(ctx)
+	ids, err := s.db.Everywhere(maintenance).PackUploads(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing the packs' uploads: %w", err)
 	}

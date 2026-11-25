@@ -14,12 +14,12 @@ import (
 // Spend reports what the organization's agents spent from since until until, naming as an agent's costliest task only
 // one the viewer v describes sees (agents.Store).
 func (s *AgentStore) Spend(ctx context.Context, orgID uuid.UUID, since, until time.Time, v agents.Shown) (agents.Report, error) {
-	rows, err := s.q.AgentSpend(ctx, queries.AgentSpendParams{OrgID: orgID, Readable: v.Readable, Hidden: v.Hidden, PrivateFor: v.PrivateFor,
+	rows, err := s.db.In(orgID).AgentSpend(ctx, queries.AgentSpendParams{OrgID: orgID, Readable: v.Readable, Hidden: v.Hidden, PrivateFor: v.PrivateFor,
 		Since: since, Until: until})
 	if err != nil {
 		return agents.Report{}, fmt.Errorf("summing the agents' spend: %w", err)
 	}
-	models, err := s.q.ModelSpend(ctx, orgID, since, until)
+	models, err := s.db.In(orgID).ModelSpend(ctx, orgID, since, until)
 	if err != nil {
 		return agents.Report{}, fmt.Errorf("summing the models' spend: %w", err)
 	}

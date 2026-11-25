@@ -15,7 +15,6 @@ import (
 	"gocloud.dev/gcerrors"
 
 	"cobranch.dev/db/migrations"
-	"cobranch.dev/internal/adapters/postgres/queries"
 )
 
 // blobDatabase returns a pool connected to a new database with Cobranch's schema, dropped when the test ends.
@@ -32,7 +31,7 @@ func blobDatabase(t *testing.T) *pgxpool.Pool {
 type blobHarness struct{ pool *pgxpool.Pool }
 
 func (h blobHarness) MakeDriver(context.Context) (driver.Bucket, error) {
-	return &blobStore{pool: h.pool, q: queries.New(h.pool)}, nil
+	return &blobStore{db: newDB(h.pool)}, nil
 }
 
 // MakeDriverForNonexistentBucket has no bucket to miss: the store is a table of the database.

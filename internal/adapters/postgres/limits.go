@@ -17,19 +17,19 @@ import (
 // limits.Store on PostgreSQL. The transactions that would cross a limit count under its lock themselves, in the
 // stores that run them.
 type LimitStore struct {
-	q *queries.Queries
+	db *DB
 }
 
 // NewLimitStore returns the limits' store on pool's database.
 func NewLimitStore(pool *pgxpool.Pool) *LimitStore {
-	return &LimitStore{q: queries.New(pool)}
+	return &LimitStore{db: newDB(pool)}
 }
 
 var _ limits.Store = (*LimitStore)(nil)
 
 // InstallationLimits reads the limits the installation's settings set.
 func (s *LimitStore) InstallationLimits(ctx context.Context) (limits.Settings, error) {
-	row, err := s.q.InstallationLimits(ctx)
+	row, err := s.db.Everywhere("the installation's limits").InstallationLimits(ctx)
 	if err != nil {
 		return limits.Settings{}, fmt.Errorf("reading the installation's limits: %w", err)
 	}
@@ -39,7 +39,7 @@ func (s *LimitStore) InstallationLimits(ctx context.Context) (limits.Settings, e
 
 // OrganizationLimits reads the organization's own limits; none for an organization without them.
 func (s *LimitStore) OrganizationLimits(ctx context.Context, orgID uuid.UUID) (limits.Overrides, error) {
-	row, err := s.q.OrganizationLimits(ctx, orgID)
+	row, err := s.db.In(orgID).OrganizationLimits(ctx, orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return limits.Overrides{}, nil
 	}
@@ -51,7 +51,7 @@ func (s *LimitStore) OrganizationLimits(ctx context.Context, orgID uuid.UUID) (l
 
 // GitData sums the bytes of the organization's repositories' active packs.
 func (s *LimitStore) GitData(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	used, err := s.q.GitData(ctx, orgID)
+	used, err := s.db.In(orgID).GitData(ctx, orgID)
 	if err != nil {
 		return 0, fmt.Errorf("summing the organization's Git data: %w", err)
 	}

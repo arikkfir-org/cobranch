@@ -19,11 +19,11 @@
 
 <section>
   <div class="facts">
-    <div class="fact"><b>Schema</b><code>db/migrations/</code>: 61 files, 67 tables, applied by <a href="migrate.html">migrate</a></div>
+    <div class="fact"><b>Schema</b><code>db/migrations/</code>: 62 files, 67 tables, applied by <a href="migrate.html">migrate</a></div>
     <div class="fact"><b>Queries</b><code>db/queries/</code>: 46 files, 3.1k lines → sqlc → 15k generated lines</div>
     <div class="fact"><b>Stores</b><code>adapters/postgres</code>: 11.6k lines, a store per service port</div>
     <div class="fact"><b>Driver</b>pgx v5, one pool per workload, plus one extra connection per listener</div>
-    <div class="fact"><b>Session variables</b>One: <code>cobranch.principal_id</code></div>
+    <div class="fact"><b>Session variables</b>Two: <code>cobranch.principal_id</code> and <code>cobranch.org_id</code></div>
     <div class="fact"><b>Row-level security</b>None. Tenancy is in the queries</div>
   </div>
 </section>
@@ -34,8 +34,9 @@
   <div class="fig"><svg class="dg" id="d1"></svg></div>
   <ul class="know">
     <li><b>SQL is never written in Go.</b> A store method calls a generated query and converts its row to the domain's type. The one exception reads goose's version table.</li>
-    <li><b><code>transact(ctx, what, actor, fn)</code> is the wrapper for writes.</b> It begins a transaction, sets the actor, runs <code>fn</code>, and turns a unique violation into a <code>ConflictError</code> naming the constraint, which the store maps to "already there".</li>
-    <li><b>It is re-entrant.</b> The transaction rides the context, so a store method called inside another's transaction joins it as a savepoint instead of opening a second connection. The outer actor stands.</li>
+    <li><b>A store reaches the database through a scope.</b> <code>db.In(org)</code> and <code>db.Of(table, id)</code> pin one organization, <code>db.Deferred()</code> waits for the work it joins to pin one, and <code>db.Everywhere(why)</code> spans organizations and says why. A read through a scope travels with its pin as one batch.</li>
+    <li><b><code>Scope.Transact(ctx, what, actor, fn)</code> is the wrapper for writes.</b> It begins a transaction pinned as its scope says, sets the actor, runs <code>fn</code>, and turns a unique violation into a <code>ConflictError</code> naming the constraint, which the store maps to "already there".</li>
+    <li><b>It is re-entrant.</b> The transaction rides the context, so a store method called inside another's transaction joins it as a savepoint instead of opening a second connection. The outer actor stands, and so does the outer organization: work in another is refused.</li>
     <li><b>sqlc's settings matter:</b> at most 3 positional parameters before it generates a params struct, nullable columns become pointers, and <code>uuid</code> and <code>timestamptz</code> map to <code>uuid.UUID</code> and <code>time.Time</code>.</li>
   </ul>
 </section>
@@ -60,9 +61,9 @@
   <div class="two">
     <div class="fig"><svg class="dg" id="d2"></svg></div>
     <div style="display:flex;flex-direction:column;gap:12px">
-      <p><code>transact</code> runs <code>SELECT set_config('cobranch.principal_id', $1, true)</code>. The <code>true</code> makes it local to the transaction, which is what makes it safe on a pool that shares connections.</p>
+      <p><code>Transact</code> runs <code>SELECT set_config('cobranch.principal_id', $1, true)</code>. The <code>true</code> makes it local to the transaction, which is what makes it safe on a pool that shares connections.</p>
       <p><b>NULL means Cobranch itself:</b> a migration, a seed, maintenance's sweep, a session's touch, the controller following a pod. Passing <code>uuid.Nil</code> as the actor leaves the variable unset.</p>
-      <p><b>A nested <code>transact</code> does not rename the actor.</b> The savepoint acts for whoever the outer transaction named.</p>
+      <p><b>A nested <code>Transact</code> does not rename the actor.</b> The savepoint acts for whoever the outer transaction named.</p>
       <p><b>Not audited on purpose:</b> transient rows (<code>sign_in_flows</code>) and history the controller writes (<code>deliveries</code>, <code>job_runs</code>), whose "who" is in <code>events</code>. Sessions audit only their making, revocation and deletion, not each use.</p>
       <p><code>events</code> is the domain's activity log, which pages show; <code>audit_log</code> is the row-level trail beneath it.</p>
     </div>
@@ -117,7 +118,7 @@
   <span class="eyebrow">Review leads</span>
   <h2>Worth a closer look</h2>
   <div class="leads">
-    <div class="lead"><h3>The house rule asks for more than <code>transact</code> does</h3><p>The house rules say every access runs in a transaction through one wrapper that sets the tenant, the user and the trace for row-level security. Today the wrapper sets the principal only, reads go straight to the pool (about 195 direct query calls), and there is no row-level security. Either the rule or the code should move.</p></div>
+    <div class="lead"><h3>The house rule asks for more than the scopes do</h3><p>The house rules say every access runs in a transaction through one wrapper that sets the tenant, the user and the trace for row-level security. Every query now runs through a scope, which sets the organization; only <code>Transact</code> sets the principal, so a read names nobody, and nothing sets the trace.</p></div>
     <div class="lead"><h3>Five copies of the same method</h3><p><code>AuthStore</code>, <code>OrgStore</code>, <code>RepoStore</code>, <code>SecretStore</code> and <code>ArtifactStore</code> each define an identical <code>transact</code> that forwards to the package's. An embedded base store would carry it once.</p></div>
     <div class="lead"><h3>Four claim queries, one statement</h3><p>The four <code>SKIP LOCKED</code> claims differ in table and returned columns. sqlc cannot template them, but their lease, defer and retry columns could at least share names and a documented shape.</p></div>
     <div class="lead"><h3>Tenancy rests on review</h3><p>With no row-level security, one query missing its <code>org_id</code> filter leaks across organizations. A test that scans <code>db/queries</code> for tables with <code>org_id</code> used without it would be cheap.</p></div>
@@ -125,11 +126,11 @@
 </section>
 
 <script>
-flow("d1",[[["s","svc","Service method\nauthorize first"]],[["st","adp","Store method\nrows ↔ domain types"]],[["t","adp","transact\nBEGIN, set the actor"]],[["q","adp","queries.*\ngenerated by sqlc"]],[["tb","store","the table\nbump_version"]],[["a","store","audit()\nAFTER trigger → audit_log"]]],
+flow("d1",[[["s","svc","Service method\nauthorize first"]],[["st","adp","Store method\nrows ↔ domain types"]],[["t","adp","Scope.Transact\nBEGIN, pin, set the actor"]],[["q","adp","queries.*\ngenerated by sqlc"]],[["tb","store","the table\nbump_version"]],[["a","store","audit()\nAFTER trigger → audit_log"]]],
  [["s","st"],["st","t"],["t","q"],["q","tb"],["tb","a"]],{w:190,gap:45});
 graph("d2",700,300,[
  ["u",30,30,200,56,"act","a person's request\nactor = their principal"],["c",30,125,200,56,"act","Cobranch's own work\nactor = uuid.Nil"],
- ["t",290,78,170,60,"adp","transact\nset_config(…, true)"],["g",520,78,160,60,"store","audit()\ncurrent_setting"],
+ ["t",290,78,170,60,"adp","Transact\nset_config(…, true)"],["g",520,78,160,60,"store","audit()\ncurrent_setting"],
  ["l",520,210,160,56,"store","audit_log\nprincipal_id or NULL"]],
  [["u","t"],["c","t","unset",1],["t","g"],["g","l"]]);
 const A=new Set("agent_tasks agents annotations artifact_versions artifacts branch_issues chat_messages chat_threads conversations credentials grants identities identity_providers installation_settings invitations issue_labels issues join_requests labels memberships model_providers models organization_limits organization_slugs organizations preferences principal_emails principals repositories repository_slugs reviews roles secrets sessions viewed_files".split(" "));

@@ -27,7 +27,7 @@ func (s *AuthStore) CreateToken(ctx context.Context, t auth.Credential, hash []b
 
 // Tokens lists a user's personal tokens that are not revoked, newest first.
 func (s *AuthStore) Tokens(ctx context.Context, userID uuid.UUID) ([]auth.Credential, error) {
-	rows, err := s.q.PersonalTokens(ctx, userID)
+	rows, err := s.db.Everywhere(personal).PersonalTokens(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the tokens: %w", err)
 	}

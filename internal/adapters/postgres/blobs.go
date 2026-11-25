@@ -51,15 +51,14 @@ func before(hook func(asFunc func(any) bool) error) error {
 // database it runs anyway, and a backup of that database holds every repository whole. Closing the bucket leaves the
 // pool open.
 func Bucket(pool *pgxpool.Pool) *blob.Bucket {
-	return blob.NewBucket(&blobStore{pool: pool, q: queries.New(pool)})
+	return blob.NewBucket(&blobStore{db: newDB(pool)})
 }
 
 // blobStore is Go Cloud's driver over table blobs (db/migrations/00018_blobs.sql). A write runs in one transaction,
 // which creates the large object a chunk at a time and names it by its key, so an object is either whole or absent; a
 // read reads the large object a chunk at a time outside any transaction, since an object never changes once written.
 type blobStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 var _ driver.Bucket = (*blobStore)(nil)
@@ -110,7 +109,7 @@ func (s *blobStore) Attributes(ctx context.Context, key string) (*driver.Attribu
 
 // get reads an object's row, or errBlobNotFound.
 func (s *blobStore) get(ctx context.Context, key string) (queries.Blob, error) {
-	row, err := s.q.GetBlob(ctx, []byte(key))
+	row, err := s.db.Everywhere(objectStore).GetBlob(ctx, []byte(key))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return queries.Blob{}, fmt.Errorf("reading object %q: %w", key, errBlobNotFound)
 	}
@@ -133,7 +132,7 @@ func (s *blobStore) NewRangeReader(ctx context.Context, key string, offset, leng
 	if length >= 0 && offset+length < end {
 		end = offset + length
 	}
-	return &blobReader{ctx: ctx, q: s.q, key: key, content: row.Content, at: min(offset, end), end: end,
+	return &blobReader{ctx: ctx, q: s.db.Everywhere(objectStore).Queries, key: key, content: row.Content, at: min(offset, end), end: end,
 		attrs: driver.ReaderAttributes{ContentType: row.ContentType, ModTime: row.WrittenAt, Size: row.Size}}, nil
 }
 
@@ -171,7 +170,7 @@ func (s *blobStore) Copy(ctx context.Context, dstKey, srcKey string, opts *drive
 		row: queries.PutBlobParams{Key: []byte(dstKey), ContentType: src.ContentType, CacheControl: src.CacheControl,
 			ContentDisposition: src.ContentDisposition, ContentEncoding: src.ContentEncoding,
 			ContentLanguage: src.ContentLanguage, Metadata: src.Metadata}}
-	r := &blobReader{ctx: ctx, q: s.q, key: srcKey, content: src.Content, end: src.Size}
+	r := &blobReader{ctx: ctx, q: s.db.Everywhere(objectStore).Queries, key: srcKey, content: src.Content, end: src.Size}
 	if _, err := io.Copy(w, r); err != nil {
 		w.abort()
 		return fmt.Errorf("copying object %q to %q: %w", srcKey, dstKey, err)
@@ -184,7 +183,7 @@ func (s *blobStore) Delete(ctx context.Context, key string, opts *driver.DeleteO
 	if err := before(opts.BeforeDelete); err != nil {
 		return err
 	}
-	n, err := s.q.DeleteBlob(ctx, []byte(key))
+	n, err := s.db.Everywhere(objectStore).DeleteBlob(ctx, []byte(key))
 	if err != nil {
 		return fmt.Errorf("deleting object %q: %w", key, err)
 	}
@@ -278,7 +277,7 @@ func (w *blobWriter) flush() error {
 	if w.chunks == nil {
 		w.chunks, w.done = make(chan []byte), make(chan error, 1)
 		go func() {
-			w.done <- transact(w.ctx, w.s.pool, w.s.q, fmt.Sprintf("writing object %q", w.row.Key), uuid.Nil, w.write)
+			w.done <- w.s.db.Everywhere(objectStore).Transact(w.ctx, fmt.Sprintf("writing object %q", w.row.Key), uuid.Nil, w.write)
 		}()
 	}
 	chunk := w.buf
@@ -392,7 +391,7 @@ func (s *blobStore) ListPaged(ctx context.Context, opts *driver.ListOptions) (*d
 	}
 	page := &driver.ListPage{}
 	for lower != nil && len(page.Objects) < size {
-		rows, err := s.q.ListBlobs(ctx, lower, until, int32(size-len(page.Objects))) //nolint:gosec // a page's size
+		rows, err := s.db.Everywhere(objectStore).ListBlobs(ctx, lower, until, int32(size-len(page.Objects))) //nolint:gosec // a page's size
 		if err != nil {
 			return nil, fmt.Errorf("listing objects under %q: %w", opts.Prefix, err)
 		}
@@ -404,7 +403,7 @@ func (s *blobStore) ListPaged(ctx context.Context, opts *driver.ListOptions) (*d
 	if lower == nil {
 		return page, nil
 	}
-	more, err := s.q.ListBlobs(ctx, lower, until, 1)
+	more, err := s.db.Everywhere(objectStore).ListBlobs(ctx, lower, until, 1)
 	if err != nil {
 		return nil, fmt.Errorf("listing objects under %q: %w", opts.Prefix, err)
 	}
