@@ -93,7 +93,7 @@
   <h2>What holds across the schema</h2>
   <div class="tw"><table>
     <tr><th>Convention</th><th>In practice</th></tr>
-    <tr><td class="p">Keys</td><td><code>uuid</code> primary keys, mostly minted by the application, which lets a retried call write once; three tables default to <code>uuidv7()</code></td></tr>
+    <tr><td class="p">Keys</td><td><code>uuid</code> primary keys that the application mints before the insert (UUIDv7), so a service knows a row's ID up front and a retried call writes once. A new table adds no default. <code>grants</code>, <code>events</code> and <code>audit_log</code> are the exceptions: nobody needs their rows' IDs back, so they default to <code>uuidv7()</code></td></tr>
     <tr><td class="p">Tenancy</td><td>Every row an organization owns carries <code>org_id</code>, and every query filters by it. Nothing in the database enforces it</td></tr>
     <tr><td class="p">Time</td><td><code>timestamptz</code> throughout, 110 columns</td></tr>
     <tr><td class="p">Numbers people see</td><td>Counter tables per scope: <code>issue_numbers</code>, <code>run_numbers</code>, <code>task_numbers</code>, <code>delivery_numbers</code> hold the last number given</td></tr>
