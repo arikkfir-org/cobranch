@@ -428,7 +428,7 @@ Cobranch’s own pull request previews sign in as seeded users.
 | An API key holds at most two secrets; rotating adds one | No downtime while scripts change secrets ([principals](principals-and-permissions.md#api-keys-and-personal-tokens)) | Agreed |
 | The maintenance CronJob arrives now, deleting expired rows | Flows and sessions grow with every sign-in | Agreed |
 | Previews sign in as seeded users, with seeding on only | A provider can't register a redirect URI per preview; reviewers try every role | Agreed |
-| Groups, personal tokens, SSH and signing keys, login-less users, mail, linked identities, and deleting accounts or organizations come later | Keeps this slice to its issue | Agreed |
+| Groups, personal tokens, SSH and signing keys, login-less users, mail, linked identities, and deleting accounts come later | Keeps this slice to its issue | Agreed |
 | Deleting an organization is two steps: Deleting at once, its rows purged later ([ENG-261](https://linear.app/arikkfir/issue/ENG-261)) | Its environments live in clusters, and the rows that find them must outlast their teardowns; a large organization's cascade runs off the request | Proposed |
 | A deleted organization's slugs are free at once: its slug is unique among live organizations only | A team that deleted one by mistake makes it again under the same name | Proposed |
 | The Console asks for the name typed; the API takes the ETag | A deletion nobody can undo takes a deliberate step; scripts keep the house rule for `DELETE` | Proposed |

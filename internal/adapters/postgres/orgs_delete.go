@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/orgs"
@@ -44,6 +46,22 @@ func (s *OrgStore) Delete(ctx context.Context, actor, orgID uuid.UUID, version i
 		}
 		return nil
 	})
+}
+
+// liveOrganization holds the organization of a repository against its deletion until the transaction ends and answers
+// whether it is live (HoldRepositoryOrganization). What would start work there (a push the push worker follows, a run,
+// a delivery other than a teardown) asks it first and queues nothing once the organization is being deleted, and a
+// deletion that comes later waits for the hold, then cancels what was queued under it. A repository that is gone isn't
+// live either.
+func liveOrganization(ctx context.Context, q *queries.Queries, repoID uuid.UUID) (bool, error) {
+	live, err := q.HoldRepositoryOrganization(ctx, repoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("holding repository %s's organization: %w", repoID, err)
+	}
+	return live, nil
 }
 
 // Purgeable lists the organizations being deleted whose rows may go, the earliest deleted first: those whose

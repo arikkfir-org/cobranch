@@ -209,9 +209,9 @@ ORDER BY e.id;
 -- DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at, none of whose
 -- deliveries is working or waits: those of organizations being deleted that had no teardown since, which tears them
 -- down at once, and the others whose last delivery ended @every ago or longer, that hold a revision to resync and
--- aren't paused, or whose branch is gone, which tears them down. Each says whether its organization is being deleted.
+-- aren't paused, or whose branch is gone, which tears them down.
 -- name: DueEnvironments :many
-SELECT e.id, e.repo_id, (o.deleting_at IS NOT NULL)::boolean AS org_deleting
+SELECT e.id, e.repo_id
 FROM environments e JOIN organizations o ON o.id = e.org_id
 WHERE e.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id

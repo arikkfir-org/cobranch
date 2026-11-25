@@ -240,7 +240,7 @@ func (q *Queries) DeliveryTokenByHash(ctx context.Context, tokenHash []byte) (De
 }
 
 const dueEnvironments = `-- name: DueEnvironments :many
-SELECT e.id, e.repo_id, (o.deleting_at IS NOT NULL)::boolean AS org_deleting
+SELECT e.id, e.repo_id
 FROM environments e JOIN organizations o ON o.id = e.org_id
 WHERE e.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
@@ -257,15 +257,14 @@ LIMIT $2
 `
 
 type DueEnvironmentsRow struct {
-	ID          uuid.UUID
-	RepoID      uuid.UUID
-	OrgDeleting bool
+	ID     uuid.UUID
+	RepoID uuid.UUID
 }
 
 // DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at, none of whose
 // deliveries is working or waits: those of organizations being deleted that had no teardown since, which tears them
 // down at once, and the others whose last delivery ended @every ago or longer, that hold a revision to resync and
-// aren't paused, or whose branch is gone, which tears them down. Each says whether its organization is being deleted.
+// aren't paused, or whose branch is gone, which tears them down.
 func (q *Queries) DueEnvironments(ctx context.Context, every float64, lim int32) ([]DueEnvironmentsRow, error) {
 	rows, err := q.db.Query(ctx, dueEnvironments, every, lim)
 	if err != nil {
@@ -275,7 +274,7 @@ func (q *Queries) DueEnvironments(ctx context.Context, every float64, lim int32)
 	var items []DueEnvironmentsRow
 	for rows.Next() {
 		var i DueEnvironmentsRow
-		if err := rows.Scan(&i.ID, &i.RepoID, &i.OrgDeleting); err != nil {
+		if err := rows.Scan(&i.ID, &i.RepoID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

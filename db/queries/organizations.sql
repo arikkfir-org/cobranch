@@ -98,6 +98,15 @@ SELECT EXISTS (SELECT 1 FROM grants WHERE principal_id = $1 AND role_id = $2 AND
 -- name: LockOrganizationVersion :one
 SELECT version FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE;
 
+-- HoldRepositoryOrganization holds the organization of a repository against its deletion until the transaction ends,
+-- since a deletion takes its row FOR UPDATE first, and answers whether it is live: false once it is being deleted. A
+-- deletion that waited for the hold then cancels what was queued under it.
+-- name: HoldRepositoryOrganization :one
+SELECT (o.deleting_at IS NULL)::boolean AS live
+FROM repositories r JOIN organizations o ON o.id = r.org_id
+WHERE r.id = $1
+FOR KEY SHARE OF o;
+
 -- MarkOrganizationDeleting makes the organization Deleting, for whoever deletes it.
 -- name: MarkOrganizationDeleting :exec
 UPDATE organizations SET deleting_at = @deleting_at::timestamptz, deleted_by = @deleted_by::uuid WHERE id = @id;

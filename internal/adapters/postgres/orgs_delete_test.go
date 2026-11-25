@@ -17,6 +17,7 @@ import (
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 )
 
 // deletionFixture is agentFixture with what deleting Acme must take besides: its former slug acme, now that it is
@@ -263,8 +264,9 @@ func TestOrgStoreDeletesTearingDown(t *testing.T) {
 }
 
 // deletingWithEnvironments pushes main, whose job queues a run and whose delivery to production succeeds, and Nia's
-// feature/login, whose delivery to its preview waits for a member; pauses production and deletes Acme, which cancels
-// the run and the waiting delivery.
+// feature/login, whose delivery to its preview waits for a member; pauses production, has the Git server record Nia's
+// feature/signup, and deletes Acme, which cancels the run and the waiting delivery before the push worker gets to
+// feature/signup, which then starts nothing.
 func (f *deliveryFixture) deletingWithEnvironments(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -285,15 +287,45 @@ func (f *deliveryFixture) deletingWithEnvironments(t *testing.T) {
 	if n := count(t, f.pool, "SELECT count(*) FROM job_runs WHERE repo_id = $1 AND state = 'queued'", repo); n != 1 {
 		t.Fatalf("queued runs = %d, want main's", n)
 	}
+	signup := pushOf(repo, f.nia, "pack-3", []git.RefUpdate{{Name: "refs/heads/feature/signup", Old: git.ZeroSHA, New: shaC}}, commit(shaC, person("Nia", "nia@example.com"), shaA))
+	signup.Settings = []git.TipSettings{tip(t, "feature/signup", "blob-2", jobsFile+deliveryFile)}
+	if err := f.g.Record(ctx, signup); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.s.Delete(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, time.Now()); err != nil {
 		t.Fatalf("Delete() = %v", err)
 	}
+	f.checkNothingStarts(t, envs[0])
 	if n := count(t, f.pool, "SELECT count(*) FROM job_runs WHERE repo_id = $1 AND state = 'cancelled' AND reason = $2 AND ended_at IS NOT NULL", repo, deletedReason); n != 1 {
 		t.Errorf("runs cancelled by the deletion = %d, want main's", n)
 	}
 	want := []string{"#1 production main@a succeeded", "#2 previews feature/login@b cancelled: " + deletedReason}
 	if got := f.history(t, repo); !slices.Equal(got, want) {
 		t.Errorf("deliveries = %q, want %q", got, want)
+	}
+}
+
+// checkNothingStarts checks that once Acme is being deleted, nothing starts work there but its teardowns: the push
+// worker processes feature/signup's push without queueing its run or its preview, and feature/login's preview can't be
+// redelivered.
+func (f *deliveryFixture) checkNothingStarts(t *testing.T, preview code.Environment) {
+	t.Helper()
+	ctx := context.Background()
+	repo := f.website.ID
+	if n := f.process(t); n != 1 {
+		t.Errorf("pushes processed after the deletion = %d, want feature/signup's", n)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM pushes WHERE repo_id = $1 AND processed_at IS NULL", repo); n != 0 {
+		t.Errorf("pushes waiting = %d, want none", n)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM job_runs WHERE repo_id = $1 AND ended_at IS NULL", repo); n != 0 {
+		t.Errorf("runs that haven't ended = %d, want none: feature/signup's job queues no run", n)
+	}
+	if envs, err := f.c.Environments(ctx, repo, ""); err != nil || len(envs) != 2 {
+		t.Errorf("Environments() = %+v, %v, want production and feature/login's preview only", envs, err)
+	}
+	if _, err := f.c.Redeliver(ctx, f.max, repo, preview.ID); !errors.Is(err, repos.ErrNotFound) {
+		t.Errorf("Redeliver() = %v, want repos.ErrNotFound", err)
 	}
 }
 

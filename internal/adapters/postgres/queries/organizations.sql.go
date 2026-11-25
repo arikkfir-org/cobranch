@@ -149,6 +149,23 @@ func (q *Queries) DeleteScopeGrants(ctx context.Context, principalID uuid.UUID, 
 	return result.RowsAffected(), nil
 }
 
+const holdRepositoryOrganization = `-- name: HoldRepositoryOrganization :one
+SELECT (o.deleting_at IS NULL)::boolean AS live
+FROM repositories r JOIN organizations o ON o.id = r.org_id
+WHERE r.id = $1
+FOR KEY SHARE OF o
+`
+
+// HoldRepositoryOrganization holds the organization of a repository against its deletion until the transaction ends,
+// since a deletion takes its row FOR UPDATE first, and answers whether it is live: false once it is being deleted. A
+// deletion that waited for the hold then cancels what was queued under it.
+func (q *Queries) HoldRepositoryOrganization(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, holdRepositoryOrganization, id)
+	var live bool
+	err := row.Scan(&live)
+	return live, err
+}
+
 const holdsRole = `-- name: HoldsRole :one
 SELECT EXISTS (SELECT 1 FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'organization' AND scope_id = $3::uuid)
 `
