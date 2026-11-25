@@ -96,7 +96,7 @@ The chart, its values and the operator’s Secret stay as they are. An operator 
 | Table | Policy `organization` |
 | --- | --- |
 | The 39 tables whose rows always have an organization | Reads and writes rows where `org_id = current_org()` |
-| `principals`, `roles`, `events`, whose rows may have none | Also reads rows without an organization (a person, a built-in role); writes only its own |
+| `principals`, `roles`, `events`, whose rows may have none | A second policy, `installation`, for reads alone, shows it rows without an organization (a person, a built-in role). Every write, a delete included, is held to its own rows by `organization` |
 | `organizations` | Reads and writes the row whose `id = current_org()` |
 
 - **The connecting role isn't bound.** It owns the tables, and the policies name `cobranch_tenant` alone, so migrations,

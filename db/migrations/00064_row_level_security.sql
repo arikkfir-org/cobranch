@@ -11,13 +11,17 @@
 
 -- +goose StatementBegin
 -- isolate_organization turns on row-level security for tbl, a table with column org_id, and gives it policy
--- organization. In a shared table, whose rows without an organization belong to the installation (a person, a built-in
--- role), an organization reads those too, and still writes only its own.
+-- organization, which holds every command to the pinned organization's rows. A shared table, whose rows without an
+-- organization belong to the installation (a person, a built-in role), also gets policy installation, which lets an
+-- organization read those rows and nothing more: a DELETE is held by USING alone, so one policy that showed them
+-- would let an organization delete them.
 CREATE FUNCTION isolate_organization(tbl regclass, shared boolean DEFAULT false) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', tbl);
-    EXECUTE format('CREATE POLICY organization ON %s TO cobranch_tenant USING (%s) WITH CHECK (org_id = (SELECT current_org()))',
-        tbl, CASE WHEN shared THEN 'org_id IS NULL OR org_id = (SELECT current_org())' ELSE 'org_id = (SELECT current_org())' END);
+    EXECUTE format('CREATE POLICY organization ON %s TO cobranch_tenant USING (org_id = (SELECT current_org())) WITH CHECK (org_id = (SELECT current_org()))', tbl);
+    IF shared THEN
+        EXECUTE format('CREATE POLICY installation ON %s FOR SELECT TO cobranch_tenant USING (org_id IS NULL)', tbl);
+    END IF;
 END
 $$;
 -- +goose StatementEnd
@@ -71,6 +75,9 @@ SELECT isolate_organization('roles', shared => true);
 SELECT isolate_organization('events', shared => true);
 
 -- +goose Down
+DROP POLICY installation ON principals;
+DROP POLICY installation ON roles;
+DROP POLICY installation ON events;
 DROP POLICY organization ON organizations;
 ALTER TABLE organizations DISABLE ROW LEVEL SECURITY;
 DROP POLICY organization ON organization_slugs;

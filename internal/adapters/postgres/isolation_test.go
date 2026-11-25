@@ -65,9 +65,8 @@ func TestEveryOrganizationTableHasItsPolicy(t *testing.T) {
 			column = "id"
 		}
 		own := "(" + column + " = ( SELECT current_org() AS current_org))"
-		wantUsing := own
-		if shared {
-			wantUsing = "((org_id IS NULL) OR " + own + ")"
+		if got := installationPolicy(t, pool, table); got != shared {
+			t.Errorf("table %s: policy installation, which lets an organization read rows without one, is there = %t, want %t", table, got, shared)
 		}
 		var secured bool
 		var roles []string
@@ -83,28 +82,36 @@ func TestEveryOrganizationTableHasItsPolicy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !secured || len(roles) != 1 || roles[0] != "cobranch_tenant" || using != wantUsing || check != own {
+		if !secured || len(roles) != 1 || roles[0] != "cobranch_tenant" || using != own || check != own {
 			t.Errorf("table %s: row-level security on = %t, for %v, USING %s WITH CHECK %s; want on, for cobranch_tenant, USING %s WITH CHECK %s",
-				table, secured, roles, using, check, wantUsing, own)
+				table, secured, roles, using, check, own, own)
 		}
 	}
 }
 
+// installationPolicy reports whether table has policy installation as isolate_organization makes it: for reads alone,
+// of rows without an organization.
+func installationPolicy(t *testing.T, pool *pgxpool.Pool, table string) bool {
+	t.Helper()
+	return countRows(t, pool, `SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = '`+table+
+		`' AND policyname = 'installation' AND cmd = 'SELECT' AND roles::text[] = '{cobranch_tenant}' AND qual = '(org_id IS NULL)'`) == 1
+}
+
 // probe runs as a transaction pinned to org and reports what it reaches of table: the role it runs as, how many rows of
-// other organizations it reads, and how many of other's rows it changes and deletes.
-func probe(ctx context.Context, db *DB, table string, org, other uuid.UUID) (role string, read int, changed, deleted int64, err error) {
+// other organizations it reads, and how many rows that aren't org's, other's and the installation's, it changes and deletes.
+func probe(ctx context.Context, db *DB, table string, org uuid.UUID) (role string, read int, changed, deleted int64, err error) {
 	ident := pgx.Identifier{table}.Sanitize()
 	err = db.In(org).Transact(ctx, "probing "+table, uuid.Nil, func(ctx context.Context, _ *queries.Queries) error {
 		tx := ctx.Value(txKey{}).(running).tx
 		if err := tx.QueryRow(ctx, "SELECT current_user, count(*) FILTER (WHERE org_id <> $1) FROM "+ident, org).Scan(&role, &read); err != nil {
 			return fmt.Errorf("reading: %w", err)
 		}
-		tag, err := tx.Exec(ctx, "UPDATE "+ident+" SET org_id = org_id WHERE org_id = $1", other)
+		tag, err := tx.Exec(ctx, "UPDATE "+ident+" SET org_id = org_id WHERE org_id IS DISTINCT FROM $1", org)
 		if err != nil {
 			return fmt.Errorf("changing: %w", err)
 		}
 		changed = tag.RowsAffected()
-		if tag, err = tx.Exec(ctx, "DELETE FROM "+ident+" WHERE org_id = $1", other); err != nil {
+		if tag, err = tx.Exec(ctx, "DELETE FROM "+ident+" WHERE org_id IS DISTINCT FROM $1", org); err != nil {
 			return fmt.Errorf("deleting: %w", err)
 		}
 		deleted = tag.RowsAffected()
@@ -147,7 +154,7 @@ func TestOrganizationSeesOnlyItsRows(t *testing.T) {
 		if countRows(t, pool, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" WHERE org_id = '"+globex.String()+"'") > 0 {
 			held++
 		}
-		role, read, changed, deleted, err := probe(ctx, db, table, acme, globex)
+		role, read, changed, deleted, err := probe(ctx, db, table, acme)
 		if err != nil || role != "cobranch_tenant" || read != 0 || changed != 0 || deleted != 0 {
 			t.Errorf("%s: pinned to Acme as %s, read %d, changed %d and deleted %d rows of other organizations (%v), want none as cobranch_tenant",
 				table, role, read, changed, deleted, err)
@@ -157,6 +164,11 @@ func TestOrganizationSeesOnlyItsRows(t *testing.T) {
 		}
 		if code := insertCode(ctx, db, table, acme, acme); code != notNullViolation {
 			t.Errorf("%s: pinned to Acme, inserting its own row = %s, want SQLSTATE %s for the columns it lacks", table, code, notNullViolation)
+		}
+	}
+	for _, table := range []string{"principals", "roles"} {
+		if countRows(t, pool, "SELECT count(*) FROM "+table+" WHERE org_id IS NULL") == 0 {
+			t.Errorf("the seeds leave %s no row without an organization, so its writes prove nothing", table)
 		}
 	}
 	if held < 10 {
