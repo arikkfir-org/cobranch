@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch maintenance</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a class="cur" href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch maintenance</span>
+  <h1>maintenance: the hourly sweep</h1>
+  <p class="muted">A CronJob that deletes what expired and keeps the object store tidy. It is the only housekeeping that runs on a clock rather than on a queue, and it reuses the services the servers use rather than SQL of its own.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>CronJob, <code>0 * * * *</code>, deadline 50 minutes so it never skips the next hour</div>
+    <div class="fact"><b>Disk</b>An emptyDir (16Gi by default) for repacking: above twice the largest repository's packs</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/maintenance.go</code>, 110 lines, the whole workload</div>
+    <div class="fact"><b>Uses</b><code>services/auth</code>, <code>orgs</code>, <code>git</code>; <code>adapters/blob</code>, <code>gitserver.Packs</code></div>
+    <div class="fact"><b>Acts as</b>Nobody: its changes carry no principal in the <a href="postgresql.html">audit log</a></div>
+    <div class="fact"><b>Kubernetes access</b>None</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">One run</span>
+  <h2>Five steps; a failure in one does not stop the rest</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <div class="tw"><table>
+    <tr><th>Step</th><th>Deletes or changes</th><th>Runs when</th><th>Through</th></tr>
+    <tr><td class="p">Expire rows</td><td>Sign-in flows, sessions, task tokens, invitations and join requests past their time</td><td>Always</td><td><code>auth.DeleteExpired</code>, <code>DeleteExpiredTaskTokens</code>, <code>orgs.DeleteExpired</code></td></tr>
+    <tr><td class="p">Sweep packs</td><td>Packs compaction replaced a day ago, and uploads no row lists (a push that failed after its upload)</td><td>Compaction is on</td><td><code>git.Service.Sweep</code></td></tr>
+    <tr><td class="p">Compact</td><td>Every repository with 8 or more packs gets them repacked into one, with the <code>git</code> CLI on the emptyDir</td><td>Compaction is on</td><td><code>git.Service.Compact</code>, <code>gitserver.Packs.Repack</code></td></tr>
+    <tr><td class="p">Move objects</td><td>Copies objects from the store <code>COBRANCH_BLOB_MOVE_FROM</code> names into the current one, and logs when none is left</td><td>A move is under way</td><td><code>blob.Stores.Move</code></td></tr>
+    <tr><td class="p">Expire logs</td><td>Runs' logs older than the retention, 30 days by default</td><td>A retention is set</td><td><code>blob.Logs.Expire</code></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Things to know</span>
+  <h2>What it relies on</h2>
+  <ul class="know">
+    <li><b>Compaction needs a store it can reach.</b> With a <code>file://</code> store on each Git server pod's own emptyDir, maintenance cannot see the packs, and the chart leaves compaction off.</li>
+    <li><b>The <a href="git-server.html">git-server</a> tolerates it mid-fetch.</b> A fetch works from one snapshot and hard-links its packs, so a pack superseded during the fetch stays readable; deletion waits a day.</li>
+    <li><b>Errors are joined, not short-circuited.</b> <code>errors.Join</code> across the steps means one failing step still lets the others run, and the Job fails at the end.</li>
+    <li><b>The controller sweeps too.</b> Pods, run tokens, schedule slots and renders are cleaned by the <a href="controller.html">controller</a>'s own <code>Sweep</code>, on its interval.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>Two homes for expiry</h3><p>Rows expire here, hourly; tokens, slots and renders expire in the controller's sweeps. One rule for where "delete what is past its time" lives would make the next table's home obvious.</p></div>
+    <div class="lead"><h3>A full service to call one method</h3><p><code>deleteExpired</code> builds an <code>auth.Service</code>, an <code>orgs.Service</code> and an authorizer to reach three delete queries. A small expiry port would need none of them.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["c","sys","CronJob\nevery hour"]],[["e","svc","expire rows\nflows, sessions, task tokens,\ninvitations, join requests"]],[["s","svc","sweep packs\nsuperseded, unlisted"]],[["k","svc","compact\n8+ packs → 1"]],[["m","adp","move objects\nbetween stores"]],[["l","adp","expire run logs\npast retention"]]],
+ [["c","e"],["e","s"],["s","k"],["k","m"],["m","l"]],{w:200,gap:38});
+</script>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch Back-office</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a class="cur" href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Web app · web/back-office</span>
+  <h1>Back-office: the operator's console</h1>
+  <p class="muted">Where an installation's administrators see every organization and user, set limits, and manage sign-up and identity providers. It is one HTML file with no build step, served by Caddy, calling the <a href="admin-server.html">admin-server</a>.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 1 replica, image <code>cobranch-back-office</code> (Caddy)</div>
+    <div class="fact"><b>Source</b><code>web/back-office/public/index.html</code>: 568 lines, of which 130 are styles and 410 one ES module</div>
+    <div class="fact"><b>Server</b><code>web/back-office/Caddyfile</code>: static files, <code>/healthz</code>, <code>config.json</code></div>
+    <div class="fact"><b>Calls</b><a href="admin-server.html">admin-server</a> <code>/v1</code>, and the <a href="auth-server.html">auth-server</a> to sign in and out</div>
+    <div class="fact"><b>Who gets in</b>A user holding <code>installation.manage</code> or <code>installation.users.manage</code></div>
+    <div class="fact"><b>Exposure</b>Can sit on a gateway only operators reach; answers <code>X-Frame-Options: DENY</code></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">How it loads</span>
+  <h2>One page, one config call, one API</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap">The page routes in the browser, so a page at any depth asks for <code>config.json</code> beside itself and every directory answers it. The design system's tokens, typefaces and marks come from <code>assets/</code>, the same files the <a href="console.html">Console</a> draws with.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Screens</span>
+  <h2>Four screens, each one function</h2>
+  <div class="tw"><table>
+    <tr><th>Screen</th><th>Function</th><th>Admin API</th><th>Notable</th></tr>
+    <tr><td class="p">Organizations</td><td><code>showOrganizations</code></td><td><code>GET /orgs</code>, <code>POST /orgs</code>, <code>POST /orgs/{org}/entries</code>, <code>GET</code> and <code>PATCH /orgs/{org}/limits</code></td><td>Search, create one for a user, set its limits, and enter it with a reason, which opens it in the Console</td></tr>
+    <tr><td class="p">Users</td><td><code>showUsers</code></td><td><code>GET /users</code></td><td>Search; shows which provider each identity came from</td></tr>
+    <tr><td class="p">Providers</td><td><code>showProviders</code></td><td><code>/providers</code>, <code>/providers/{id}</code></td><td>Add, change and remove OpenID Connect providers; those the chart's values set are read-only</td></tr>
+    <tr><td class="p">Settings</td><td><code>showSettings</code></td><td><code>GET</code> and <code>PATCH /settings</code></td><td>Sign-up policy, self-serve organizations, default limits; a locked field says which chart value sets it</td></tr>
+  </table></div>
+  <p>Shared inside the file: <code>api</code> (fetch with the cookie, problem details to errors, ETag out and <code>If-Match</code> in), <code>h</code> (a DOM builder), <code>go</code> and <code>route</code> (history routing), <code>list</code> (a searched, paged table that follows <code>next</code> links), and <code>showSignIn</code>.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Things to know</span>
+  <h2>How it stays safe to change</h2>
+  <ul class="know">
+    <li><b>Stale edits are refused.</b> Every PATCH and DELETE sends the ETag it read; a 412 tells the administrator someone changed it first.</li>
+    <li><b>Mutations are JSON from its own origin,</b> which the Admin API's cookie guard requires, merge patches included.</li>
+    <li><b>Sign-in returns here.</b> The Auth server accepts the Back-office's URL as a return target (<code>SafeReturn</code>) only because the installation names it.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>A second copy of the Console's base</h3><p><code>api</code>, <code>h</code>, <code>go</code>, <code>route</code>, <code>showCard</code>, <code>showSignIn</code> and the formatters re-implement <code>lib/api.js</code>, <code>dom.js</code>, <code>router.js</code>, <code>layout.js</code> and <code>format.js</code>. <code>web/ui</code>, planned for exactly this, does not exist yet.</p></div>
+    <div class="lead"><h3>Styles outside the component stylesheet</h3><p>The page uses the design system's tokens but carries 130 lines of its own component CSS, where the Console's rule is that a page writes none. Sharing <code>components.css</code> would close the gap.</p></div>
+    <div class="lead"><h3>Two ways to learn the configuration</h3><p>The Back-office fetches <code>config.json</code>; the Console has it templated into its page and keeps <code>config.json</code> only for old releases. One mechanism for both.</p></div>
+  </div>
+</section>
+
+<script>
+seq("d1",[["Browser","act"],["Caddy (back-office)","sys"],["auth-server","adp","auth-server"],["admin-server","adp","admin-server"]],[
+ [0,1,"GET any path → index.html"],[0,1,"GET config.json: adminUrl, authUrl, consoleUrl"],[0,3,"GET /v1/me, with the session cookie"],[3,0,"401: not signed in",1],
+ [0,2,"GET /providers, then /sign-in?return=<Back-office URL>"],[2,0,"cookie set; back to the Back-office",1],[0,3,"GET /v1/me → the administrator and their permissions"],
+ [0,3,"GET /v1/orgs?q=… and the rest, as screens open"]]);
+</script>
+
+</div>
+</body>
+</html>

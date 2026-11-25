@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch git-server</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a class="cur" href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch git-server</span>
+  <h1>git-server: the only one that touches Git</h1>
+  <p class="muted">Clone, fetch and push over HTTPS and SSH, and every read of code the APIs make. It keeps no repository on disk: each request builds a throwaway one from rows in PostgreSQL and packs from the object store, and a push is committed to PostgreSQL before Git answers the client.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas, an ephemeral volume for the pack cache, no Kubernetes token</div>
+    <div class="fact"><b>Listens on</b>HTTP (Git's smart protocol), an internal port the chart never exposes, and SSH when a host key is set</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/git.go</code></div>
+    <div class="fact"><b>Code</b><code>adapters/gitserver</code> (4.2k lines, 19 files) over the <code>git</code> CLI; <code>adapters/gitinternal</code> (wire types and client)</div>
+    <div class="fact"><b>Domain</b><code>services/git</code>: <code>Snapshot</code>, <code>Weigh</code>, <code>Record</code></div>
+    <div class="fact"><b>Stores</b><a href="postgresql.html">PostgreSQL</a> (refs, packs, pushes, commits, branches) and the bucket, itself PostgreSQL large objects by default</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">A fetch</span>
+  <h2>Every request serves a repository built for it</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap">A pack's name is the hash of its content, so the cache keeps it by name whichever upload it came from. A fetch hard-links what it serves, so the cache may evict any file at any time without breaking a fetch in flight.</p>
+</section>
+
+<section>
+  <span class="eyebrow">A push</span>
+  <h2>The pre-receive hook is this same binary, calling home</h2>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <ul class="know">
+    <li><b>One transaction decides.</b> <code>git.Record</code> locks the repository's live branches, refuses a push whose refs moved meanwhile (<code>StaleError</code>), lists the pack, inserts the push and its commits, and notifies. A refused push changes nothing.</li>
+    <li><b>The pack is uploaded before it is listed.</b> A push that fails leaves files no row lists; <a href="maintenance.html">maintenance</a> deletes them.</li>
+    <li><b>Branch facts are counted here, in the hook's call:</b> merge requirements from <code>/cobranch.yaml</code>, the AI reviewer's settings, and each live branch's standing against the default branch (<code>facts.go</code>). A file that does not parse at the default branch's new tip refuses the push.</li>
+    <li><b>Quota is weighed twice:</b> before the upload, to avoid storing what won't fit, and again inside the transaction, which alone is sure.</li>
+    <li><b>What follows a push is not here.</b> Attribution, runs, deliveries, reviews and branch status belong to the <a href="push-worker.html">push-worker</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">The internal API</span>
+  <h2>How the API servers read code</h2>
+  <p>On the internal port, under <code>gitinternal.ReposPath</code>. Each call carries the viewer's own token, and the Git server authorizes it itself. Both ends are the same binary, so they share one Go type per body.</p>
+  <div class="tw"><table>
+    <tr><th>Call</th><th>Serves</th><th>File</th></tr>
+    <tr><td class="p">GET tree · blob · raw · paths</td><td>Directories, files, raw bytes, and every path for "go to file"</td><td><code>internal.go</code></td></tr>
+    <tr><td class="p">GET log · last-commits</td><td>History through every parent; the last commit to touch each entry of a directory</td><td><code>commit.go</code>, <code>lastcommits.go</code></td></tr>
+    <tr><td class="p">GET blame · diff</td><td>Blame of a file; the diff of a commit or a branch against <code>main</code></td><td><code>blame.go</code>, <code>diff.go</code></td></tr>
+    <tr><td class="p">POST merge</td><td>Merge a Ready branch by a merge commit or a fast-forward, recorded as a push</td><td><code>merge.go</code></td></tr>
+    <tr><td class="p">POST delete</td><td>Delete a branch, recorded as a push that deletes its ref</td><td><code>delete.go</code></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Code map</span>
+  <h2>Nineteen files, four jobs</h2>
+  <div class="tw"><table>
+    <tr><th>Job</th><th>Files</th></tr>
+    <tr><td class="p">Protocol</td><td><code>gitserver.go</code> (routes, auth), <code>protocol.go</code> (smart HTTP framing, size limits), <code>ssh.go</code></td></tr>
+    <tr><td class="p">Throwaway repositories</td><td><code>repository.go</code> (layout, isolated git config), <code>cache.go</code> (LRU of packs), <code>links_unix.go</code>, <code>links_other.go</code></td></tr>
+    <tr><td class="p">Accepting a push</td><td><code>hook.go</code> (the server's side), <code>hookclient.go</code> (<code>cobranch git-hook</code>), <code>facts.go</code>, <code>packs.go</code> (repack, which maintenance also uses)</td></tr>
+    <tr><td class="p">Reading and changing for the APIs</td><td><code>internal.go</code>, <code>commit.go</code>, <code>lastcommits.go</code>, <code>blame.go</code>, <code>diff.go</code>, <code>merge.go</code>, <code>delete.go</code>, <code>metrics.go</code></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>Domain rules inside an adapter</h3><p><code>facts.go</code> (543 lines) works out merge requirements and branch facts in <code>adapters/gitserver</code>. It needs Git objects, but the rules themselves are domain. Could the adapter read and <code>services/code</code> decide?</p></div>
+    <div class="lead"><h3>Merge and delete build pushes by hand</h3><p><code>merge.go</code> and <code>delete.go</code> each assemble a push and record it, beside the hook's path in <code>hook.go</code>. Three routes to <code>git.Record</code> to compare.</p></div>
+    <div class="lead"><h3>Two wire formats for one reader</h3><p><code>internal.go</code> (451 lines) and <code>gitinternal/wire.go</code> describe the same calls from each end. Check nothing is mapped twice.</p></div>
+  </div>
+</section>
+
+<script>
+seq("d1",[["git fetch","act"],["git-server","adp"],["PostgreSQL","store","postgresql"],["Pack cache (disk)","adp"],["Object store","store"]],[
+ [0,1,"GET info/refs, POST git-upload-pack (token or SSH key)"],[1,2,"auth.Authenticate; repos: may this viewer read?"],[1,2,"git.Snapshot: refs and active packs, at one moment"],
+ [1,3,"link the snapshot's packs"],[3,4,"fetch those the cache lacks"],[1,1,"write packed-refs, HEAD, config into a temp dir"],[1,1,"run git upload-pack there"],[1,0,"pack",1],[1,1,"remove the directory"]]);
+seq("d2",[["git push","act"],["git-server","adp"],["git receive-pack","sys"],["cobranch git-hook","sys"],["Object store","store"],["PostgreSQL","store","postgresql"]],[
+ [0,1,"POST git-receive-pack"],[1,2,"run in a throwaway repository; expect(push) → token"],[2,3,"pre-receive: old new ref lines, quarantine path"],
+ [3,1,"POST to the loopback hook path, with the token"],[1,1,"read the new commits; count the branch facts"],[1,5,"git.Weigh: room under the Git data limit?"],
+ [1,4,"upload the pack, its index first"],[1,5,"git.Record: one transaction, then pg_notify('cobranch_pushes')"],[1,3,"accepted, or the refusal's lines",1],[3,2,"exit 0 or 1",1],[1,0,"remote: lines, ok",1]]);
+</script>
+
+</div>
+</body>
+</html>

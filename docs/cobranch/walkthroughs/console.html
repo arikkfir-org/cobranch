@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a class="cur" href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Web app · web/console</span>
+  <h1>Console: the product people see</h1>
+  <p class="muted">Every page of Cobranch for its users: organizations, repositories, branches, issues, agents, artifacts. It is native ES modules and stylesheets with no build step and no framework, served by Caddy, calling the <a href="rest-server.html">rest-server</a> only.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas, image <code>cobranch-console</code> (Caddy)</div>
+    <div class="fact"><b>Size</b>9.3k lines of JavaScript, 2.0k of CSS, a 93-line shell</div>
+    <div class="fact"><b>Calls</b><a href="rest-server.html">REST</a> for data, the <a href="auth-server.html">auth-server</a> to sign in. No GraphQL</div>
+    <div class="fact"><b>Look</b>Tokens generated from the Figma file; a class per Figma component</div>
+    <div class="fact"><b>Adding a page</b>A new file. No list in code names it</div>
+    <div class="fact"><b>Design</b><code>docs/cobranch/designs/console.md</code>, <code>design-system.md</code></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">First load</span>
+  <h2>The shell names every file, and the browser asks for all of them at once</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <ul class="know">
+    <li><b>Caddy's <code>templates</code> writes two things into <code>index.html</code>:</b> the configuration (where REST, Auth, Git and the Console answer, and the release) and the names of the files in each asset directory (<code>listFiles</code>).</li>
+    <li><b>Assets live under <code>/assets/@&lt;release&gt;/</code>.</b> A Caddy serves only its own release's path. During a rollout a load that reaches the other release fails and reloads, up to three times, each under a path (<code>~2</code>, <code>~3</code>) the browser never cached.</li>
+    <li><b>Every page module is imported up front,</b> so a session runs one release throughout. Stylesheets link in a fixed order so the cascade is the same on every load.</li>
+    <li><b><code>start(loaded, root, again)</code> is a contract across releases:</b> an old shell may load a new <code>console.js</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Routing</span>
+  <h2>The path picks a file</h2>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <div class="tw"><table>
+    <tr><th>Path</th><th>Module</th><th>Examples</th></tr>
+    <tr><td class="p">/sign-in · /new · /join · /invitations</td><td><code>pages/sign-in.js</code>, <code>pages/welcome.js</code></td><td>Reserved words no organization may take</td></tr>
+    <tr><td class="p">/me · /help</td><td><code>pages/settings.js</code>, <code>pages/help.js</code></td><td>Modules of <code>pages/</code> with a default export draw inside the shell</td></tr>
+    <tr><td class="p">/&lt;org&gt;[/&lt;page&gt;]</td><td><code>pages/org/&lt;page&gt;.js</code>, <code>index.js</code> for the root</td><td>issues, agents, tasks, artifacts, activity, repos, members, roles, secrets, api-keys, settings</td></tr>
+    <tr><td class="p">/&lt;org&gt;/&lt;repo&gt;[/&lt;page&gt;/…]</td><td><code>pages/repo/&lt;page&gt;.js</code></td><td>branches, commits, commit, tree, blob, changes, runs, environments, issues, artifacts, access, secrets, settings</td></tr>
+    <tr><td class="p">…/settings/&lt;tab&gt;</td><td><code>pages/org/settings/*.js</code>, <code>pages/repo/settings/*.js</code></td><td>A page whose views are tabs: each tab a module in the page's directory (<code>lib/tabs.js</code>)</td></tr>
+  </table></div>
+  <p class="cap">An organization page's name is also a slug no repository may take, so a new one adds a line to <code>repos.ReservedSlugs</code> in Go and a migration that moves any repository off it.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Layers</span>
+  <h2>Pages over features over primitives over tokens</h2>
+  <div class="fig"><svg class="dg" id="d3"></svg></div>
+  <div class="tw"><table>
+    <tr><th>Layer</th><th>Modules</th><th>Rule</th></tr>
+    <tr><td class="p">Primitives</td><td><code>api</code> (fetch, problems, paging), <code>dom</code> (<code>h</code>), <code>state</code> (config, me, orgs, permissions), <code>router</code>, <code>assets</code>, <code>format</code>, <code>icons</code>, <code>forms</code>, <code>dialog</code>, <code>menu</code>, <code>tabs</code>, <code>theme</code>, <code>brand</code>, <code>figures</code></td><td>Know nothing of any feature</td></tr>
+    <tr><td class="p">Shell</td><td><code>layout</code>, <code>sidebar</code>, <code>pane</code> (the conversation pane on every page), <code>organization</code>, <code>repository</code></td><td>Load the organization or repository once, then hand the page its part</td></tr>
+    <tr><td class="p">Features</td><td><code>code</code> (572), <code>chat</code> (443), <code>run</code>, <code>agent</code>, <code>task</code>, <code>environments</code>, <code>diff</code>, <code>artifact</code>, <code>runs</code>, <code>issues</code>, <code>reviews</code>, <code>diffthreads</code>, <code>artifacts</code>, <code>secrets</code>, <code>markdown</code>, <code>branches</code>, <code>annotations</code>, <code>history</code></td><td>What several pages draw the same way</td></tr>
+    <tr><td class="p">Pages</td><td><code>pages/**</code></td><td>Compose features and component classes; write no component CSS</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Styles</span>
+  <h2>Figma leads, code follows</h2>
+  <div class="tw"><table>
+    <tr><th>File</th><th>Lines</th><th>Holds</th><th>Changes how</th></tr>
+    <tr><td class="p">tokens.css</td><td class="n">346</td><td>Every colour, size, radius, text style and shadow, light and dark</td><td>Generated from the Figma export by <code>web/console/tools</code>. Never by hand</td></tr>
+    <tr><td class="p">components.css</td><td class="n">552</td><td>One class per Figma component: <code>Badge/Quiet</code> is <code>.badge-quiet</code></td><td>With the component in Figma, first</td></tr>
+    <tr><td class="p">console.css · lib/shell.css</td><td class="n">353</td><td>The base and the app shell</td><td></td></tr>
+    <tr><td class="p">lib/*.css · pages/**/*.css</td><td class="n">about 800</td><td>Layout of one feature or page, beside its module</td><td>Found by file name, linked after the four above</td></tr>
+  </table></div>
+  <p class="cap"><code>/help/components</code> shows every component live, for comparison with the Figma file.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Things to know</span>
+  <h2>Behaviours that cut across pages</h2>
+  <ul class="know">
+    <li><b>Permissions shape the page.</b> The Console reads the viewer's permissions and hides what they may not do; the API still decides.</li>
+    <li><b>Chats follow live</b> by long-polling the REST API from a cursor (<code>followChat</code> in <code>lib/chat.js</code>), with a banner when it cannot.</li>
+    <li><b>Each page view is timed</b> and its Git reads counted from <code>Server-Timing</code>, then posted in batches to <code>/v1/page-views</code> without the cookie. Nothing names who viewed what.</li>
+    <li><b>Theme is the person's, not the browser's.</b> <code>lib/theme.js</code> keeps it in their preferences through the API and mirrors it in <code>localStorage</code> so the first paint is right.</li>
+    <li><b>Links marked <code>data-nav</code></b> route in the browser; anything else is a normal link.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3><code>lib/</code> is two things</h3><p>Fourteen small primitives share a flat directory with page-sized feature modules. Splitting them would make the layering above visible in the tree, and show which features import each other.</p></div>
+    <div class="lead"><h3>Reserved words in two languages</h3><p><code>router.js</code> lists the Console's own paths; <code>orgs.ReservedSlugs</code> and <code>repos.ReservedSlugs</code> list them in Go, held together by a test and a comment. The shell could receive them from the API.</p></div>
+    <div class="lead"><h3><code>api</code> and <code>apiPage</code></h3><p>Two functions in <code>lib/api.js</code> repeat the fetch, the read count and the problem-to-error mapping. One could build on the other.</p></div>
+    <div class="lead"><h3>List pages look alike</h3><p>Issues, runs, tasks, artifacts, commits and activity each draw a filtered, paged list. Check whether they share one list helper or each wires <code>apiPage</code> and "load more" again.</p></div>
+  </div>
+</section>
+
+<script>
+seq("d1",[["Browser","act"],["Caddy (console)","sys"],["index.html shell","sys"],["console.js","adp"],["rest-server","adp","rest-server"]],[
+ [0,1,"GET any path"],[1,0,"index.html with config and file names written in",1],[2,1,"preload every module, stylesheet and Latin font under /assets/@release/"],[2,4,"GET /v1/me, at the same time"],
+ [2,3,"import console.js; start(loaded, root, again)"],[3,3,"load(files): link stylesheets in order, import every page"],[3,4,"GET /me/organizations, /permissions"],[3,3,"router.show('load'): draw the page for the path"]]);
+flow("d2",[[["p","act","location.pathname\nunder the Console's root"]],[["r","adp","router.render"]],
+ [["s","sys","not signed in\n→ sign-in"],["w","sys","empty, or reserved\n→ welcome, or the last organization"],["c","sys","a Console page\n→ pages/<name>.js"],["o","adp","anything else → showOrganization\npages/org/<page>.js for an org page,\notherwise pages/repo/<page>.js"]]],
+ [["p","r"],["r","s"],["r","w"],["r","c"],["r","o"]],{w:330,gap:110});
+flow("d3",[[["pg","sys","pages/**\na module per route"]],[["f","adp","lib: features\ncode, chat, run, agent, task,\nenvironments, diff, artifact, …"],["sh","adp","lib: shell\nlayout, sidebar, pane"]],[["pr","svc","lib: primitives\napi, dom, state, router, assets,\nforms, dialog, menu, tabs, icons"]],[["cc","store","components.css\na class per Figma component"],["tk","store","tokens.css\ngenerated from Figma"]],[["api","adp","REST API","rest-server"]]],
+ [["pg","f"],["pg","sh"],["f","pr"],["sh","pr"],["pr","api"],["f","cc"],["sh","cc"],["cc","tk"]],{w:240,gap:50});
+</script>
+
+</div>
+</body>
+</html>

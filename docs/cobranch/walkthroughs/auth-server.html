@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch auth-server</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a class="cur" href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch auth-server</span>
+  <h1>auth-server: who you are</h1>
+  <p class="muted">The only workload that sends a browser to an identity provider and the only one that sets the session cookie. It serves no data. Every other workload resolves credentials through the same <code>auth.Service</code>, so this page also covers tokens and the authorizer.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas, no disk, no Kubernetes token</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/authserver.go</code>, <code>providers.go</code></div>
+    <div class="fact"><b>Transport</b><code>adapters/authserver</code> (252 lines), <code>adapters/oidc</code> (175)</div>
+    <div class="fact"><b>Domain</b><code>services/auth</code> (2.0k lines, fan-in 31)</div>
+    <div class="fact"><b>Store</b><code>postgres.AuthStore</code>: principals, identities, sign_in_flows, sessions</div>
+    <div class="fact"><b>Called by</b><a href="console.html">Console</a> and <a href="back-office.html">Back-office</a> sign-in pages</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Flow</span>
+  <h2>A sign-in is four routes and one cookie</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <div class="tw"><table>
+    <tr><th>Route</th><th>Does</th></tr>
+    <tr><td class="p">GET /providers</td><td>Lists the identity providers, and the seeded demo users while seeding is on, for the sign-in page to draw</td></tr>
+    <tr><td class="p">GET /sign-in</td><td><code>?provider=&amp;return=</code> begins a flow at the provider; <code>?user=</code> signs in as a seeded user. The return is a Console path or a Back-office URL, checked by <code>SafeReturn</code></td></tr>
+    <tr><td class="p">GET /callback</td><td>Where the provider sends the browser back; completes the flow and sets the cookie</td></tr>
+    <tr><td class="p">POST /sign-out</td><td>Revokes the cookie's session, from the Console's or the Back-office's origin only</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Credentials</span>
+  <h2>Six kinds of token, one resolver</h2>
+  <p><code>auth.Service.Authenticate</code> switches on the token's prefix. Every server and the Git server call it through <code>server.Authenticate</code>; a live credential is marked used at most once a minute.</p>
+  <div class="tw"><table>
+    <tr><th>Prefix</th><th>Credential</th><th>Acts as</th><th>How the authorizer treats it</th></tr>
+    <tr><td class="p">cbs_</td><td>Session (the cookie)</td><td>Its user</td><td>Everything the user holds</td></tr>
+    <tr><td class="p">cbp_</td><td>Personal token</td><td>Its user</td><td>Narrowed to the permissions the token lists</td></tr>
+    <tr><td class="p">cbk_</td><td>API key</td><td>The key, a principal of its organization</td><td>The key's own grants</td></tr>
+    <tr><td class="p">cbr_</td><td>Run token</td><td>The run's job</td><td>Widened while the run runs: read the organization, do what the job declared</td></tr>
+    <tr><td class="p">cba_</td><td>Task token</td><td>The task's agent</td><td>Capped by what the task's assigner holds</td></tr>
+    <tr><td class="p">cbd_</td><td>Delivery token</td><td>The delivery's target</td><td>Widened while the delivery renders</td></tr>
+  </table></div>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <p class="cap">The one authorizer. Nothing is cached between requests, so a revoked grant fails the very next one. A service asks <code>Can</code> or <code>Holds</code> and never reads <code>grants</code> itself.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Things to know</span>
+  <h2>Rules that live here</h2>
+  <ul class="know">
+    <li><b>The cookie is scoped to the parent domain</b> of every Cobranch URL (<code>auth.CookieScope</code>), so one sign-in reaches every API. With no URLs configured it falls back to a host cookie.</li>
+    <li><b>Cookie plus mutation needs JSON from the pages' origin.</b> <code>server.Authenticate</code> refuses a cookie-authenticated POST, PUT, PATCH or DELETE that is not JSON or names another Origin. A bearer token is sent on purpose and skips the check.</li>
+    <li><b>Providers come from two places:</b> the chart's values (read-only in the Back-office) and rows the Back-office adds, whose client secrets are sealed with the installation's secrets key.</li>
+    <li><b>Sign-up policy and self-serve organizations</b> are settings: the chart's values lock them, otherwise the <a href="back-office.html">Back-office</a> edits them.</li>
+    <li><b>Expiry is not here.</b> <a href="maintenance.html">maintenance</a> deletes expired flows, sessions and task tokens hourly.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>Minting is spread, resolving is not</h3><p>Resolution is one switch. Minting is in four places: <code>auth</code> (sessions, personal tokens, task tokens), and the <code>Token</code> methods of the runner, taskrunner and deliverer stores. Check they share the hash and hint code.</p></div>
+    <div class="lead"><h3><code>auth.Service</code> is built four times</h3><p>The API servers, the Auth server, the Git server and maintenance each construct their own <code>auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})</code>. Harmless, but a shared constructor in <code>cmd/cobranch</code> would say it once.</p></div>
+  </div>
+</section>
+
+<script>
+seq("d1",[["Browser","act"],["Console page","sys","console"],["auth-server","adp"],["Identity provider","act"],["PostgreSQL","store","postgresql"]],[
+ [0,1,"open /sign-in"],[1,2,"GET /providers"],[0,2,"GET /sign-in?provider=…&return=…"],[2,4,"auth.Begin: a sign_in_flows row"],[2,0,"302 to the provider",1],
+ [0,3,"sign in there"],[3,0,"302 to /callback",1],[0,2,"GET /callback"],[2,3,"exchange the code (adapters/oidc)"],
+ [2,4,"auth.Complete: find or create the principal, apply the sign-up policy, a sessions row"],[2,0,"Set-Cookie cbs_… for the parent domain, 302 to the return",1]]);
+flow("d2",[[["req","act","Request\nbearer token or cookie"]],[["authn","svc","auth.Authenticate\nprefix → principal"]],[["holds","svc","Authorizer.Holds\ngrants at the scope\nand every scope around it"]],
+ [["n","adp","narrowed\npersonal token: only what it lists"],["w","adp","widened\nrun or delivery token"],["c","adp","capped\ntask token: assigner's permissions"]],[["can","svc","Can(permission)\nnil or ErrForbidden"]]],
+ [["req","authn"],["authn","holds"],["holds","n"],["holds","w"],["holds","c"],["n","can"],["w","can"],["c","can"]],{w:230,gap:50});
+</script>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch rest-server</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a href="push-worker.html">push-worker</a><a class="cur" href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch rest-server</span>
+  <h1>rest-server: the front door</h1>
+  <p class="muted">The REST API under <code>/v1/</code>. The <a href="console.html">Console</a>, scripts, job runs and agents all come through it, each as a principal of its own. It is the largest hand-written transport in the codebase.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas; reads <code>pods/log</code> in the job namespaces</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/server.go</code> (<code>restServer</code>)</div>
+    <div class="fact"><b>Contract</b><code>api/openapi.yaml</code>: 158 paths, 216 operations → <code>rest.gen.go</code> (46k)</div>
+    <div class="fact"><b>Transport</b><code>adapters/rest</code>: 7.2k hand-written lines, a file per area</div>
+    <div class="fact"><b>Also built from the contract</b><code>adapters/restclient</code>, the client the agent's harness uses</div>
+    <div class="fact"><b>Talks to</b><a href="postgresql.html">PostgreSQL</a>, <a href="git-server.html">git-server</a> (internal port), the object store, job pods</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Request path</span>
+  <h2>From a request to a row, a Git object or a pod's log</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap">The services are the same instances the <a href="graphql-server.html">graphql-server</a> builds. Code reads leave through <code>gitinternal</code> with the viewer's own token, so the Git server checks who reads.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Surface</span>
+  <h2>216 operations, by what they are about</h2>
+  <div class="hb" id="hb"></div>
+  <p class="cap">Operations grouped by path. Everything below <code>/orgs/{org}</code> is scoped to one organization; <code>/me</code> is the viewer's own sessions, tokens, SSH keys, preferences and organizations.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Conventions</span>
+  <h2>What every route does the same way</h2>
+  <div class="tw"><table>
+    <tr><th>Concern</th><th>Rule</th><th>Where</th></tr>
+    <tr><td class="p">Errors</td><td>Problem details (RFC 9457) with a stable <code>code</code> and the request's ID; an unknown error is hidden behind that ID</td><td><code>rest/api.go</code></td></tr>
+    <tr><td class="p">Caching</td><td>Every GET answers <code>Cache-Control: private, no-cache</code>; resources carry an <code>ETag</code> from their <code>version</code>, and changes need <code>If-Match</code></td><td><code>rest/api.go</code>, each area</td></tr>
+    <tr><td class="p">Paging</td><td>An opaque cursor and <code>Link: rel="next"</code>, which the Console's <code>apiPage</code> follows</td><td>each area</td></tr>
+    <tr><td class="p">Authentication</td><td>Bearer token, else the session cookie; a cookie mutation must be JSON from the Console's origin</td><td><code>server/auth.go</code></td></tr>
+    <tr><td class="p">Authorization</td><td>Never in the handler: the service's first act, through <code>auth.Authorizer</code>. What the viewer may not see answers 404</td><td><code>services/*</code></td></tr>
+    <tr><td class="p">Timing</td><td><code>Server-Timing</code> names each Git read, which the Console counts per page view and posts to <code>/v1/page-views</code></td><td><code>server/timing.go</code>, <code>rest/pageviews.go</code></td></tr>
+    <tr><td class="p">Live updates</td><td>A long poll on a chat's updates, woken by <code>LISTEN cobranch_chats</code></td><td><code>rest/chats.go</code>, <code>postgres/listen.go</code></td></tr>
+    <tr><td class="p">Run logs</td><td>Live from the pod while a run runs, from the object store once it ended</td><td><code>rest/runlogs.go</code>, <code>code/runlogs.go</code></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Code map</span>
+  <h2>A file per area, each a thin translation</h2>
+  <p>A handler reads the generated request object, calls one service method with the viewer from the context, and maps the domain value to the generated response type. The files: <code>orgs</code>, <code>repos</code>, <code>me</code>, <code>tokens</code>, <code>sshkeys</code>, <code>api_keys</code>, <code>code</code>, <code>files</code>, <code>diffs</code>, <code>viewed</code>, <code>runs</code>, <code>runlogs</code>, <code>environments</code>, <code>issues</code>, <code>labels</code>, <code>chats</code>, <code>issue_chats</code>, <code>conversations</code>, <code>agents</code>, <code>models</code>, <code>transcripts</code>, <code>spend</code>, <code>artifacts</code>, <code>secrets</code>, <code>activity</code>, <code>overview</code>, <code>usage</code>, <code>preferences</code>, <code>pageviews</code>, <code>report</code>.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>Mirrored in GraphQL</h3><p>Almost every file here has a twin in <code>adapters/graphql</code> doing the same mapping onto different generated types. The domain-to-wire mapping could be the shared part.</p></div>
+    <div class="lead"><h3>Three chat files</h3><p><code>chats.go</code>, <code>issue_chats.go</code> and <code>conversations.go</code> serve one <code>chats.Service</code> for three kinds of subject. One handler set over a subject?</p></div>
+    <div class="lead"><h3>Hand-rolled ETag and cursor per area</h3><p>Each area parses its own cursor and compares its own <code>If-Match</code>. A pair of helpers would shrink every file.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["c","act","Console, scripts,\nruns, agents"]],
+ [["cors","adp","server.AllowOrigin"],["h","adp","server.Handler\nhealth, span, timing"],["a","adp","server.Authenticate"]],
+ [["gen","adp","rest.gen.go\nstrict server"],["api","adp","adapters/rest\na file per area"]],
+ [["svc","svc","11 services\nauthorize, then act"]],
+ [["st","adp","postgres stores"],["gi","adp","gitinternal\nwith the viewer's token"],["lg","adp","blob.Logs\njobcluster"]],
+ [["pg","store","PostgreSQL","postgresql"],["git","adp","git-server","git-server"],["pod","act","object store\njob pods"]]],
+ [["c","cors"],["cors","h"],["h","a"],["a","gen"],["gen","api"],["api","svc"],["svc","st"],["svc","gi"],["svc","lg"],["st","pg"],["gi","git"],["lg","pod"]],{w:200,gap:40});
+const R=[["/me",22],["repo: branches",21],["conversations (org + repo)",18],["agents",16],["issues",16],["artifacts",14],["environments, deliveries, targets",11],["secrets (org + repo)",10],["repo: commits",8],["repo: runs, jobs, events",10],["tasks",7],["repo: files (tree, blob, raw, blame, paths, tags)",7],["api-keys",5],["labels",5],["members, invitations, join requests, leave",12],["roles, access, permissions",10],["models, model providers, spend",9],["repos, orgs",7],["overview, activity, attention, usage",4],["reviews, deleted branches",2],["version, page-views",2]];
+R.sort((a,b)=>b[1]-a[1]);const hb=document.getElementById("hb");
+for(const [n,c] of R){const a=document.createElement("div");a.textContent=n;const b=document.createElement("div"),s=document.createElement("span");s.style.width=(c/22*70)+"%";const e=document.createElement("em");e.textContent=c;e.style.left="calc("+(c/22*70)+"% + 0px)";b.append(s,e);hb.append(a,b)}
+</script>
+
+</div>
+</body>
+</html>

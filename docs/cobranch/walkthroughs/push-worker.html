@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranch push-worker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="walkthrough.css">
+<script src="walkthrough.js"></script>
+</head>
+<body>
+<div class="wrap">
+<nav class="nav"><a href="architecture.html">Architecture</a><i>·</i><a href="admin-server.html">admin-server</a><a href="auth-server.html">auth-server</a><a href="controller.html">controller</a><a href="git-server.html">git-server</a><a href="graphql-server.html">graphql-server</a><a href="maintenance.html">maintenance</a><a href="migrate.html">migrate</a><a class="cur" href="push-worker.html">push-worker</a><a href="rest-server.html">rest-server</a><i>·</i><a href="postgresql.html">PostgreSQL</a><a href="back-office.html">Back-office</a><a href="console.html">Console</a></nav>
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Workload · cobranch push-worker</span>
+  <h1>push-worker: everything a push sets in motion</h1>
+  <p class="muted">The <a href="git-server.html">git-server</a> commits a push and answers the client. The push worker then works out who wrote the commits and what the push means: issues to link, merges to record, runs, deliveries and reviews to queue, branch statuses to update. Nothing waits on it, so it can run any number of replicas, or none while no push waits.</p>
+</header>
+
+<section>
+  <div class="facts">
+    <div class="fact"><b>Runs as</b>Deployment, 2 replicas, no disk, no Kubernetes token</div>
+    <div class="fact"><b>Wiring</b><code>cmd/cobranch/git.go</code> (<code>runPushWorker</code>)</div>
+    <div class="fact"><b>Loop</b><code>adapters/pushworker</code>: 52 lines</div>
+    <div class="fact"><b>Domain</b><code>git.Service.Process</code></div>
+    <div class="fact"><b>The work itself</b><code>postgres/git.go</code>: <code>Process</code>, <code>attribute</code>, <code>followPush</code></div>
+    <div class="fact"><b>Serves</b>Only <code>/healthz</code> and <code>/readyz</code></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The loop</span>
+  <h2>Drain, then sleep until a notification or the poll</h2>
+  <div class="fig"><svg class="dg" id="d1"></svg></div>
+  <p class="cap"><code>postgres.ListenPushes</code> holds one connection outside the pool on <code>LISTEN cobranch_pushes</code>. A lost connection wakes the loop too, and the poll interval covers a missed notification.</p>
+</section>
+
+<section>
+  <span class="eyebrow">One push</span>
+  <h2>Claimed and processed in a single transaction</h2>
+  <div class="fig"><svg class="dg" id="d2"></svg></div>
+  <ul class="know">
+    <li><b>Claiming is a row lock.</b> <code>ClaimPush</code> takes the push that has waited longest with <code>FOR UPDATE SKIP LOCKED</code>, so replicas never take the same one.</li>
+    <li><b>Attribution is by email.</b> A commit's author and committer resolve to the user who holds the email verified, else a login-less user who holds it, else a new login-less user named after the commit. An email a user holds unverified is nobody.</li>
+    <li><b>Queues are locked in a fixed order,</b> the delivery queue before the run queue before any branch, so two pushes to one repository cannot deadlock.</li>
+    <li><b>A failure rolls the whole push back</b> and records it in a transaction of its own (<code>FailPush</code>), with a retry that waits longer after many failures than after the first.</li>
+    <li><b>The trace continues.</b> The push carries its <code>traceparent</code>, and the worker links its span to it.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Review leads</span>
+  <h2>Worth a closer look</h2>
+  <div class="leads">
+    <div class="lead"><h3>The orchestration lives in the store</h3><p><code>followPush</code> in <code>adapters/postgres/git.go</code> links issues, records merges, queues runs, deliveries and reviews, and updates branch status. That is the domain's most important sequence, written in the storage adapter. It is there for the single transaction; a service method driving a transactional port would say the same in the domain.</p></div>
+    <div class="lead"><h3>One push crosses five services' tables</h3><p>The transaction writes what <code>issues</code>, <code>jobs</code>, <code>code</code>, <code>delivery</code> and <code>reviewer</code> own. Check each of those writes reuses its owner's query rather than a second copy.</p></div>
+  </div>
+</section>
+
+<script>
+flow("d1",[[["n","store","PostgreSQL\nNOTIFY cobranch_pushes","postgresql"],["t","sys","poll timer"]],
+ [["w","adp","pushworker.Run\nwait for a wake"]],[["d","adp","drain\nuntil none waits, then wait again"]],[["p","svc","git.Service.Process\none push"]],[["pg","store","PostgreSQL\none transaction","postgresql"]]],
+ [["n","w","wake"],["t","w"],["w","d"],["d","p","repeat"],["p","pg"]],{w:215,gap:75});
+seq("d2",[["push-worker","adp"],["pushes","store"],["commits · principals","store"],["issues · merges","store"],["the work queues","store"],["branches","store"]],[
+ [0,1,"ClaimPush (SKIP LOCKED)"],[0,2,"attribute: authors and committers → principals"],[0,4,"lock the delivery queue, then the run queue (job_runs)"],
+ [0,3,"link branches to their issues"],[0,3,"record merges; move their issues to Done"],[0,4,"queue the jobs' runs, the deliveries, the heads' reviews"],
+ [0,5,"work out the status of the branches waiting on this push"],[0,1,"MarkPushProcessed; commit"],[4,null,"the controller claims these rows next"]]);
+</script>
+
+</div>
+</body>
+</html>

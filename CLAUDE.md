@@ -93,7 +93,8 @@
   the code needs what the file lacks (a state, an empty or error screen), the file gets it first; a forced divergence
   is said in the pull request and corrected in the file in the same unit of work.
 - Cobranch's pages are in `docs/cobranch/`, published to the docs site under `cobranch/`: snapshots of the designs in
-  `designs/`. A change keeps those it touches true, in the same pull request.
+  `designs/`, and walk-throughs of the codebase in `walkthroughs/` (HTML pages that share `walkthrough.css` and
+  `walkthrough.js`, which draws their diagrams). A change keeps those it touches true, in the same pull request.
 - Pages at `https://docs.dev.kfirs.com/<path>` (every repository's `docs/`) are behind the hub's sign-in. Read one with
   `curl -fsS https://storage.googleapis.com/arikkfir-docs/.layers/<repository>/<path>`, where `<repository>` is the
   path's first segment when it names a repository (`cobranch/designs/repository.md` is `cobranch`'s) and `docs`
