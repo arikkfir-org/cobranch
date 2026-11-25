@@ -17,20 +17,19 @@ import (
 // ArtifactStore keeps the organizations' artifacts, their versions and the grants on them and on their owners
 // (db/migrations/00049_artifacts.sql, 00055_artifact_owners.sql): artifacts.Store on PostgreSQL.
 type ArtifactStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewArtifactStore returns artifacts' store on pool's database.
 func NewArtifactStore(pool *pgxpool.Pool) *ArtifactStore {
-	return &ArtifactStore{pool: pool, q: queries.New(pool)}
+	return &ArtifactStore{db: newDB(pool)}
 }
 
 var _ artifacts.Store = (*ArtifactStore)(nil)
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a taken ID to artifacts.ErrExists.
-func (s *ArtifactStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
-	err := transact(ctx, s.pool, s.q, what, actor, fn)
+func (s *ArtifactStore) transact(ctx context.Context, scope Scope, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
+	err := scope.Transact(ctx, what, actor, fn)
 	var conflict *ConflictError
 	if errors.As(err, &conflict) && (conflict.Constraint == "artifacts_pkey" || conflict.Constraint == "artifact_versions_id_key") {
 		return artifacts.ErrExists
@@ -93,7 +92,7 @@ func versionOf(r queries.ArtifactVersionRow) artifacts.Version {
 // With lists the IDs of the organization's artifacts, or the repository's for a repoID, where the principal holds
 // permission.
 func (s *ArtifactStore) With(ctx context.Context, principalID, orgID, repoID uuid.UUID, permission string) ([]uuid.UUID, error) {
-	ids, err := s.q.ArtifactsWith(ctx, queries.ArtifactsWithParams{OrgID: orgID, RepoID: nullable(repoID), PrincipalID: principalID,
+	ids, err := s.db.In(orgID).ArtifactsWith(ctx, queries.ArtifactsWithParams{OrgID: orgID, RepoID: nullable(repoID), PrincipalID: principalID,
 		Permission: permission})
 	if err != nil {
 		return nil, fmt.Errorf("listing the artifacts with %s: %w", permission, err)
@@ -103,7 +102,7 @@ func (s *ArtifactStore) With(ctx context.Context, principalID, orgID, repoID uui
 
 // List reads the artifacts ids names, newest change first.
 func (s *ArtifactStore) List(ctx context.Context, ids []uuid.UUID) ([]artifacts.Artifact, error) {
-	rows, err := s.q.Artifacts(ctx, ids)
+	rows, err := s.db.OfAny(Artifacts, ids).Artifacts(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading the artifacts: %w", err)
 	}
@@ -116,7 +115,7 @@ func (s *ArtifactStore) List(ctx context.Context, ids []uuid.UUID) ([]artifacts.
 
 // Get finds an artifact.
 func (s *ArtifactStore) Get(ctx context.Context, id uuid.UUID) (artifacts.Artifact, error) {
-	return get(ctx, s.q, id)
+	return get(ctx, s.db.Of(Artifacts, id).Queries, id)
 }
 
 func get(ctx context.Context, q *queries.Queries, id uuid.UUID) (artifacts.Artifact, error) {
@@ -131,7 +130,7 @@ func get(ctx context.Context, q *queries.Queries, id uuid.UUID) (artifacts.Artif
 func (s *ArtifactStore) Create(ctx context.Context, actor uuid.UUID, n artifacts.New) (artifacts.Artifact, error) {
 	var out artifacts.Artifact
 	a := n.Artifact
-	err := s.transact(ctx, "creating the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.In(a.OrgID), "creating the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
 		inserted, err := q.InsertArtifact(ctx, queries.InsertArtifactParams{ID: a.ID, OrgID: a.OrgID, RepoID: nullable(a.RepoID),
 			OwnerID: nullable(a.Owner.ID), Title: a.Title,
 			Summary: a.Summary, Kind: string(a.Kind), RepositoryAccess: string(a.RepositoryAccess), OrganizationAccess: string(a.OrganizationAccess),
@@ -176,7 +175,7 @@ func lockArtifact(ctx context.Context, q *queries.Queries, id uuid.UUID, version
 // Update changes the artifact's row if it is still at version, and records the event.
 func (s *ArtifactStore) Update(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64, c artifacts.Changes) (artifacts.Artifact, error) {
 	var out artifacts.Artifact
-	err := s.transact(ctx, "changing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Of(Artifacts, id), "changing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := lockArtifact(ctx, q, id, version)
 		if err != nil {
 			return err
@@ -196,7 +195,7 @@ func (s *ArtifactStore) Update(ctx context.Context, actor uuid.UUID, id uuid.UUI
 
 // Delete deletes the artifact, its versions and the grants on it if it is still at version, and records the event.
 func (s *ArtifactStore) Delete(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64) error {
-	return s.transact(ctx, "deleting the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Of(Artifacts, id), "deleting the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := lockArtifact(ctx, q, id, version)
 		if err != nil {
 			return err
@@ -211,7 +210,7 @@ func (s *ArtifactStore) Delete(ctx context.Context, actor uuid.UUID, id uuid.UUI
 // AddVersion adds the artifact's next version if it is still at version, and records the event.
 func (s *ArtifactStore) AddVersion(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64, in artifacts.VersionInput, taskID uuid.UUID) (artifacts.Artifact, error) {
 	var out artifacts.Artifact
-	err := s.transact(ctx, "adding the artifact's version", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Of(Artifacts, id), "adding the artifact's version", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := lockArtifact(ctx, q, id, version)
 		if err != nil {
 			return err
@@ -235,7 +234,7 @@ func (s *ArtifactStore) AddVersion(ctx context.Context, actor uuid.UUID, id uuid
 
 // Versions lists the artifact's versions, newest first, without their bodies.
 func (s *ArtifactStore) Versions(ctx context.Context, id uuid.UUID) ([]artifacts.Version, error) {
-	rows, err := s.q.ArtifactVersions(ctx, id)
+	rows, err := s.db.Of(Artifacts, id).ArtifactVersions(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("listing the artifact's versions: %w", err)
 	}
@@ -251,7 +250,7 @@ func (s *ArtifactStore) Versions(ctx context.Context, id uuid.UUID) ([]artifacts
 
 // Version finds a version of the artifact with its body.
 func (s *ArtifactStore) Version(ctx context.Context, id uuid.UUID, number int32) (artifacts.Version, error) {
-	r, err := s.q.ArtifactVersion(ctx, id, number)
+	r, err := s.db.Of(Artifacts, id).ArtifactVersion(ctx, id, number)
 	if err != nil {
 		return artifacts.Version{}, wrapArtifact("reading the version", err)
 	}
@@ -260,7 +259,7 @@ func (s *ArtifactStore) Version(ctx context.Context, id uuid.UUID, number int32)
 
 // VersionByID finds the version a call wrote, by its ID, with its body.
 func (s *ArtifactStore) VersionByID(ctx context.Context, versionID uuid.UUID) (artifacts.Version, error) {
-	r, err := s.q.ArtifactVersionByID(ctx, versionID)
+	r, err := s.db.Everywhere("finding an artifact's version by its ID, before its organization is known").ArtifactVersionByID(ctx, versionID)
 	if err != nil {
 		return artifacts.Version{}, wrapArtifact("finding the version", err)
 	}
@@ -269,7 +268,7 @@ func (s *ArtifactStore) VersionByID(ctx context.Context, versionID uuid.UUID) (a
 
 // Grants lists the roles principals hold on the artifact itself, by display name.
 func (s *ArtifactStore) Grants(ctx context.Context, id uuid.UUID) ([]artifacts.Grant, error) {
-	rows, err := s.q.ArtifactGrantees(ctx, id)
+	rows, err := s.db.Of(Artifacts, id).ArtifactGrantees(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("listing the artifact's grants: %w", err)
 	}
@@ -278,7 +277,7 @@ func (s *ArtifactStore) Grants(ctx context.Context, id uuid.UUID) ([]artifacts.G
 
 // PersonGrants lists the roles principals hold on the user, by display name.
 func (s *ArtifactStore) PersonGrants(ctx context.Context, userID uuid.UUID) ([]artifacts.Grant, error) {
-	rows, err := s.q.PersonGrantees(ctx, userID)
+	rows, err := s.db.Everywhere(personal).PersonGrantees(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the grants on the person: %w", err)
 	}
@@ -302,7 +301,7 @@ func artifactGrants(rows []queries.ArtifactGranteesRow) []artifacts.Grant {
 
 // Principal finds one of the organization's members, or a principal of its own: an API key, a job or an agent.
 func (s *ArtifactStore) Principal(ctx context.Context, orgID, principalID uuid.UUID) (artifacts.Principal, error) {
-	r, err := s.q.Grantee(ctx, principalID, orgID)
+	r, err := s.db.In(orgID).Grantee(ctx, principalID, orgID)
 	if err != nil {
 		return artifacts.Principal{}, wrapArtifact("finding the principal", err)
 	}
@@ -311,7 +310,7 @@ func (s *ArtifactStore) Principal(ctx context.Context, orgID, principalID uuid.U
 
 // Colleague finds a member of one of the user's organizations, or an agent of one.
 func (s *ArtifactStore) Colleague(ctx context.Context, userID, principalID uuid.UUID) (artifacts.Principal, error) {
-	r, err := s.q.Colleague(ctx, principalID, userID)
+	r, err := s.db.Everywhere(personal).Colleague(ctx, principalID, userID)
 	if err != nil {
 		return artifacts.Principal{}, wrapArtifact("finding the principal", err)
 	}
@@ -320,7 +319,7 @@ func (s *ArtifactStore) Colleague(ctx context.Context, userID, principalID uuid.
 
 // Share gives the principal the role on the artifact in place of any artifact role it held there, and records it.
 func (s *ArtifactStore) Share(ctx context.Context, actor uuid.UUID, a artifacts.Artifact, principalID, roleID uuid.UUID) error {
-	return s.transact(ctx, "sharing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(a.OrgID), "sharing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, a.OrgID); err != nil {
 			return wrapArtifact("locking the organization", err)
 		}
@@ -340,7 +339,7 @@ func (s *ArtifactStore) Share(ctx context.Context, actor uuid.UUID, a artifacts.
 
 // Unshare takes every role the principal holds on the artifact itself, and records it.
 func (s *ArtifactStore) Unshare(ctx context.Context, actor uuid.UUID, a artifacts.Artifact, principalID uuid.UUID) error {
-	return s.transact(ctx, "unsharing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(a.OrgID), "unsharing the artifact", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.DeleteArtifactGrants(ctx, principalID, a.ID)
 		if err != nil {
 			return fmt.Errorf("deleting the grants: %w", err)
@@ -355,7 +354,7 @@ func (s *ArtifactStore) Unshare(ctx context.Context, actor uuid.UUID, a artifact
 // SharePerson gives the principal the role on actor in place of any role it held there, and records it as an event of
 // the installation's, since a person's artifacts span their organizations.
 func (s *ArtifactStore) SharePerson(ctx context.Context, actor, principalID, roleID uuid.UUID) error {
-	return s.transact(ctx, "sharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Everywhere(personal), "sharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.DeletePersonGrants(ctx, principalID, actor); err != nil {
 			return fmt.Errorf("deleting the roles it held: %w", err)
 		}
@@ -369,7 +368,7 @@ func (s *ArtifactStore) SharePerson(ctx context.Context, actor, principalID, rol
 
 // UnsharePerson takes every role the principal holds on actor, and records it as SharePerson does.
 func (s *ArtifactStore) UnsharePerson(ctx context.Context, actor, principalID uuid.UUID) error {
-	return s.transact(ctx, "unsharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Everywhere(personal), "unsharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.DeletePersonGrants(ctx, principalID, actor)
 		if err != nil {
 			return fmt.Errorf("deleting the grants: %w", err)

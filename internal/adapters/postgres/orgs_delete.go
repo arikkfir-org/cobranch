@@ -21,7 +21,7 @@ const deletedReason = "its organization was deleted"
 // grants there of whoever isn't its own and its API keys' secrets, and cancels its runs and tasks that haven't ended and
 // its deliveries that haven't started applying (orgs.Store).
 func (s *OrgStore) Delete(ctx context.Context, actor, orgID uuid.UUID, version int64, at time.Time) error {
-	return s.transact(ctx, "deleting the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "deleting the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		current, err := q.LockOrganizationVersion(ctx, orgID)
 		if err != nil {
 			return wrapOrg("reading the organization", err)
@@ -67,7 +67,7 @@ func liveOrganization(ctx context.Context, q *queries.Queries, repoID uuid.UUID)
 // Purgeable lists the organizations being deleted whose rows may go, the earliest deleted first: those whose
 // environments' teardowns all ended, and those deleted before `before` (orgs.Store).
 func (s *OrgStore) Purgeable(ctx context.Context, before time.Time) ([]orgs.Purgeable, error) {
-	rows, err := s.q.OrganizationsToPurge(ctx, before)
+	rows, err := s.db.Everywhere(maintenance).OrganizationsToPurge(ctx, before)
 	if err != nil {
 		return nil, fmt.Errorf("listing the organizations to purge: %w", err)
 	}
@@ -82,7 +82,7 @@ func (s *OrgStore) Purgeable(ctx context.Context, before time.Time) ([]orgs.Purg
 // carries its org_id with it, and its events. False when it isn't one (orgs.Store).
 func (s *OrgStore) Purge(ctx context.Context, orgID uuid.UUID) (bool, error) {
 	var purged bool
-	err := s.transact(ctx, "purging organization "+orgID.String(), uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Everywhere(maintenance), "purging organization "+orgID.String(), uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.PurgeOrganization(ctx, orgID)
 		if err != nil || n == 0 {
 			return wrapIf(err, "deleting the organization's rows")

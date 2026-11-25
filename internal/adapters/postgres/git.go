@@ -25,13 +25,12 @@ import (
 // GitStore keeps Git hosting's rows (db/migrations/00012_git.sql): git.Store on PostgreSQL, through the queries sqlc
 // generates from db/queries.
 type GitStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewGitStore returns Git hosting's store on pool's database.
 func NewGitStore(pool *pgxpool.Pool) *GitStore {
-	return &GitStore{pool: pool, q: queries.New(pool)}
+	return &GitStore{db: newDB(pool)}
 }
 
 var _ git.Store = (*GitStore)(nil)
@@ -39,7 +38,7 @@ var _ git.Store = (*GitStore)(nil)
 // Snapshot reads the repository's refs and active packs in one statement; a repository with neither, or none at all,
 // has an empty one.
 func (s *GitStore) Snapshot(ctx context.Context, repoID uuid.UUID) (git.Snapshot, error) {
-	row, err := s.q.Snapshot(ctx, repoID)
+	row, err := s.db.Of(Repositories, repoID).Snapshot(ctx, repoID)
 	if err != nil {
 		return git.Snapshot{}, fmt.Errorf("reading the snapshot: %w", err)
 	}
@@ -61,7 +60,7 @@ func (s *GitStore) Snapshot(ctx context.Context, repoID uuid.UUID) (git.Snapshot
 
 // Record applies the push in one transaction that acts for its pusher (git.Store).
 func (s *GitStore) Record(ctx context.Context, push git.Push) error {
-	return transact(ctx, s.pool, s.q, "recording the push", push.PusherID, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Of(Repositories, push.RepoID).Transact(ctx, "recording the push", push.PusherID, func(ctx context.Context, q *queries.Queries) error {
 		orgID, err := q.LockRepository(ctx, push.RepoID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return git.ErrNotFound
@@ -295,7 +294,7 @@ func insertCommits(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pus
 // is kept waiting in a transaction of its own, the failed one rolled back.
 func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Duration) (uuid.UUID, error) {
 	var claimed queries.ClaimPushRow
-	err := transact(ctx, s.pool, s.q, "processing a push", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Everywhere(pushQueue).Transact(ctx, "processing a push", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		var err error
 		claimed, err = q.ClaimPush(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -317,7 +316,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, err
 	}
 	delay := retry(int(claimed.Attempts) + 1)
-	if failed := s.q.FailPush(ctx, err.Error(), delay.Seconds(), claimed.ID); failed != nil {
+	if failed := s.db.Everywhere(pushQueue).FailPush(ctx, err.Error(), delay.Seconds(), claimed.ID); failed != nil {
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
@@ -448,7 +447,7 @@ func (s *GitStore) loginless(ctx context.Context, q *queries.Queries, email, nam
 	if err != nil {
 		return nil, fmt.Errorf("making an ID: %w", err)
 	}
-	err = transact(ctx, s.pool, s.q, "making a login-less user", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err = savepoint(ctx, "making a login-less user", func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{ID: id, Kind: "user", DisplayName: loginlessName(name, email), CreatedAt: at}); err != nil {
 			return fmt.Errorf("inserting the user: %w", err)
 		}

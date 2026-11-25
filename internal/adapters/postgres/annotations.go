@@ -17,7 +17,7 @@ import (
 // Annotations lists the annotations on one of the repository's commits by name, or repos.ErrNotFound when it holds no
 // such commit (code.Store).
 func (s *CodeStore) Annotations(ctx context.Context, repoID uuid.UUID, sha string) ([]code.Annotation, error) {
-	if _, err := s.q.CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := s.db.Of(Repositories, repoID).CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding commit %s: %w", sha, err)
@@ -35,7 +35,7 @@ func (s *CodeStore) annotationsOf(ctx context.Context, repoID uuid.UUID, shas []
 	if len(shas) == 0 {
 		return nil, nil
 	}
-	return annotationsAt(ctx, s.q, repoID, shas)
+	return annotationsAt(ctx, s.db.Of(Repositories, repoID).Queries, repoID, shas)
 }
 
 // SetAnnotation sets the annotation on the repository's commit for actor, or changes the one actor set there before,
@@ -43,7 +43,7 @@ func (s *CodeStore) annotationsOf(ctx context.Context, repoID uuid.UUID, shas []
 // again the status of the branches at the commit (code.Store).
 func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error) {
 	var out code.Annotation
-	err := transact(ctx, s.pool, s.q, "setting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "setting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
 		orgID, err := q.CommitOrg(ctx, repoID, sha)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repos.ErrNotFound
@@ -130,7 +130,7 @@ func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoI
 // annotation.changed and works out again the status of the branches at the commit (code.Store). One that isn't
 // there, on a commit the repository holds, is code.ErrAnnotationChanged when version names one.
 func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error {
-	return transact(ctx, s.pool, s.q, "deleting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.Of(Repositories, repoID).Transact(ctx, "deleting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.LockRunQueue(ctx, repoID); err != nil { // first, as every transaction that locks an annotation
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}

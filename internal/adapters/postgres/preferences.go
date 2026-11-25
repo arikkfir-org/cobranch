@@ -19,7 +19,7 @@ func preferences(row queries.Preference) auth.Preferences {
 
 // Preferences reads a person's preferences: auth.DefaultPreferences, at version 0, until they first change one.
 func (s *AuthStore) Preferences(ctx context.Context, userID uuid.UUID) (auth.Preferences, error) {
-	row, err := s.q.Preferences(ctx, userID)
+	row, err := s.db.Everywhere(personal).Preferences(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return auth.DefaultPreferences, nil
 	}

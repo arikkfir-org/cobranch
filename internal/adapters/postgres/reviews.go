@@ -19,7 +19,7 @@ import (
 // Reviews lists at most limit of the reviews on one of the repository's commits in the order they were submitted, after
 // the one named after unless it is uuid.Nil, or repos.ErrNotFound when it holds no such commit (code.Store).
 func (s *CodeStore) Reviews(ctx context.Context, repoID uuid.UUID, sha string, after uuid.UUID, limit int) ([]code.Review, error) {
-	if _, err := s.q.CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := s.db.Of(Repositories, repoID).CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding commit %s: %w", sha, err)
@@ -28,7 +28,7 @@ func (s *CodeStore) Reviews(ctx context.Context, repoID uuid.UUID, sha string, a
 	if after != uuid.Nil {
 		params.After = &after
 	}
-	rows, err := s.q.ReviewsPage(ctx, params)
+	rows, err := s.db.Of(Repositories, repoID).ReviewsPage(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("reading the reviews of commit %s: %w", sha, err)
 	}
@@ -41,7 +41,7 @@ func (s *CodeStore) Reviews(ctx context.Context, repoID uuid.UUID, sha string, a
 
 // Review finds one of the repository's reviews, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Review(ctx context.Context, repoID, id uuid.UUID) (code.Review, error) {
-	row, err := s.q.ReviewOf(ctx, repoID, id)
+	row, err := s.db.Of(Repositories, repoID).ReviewOf(ctx, repoID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return code.Review{}, repos.ErrNotFound
 	}
@@ -57,7 +57,7 @@ func (s *CodeStore) Review(ctx context.Context, repoID, id uuid.UUID) (code.Revi
 // chats.ErrBranchDeleted.
 func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error) {
 	var out code.Review
-	err := transact(ctx, s.pool, s.q, "submitting the review", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "submitting the review", actor, func(ctx context.Context, q *queries.Queries) error {
 		orgID, err := q.CommitOrg(ctx, repoID, sha)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repos.ErrNotFound

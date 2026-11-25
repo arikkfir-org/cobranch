@@ -18,20 +18,19 @@ import (
 // AuthStore keeps sign-in's rows (db/migrations/00002_sign_in.sql): auth.Store on PostgreSQL, through the queries sqlc
 // generates from db/queries.
 type AuthStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewAuthStore returns sign-in's store on pool's database.
 func NewAuthStore(pool *pgxpool.Pool) *AuthStore {
-	return &AuthStore{pool: pool, q: queries.New(pool)}
+	return &AuthStore{db: newDB(pool)}
 }
 
 var _ auth.Store = (*AuthStore)(nil)
 
 // CreateFlow records a sign-in that began.
 func (s *AuthStore) CreateFlow(ctx context.Context, f auth.Flow) error {
-	err := s.q.CreateFlow(ctx, queries.CreateFlowParams{
+	err := s.db.Everywhere(signingIn).CreateFlow(ctx, queries.CreateFlowParams{
 		StateHash:    f.StateHash,
 		BrowserHash:  f.BrowserHash,
 		ProviderID:   f.ProviderID,
@@ -48,7 +47,7 @@ func (s *AuthStore) CreateFlow(ctx context.Context, f auth.Flow) error {
 
 // TakeFlow deletes the flow stateHash names and returns it, so each is finished once.
 func (s *AuthStore) TakeFlow(ctx context.Context, stateHash []byte) (auth.Flow, error) {
-	f, err := s.q.TakeFlow(ctx, stateHash)
+	f, err := s.db.Everywhere(signingIn).TakeFlow(ctx, stateHash)
 	if err != nil {
 		return auth.Flow{}, wrap("taking the sign-in flow", err)
 	}
@@ -78,7 +77,7 @@ func identity(i queries.Identity) auth.Identity {
 
 // Identity finds who issuer and subject signed in as.
 func (s *AuthStore) Identity(ctx context.Context, issuer, subject string) (auth.Identity, error) {
-	i, err := s.q.Identity(ctx, issuer, subject)
+	i, err := s.db.Everywhere(signingIn).Identity(ctx, issuer, subject)
 	if err != nil {
 		return auth.Identity{}, wrap("reading the identity", err)
 	}
@@ -87,7 +86,7 @@ func (s *AuthStore) Identity(ctx context.Context, issuer, subject string) (auth.
 
 // EmailHolder finds the user who holds email, verified, and the issuer of one of their identities.
 func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, string, error) {
-	h, err := s.q.EmailHolder(ctx, email)
+	h, err := s.db.Everywhere(signingIn).EmailHolder(ctx, email)
 	if err != nil {
 		return uuid.Nil, "", wrap("finding the email's holder", err)
 	}
@@ -96,7 +95,7 @@ func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, s
 
 // LoginlessHolder finds the login-less user who holds email unverified.
 func (s *AuthStore) LoginlessHolder(ctx context.Context, email string) (uuid.UUID, error) {
-	id, err := s.q.LoginlessHolder(ctx, email)
+	id, err := s.db.Everywhere(signingIn).LoginlessHolder(ctx, email)
 	if err != nil {
 		return uuid.Nil, wrap("finding a login-less user with the email", err)
 	}
@@ -265,7 +264,7 @@ func sessionOf(m queries.Session) auth.Session {
 
 // Session finds a session by its token's hash, with its user.
 func (s *AuthStore) Session(ctx context.Context, tokenHash []byte) (auth.Session, auth.User, error) {
-	row, err := s.q.SessionByToken(ctx, tokenHash)
+	row, err := s.db.Everywhere(signingIn).SessionByToken(ctx, tokenHash)
 	if err != nil {
 		return auth.Session{}, auth.User{}, wrap("reading the session", err)
 	}
@@ -282,7 +281,7 @@ func (s *AuthStore) user(ctx context.Context, p queries.Principal) (auth.User, e
 		Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
 		CreatedAt: p.CreatedAt,
 	}
-	emails, err := s.q.Emails(ctx, u.ID)
+	emails, err := s.db.Everywhere(signingIn).Emails(ctx, u.ID)
 	if err != nil {
 		return auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
 	}
@@ -294,7 +293,7 @@ func (s *AuthStore) user(ctx context.Context, p queries.Principal) (auth.User, e
 
 // Touch records that session id was used at seen.
 func (s *AuthStore) Touch(ctx context.Context, id uuid.UUID, seen time.Time) error {
-	if err := s.q.TouchSession(ctx, seen, seen.Add(auth.SessionIdle), id); err != nil {
+	if err := s.db.Everywhere(signingIn).TouchSession(ctx, seen, seen.Add(auth.SessionIdle), id); err != nil {
 		return fmt.Errorf("marking the session used: %w", err)
 	}
 	return nil
@@ -302,7 +301,7 @@ func (s *AuthStore) Touch(ctx context.Context, id uuid.UUID, seen time.Time) err
 
 // Sessions lists a user's sessions that are not revoked, newest first.
 func (s *AuthStore) Sessions(ctx context.Context, userID uuid.UUID) ([]auth.Session, error) {
-	rows, err := s.q.Sessions(ctx, userID)
+	rows, err := s.db.Everywhere(signingIn).Sessions(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the sessions: %w", err)
 	}
@@ -329,7 +328,7 @@ func (s *AuthStore) Revoke(ctx context.Context, userID, id uuid.UUID, now time.T
 
 // SeededUsers lists the demo data's users: those with an identity of auth.SeedIssuer, by display name.
 func (s *AuthStore) SeededUsers(ctx context.Context) ([]auth.Seeded, error) {
-	rows, err := s.q.SeededUsers(ctx, auth.SeedIssuer)
+	rows, err := s.db.Everywhere(signingIn).SeededUsers(ctx, auth.SeedIssuer)
 	if err != nil {
 		return nil, fmt.Errorf("listing the seeded users: %w", err)
 	}
@@ -347,10 +346,10 @@ func (s *AuthStore) SeededUser(ctx context.Context, subject string) (auth.Identi
 
 // DeleteExpired deletes the flows and sessions that expired before now.
 func (s *AuthStore) DeleteExpired(ctx context.Context, now time.Time) (flows, sessions int64, err error) {
-	if flows, err = s.q.DeleteExpiredFlows(ctx, now); err != nil {
+	if flows, err = s.db.Everywhere(signingIn).DeleteExpiredFlows(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired sign-in flows: %w", err)
 	}
-	if sessions, err = s.q.DeleteExpiredSessions(ctx, now); err != nil {
+	if sessions, err = s.db.Everywhere(signingIn).DeleteExpiredSessions(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired sessions: %w", err)
 	}
 	return flows, sessions, nil
@@ -366,5 +365,5 @@ func wrap(what string, err error) error {
 
 // transact runs fn in a transaction that acts for actor (transact).
 func (s *AuthStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
-	return transact(ctx, s.pool, s.q, what, actor, fn)
+	return s.db.Everywhere(signingIn).Transact(ctx, what, actor, fn)
 }

@@ -19,13 +19,12 @@ import (
 // RepoStore keeps repositories' rows (db/migrations/00010_repositories.sql): repos.Store on PostgreSQL, through the
 // queries sqlc generates from db/queries.
 type RepoStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewRepoStore returns repositories' store on pool's database.
 func NewRepoStore(pool *pgxpool.Pool) *RepoStore {
-	return &RepoStore{pool: pool, q: queries.New(pool)}
+	return &RepoStore{db: newDB(pool)}
 }
 
 var _ repos.Store = (*RepoStore)(nil)
@@ -36,8 +35,8 @@ var repoConflicts = map[string]error{
 }
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a conflict to the domain's error.
-func (s *RepoStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
-	err := transact(ctx, s.pool, s.q, what, actor, fn)
+func (s *RepoStore) transact(ctx context.Context, scope Scope, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
+	err := scope.Transact(ctx, what, actor, fn)
 	var conflict *ConflictError
 	if errors.As(err, &conflict) {
 		if domain, ok := repoConflicts[conflict.Constraint]; ok {
@@ -70,7 +69,7 @@ func repository(r queries.Repository, shared []uuid.UUID) repos.Repository {
 
 // shared lists the IDs of the organization's Internal repositories.
 func (s *RepoStore) shared(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
-	ids, err := s.q.SharedRepositories(ctx, orgID, auth.RoleOwner)
+	ids, err := s.db.In(orgID).SharedRepositories(ctx, orgID, auth.RoleOwner)
 	if err != nil {
 		return nil, fmt.Errorf("listing the shared repositories: %w", err)
 	}
@@ -81,7 +80,7 @@ func (s *RepoStore) shared(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, e
 // organization's, an organization that holds limit repositories already is refused with a *limits.ExceededError; 0
 // caps nothing.
 func (s *RepoStore) Create(ctx context.Context, actor uuid.UUID, repo repos.Repository, limit int64) error {
-	return s.transact(ctx, "creating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(repo.OrgID), "creating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
 		if limit > 0 {
 			if err := lockLimit(ctx, q, limits.KindRepositories, repo.OrgID); err != nil {
 				return err
@@ -114,7 +113,7 @@ func (s *RepoStore) Create(ctx context.Context, actor uuid.UUID, repo repos.Repo
 
 // BySlug finds one of the organization's repositories by any slug it has had there.
 func (s *RepoStore) BySlug(ctx context.Context, orgID uuid.UUID, slug string) (repos.Repository, error) {
-	row, err := s.q.RepositoryBySlug(ctx, orgID, slug)
+	row, err := s.db.In(orgID).RepositoryBySlug(ctx, orgID, slug)
 	if err != nil {
 		return repos.Repository{}, wrapRepo("finding the repository", err)
 	}
@@ -127,7 +126,7 @@ func (s *RepoStore) BySlug(ctx context.Context, orgID uuid.UUID, slug string) (r
 
 // ByPath finds a repository by its organization's slug and its own, each one it has or had.
 func (s *RepoStore) ByPath(ctx context.Context, orgSlug, slug string) (repos.Repository, error) {
-	row, err := s.q.RepositoryByPath(ctx, orgSlug, slug)
+	row, err := s.db.Everywhere("finding a repository by its path, before its organization is known").RepositoryByPath(ctx, orgSlug, slug)
 	if err != nil {
 		return repos.Repository{}, wrapRepo("finding the repository", err)
 	}
@@ -140,7 +139,7 @@ func (s *RepoStore) ByPath(ctx context.Context, orgSlug, slug string) (repos.Rep
 
 // ByID finds a repository.
 func (s *RepoStore) ByID(ctx context.Context, id uuid.UUID) (repos.Repository, error) {
-	row, err := s.q.RepositoryByID(ctx, id)
+	row, err := s.db.Of(Repositories, id).RepositoryByID(ctx, id)
 	if err != nil {
 		return repos.Repository{}, wrapRepo("finding the repository", err)
 	}
@@ -153,7 +152,7 @@ func (s *RepoStore) ByID(ctx context.Context, id uuid.UUID) (repos.Repository, e
 
 // Among lists those of ids that are the organization's repositories, by slug.
 func (s *RepoStore) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]repos.Repository, error) {
-	rows, err := s.q.RepositoriesAmong(ctx, orgID, ids)
+	rows, err := s.db.In(orgID).RepositoriesAmong(ctx, orgID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("listing the repositories: %w", err)
 	}
@@ -170,7 +169,7 @@ func (s *RepoStore) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 
 // Summaries sums up those of ids that are the organization's repositories, by ID.
 func (s *RepoStore) Summaries(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]repos.Summary, error) {
-	rows, err := s.q.RepositorySummaries(ctx, orgID, ids)
+	rows, err := s.db.In(orgID).RepositorySummaries(ctx, orgID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("summing up the repositories: %w", err)
 	}
@@ -188,7 +187,7 @@ func (s *RepoStore) Summaries(ctx context.Context, orgID uuid.UUID, ids []uuid.U
 // Usage counts the organization's repositories and sums the bytes of their active packs, and lists those of ids that
 // are its repositories, by slug, each with the bytes of its own.
 func (s *RepoStore) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []repos.RepositoryUsage, error) {
-	used, err := s.q.OrganizationUsage(ctx, orgID)
+	used, err := s.db.In(orgID).OrganizationUsage(ctx, orgID)
 	if err != nil {
 		return limits.Usage{}, nil, fmt.Errorf("counting the organization's usage: %w", err)
 	}
@@ -196,7 +195,7 @@ func (s *RepoStore) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 	if err != nil {
 		return limits.Usage{}, nil, err
 	}
-	rows, err := s.q.RepositoriesGitData(ctx, orgID, ids)
+	rows, err := s.db.In(orgID).RepositoriesGitData(ctx, orgID, ids)
 	if err != nil {
 		return limits.Usage{}, nil, fmt.Errorf("summing the repositories' Git data: %w", err)
 	}
@@ -213,7 +212,7 @@ func (s *RepoStore) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 
 // Update writes the repository's settings and claims its slug, keeping the old one as a redirect.
 func (s *RepoStore) Update(ctx context.Context, actor uuid.UUID, repo repos.Repository) error {
-	return s.transact(ctx, "updating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(repo.OrgID), "updating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.UpdateRepository(ctx, queries.UpdateRepositoryParams{
 			ID: repo.ID, Slug: repo.Slug, Name: repo.Name, Description: repo.Description,
 		})
@@ -233,7 +232,7 @@ func (s *RepoStore) Update(ctx context.Context, actor uuid.UUID, repo repos.Repo
 // Access lists the principals holding roles on the repository, by display name, each with its grants on it, then
 // its roles at its organization.
 func (s *RepoStore) Access(ctx context.Context, repoID uuid.UUID) ([]repos.Access, error) {
-	rows, err := s.q.RepositoryGrants(ctx, repoID)
+	rows, err := s.db.Of(Repositories, repoID).RepositoryGrants(ctx, repoID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the repository's grants: %w", err)
 	}
@@ -254,7 +253,7 @@ func (s *RepoStore) Access(ctx context.Context, repoID uuid.UUID) ([]repos.Acces
 
 // Roles lists the built-in repository roles, then the organization's own.
 func (s *RepoStore) Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error) {
-	rows, err := s.q.RepositoryRoles(ctx, orgID)
+	rows, err := s.db.In(orgID).RepositoryRoles(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the roles: %w", err)
 	}
@@ -267,7 +266,7 @@ func (s *RepoStore) Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, er
 
 // Principal finds one of the organization's members or API keys.
 func (s *RepoStore) Principal(ctx context.Context, orgID, principalID uuid.UUID) (repos.Principal, error) {
-	row, err := s.q.Grantee(ctx, principalID, orgID)
+	row, err := s.db.In(orgID).Grantee(ctx, principalID, orgID)
 	if err != nil {
 		return repos.Principal{}, wrapRepo("finding the principal", err)
 	}
@@ -277,7 +276,7 @@ func (s *RepoStore) Principal(ctx context.Context, orgID, principalID uuid.UUID)
 // Grant gives the principal the role on the repository. It holds the organization's lock, as every grant does, so
 // the role can't be deleted meanwhile: one deleted first is not found.
 func (s *RepoStore) Grant(ctx context.Context, actor uuid.UUID, repo repos.Repository, principalID, roleID uuid.UUID) error {
-	return s.transact(ctx, "granting the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(repo.OrgID), "granting the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, repo.OrgID); err != nil {
 			return wrapRepo("locking the organization", err)
 		}
@@ -299,7 +298,7 @@ func (s *RepoStore) Grant(ctx context.Context, actor uuid.UUID, repo repos.Repos
 
 // Revoke takes the role from the principal on the repository.
 func (s *RepoStore) Revoke(ctx context.Context, actor uuid.UUID, repo repos.Repository, principalID, roleID uuid.UUID) error {
-	return s.transact(ctx, "revoking the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(repo.OrgID), "revoking the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.DeleteRepositoryGrant(ctx, principalID, roleID, repo.ID)
 		if err != nil {
 			return fmt.Errorf("deleting the grant: %w", err)

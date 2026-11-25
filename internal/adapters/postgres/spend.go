@@ -64,11 +64,11 @@ func modelAgents(ctx context.Context, q *queries.Queries, orgID uuid.UUID) (map[
 
 // Models lists the organization's models by provider and name, each with the agents on it (agents.Store).
 func (s *AgentStore) Models(ctx context.Context, orgID uuid.UUID) ([]agents.Model, error) {
-	rows, err := s.q.Models(ctx, orgID)
+	rows, err := s.db.In(orgID).Models(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the models: %w", err)
 	}
-	on, err := modelAgents(ctx, s.q, orgID)
+	on, err := modelAgents(ctx, s.db.In(orgID).Queries, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (s *AgentStore) Models(ctx context.Context, orgID uuid.UUID) ([]agents.Mode
 
 // Model finds one of the organization's models, with the agents on it (agents.Store).
 func (s *AgentStore) Model(ctx context.Context, orgID uuid.UUID, provider, name string) (agents.Model, error) {
-	return findModel(ctx, s.q, orgID, provider, name)
+	return findModel(ctx, s.db.In(orgID).Queries, orgID, provider, name)
 }
 
 // findModel finds one of the organization's models, with the agents on it.
@@ -104,7 +104,7 @@ func findModel(ctx context.Context, q *queries.Queries, orgID uuid.UUID, provide
 func (s *AgentStore) PutModel(ctx context.Context, actor, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (agents.Model, bool, error) {
 	var out agents.Model
 	var created bool
-	err := transact(ctx, s.pool, s.q, "setting the model", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.In(orgID).Transact(ctx, "setting the model", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.ShareModelProvider(ctx, orgID, provider); errors.Is(err, pgx.ErrNoRows) {
 			return &orgs.ValidationError{Field: "provider", Code: "model.provider_invalid", Message: "the organization hasn't added this provider"}
 		} else if err != nil {
@@ -165,7 +165,7 @@ func putModel(ctx context.Context, q *queries.Queries, actor, orgID uuid.UUID, p
 // RemoveModel removes one of the organization's models for actor under its row's lock, at version or at any version
 // for agents.AnyVersion; agents.ErrChanged, agents.ErrModelInUse while agents run on it (agents.Store).
 func (s *AgentStore) RemoveModel(ctx context.Context, actor, orgID uuid.UUID, provider, name string, version int64) error {
-	return transact(ctx, s.pool, s.q, "removing the model", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.db.In(orgID).Transact(ctx, "removing the model", actor, func(ctx context.Context, q *queries.Queries) error {
 		at, err := q.LockModel(ctx, orgID, provider, name)
 		switch {
 		case err != nil:
@@ -193,7 +193,7 @@ func (s *AgentStore) RemoveModel(ctx context.Context, actor, orgID uuid.UUID, pr
 // report that repeats an ID records nothing; agents.ErrEnded for a task that has ended (agents.Store).
 func (s *AgentStore) RecordSpend(ctx context.Context, taskID uuid.UUID, u agents.Usage) (agents.Spend, error) {
 	var out agents.Spend
-	err := transact(ctx, s.pool, s.q, "recording the task's spend", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(AgentTasks, taskID).Transact(ctx, "recording the task's spend", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		t, err := q.LockSpendingTask(ctx, taskID)
 		if err != nil {
 			return fmt.Errorf("locking task %s: %w", taskID, notFound(err))

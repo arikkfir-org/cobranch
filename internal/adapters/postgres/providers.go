@@ -45,17 +45,17 @@ func readIdentityProviders(ctx context.Context, q *queries.Queries) ([]auth.Stor
 
 // IdentityProviders lists the providers the Back-office added, for sign-in.
 func (s *AuthStore) IdentityProviders(ctx context.Context) ([]auth.StoredProvider, error) {
-	return readIdentityProviders(ctx, s.q)
+	return readIdentityProviders(ctx, s.db.Everywhere(installation).Queries)
 }
 
 // IdentityProviders lists the providers the Back-office added.
 func (s *OrgStore) IdentityProviders(ctx context.Context) ([]auth.StoredProvider, error) {
-	return readIdentityProviders(ctx, s.q)
+	return readIdentityProviders(ctx, s.db.Everywhere(installation).Queries)
 }
 
 // IdentityProvider finds the Back-office's provider id, or orgs.ErrNotFound.
 func (s *OrgStore) IdentityProvider(ctx context.Context, id string) (auth.StoredProvider, error) {
-	row, err := s.q.IdentityProvider(ctx, id)
+	row, err := s.db.Everywhere(installation).IdentityProvider(ctx, id)
 	if err != nil {
 		return auth.StoredProvider{}, wrapOrg("reading the identity provider", err)
 	}
@@ -67,7 +67,7 @@ func (s *OrgStore) CreateIdentityProvider(ctx context.Context, actor uuid.UUID, 
 	params := queries.CreateIdentityProviderParams{ID: p.ID, Name: p.Name, Issuer: optional(p.Issuer), Preset: optional(p.Preset),
 		ClientID: p.ClientID, ClientSecret: p.SealedSecret, UpdatedAt: at, UpdatedBy: &actor}
 	var written auth.StoredProvider
-	err := s.transact(ctx, "adding an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Everywhere(installation), "adding an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.CreateIdentityProvider(ctx, params)
 		if err != nil {
 			return fmt.Errorf("writing it: %w", err)
@@ -87,7 +87,7 @@ func (s *OrgStore) ChangeIdentityProvider(ctx context.Context, actor uuid.UUID, 
 	params := queries.ChangeIdentityProviderParams{ID: p.ID, Name: p.Name, Issuer: optional(p.Issuer), Preset: optional(p.Preset),
 		ClientID: p.ClientID, ClientSecret: p.SealedSecret, UpdatedAt: at, UpdatedBy: &actor, Version: p.Version}
 	var written auth.StoredProvider
-	err := s.transact(ctx, "changing an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Everywhere(installation), "changing an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.ChangeIdentityProvider(ctx, params)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return admin.ErrStale
@@ -107,7 +107,7 @@ func (s *OrgStore) ChangeIdentityProvider(ctx context.Context, actor uuid.UUID, 
 // DeleteIdentityProvider removes provider id, acting for actor, unless its version is no longer version: then
 // admin.ErrStale.
 func (s *OrgStore) DeleteIdentityProvider(ctx context.Context, actor uuid.UUID, id string, version int64) error {
-	return s.transact(ctx, "removing an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Everywhere(installation), "removing an identity provider", actor, func(ctx context.Context, q *queries.Queries) error {
 		removed, err := q.DeleteIdentityProvider(ctx, id, version)
 		if err != nil {
 			return fmt.Errorf("deleting it: %w", err)

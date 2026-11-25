@@ -62,14 +62,14 @@ func TestAuthStorePersonalTokens(t *testing.T) {
 // checkTokenRecords checks that the tokens' events and audit rows name their user, and that no audit row keeps a hash.
 func checkTokenRecords(t *testing.T, s *AuthStore, userID uuid.UUID) {
 	t.Helper()
-	kinds := eventKinds(t, s.pool)
+	kinds := eventKinds(t, s.db.pool)
 	if !slices.Equal(kinds[len(kinds)-3:], []string{"personal_token.created", "personal_token.created", "personal_token.revoked"}) {
 		t.Errorf("events = %v, want two tokens made and one revoked last", kinds)
 	}
-	if n := count(t, s.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND principal_id = $1", userID); n != 3 {
+	if n := count(t, s.db.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND principal_id = $1", userID); n != 3 {
 		t.Errorf("%d audit rows of the tokens name Alice, want 3: two made, one revoked", n)
 	}
-	if n := count(t, s.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND (after ? 'token_hash' OR before ? 'token_hash')"); n != 0 {
+	if n := count(t, s.db.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'credentials' AND (after ? 'token_hash' OR before ? 'token_hash')"); n != 0 {
 		t.Errorf("%d audit rows keep a token's hash, want none", n)
 	}
 }

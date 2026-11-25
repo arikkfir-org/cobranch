@@ -18,11 +18,11 @@ import (
 // ViewedFiles lists actor's Viewed marks on the repository's live branch of name, by path: repos.ErrNotFound when it
 // has no such branch (code.ViewedStore).
 func (s *CodeStore) ViewedFiles(ctx context.Context, actor, repoID uuid.UUID, branch string) ([]code.ViewedFile, error) {
-	b, err := viewedBranch(ctx, s.q, repoID, branch)
+	b, err := viewedBranch(ctx, s.db.Of(Repositories, repoID).Queries, repoID, branch)
 	if err != nil {
 		return nil, err
 	}
-	return viewedFiles(ctx, s.q, actor, b.ID)
+	return viewedFiles(ctx, s.db.Of(Repositories, repoID).Queries, actor, b.ID)
 }
 
 // UpdateViewed applies changes, at at, to actor's Viewed marks on the repository's live branch of name, as actor,
@@ -31,7 +31,7 @@ func (s *CodeStore) ViewedFiles(ctx context.Context, actor, repoID uuid.UUID, br
 func (s *CodeStore) UpdateViewed(ctx context.Context, actor, repoID uuid.UUID, branch string, check func([]code.ViewedFile) error,
 	changes []code.ViewedChange, at time.Time) ([]code.ViewedFile, error) {
 	var marks []code.ViewedFile
-	err := transact(ctx, s.pool, s.q, "changing the Viewed marks", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "changing the Viewed marks", actor, func(ctx context.Context, q *queries.Queries) error {
 		b, err := viewedBranch(ctx, q, repoID, branch)
 		if err != nil {
 			return err

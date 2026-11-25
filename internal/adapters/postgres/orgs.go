@@ -20,13 +20,12 @@ import (
 // OrgStore keeps organizations' rows (db/migrations/00004_organizations.sql): orgs.Store on PostgreSQL, and the
 // grants the authorizer reads (auth.Grants), through the queries sqlc generates from db/queries.
 type OrgStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewOrgStore returns organizations' store on pool's database.
 func NewOrgStore(pool *pgxpool.Pool) *OrgStore {
-	return &OrgStore{pool: pool, q: queries.New(pool)}
+	return &OrgStore{db: newDB(pool)}
 }
 
 var (
@@ -46,8 +45,8 @@ var conflicts = map[string]error{
 }
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a conflict to the domain's error.
-func (s *OrgStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
-	err := transact(ctx, s.pool, s.q, what, actor, fn)
+func (s *OrgStore) transact(ctx context.Context, scope Scope, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
+	err := scope.Transact(ctx, what, actor, fn)
 	var conflict *ConflictError
 	if errors.As(err, &conflict) {
 		if domain, ok := conflicts[conflict.Constraint]; ok {
@@ -55,6 +54,15 @@ func (s *OrgStore) transact(ctx context.Context, what string, actor uuid.UUID, f
 		}
 	}
 	return err
+}
+
+// grantsScope is where the grants at a scope are read: in the organization for its own, and everywhere for the
+// installation's and a person's, which belong to none.
+func (s *OrgStore) grantsScope(scope auth.Scope, scopeID uuid.UUID) Scope {
+	if scope == auth.ScopeOrganization {
+		return s.db.In(scopeID)
+	}
+	return s.db.Everywhere("grants at the " + string(scope) + " belong to no organization")
 }
 
 // wrapOrg returns orgs.ErrNotFound for a query that found no row, and err in what's context otherwise.
@@ -85,19 +93,19 @@ func issueKey(org orgs.Organization) string {
 func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
 	switch scope {
 	case auth.ScopeRepository:
-		permissions, err := s.q.RepositoryPermissions(ctx, principalID, scopeID, auth.RepositoryPermissions)
+		permissions, err := s.db.Of(Repositories, scopeID).RepositoryPermissions(ctx, principalID, scopeID, auth.RepositoryPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("reading the permissions at the repository: %w", err)
 		}
 		return permissions, nil
 	case auth.ScopeSecret:
-		permissions, err := s.q.SecretPermissions(ctx, principalID, scopeID, auth.SecretPermissions)
+		permissions, err := s.db.Of(Secrets, scopeID).SecretPermissions(ctx, principalID, scopeID, auth.SecretPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("reading the permissions on the secret: %w", err)
 		}
 		return permissions, nil
 	case auth.ScopeArtifact:
-		permissions, err := s.q.ArtifactPermissions(ctx, principalID, scopeID, auth.ArtifactPermissions)
+		permissions, err := s.db.Of(Artifacts, scopeID).ArtifactPermissions(ctx, principalID, scopeID, auth.ArtifactPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("reading the permissions on the artifact: %w", err)
 		}
@@ -107,7 +115,7 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 	if scopeID != uuid.Nil {
 		id = &scopeID
 	}
-	permissions, err := s.q.Permissions(ctx, principalID, string(scope), id)
+	permissions, err := s.grantsScope(scope, scopeID).Permissions(ctx, principalID, string(scope), id)
 	if err != nil {
 		return nil, fmt.Errorf("reading the permissions: %w", err)
 	}
@@ -117,7 +125,7 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 // Repositories lists the IDs of the organization's repositories where principalID holds permission, through a grant
 // on the repository or a role at the organization.
 func (s *OrgStore) Repositories(ctx context.Context, principalID, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
-	ids, err := s.q.RepositoriesWith(ctx, orgID, principalID, permission)
+	ids, err := s.db.In(orgID).RepositoriesWith(ctx, orgID, principalID, permission)
 	if err != nil {
 		return nil, fmt.Errorf("listing the repositories with %s: %w", permission, err)
 	}
@@ -128,7 +136,7 @@ func (s *OrgStore) Repositories(ctx context.Context, principalID, orgID uuid.UUI
 // counts it against its creator: under a lock of theirs, a creator who created limit organizations already is refused
 // with a *limits.ExceededError; 0 caps nothing.
 func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization, limit int64) error {
-	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Everywhere("creating an organization counts its creator's others"), "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		if limit > 0 {
 			if err := lockLimit(ctx, q, limits.KindOrganizations, actor); err != nil {
 				return err
@@ -148,7 +156,7 @@ func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 // CreateFor makes the organization as Create does, with owner its first Owner: an administrator who creates one for a
 // user is the actor, and the user its Owner, whom the event names when it isn't the actor. It counts against nobody.
 func (s *OrgStore) CreateFor(ctx context.Context, actor, owner uuid.UUID, org orgs.Organization) error {
-	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(org.ID), "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		return create(ctx, q, actor, owner, nil, org)
 	})
 }
@@ -217,7 +225,7 @@ func dropPending(ctx context.Context, q *queries.Queries, orgID, userID uuid.UUI
 
 // BySlug finds an organization by any slug it has had.
 func (s *OrgStore) BySlug(ctx context.Context, slug string) (orgs.Organization, error) {
-	row, err := s.q.OrganizationBySlug(ctx, slug)
+	row, err := s.db.Everywhere("finding an organization by its slug, before it is known").OrganizationBySlug(ctx, slug)
 	if err != nil {
 		return orgs.Organization{}, wrapOrg("reading the organization", err)
 	}
@@ -226,7 +234,7 @@ func (s *OrgStore) BySlug(ctx context.Context, slug string) (orgs.Organization, 
 
 // ByID finds an organization.
 func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, error) {
-	o, err := s.q.OrganizationByID(ctx, id)
+	o, err := s.db.In(id).OrganizationByID(ctx, id)
 	if err != nil {
 		return orgs.Organization{}, wrapOrg("reading the organization", err)
 	}
@@ -238,7 +246,7 @@ func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, e
 // deleted, and answers its version since.
 func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization, expected int64) (int64, error) {
 	var version int64
-	err := s.transact(ctx, "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.In(org.ID), "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		current, err := q.LockOrganizationVersion(ctx, org.ID)
 		if err != nil {
 			return wrapOrg("locking the organization", err)
@@ -273,7 +281,7 @@ func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 
 // OrganizationsOf lists the organizations a user belongs to, by name.
 func (s *OrgStore) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]orgs.Organization, error) {
-	rows, err := s.q.OrganizationsOf(ctx, userID)
+	rows, err := s.db.Everywhere(personal).OrganizationsOf(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the organizations: %w", err)
 	}
@@ -286,7 +294,7 @@ func (s *OrgStore) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]org
 
 // Created counts the organizations the user created for themselves that still exist.
 func (s *OrgStore) Created(ctx context.Context, userID uuid.UUID) (int64, error) {
-	created, err := s.q.CreatedOrganizations(ctx, userID)
+	created, err := s.db.Everywhere(personal).CreatedOrganizations(ctx, userID)
 	if err != nil {
 		return 0, fmt.Errorf("counting the organizations the user created: %w", err)
 	}
@@ -304,7 +312,7 @@ func role(r queries.Role) orgs.Role {
 
 // rolesHeld lists the roles each principal holds at the organization.
 func (s *OrgStore) rolesHeld(ctx context.Context, orgID uuid.UUID) (map[uuid.UUID][]orgs.Role, error) {
-	rows, err := s.q.OrganizationGrants(ctx, orgID)
+	rows, err := s.db.In(orgID).OrganizationGrants(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the organization's grants: %w", err)
 	}
@@ -317,7 +325,7 @@ func (s *OrgStore) rolesHeld(ctx context.Context, orgID uuid.UUID) (map[uuid.UUI
 
 // Members lists the organization's members with the roles they hold there, by display name.
 func (s *OrgStore) Members(ctx context.Context, orgID uuid.UUID) ([]orgs.Member, error) {
-	rows, err := s.q.Members(ctx, orgID)
+	rows, err := s.db.In(orgID).Members(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the members: %w", err)
 	}
@@ -348,7 +356,7 @@ func (s *OrgStore) Member(ctx context.Context, orgID, userID uuid.UUID) (orgs.Me
 
 // MemberByEmail finds the member who holds email, verified.
 func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email string) (uuid.UUID, error) {
-	id, err := s.q.MemberByEmail(ctx, orgID, email)
+	id, err := s.db.In(orgID).MemberByEmail(ctx, orgID, email)
 	if err != nil {
 		return uuid.Nil, wrapOrg("finding the member", err)
 	}
@@ -359,7 +367,7 @@ func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email str
 // who did it.
 // The organization's row is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
 func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, _ time.Time) error {
-	return s.transact(ctx, "dropping the member", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "dropping the member", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -428,7 +436,7 @@ func invitation(i queries.Invitation, slug, name, roleName string) orgs.Invitati
 // Invite records the invitation. It holds the organization's lock and reads the role under it, as every grant does,
 // so a role being deleted isn't offered meanwhile.
 func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitation) error {
-	return s.transact(ctx, "recording the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(inv.OrgID), "recording the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, inv.OrgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -450,7 +458,7 @@ func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitat
 
 // Invitation finds an invitation.
 func (s *OrgStore) Invitation(ctx context.Context, id uuid.UUID) (orgs.Invitation, error) {
-	row, err := s.q.Invitation(ctx, id)
+	row, err := s.db.Of(Invitations, id).Invitation(ctx, id)
 	if err != nil {
 		return orgs.Invitation{}, wrapOrg("reading the invitation", err)
 	}
@@ -459,7 +467,7 @@ func (s *OrgStore) Invitation(ctx context.Context, id uuid.UUID) (orgs.Invitatio
 
 // Invitations lists the organization's pending invitations at now, oldest first.
 func (s *OrgStore) Invitations(ctx context.Context, orgID uuid.UUID, now time.Time) ([]orgs.Invitation, error) {
-	rows, err := s.q.PendingInvitations(ctx, orgID, now)
+	rows, err := s.db.In(orgID).PendingInvitations(ctx, orgID, now)
 	if err != nil {
 		return nil, fmt.Errorf("listing the invitations: %w", err)
 	}
@@ -472,7 +480,7 @@ func (s *OrgStore) Invitations(ctx context.Context, orgID uuid.UUID, now time.Ti
 
 // InvitationsFor lists the pending invitations to any of emails at now, oldest first.
 func (s *OrgStore) InvitationsFor(ctx context.Context, emails []string, now time.Time) ([]orgs.Invitation, error) {
-	rows, err := s.q.InvitationsFor(ctx, emails, now)
+	rows, err := s.db.Everywhere(personal).InvitationsFor(ctx, emails, now)
 	if err != nil {
 		return nil, fmt.Errorf("listing the invitations: %w", err)
 	}
@@ -498,7 +506,7 @@ func closeInvitation(ctx context.Context, q *queries.Queries, actor uuid.UUID, i
 // Accept makes the invitee a member with the invitation's role, closes the invitation, and records both. It takes
 // the organization's lock before touching the invitation, the order DeleteRole uses, so the two can't deadlock.
 func (s *OrgStore) Accept(ctx context.Context, actor uuid.UUID, inv orgs.Invitation, userID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "accepting the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(inv.OrgID), "accepting the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, inv.OrgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -515,7 +523,7 @@ func (s *OrgStore) CloseInvitation(ctx context.Context, actor uuid.UUID, id uuid
 	if err != nil {
 		return err
 	}
-	return s.transact(ctx, "closing the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Of(Invitations, id), "closing the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		return closeInvitation(ctx, q, actor, inv, state, at)
 	})
 }
@@ -528,7 +536,7 @@ func joinRequest(j queries.JoinRequest, slug, name, userName string) orgs.JoinRe
 
 // Request records the join request.
 func (s *OrgStore) Request(ctx context.Context, actor uuid.UUID, req orgs.JoinRequest) error {
-	return s.transact(ctx, "recording the request", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(req.OrgID), "recording the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.DeleteExpiredJoinRequestOf(ctx, req.OrgID, req.UserID, req.CreatedAt); err != nil {
 			return fmt.Errorf("dropping an expired request: %w", err)
 		}
@@ -543,7 +551,7 @@ func (s *OrgStore) Request(ctx context.Context, actor uuid.UUID, req orgs.JoinRe
 
 // JoinRequest finds a join request.
 func (s *OrgStore) JoinRequest(ctx context.Context, id uuid.UUID) (orgs.JoinRequest, error) {
-	row, err := s.q.JoinRequest(ctx, id)
+	row, err := s.db.Of(JoinRequests, id).JoinRequest(ctx, id)
 	if err != nil {
 		return orgs.JoinRequest{}, wrapOrg("reading the request", err)
 	}
@@ -552,7 +560,7 @@ func (s *OrgStore) JoinRequest(ctx context.Context, id uuid.UUID) (orgs.JoinRequ
 
 // JoinRequests lists the organization's pending requests at now, oldest first.
 func (s *OrgStore) JoinRequests(ctx context.Context, orgID uuid.UUID, now time.Time) ([]orgs.JoinRequest, error) {
-	rows, err := s.q.PendingJoinRequests(ctx, orgID, now)
+	rows, err := s.db.In(orgID).PendingJoinRequests(ctx, orgID, now)
 	if err != nil {
 		return nil, fmt.Errorf("listing the requests: %w", err)
 	}
@@ -565,7 +573,7 @@ func (s *OrgStore) JoinRequests(ctx context.Context, orgID uuid.UUID, now time.T
 
 // JoinRequestsOf lists the user's pending requests at now, oldest first.
 func (s *OrgStore) JoinRequestsOf(ctx context.Context, userID uuid.UUID, now time.Time) ([]orgs.JoinRequest, error) {
-	rows, err := s.q.JoinRequestsOf(ctx, userID, now)
+	rows, err := s.db.Everywhere(personal).JoinRequestsOf(ctx, userID, now)
 	if err != nil {
 		return nil, fmt.Errorf("listing the requests: %w", err)
 	}
@@ -590,7 +598,7 @@ func closeJoinRequest(ctx context.Context, q *queries.Queries, actor uuid.UUID, 
 
 // Approve makes the requester a member with roleID, closes the request, and records both.
 func (s *OrgStore) Approve(ctx context.Context, actor uuid.UUID, req orgs.JoinRequest, roleID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "approving the request", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(req.OrgID), "approving the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := closeJoinRequest(ctx, q, actor, req, orgs.StateApproved, at); err != nil {
 			return err
 		}
@@ -604,14 +612,14 @@ func (s *OrgStore) CloseJoinRequest(ctx context.Context, actor uuid.UUID, id uui
 	if err != nil {
 		return err
 	}
-	return s.transact(ctx, "closing the request", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Of(JoinRequests, id), "closing the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		return closeJoinRequest(ctx, q, actor, req, state, at)
 	})
 }
 
 // Role finds a role.
 func (s *OrgStore) Role(ctx context.Context, id uuid.UUID) (orgs.Role, error) {
-	r, err := s.q.Role(ctx, id)
+	r, err := s.db.Of(Roles, id).Role(ctx, id)
 	if err != nil {
 		return orgs.Role{}, wrapOrg("reading the role", err)
 	}
@@ -621,11 +629,11 @@ func (s *OrgStore) Role(ctx context.Context, id uuid.UUID) (orgs.Role, error) {
 // Roles lists the roles granted at the organization: the built-in organization roles first, then its own, each with
 // how many principals hold it there; for uuid.Nil, the built-in ones alone.
 func (s *OrgStore) Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error) {
-	rows, err := s.q.OrganizationRoles(ctx, orgID)
+	rows, err := s.db.In(orgID).OrganizationRoles(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the roles: %w", err)
 	}
-	holders, err := s.q.RoleHolders(ctx, orgID)
+	holders, err := s.db.In(orgID).RoleHolders(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("counting the roles' holders: %w", err)
 	}
@@ -644,7 +652,7 @@ func (s *OrgStore) Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, err
 
 // CreateRole records a custom role of its organization.
 func (s *OrgStore) CreateRole(ctx context.Context, actor uuid.UUID, r orgs.Role) error {
-	return s.transact(ctx, "creating the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(r.OrgID), "creating the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertRole(ctx, queries.InsertRoleParams{ID: r.ID, Name: r.Name, Description: r.Description, Permissions: r.Permissions, OrgID: &r.OrgID}); err != nil {
 			return fmt.Errorf("inserting the role: %w", err)
 		}
@@ -654,7 +662,7 @@ func (s *OrgStore) CreateRole(ctx context.Context, actor uuid.UUID, r orgs.Role)
 
 // UpdateRole rewrites one of its organization's own roles; a built-in or another organization's is not found.
 func (s *OrgStore) UpdateRole(ctx context.Context, actor uuid.UUID, r orgs.Role) error {
-	return s.transact(ctx, "updating the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(r.OrgID), "updating the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		updated, err := q.UpdateRole(ctx, queries.UpdateRoleParams{ID: r.ID, OrgID: r.OrgID, Name: r.Name, Description: r.Description, Permissions: r.Permissions})
 		if err != nil {
 			return fmt.Errorf("updating the role: %w", err)
@@ -670,7 +678,7 @@ func (s *OrgStore) UpdateRole(ctx context.Context, actor uuid.UUID, r orgs.Role)
 // it. The organization's row is locked first, and every grant takes that lock too, so no grant of the role lands
 // between the check and the deletion.
 func (s *OrgStore) DeleteRole(ctx context.Context, actor uuid.UUID, orgID, roleID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "deleting the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "deleting the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -704,7 +712,7 @@ func (s *OrgStore) DeleteRole(ctx context.Context, actor uuid.UUID, orgID, roleI
 // GrantRole gives the member the role at the organization. It holds the organization's lock, so the role can't be
 // deleted meanwhile: one deleted first is not found.
 func (s *OrgStore) GrantRole(ctx context.Context, actor uuid.UUID, orgID, userID, roleID uuid.UUID) error {
-	return s.transact(ctx, "granting the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "granting the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -727,7 +735,7 @@ func (s *OrgStore) GrantRole(ctx context.Context, actor uuid.UUID, orgID, userID
 // RevokeRole takes the role from the member at the organization. The organization's row is locked first, so the Owner
 // role can't be taken from two Owners at once and leave none.
 func (s *OrgStore) RevokeRole(ctx context.Context, actor uuid.UUID, orgID, userID, roleID uuid.UUID) error {
-	return s.transact(ctx, "revoking the role", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(orgID), "revoking the role", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -749,10 +757,10 @@ func (s *OrgStore) RevokeRole(ctx context.Context, actor uuid.UUID, orgID, userI
 
 // DeleteExpired deletes the invitations and join requests that expired before now.
 func (s *OrgStore) DeleteExpired(ctx context.Context, now time.Time) (invitations, requests int64, err error) {
-	if invitations, err = s.q.DeleteExpiredInvitations(ctx, now); err != nil {
+	if invitations, err = s.db.Everywhere(maintenance).DeleteExpiredInvitations(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired invitations: %w", err)
 	}
-	if requests, err = s.q.DeleteExpiredJoinRequests(ctx, now); err != nil {
+	if requests, err = s.db.Everywhere(maintenance).DeleteExpiredJoinRequests(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired join requests: %w", err)
 	}
 	return invitations, requests, nil

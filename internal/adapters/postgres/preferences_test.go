@@ -47,7 +47,7 @@ func TestAuthStorePreferences(t *testing.T) {
 			t.Errorf("%s: Preferences() = %+v, %v, want %+v", c.name, read, err, got)
 		}
 	}
-	if n := count(t, s.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'preferences' AND principal_id = $1", up.Principal.ID); n != 3 {
+	if n := count(t, s.db.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'preferences' AND principal_id = $1", up.Principal.ID); n != 3 {
 		t.Errorf("%d audit rows of the preferences name Alice, want 3: one inserted, two updated", n)
 	}
 }

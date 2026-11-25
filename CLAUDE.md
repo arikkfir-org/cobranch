@@ -58,11 +58,17 @@
   `go generate ./...`) writes `internal/adapters/postgres/queries` on pgx and `db/seeds/queries` on database/sql. A
   store converts between the generated rows and the domain's types and writes no SQL of its own; the one exception is
   the schema version's read of goose's table, whose name sqlc doesn't know.
+- A store reaches the database only through a scope of `DB` (`internal/adapters/postgres/db.go`,
+  `docs/cobranch/designs/tenant-isolation.md`): `In(orgID)` or `Of(table, id)` for work in one organization,
+  `Deferred()` for a transaction that only joins other stores' work, and `Everywhere(why)` for work that spans
+  organizations, with its reason. A scope's queries and its `Transact` pin the organization for their transaction. No
+  store keeps a pool or calls `queries.New`, and a test fails one that does; the pin's own statements in `db.go` are
+  the other SQL written in Go.
 - Every table of data people manage (principals, their emails and identities, sessions, roles, grants, organizations,
   their slugs, memberships, invitations, join requests, and each such table a slice adds) carries trigger `audit()` (`db/migrations/00003_audit.sql`), which writes `audit_log` with the
   principal from session variable `cobranch.principal_id`; a new table gets the trigger in its migration, with the
   columns to keep out of the log (a token's hash) as the trigger's arguments. A change a person makes to an audited
-  table runs in a store transaction that names them (`transact`'s actor; the variable is local to the transaction).
+  table runs in a store transaction that names them (`Transact`'s actor; the variable is local to the transaction).
   Cobranch's own changes (a migration, a seed, maintenance's expiry sweep, a session's touch) name nobody, and
   transient rows (`sign_in_flows`) aren't audited.
 - Every permission check goes through `auth.Authorizer` over the viewer's grants (`internal/services/auth/authorize.go`):

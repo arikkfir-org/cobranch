@@ -17,20 +17,19 @@ import (
 // SecretStore keeps the organizations' and repositories' secrets (db/migrations/00030_secrets.sql): secrets.Store on
 // PostgreSQL. It reads a secret's sealed value only in Sealed, and writes it only as it creates or replaces one.
 type SecretStore struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	db *DB
 }
 
 // NewSecretStore returns secrets' store on pool's database.
 func NewSecretStore(pool *pgxpool.Pool) *SecretStore {
-	return &SecretStore{pool: pool, q: queries.New(pool)}
+	return &SecretStore{db: newDB(pool)}
 }
 
 var _ secrets.Store = (*SecretStore)(nil)
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a taken name to secrets.ErrNameTaken.
-func (s *SecretStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
-	err := transact(ctx, s.pool, s.q, what, actor, fn)
+func (s *SecretStore) transact(ctx context.Context, scope Scope, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
+	err := scope.Transact(ctx, what, actor, fn)
 	var conflict *ConflictError
 	if errors.As(err, &conflict) && conflict.Constraint == "secrets_org_id_repo_id_name_key" {
 		return secrets.ErrNameTaken
@@ -67,7 +66,7 @@ func nullable(id uuid.UUID) *uuid.UUID {
 
 // List lists the secrets of the organization, or of one of its repositories, by name.
 func (s *SecretStore) List(ctx context.Context, orgID, repoID uuid.UUID) ([]secrets.Secret, error) {
-	rows, err := s.q.Secrets(ctx, orgID, nullable(repoID))
+	rows, err := s.db.In(orgID).Secrets(ctx, orgID, nullable(repoID))
 	if err != nil {
 		return nil, fmt.Errorf("listing the secrets: %w", err)
 	}
@@ -80,7 +79,7 @@ func (s *SecretStore) List(ctx context.Context, orgID, repoID uuid.UUID) ([]secr
 
 // Get finds a secret.
 func (s *SecretStore) Get(ctx context.Context, id uuid.UUID) (secrets.Secret, error) {
-	r, err := s.q.Secret(ctx, id)
+	r, err := s.db.Of(Secrets, id).Secret(ctx, id)
 	if err != nil {
 		return secrets.Secret{}, wrapSecret("reading the secret", err)
 	}
@@ -90,7 +89,7 @@ func (s *SecretStore) Get(ctx context.Context, id uuid.UUID) (secrets.Secret, er
 // Create writes the secret with its sealed value and records the event.
 func (s *SecretStore) Create(ctx context.Context, actor uuid.UUID, secret secrets.Secret, sealed []byte) (secrets.Secret, error) {
 	var out secrets.Secret
-	err := s.transact(ctx, "creating the secret", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.In(secret.OrgID), "creating the secret", actor, func(ctx context.Context, q *queries.Queries) error {
 		r, err := q.InsertSecret(ctx, queries.InsertSecretParams{ID: secret.ID, OrgID: secret.OrgID, RepoID: nullable(secret.RepoID),
 			Name: secret.Name, Value: sealed, Actor: actor})
 		if err != nil {
@@ -117,7 +116,7 @@ func current(ctx context.Context, q *queries.Queries, id uuid.UUID, version int6
 // Replace renames the secret, and replaces its value unless sealed is nil, if it is still at version.
 func (s *SecretStore) Replace(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64, name string, sealed []byte) (secrets.Secret, error) {
 	var out secrets.Secret
-	err := s.transact(ctx, "replacing the secret", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.transact(ctx, s.db.Of(Secrets, id), "replacing the secret", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := current(ctx, q, id, version)
 		if err != nil {
 			return err
@@ -134,7 +133,7 @@ func (s *SecretStore) Replace(ctx context.Context, actor uuid.UUID, id uuid.UUID
 
 // Delete deletes the secret, and with it the grants on it, if it is still at version.
 func (s *SecretStore) Delete(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64) error {
-	return s.transact(ctx, "deleting the secret", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.Of(Secrets, id), "deleting the secret", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := current(ctx, q, id, version)
 		if err != nil {
 			return err
@@ -148,7 +147,7 @@ func (s *SecretStore) Delete(ctx context.Context, actor uuid.UUID, id uuid.UUID,
 
 // Sealed reads the sealed values of those of ids that are there.
 func (s *SecretStore) Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
-	rows, err := s.q.SealedSecrets(ctx, ids)
+	rows, err := s.db.OfAny(Secrets, ids).SealedSecrets(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading the sealed values: %w", err)
 	}
@@ -161,7 +160,7 @@ func (s *SecretStore) Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 
 // Access lists the principals holding a grant on the secret, by display name.
 func (s *SecretStore) Access(ctx context.Context, id uuid.UUID) ([]secrets.Principal, error) {
-	rows, err := s.q.SecretGrantees(ctx, id)
+	rows, err := s.db.Of(Secrets, id).SecretGrantees(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("listing the secret's grants: %w", err)
 	}
@@ -174,7 +173,7 @@ func (s *SecretStore) Access(ctx context.Context, id uuid.UUID) ([]secrets.Princ
 
 // Jobs lists the jobs of the organization's repository, by name.
 func (s *SecretStore) Jobs(ctx context.Context, orgID, repoID uuid.UUID) ([]secrets.Principal, error) {
-	rows, err := s.q.RepositoryJobs(ctx, orgID, repoID)
+	rows, err := s.db.In(orgID).RepositoryJobs(ctx, orgID, repoID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the jobs: %w", err)
 	}
@@ -187,7 +186,7 @@ func (s *SecretStore) Jobs(ctx context.Context, orgID, repoID uuid.UUID) ([]secr
 
 // Principal finds one of the organization's members, or a principal of its own: an API key, a job or an agent.
 func (s *SecretStore) Principal(ctx context.Context, orgID, principalID uuid.UUID) (secrets.Principal, error) {
-	r, err := s.q.Grantee(ctx, principalID, orgID)
+	r, err := s.db.In(orgID).Grantee(ctx, principalID, orgID)
 	if err != nil {
 		return secrets.Principal{}, wrapSecret("finding the principal", err)
 	}
@@ -196,7 +195,7 @@ func (s *SecretStore) Principal(ctx context.Context, orgID, principalID uuid.UUI
 
 // Grant gives the principal Secret reader on the secret and records it.
 func (s *SecretStore) Grant(ctx context.Context, actor uuid.UUID, secret secrets.Secret, principalID uuid.UUID) error {
-	return s.transact(ctx, "granting Secret reader", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(secret.OrgID), "granting Secret reader", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, secret.OrgID); err != nil {
 			return wrapSecret("locking the organization", err)
 		}
@@ -218,7 +217,7 @@ func (s *SecretStore) Grant(ctx context.Context, actor uuid.UUID, secret secrets
 
 // Revoke takes Secret reader on the secret from the principal and records it.
 func (s *SecretStore) Revoke(ctx context.Context, actor uuid.UUID, secret secrets.Secret, principalID uuid.UUID) error {
-	return s.transact(ctx, "revoking Secret reader", actor, func(ctx context.Context, q *queries.Queries) error {
+	return s.transact(ctx, s.db.In(secret.OrgID), "revoking Secret reader", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.DeleteSecretGrant(ctx, principalID, auth.RoleSecretReader, secret.ID)
 		if err != nil {
 			return fmt.Errorf("deleting the grant: %w", err)

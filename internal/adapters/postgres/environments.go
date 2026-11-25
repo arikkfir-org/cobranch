@@ -17,7 +17,7 @@ import (
 // Environments lists the repository's live environments, by target and then branch, of branch unless it is empty,
 // each with its newest delivery, its URL and what it renders (code.Store).
 func (s *CodeStore) Environments(ctx context.Context, repoID uuid.UUID, branch string) ([]code.Environment, error) {
-	rows, err := s.q.EnvironmentsOf(ctx, repoID, branch)
+	rows, err := s.db.Of(Repositories, repoID).EnvironmentsOf(ctx, repoID, branch)
 	if err != nil {
 		return nil, fmt.Errorf("listing the environments: %w", err)
 	}
@@ -34,7 +34,7 @@ func (s *CodeStore) Environments(ctx context.Context, repoID uuid.UUID, branch s
 // Environment finds one of the repository's live environments with its newest delivery, its URL and what it renders,
 // or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Environment(ctx context.Context, repoID, id uuid.UUID) (code.Environment, error) {
-	row, err := s.q.EnvironmentByID(ctx, repoID, id)
+	row, err := s.db.Of(Repositories, repoID).EnvironmentByID(ctx, repoID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return code.Environment{}, repos.ErrNotFound
 	}
@@ -59,11 +59,11 @@ func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code
 	if len(envs) == 0 {
 		return nil
 	}
-	main, err := mainSettings(ctx, s.q, repoID)
+	main, err := mainSettings(ctx, s.db.Of(Repositories, repoID).Queries, repoID)
 	if err != nil {
 		return err
 	}
-	slugs, err := s.q.Slugs(ctx, repoID)
+	slugs, err := s.db.Of(Repositories, repoID).Slugs(ctx, repoID)
 	if err != nil {
 		return fmt.Errorf("reading the repository's slugs: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code
 		}
 		tip, ok := tips[e.Branch]
 		if !ok {
-			if tip, err = tipOf(ctx, s.q, repoID, e.Branch); err != nil {
+			if tip, err = tipOf(ctx, s.db.Of(Repositories, repoID).Queries, repoID, e.Branch); err != nil {
 				return err
 			}
 			tips[e.Branch] = tip
@@ -94,12 +94,12 @@ func (s *CodeStore) withPlans(ctx context.Context, repoID uuid.UUID, envs []code
 
 // EnvironmentObjects lists what a live environment holds, in order, or repos.ErrNotFound without it (code.Store).
 func (s *CodeStore) EnvironmentObjects(ctx context.Context, repoID, environmentID uuid.UUID) ([]code.EnvironmentObject, error) {
-	if _, err := s.q.EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := s.db.Of(Repositories, repoID).EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding environment %s: %w", environmentID, err)
 	}
-	rows, err := s.q.InventoryOf(ctx, environmentID)
+	rows, err := s.db.Of(Repositories, repoID).InventoryOf(ctx, environmentID)
 	if err != nil {
 		return nil, fmt.Errorf("listing environment %s's objects: %w", environmentID, err)
 	}
@@ -117,7 +117,7 @@ func (s *CodeStore) EnvironmentObjects(ctx context.Context, repoID, environmentI
 
 // DeliveryTargets lists the targets of the default branch's /cobranch.yaml, in its order (code.Store).
 func (s *CodeStore) DeliveryTargets(ctx context.Context, repoID uuid.UUID) ([]code.Target, error) {
-	main, err := mainSettings(ctx, s.q, repoID)
+	main, err := mainSettings(ctx, s.db.Of(Repositories, repoID).Queries, repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *CodeStore) DeliveryTargets(ctx context.Context, repoID uuid.UUID) ([]co
 
 // ClusterSecrets finds those of ids that are secrets of the repository's organization (code.Store).
 func (s *CodeStore) ClusterSecrets(ctx context.Context, repoID uuid.UUID, ids []uuid.UUID) ([]code.ClusterSecret, error) {
-	rows, err := s.q.ClusterSecrets(ctx, repoID, ids)
+	rows, err := s.db.Of(Repositories, repoID).ClusterSecrets(ctx, repoID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("finding the clusters' secrets: %w", err)
 	}
@@ -146,7 +146,7 @@ func (s *CodeStore) withLatest(ctx context.Context, envs []code.Environment) err
 	for i, e := range envs {
 		ids[i] = e.ID
 	}
-	rows, err := s.q.LatestDeliveries(ctx, ids)
+	rows, err := s.db.OfAny(Environments, ids).LatestDeliveries(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("finding the environments' deliveries: %w", err)
 	}
@@ -166,7 +166,7 @@ func (s *CodeStore) withLatest(ctx context.Context, envs []code.Environment) err
 // first, numbered before before (0 for the newest), or repos.ErrNotFound without it (code.Store).
 func (s *CodeStore) Deliveries(ctx context.Context, repoID, environmentID uuid.UUID, kinds []code.DeliveryKind, before int64,
 	limit int) ([]code.Delivery, error) {
-	if _, err := s.q.EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := s.db.Of(Repositories, repoID).EnvironmentByID(ctx, repoID, environmentID); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding environment %s: %w", environmentID, err)
@@ -175,7 +175,7 @@ func (s *CodeStore) Deliveries(ctx context.Context, repoID, environmentID uuid.U
 	for i, k := range kinds {
 		names[i] = string(k)
 	}
-	rows, err := s.q.DeliveriesOf(ctx, queries.DeliveriesOfParams{EnvironmentID: environmentID, Before: before, Kinds: names, Lim: int32(limit)})
+	rows, err := s.db.Of(Repositories, repoID).DeliveriesOf(ctx, queries.DeliveriesOfParams{EnvironmentID: environmentID, Before: before, Kinds: names, Lim: int32(limit)})
 	if err != nil {
 		return nil, fmt.Errorf("listing the deliveries: %w", err)
 	}
@@ -188,7 +188,7 @@ func (s *CodeStore) Deliveries(ctx context.Context, repoID, environmentID uuid.U
 
 // Delivery finds one of the repository's deliveries by number, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Delivery(ctx context.Context, repoID uuid.UUID, number int64) (code.Delivery, error) {
-	row, err := s.q.DeliveryByNumber(ctx, repoID, number)
+	row, err := s.db.Of(Repositories, repoID).DeliveryByNumber(ctx, repoID, number)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return code.Delivery{}, repos.ErrNotFound
 	}
@@ -203,7 +203,7 @@ func (s *CodeStore) Delivery(ctx context.Context, repoID uuid.UUID, number int64
 // (code.Store).
 func (s *CodeStore) Redeliver(ctx context.Context, actor uuid.UUID, repoID, environmentID uuid.UUID) (code.Delivery, error) {
 	var number int64
-	err := transact(ctx, s.pool, s.q, "redelivering", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "redelivering", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := environmentForUpdate(ctx, q, repoID, environmentID)
 		if err != nil {
 			return err
@@ -226,7 +226,7 @@ func (s *CodeStore) Redeliver(ctx context.Context, actor uuid.UUID, repoID, envi
 // PauseEnvironment pauses a live environment for actor, cancelling its deliveries that haven't started applying but its
 // teardown, in one transaction that acts for actor and appends event environment.paused (code.Store).
 func (s *CodeStore) PauseEnvironment(ctx context.Context, actor uuid.UUID, repoID, environmentID uuid.UUID) (code.Environment, error) {
-	err := transact(ctx, s.pool, s.q, "pausing the environment", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "pausing the environment", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := environmentForUpdate(ctx, q, repoID, environmentID)
 		if err != nil {
 			return err
@@ -257,7 +257,7 @@ func (s *CodeStore) PauseEnvironment(ctx context.Context, actor uuid.UUID, repoI
 // ResumeEnvironment resumes a paused environment for actor and queues a delivery of its branch's head, in one
 // transaction that acts for actor and appends event environment.resumed (code.Store).
 func (s *CodeStore) ResumeEnvironment(ctx context.Context, actor uuid.UUID, repoID, environmentID uuid.UUID) (code.Environment, error) {
-	err := transact(ctx, s.pool, s.q, "resuming the environment", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "resuming the environment", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := environmentForUpdate(ctx, q, repoID, environmentID)
 		if err != nil {
 			return err
@@ -284,7 +284,7 @@ func (s *CodeStore) ResumeEnvironment(ctx context.Context, actor uuid.UUID, repo
 // StartDelivery queues a waiting delivery for actor, in one transaction that acts for actor and appends event
 // delivery.started; its target's annotation stays Pending, now Queued (code.Store).
 func (s *CodeStore) StartDelivery(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Delivery, error) {
-	err := transact(ctx, s.pool, s.q, "starting the delivery", actor, func(ctx context.Context, q *queries.Queries) error {
+	err := s.db.Of(Repositories, repoID).Transact(ctx, "starting the delivery", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.DeliveryForUpdate(ctx, repoID, number)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repos.ErrNotFound
@@ -381,7 +381,7 @@ func deliveryView(d queries.Delivery, target, branch string, startedBy *string, 
 
 // KeepRender keeps a rendering delivery's render, once (code.EnvironmentStore).
 func (s *CodeStore) KeepRender(ctx context.Context, deliveryID uuid.UUID, manifests []byte) error {
-	kept, err := s.q.InsertDeliveryRender(ctx, manifests, deliveryID)
+	kept, err := s.db.Of(Deliveries, deliveryID).InsertDeliveryRender(ctx, manifests, deliveryID)
 	switch {
 	case err != nil:
 		return fmt.Errorf("keeping delivery %s's render: %w", deliveryID, err)

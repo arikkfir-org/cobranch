@@ -315,7 +315,7 @@ func TestAuthStoreRevoke(t *testing.T) {
 	if err != nil || len(live) != 1 || live[0].ID != second.ID {
 		t.Errorf("Sessions() = %+v, %v, want the second alone", live, err)
 	}
-	if kinds := eventKinds(t, s.pool); kinds[len(kinds)-1] != "session.revoked" {
+	if kinds := eventKinds(t, s.db.pool); kinds[len(kinds)-1] != "session.revoked" {
 		t.Errorf("events = %v, want session.revoked last", kinds)
 	}
 }
