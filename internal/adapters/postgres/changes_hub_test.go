@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/secrets"
@@ -174,6 +175,12 @@ func pageChanges() []settingsChange {
 			must(t, err)
 			return []uuid.UUID{f.acme.ID}
 		}},
+		{name: "an issue created", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			_, err := NewIssueStore(f.pool).Create(ctx, f.olivia, issues.Issue{ID: v7(), OrgID: f.acme.ID, Title: "Safari", State: issues.StateTodo,
+				CreatedBy: &issues.Principal{ID: f.olivia}, CreatedAt: now, UpdatedAt: now, Version: 1})
+			must(t, err)
+			return []uuid.UUID{f.acme.ID}
+		}},
 	}
 }
 
@@ -202,7 +209,7 @@ func TestOrganizationPagesNotify(t *testing.T) {
 		defs[table] = def
 	}
 	must(t, rows.Err())
-	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "agent_tasks", "task_spend",
+	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "branch_issues", "agent_tasks", "task_spend",
 		"job_runs", "deliveries", "artifacts", "packs", "organization_limits"} {
 		def := defs[table]
 		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, "notify_changes('org_id')") {

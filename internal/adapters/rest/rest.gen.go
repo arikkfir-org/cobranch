@@ -4513,6 +4513,12 @@ type ListIssuesParams struct {
 
 	// Limit How many issues the page holds, 1 to 100.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // DeleteIssueParams defines parameters for DeleteIssue.
@@ -4523,6 +4529,9 @@ type DeleteIssueParams struct {
 
 // GetIssueParams defines parameters for GetIssue.
 type GetIssueParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -4531,6 +4540,24 @@ type GetIssueParams struct {
 type UpdateIssueParams struct {
 	// IfMatch The ETag of the issue the change was made from, or its version alone, quoted; a change made meanwhile is refused with 412, while a changed issue key, which renames the issue, is not.
 	IfMatch *IfMatchIssue `json:"If-Match,omitempty"`
+}
+
+// ListIssueActivityParams defines parameters for ListIssueActivity.
+type ListIssueActivityParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListIssueBranchesParams defines parameters for ListIssueBranches.
+type ListIssueBranchesParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListIssueChatThreadsParams defines parameters for ListIssueChatThreads.
@@ -5613,7 +5640,7 @@ type ServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(w http.ResponseWriter, r *http.Request, org Org, id Id)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. With If-None-Match and wait, it waits up to wait seconds for the page or its counts to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues)
 	ListIssues(w http.ResponseWriter, r *http.Request, org Org, params ListIssuesParams)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
@@ -5622,18 +5649,18 @@ type ServerInterface interface {
 	// DeleteIssue Deletes one of the organization's issues, with its activity, for a mistake; work that won't be done is canceled instead. Takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/issues/{number})
 	DeleteIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params DeleteIssueParams)
-	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read. With If-None-Match and wait, it waits up to wait seconds for the issue to change before it answers 304, so a client follows the issue by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number})
 	GetIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params GetIssueParams)
 	// UpdateIssue Changes the fields the merge patch (RFC 7396) names of one of the organization's issues, null unassigning it or making it about no repository; takes issues.write, and repo.read on a repository it makes it about. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/issues/{number})
 	UpdateIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params UpdateIssueParams)
-	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads. With If-None-Match and wait, it waits up to wait seconds for more to happen before it answers 304, so a client follows the activity by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number}/activity)
-	ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number)
-	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+	ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueActivityParams)
+	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number}/branches)
-	ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number)
+	ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueBranchesParams)
 	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
 	// (GET /orgs/{org}/issues/{number}/chat)
 	ListIssueChatThreads(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueChatThreadsParams)
@@ -9483,6 +9510,40 @@ func (siw *ServerInterfaceWrapper) ListIssues(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIssues(w, r, org, params)
 	}))
@@ -9606,6 +9667,19 @@ func (siw *ServerInterfaceWrapper) GetIssue(w http.ResponseWriter, r *http.Reque
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetIssueParams
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "If-None-Match" -------------
@@ -9721,8 +9795,45 @@ func (siw *ServerInterfaceWrapper) ListIssueActivity(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIssueActivityParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIssueActivity(w, r, org, number)
+		siw.Handler.ListIssueActivity(w, r, org, number, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9756,8 +9867,45 @@ func (siw *ServerInterfaceWrapper) ListIssueBranches(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIssueBranchesParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIssueBranches(w, r, org, number)
+		siw.Handler.ListIssueBranches(w, r, org, number, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25392,6 +25540,7 @@ type ListIssuesResponseObject interface {
 }
 
 type ListIssues200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -25411,12 +25560,27 @@ func (response ListIssues200JSONResponse) VisitListIssuesResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListIssues304ResponseHeaders struct {
+	ETag string
+}
+
+type ListIssues304Response struct {
+	Headers ListIssues304ResponseHeaders
+}
+
+func (response ListIssues304Response) VisitListIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListIssues400ApplicationProblemPlusJSONResponse struct {
@@ -25955,26 +26119,49 @@ func (response UpdateIssuedefaultApplicationProblemPlusJSONResponse) VisitUpdate
 type ListIssueActivityRequestObject struct {
 	Org    Org    `json:"org"`
 	Number Number `json:"number"`
+	Params ListIssueActivityParams
 }
 
 type ListIssueActivityResponseObject interface {
 	VisitListIssueActivityResponse(w http.ResponseWriter) error
 }
 
+type ListIssueActivity200ResponseHeaders struct {
+	ETag string
+}
+
 type ListIssueActivity200JSONResponse struct {
-	Events []IssueEvent `json:"events"`
+	Body struct {
+		Events []IssueEvent `json:"events"`
+	}
+	Headers ListIssueActivity200ResponseHeaders
 }
 
 func (response ListIssueActivity200JSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListIssueActivity304ResponseHeaders struct {
+	ETag string
+}
+
+type ListIssueActivity304Response struct {
+	Headers ListIssueActivity304ResponseHeaders
+}
+
+func (response ListIssueActivity304Response) VisitListIssueActivityResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListIssueActivity401ApplicationProblemPlusJSONResponse struct {
@@ -26041,26 +26228,49 @@ func (response ListIssueActivitydefaultApplicationProblemPlusJSONResponse) Visit
 type ListIssueBranchesRequestObject struct {
 	Org    Org    `json:"org"`
 	Number Number `json:"number"`
+	Params ListIssueBranchesParams
 }
 
 type ListIssueBranchesResponseObject interface {
 	VisitListIssueBranchesResponse(w http.ResponseWriter) error
 }
 
+type ListIssueBranches200ResponseHeaders struct {
+	ETag string
+}
+
 type ListIssueBranches200JSONResponse struct {
-	Branches []IssueBranch `json:"branches"`
+	Body struct {
+		Branches []IssueBranch `json:"branches"`
+	}
+	Headers ListIssueBranches200ResponseHeaders
 }
 
 func (response ListIssueBranches200JSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListIssueBranches304ResponseHeaders struct {
+	ETag string
+}
+
+type ListIssueBranches304Response struct {
+	Headers ListIssueBranches304ResponseHeaders
+}
+
+func (response ListIssueBranches304Response) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListIssueBranches401ApplicationProblemPlusJSONResponse struct {
@@ -40988,7 +41198,7 @@ type StrictServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(ctx context.Context, request CancelInvitationRequestObject) (CancelInvitationResponseObject, error)
-	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. With If-None-Match and wait, it waits up to wait seconds for the page or its counts to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues)
 	ListIssues(ctx context.Context, request ListIssuesRequestObject) (ListIssuesResponseObject, error)
 	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
@@ -40997,16 +41207,16 @@ type StrictServerInterface interface {
 	// DeleteIssue Deletes one of the organization's issues, with its activity, for a mistake; work that won't be done is canceled instead. Takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/issues/{number})
 	DeleteIssue(ctx context.Context, request DeleteIssueRequestObject) (DeleteIssueResponseObject, error)
-	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read. With If-None-Match and wait, it waits up to wait seconds for the issue to change before it answers 304, so a client follows the issue by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number})
 	GetIssue(ctx context.Context, request GetIssueRequestObject) (GetIssueResponseObject, error)
 	// UpdateIssue Changes the fields the merge patch (RFC 7396) names of one of the organization's issues, null unassigning it or making it about no repository; takes issues.write, and repo.read on a repository it makes it about. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/issues/{number})
 	UpdateIssue(ctx context.Context, request UpdateIssueRequestObject) (UpdateIssueResponseObject, error)
-	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads. With If-None-Match and wait, it waits up to wait seconds for more to happen before it answers 304, so a client follows the activity by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number}/activity)
 	ListIssueActivity(ctx context.Context, request ListIssueActivityRequestObject) (ListIssueActivityResponseObject, error)
-	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/issues/{number}/branches)
 	ListIssueBranches(ctx context.Context, request ListIssueBranchesRequestObject) (ListIssueBranchesResponseObject, error)
 	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
@@ -43791,11 +44001,12 @@ func (sh *strictHandler) UpdateIssue(w http.ResponseWriter, r *http.Request, org
 }
 
 // ListIssueActivity operation middleware
-func (sh *strictHandler) ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number) {
+func (sh *strictHandler) ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueActivityParams) {
 	var request ListIssueActivityRequestObject
 
 	request.Org = org
 	request.Number = number
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListIssueActivity(ctx, request.(ListIssueActivityRequestObject))
@@ -43818,11 +44029,12 @@ func (sh *strictHandler) ListIssueActivity(w http.ResponseWriter, r *http.Reques
 }
 
 // ListIssueBranches operation middleware
-func (sh *strictHandler) ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number) {
+func (sh *strictHandler) ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueBranchesParams) {
 	var request ListIssueBranchesRequestObject
 
 	request.Org = org
 	request.Number = number
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListIssueBranches(ctx, request.(ListIssueBranchesRequestObject))

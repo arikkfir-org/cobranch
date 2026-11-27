@@ -172,7 +172,7 @@ func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Po
 	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...).WithNotifier(changeHub)
 	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas).WithNotifier(orgHub).WithChanges(changeHub),
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas).WithNotifier(changeHub), code: codeService,
-		issues:    issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
+		issues:    issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore).WithNotifier(changeHub),
 		chats:     chats.NewService(postgres.NewChatStore(pool), chatHub, renderer, authorizer).WithAgents(agentService, agentStore),
 		agents:    agentService,
 		secrets:   secrets.NewService(postgres.NewSecretStore(pool), authorizer, box).WithNotifier(changeHub),

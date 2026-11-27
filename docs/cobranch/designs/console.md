@@ -259,9 +259,13 @@ makes every page live, a group of pages a slice. The organization switcher was f
   change no trigger names, a person's new display name, shows within one wait. Each read checks the viewer's
   permission again, so a viewer who loses it stops following.
 - **A page follows with `followLists`** (`lib/live.js`): one follower a page, abandoned once the Console draws another
-  page or the page draws itself again; a tab out of sight stops asking until it shows. `keepingFilter` keeps what the
-  viewer typed in the page's filter, and its focus, across the draw, and `drawAgain` tries a draw that fails again,
-  leaving the page as it was meanwhile.
+  page or the page draws itself again; a tab out of sight stops asking until it shows. It starts a task after it is
+  called, once the draw has put the page's elements in place, so a part a page awaits (an issue list) may follow what
+  it read before it shows. `keepingFilter` keeps what the viewer typed in the page's filter, and its focus, across the
+  draw, and `drawAgain` tries a draw that fails again, leaving the page as it was meanwhile.
+- **A page of one thing sees it go.** An issue's page follows with `gone`: the issue deleted (404) draws the page
+  again, which says there is no such issue. The server's follower stops quietly once its read finds the issue gone
+  (`live.ErrGone`), and a wait whose follower stopped answers what a read answers then, here a 404.
 - **The sidebar follows across pages.** A section's `nav.items` answers the lists its items came from with their ETags,
   and the sidebar waits on them (`watchLists`) whatever page shows, drawing the section's count and items again once
   one changes, until it draws another organization.
@@ -283,11 +287,14 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | Repositories, and the sidebar's | Repositories, each with its branches, main's status and last push | `repositories`, `branches`, `annotations`, `pushes`, `grants` |
 | Agents, an agent's page, Agents · Activity, and the sidebar's agents | Agents, and their tasks | `agents`, `agent_tasks`, `task_spend`, `grants` |
 | Artifacts, and the sidebar's | Artifacts the viewer may list or read | `artifacts`, `grants` |
+| Issues, a repository's Issues, and the sidebar's | The first page of issues the filters match, with the tabs' counts | `issues` (a label renamed touches its issues), `agent_tasks`, `branches`, `branch_issues` |
+| An issue's page | The issue, its activity and its linked branches; its comments follow in the conversation pane | `issues`, `branch_issues` (a branch linked or unlinked), `agent_tasks` (a task's progress), `branches` |
 
 Settings · Secrets reads who may read each secret with a read per secret, which it doesn't follow: a grant on one secret
-alone shows at the page's next draw. The sidebar's issues follow with the issues' pages
-([ENG-286](https://linear.app/arikkfir/issue/ENG-286)). Agents · Activity follows its newest page of tasks, and an
-agent's page its tasks; both read the spend report again on each draw, which they don't follow.
+alone shows at the page's next draw. Agents · Activity follows its newest page of tasks, and an agent's page its tasks;
+both read the spend report again on each draw, which they don't follow. An issue list follows its first page: a change
+draws that page again, dropping the pages More added under it. The issue lists' filters (members, agents, repositories,
+labels) are read with each draw, not followed.
 
 ## Security and failure modes
 

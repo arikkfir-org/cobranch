@@ -10,6 +10,7 @@ import { banner, failure, field, input, selectBox, textarea } from "../../lib/fo
 import { avatar, icon } from "../../lib/icons.js";
 import { branchHref, issueChoices, issueList, issuePath, issueStates, item, labelTag, labelTones, listTabLinks } from "../../lib/issues.js";
 import { pageHeading } from "../../lib/layout.js";
+import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { rendered } from "../../lib/markdown.js";
 import { closeMenu, popover } from "../../lib/menu.js";
 import { go } from "../../lib/router.js";
@@ -17,9 +18,11 @@ import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
 
 // nav puts Issues in the sidebar, counting the open ones, with the newest five open issues under it, after those the
-// viewer opened last.
+// viewer opened last, and follows them.
+const sidebarPath = (org) => "/orgs/" + org.slug + "/issues?limit=5";
 export const nav = { label: "Issues", order: 10, icon: "circle-dot",
-  items: ({ org }) => api("GET", "/orgs/" + org.slug + "/issues?limit=5").then((d) => ({ count: d.counts.open, items: d.issues.map((i) => issueItem(org, i)) })) };
+  items: ({ org }) => readTagged(sidebarPath(org)).then(({ data: d, tag }) => ({ count: d.counts.open, items: d.issues.map((i) => issueItem(org, i)),
+    follow: [[sidebarPath(org), tag]] })) };
 export const allowed = (can) => can("issues.read");
 export const crumbs = ({ org, sub }) => sub === "labels" ? [{ label: "Labels" }] : [{ label: "Issues", href: base + org.slug + "/issues" },
   ...(sub === "new" ? [{ label: "New" }] : sub ? [{ label: sub }] : [])];
@@ -141,25 +144,27 @@ async function labelsNamed(org, labels, text, manage) {
 // and its activity, oldest first, without its comments, which the conversation pane holds; beside them, its
 // properties, each changed from its menu for a viewer with issues.write, from the version the page shows, and Assign
 // to an agent. It opens the issue by the number its identifier ends in, so a link made before the organization
-// changed its key still opens it.
+// changed its key still opens it. It follows the issue, its activity and its branches, and draws itself again once one
+// changes, or once the issue is deleted.
 async function showIssue(org, main, can, identifier, notice) {
   const number = /^(?:[A-Za-z][A-Za-z0-9]*-)?(\d+)$/.exec(identifier);
   if (!number) return go("/" + org.slug + "/issues", true);
   const path = "/orgs/" + org.slug + "/issues/" + number[1];
-  let issue;
+  let read;
   try {
-    issue = await api("GET", path);
+    read = await readTagged(path);
   } catch (err) {
     if (err.status !== 404) throw err;
     return main.replaceChildren(h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("circle-dot")),
       h("h2", { class: "empty-title" }, "No such issue"), h("p", { class: "empty-description" }, "There is no issue " + identifier + " in " + org.name + "."),
       h("a", { class: "btn", href: base + org.slug + "/issues", "data-nav": "" }, "Back to the issues"))));
   }
+  const issue = read.data;
   if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
   const write = can("issues.write");
   remember(org, "issues", issueItem(org, issue));
-  const [events, branches, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
-    api("GET", path + "/branches").then((d) => d.branches), issueChoices(org)]);
+  const [activity, linked, choices] = await Promise.all([readTagged(path + "/activity"), readTagged(path + "/branches"), issueChoices(org)]);
+  const [events, branches] = [activity.data.events, linked.data.branches];
   const error = failure();
   const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
   const tag = '"' + issue.version + '"';
@@ -174,6 +179,9 @@ async function showIssue(org, main, can, identifier, notice) {
     branchesCard(org, issue, branches), issueActivity(issue, events)),
     h("aside", { class: "issue-side" }, h("section", { class: "card" }, h("div", { class: "facts" }, issueFacts(page))),
       write && can("agents.assign") && choices.agents.length ? assignToAgent(page) : null)));
+  const still = () => error.el.isConnected;
+  followLists([[path, read.tag], [path + "/activity", activity.tag], [path + "/branches", linked.tag]], still,
+    () => drawAgain(() => showIssue(org, main, can, issue.identifier), still), { gone: true });
 }
 
 // issueHeader is the top of an issue's page: its key line, its key and state, then, for a viewer with issues.write,

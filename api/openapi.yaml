@@ -3892,7 +3892,7 @@ paths:
   /orgs/{org}/issues:
     get:
       operationId: listIssues
-      summary: A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+      summary: A page of the organization's issues, newest first, open ones unless states are named, with how many the other filters match open and closed; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. With If-None-Match and wait, it waits up to wait seconds for the page or its counts to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: state
@@ -3939,10 +3939,14 @@ paths:
           schema:
             type: integer
             default: 50
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's issues, newest first, without their rendered descriptions.
           headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -3959,6 +3963,11 @@ paths:
                       $ref: "#/components/schemas/Issue"
                   counts:
                     $ref: "#/components/schemas/IssueCounts"
+        "304":
+          description: The page is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -4008,11 +4017,12 @@ paths:
   /orgs/{org}/issues/{number}:
     get:
       operationId: getIssue
-      summary: One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+      summary: One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read. With If-None-Match and wait, it waits up to wait seconds for the issue to change before it answers 304, so a client follows the issue by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/number"
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The issue.
@@ -4024,7 +4034,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Issue"
         "304":
-          description: The issue is still the one If-None-Match names.
+          description: The issue is still the one If-None-Match names, after waiting wait seconds for a change.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -4101,12 +4111,19 @@ paths:
       summary: >-
         The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by
         repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+        With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client
+        follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The issue's branches.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -4117,6 +4134,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/IssueBranch"
+        "304":
+          description: The branches are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -4128,13 +4150,18 @@ paths:
   /orgs/{org}/issues/{number}/activity:
     get:
       operationId: listIssueActivity
-      summary: What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+      summary: What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads. With If-None-Match and wait, it waits up to wait seconds for more to happen before it answers 304, so a client follows the activity by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The issue's events.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -4145,6 +4172,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/IssueEvent"
+        "304":
+          description: The activity is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "403":

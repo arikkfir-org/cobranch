@@ -2,7 +2,6 @@ package rest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -26,19 +25,23 @@ func listWait(wait *WaitForChange, tag *IfNoneMatch) (time.Duration, error) {
 }
 
 // readList answers a list that a client may follow: read now when waits is zero, and otherwise followed until it
-// differs from the one the caller holds, or until waits passes, when it answers the list unchanged. answer makes a
-// list the response and says whether it is the one the caller holds (304). The Console follows its live lists this
-// way, asking again with each answer's ETag.
+// differs from the one the caller holds, or until waits passes, when it answers the list unchanged. A follower that
+// stops before then (its read failed, or found the list gone) answers what a read answers now, an issue deleted
+// meanwhile its 404. answer makes a list the response and says whether it is the one the caller holds (304). The
+// Console follows its live lists this way, asking again with each answer's ETag.
 func readList[T, R any](ctx context.Context, waits time.Duration, read func(context.Context) (T, error),
 	follow func(context.Context) (<-chan T, error), answer func(T) (R, bool, error)) (R, error) {
 	var none R
-	if waits == 0 {
+	now := func() (R, error) {
 		list, err := read(ctx)
 		if err != nil {
 			return none, err
 		}
 		out, _, err := answer(list)
 		return out, err
+	}
+	if waits == 0 {
+		return now()
 	}
 	following, cancel := context.WithTimeout(ctx, waits)
 	defer cancel()
@@ -55,7 +58,7 @@ func readList[T, R any](ctx context.Context, waits time.Duration, read func(cont
 		last = out
 	}
 	if following.Err() == nil {
-		return none, errors.New("following the list stopped before the wait ended")
+		return now()
 	}
 	if err := ctx.Err(); err != nil {
 		return none, fmt.Errorf("waiting for the list to change: %w", err)
