@@ -14,8 +14,7 @@ import (
 
 // TestAgentsSeeTheirOrganizationMigration checks that migration 00072 gives Guest at its organization to each agent
 // made before it that holds no organization role reading the organization, leaves the others as they are, and that
-// running it again gives nothing more; and that its trigger gives Guest to an agent made later without such a role, as
-// an older release still rolling out makes one, and nothing to one made with it.
+// running it again gives nothing more.
 func TestAgentsSeeTheirOrganizationMigration(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -67,18 +66,32 @@ func TestAgentsSeeTheirOrganizationMigration(t *testing.T) {
 			})
 		}
 	}
-	made := []struct {
+}
+
+// TestAgentsSeeTheirOrganizationTrigger checks that migration 00072's trigger gives Guest to an agent made after it
+// without a role reading its organization, as an older release still rolling out makes one, and nothing to one made
+// with such a role.
+func TestAgentsSeeTheirOrganizationTrigger(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	if err := newSchema(t, pool, migrations.FS, migrations.Go...).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	org := insertOrganizationWithAgents(ctx, t, pool, nil)
+	tests := []struct {
 		name  string
+		agent string
 		roles []uuid.UUID
 		want  []uuid.UUID
 	}{
-		{name: "Late", want: []uuid.UUID{auth.RoleGuest}},
-		{name: "Lead", roles: []uuid.UUID{auth.RoleMember}, want: []uuid.UUID{auth.RoleMember}},
-		{name: "Lurker", roles: []uuid.UUID{auth.RoleGuest}, want: []uuid.UUID{auth.RoleGuest}},
+		{name: "no roles: Guest", agent: "Late", want: []uuid.UUID{auth.RoleGuest}},
+		{name: "a role that reads the organization: as made", agent: "Lead", roles: []uuid.UUID{auth.RoleMember}, want: []uuid.UUID{auth.RoleMember}},
+		{name: "Guest: as made", agent: "Lurker", roles: []uuid.UUID{auth.RoleGuest}, want: []uuid.UUID{auth.RoleGuest}},
 	}
-	for _, tt := range made {
-		t.Run("made later: "+tt.name, func(t *testing.T) {
-			id := makeAgent(ctx, t, pool, org, tt.name, tt.roles)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id := makeAgent(ctx, t, pool, org, tt.agent, tt.roles)
 			if got := rolesAt(ctx, t, pool, id, org); !slices.Equal(got, tt.want) {
 				t.Errorf("roles at the organization = %v, want %v", got, tt.want)
 			}
