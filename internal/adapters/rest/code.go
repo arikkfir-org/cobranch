@@ -71,7 +71,9 @@ type Code interface {
 	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
 	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
 	Attention(ctx context.Context, v code.Viewer, orgID uuid.UUID) ([]code.Attention, error)
+	FollowAttention(ctx context.Context, v code.Viewer, orgID uuid.UUID) (<-chan []code.Attention, error)
 	Activity(ctx context.Context, v code.Viewer, orgID uuid.UUID, before code.ActivityCursor, limit int) (code.ActivityPage, error)
+	FollowActivity(ctx context.Context, v code.Viewer, orgID uuid.UUID, before code.ActivityCursor, limit int) (<-chan code.ActivityPage, error)
 }
 
 func principal(p *code.Principal) *Principal {

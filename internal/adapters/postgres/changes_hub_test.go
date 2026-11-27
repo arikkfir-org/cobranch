@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/secrets"
 )
 
@@ -155,6 +157,57 @@ func settingsChanges() []settingsChange {
 			must(t, NewSecretStore(f.pool).Grant(ctx, f.olivia, f.npm, f.max))
 			return []uuid.UUID{f.acme.ID}
 		}},
+	}
+}
+
+// pageChanges are changes to what an organization's live pages show, which wake its watchers.
+func pageChanges() []settingsChange {
+	return []settingsChange{
+		{name: "a repository created", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			docs := repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "docs", Name: "x", ObjectFormat: "sha1", CreatedBy: f.olivia, CreatedAt: now}
+			must(t, f.r.Create(ctx, f.olivia, docs, 0))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "a repository's Git data grown", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			_, err := f.pool.Exec(ctx, "INSERT INTO packs (repo_id, org_id, name, upload, size, objects) VALUES ($1, $2, 'pack-1', $3, 10, 1)",
+				f.website.ID, f.acme.ID, uuid.New())
+			must(t, err)
+			return []uuid.UUID{f.acme.ID}
+		}},
+	}
+}
+
+func TestOrganizationPagesChangesHub(t *testing.T) {
+	t.Parallel()
+	for _, tt := range pageChanges() {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			hearSettingsChange(t, tt.change)
+		})
+	}
+}
+
+// TestOrganizationPagesNotify checks that each table whose rows the organization's live pages show notifies its
+// organization when a row changes, as the tables Settings · Models shows do.
+func TestOrganizationPagesNotify(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	rows, err := f.pool.Query(context.Background(), `SELECT c.relname, pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+		WHERE t.tgname = 'notify_changes' AND NOT t.tgisinternal`)
+	must(t, err)
+	defs := map[string]string{}
+	for rows.Next() {
+		var table, def string
+		must(t, rows.Scan(&table, &def))
+		defs[table] = def
+	}
+	must(t, rows.Err())
+	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "events", "agent_tasks", "task_spend",
+		"job_runs", "deliveries", "artifacts", "packs", "organization_limits"} {
+		def := defs[table]
+		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, "notify_changes('org_id')") {
+			t.Errorf("table %s's trigger notify_changes = %q; want one after every change naming org_id", table, def)
+		}
 	}
 }
 

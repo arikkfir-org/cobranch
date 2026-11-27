@@ -4241,6 +4241,12 @@ type ListOrganizationActivityParams struct {
 
 	// Limit How many entries the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListAgentsParams defines parameters for ListAgents.
@@ -4349,6 +4355,12 @@ type ListOrganizationArtifactsParams struct {
 
 	// Mine Only the caller's own artifacts.
 	Mine *bool `form:"mine,omitempty" json:"mine,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // DeleteArtifactParams defines parameters for DeleteArtifact.
@@ -4385,6 +4397,15 @@ type GetArtifactVersionParams struct {
 type GetArtifactVersionRawParams struct {
 	// Download Whether to answer the body as an attachment, named after the artifact's title and the version's format.
 	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListOrganizationAttentionParams defines parameters for ListOrganizationAttention.
+type ListOrganizationAttentionParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
@@ -4668,6 +4689,18 @@ type GetOrganizationOverviewParams struct {
 
 	// Zone The IANA time zone the days begin and end in, such as Asia/Jerusalem; UTC when absent.
 	Zone *string `form:"zone,omitempty" json:"zone,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListRepositoriesParams defines parameters for ListRepositories.
+type ListRepositoriesParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
@@ -5080,6 +5113,12 @@ type ListTasksParams struct {
 
 	// Limit How many tasks the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetTaskParams defines parameters for GetTask.
@@ -5111,6 +5150,9 @@ type GetTranscriptEntryParams struct {
 
 // GetOrganizationUsageParams defines parameters for GetOrganizationUsage.
 type GetOrganizationUsageParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -5409,7 +5451,7 @@ type ServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org, params UpdateOrganizationParams)
-	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
+	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams)
 	// ListAgents The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
@@ -5475,7 +5517,7 @@ type ServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, secretID SecretID)
-	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open.
+	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/artifacts)
 	ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationArtifactsParams)
 	// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
@@ -5511,9 +5553,9 @@ type ServerInterface interface {
 	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
 	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
 	GetArtifactVersionRaw(w http.ResponseWriter, r *http.Request, org Org, id Id, version ArtifactVersionNumber, params GetArtifactVersionRawParams)
-	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read.
+	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/attention)
-	ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org)
+	ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationAttentionParams)
 	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
 	// (GET /orgs/{org}/conversation)
 	ListOrganizationConversationThreads(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationConversationThreadsParams)
@@ -5664,12 +5706,12 @@ type ServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
-	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository. With If-None-Match and wait, it waits up to wait seconds for the figures to change before it answers 304, so a client follows the figures by asking again with the answer's ETag.
 	// (GET /orgs/{org}/overview)
 	GetOrganizationOverview(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationOverviewParams)
-	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos)
-	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
+	ListRepositories(w http.ResponseWriter, r *http.Request, org Org, params ListRepositoriesParams)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
@@ -5946,7 +5988,7 @@ type ServerInterface interface {
 	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
 	// (GET /orgs/{org}/spend)
 	GetOrganizationSpend(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationSpendParams)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
@@ -5967,7 +6009,7 @@ type ServerInterface interface {
 	// GetTranscriptEntry One entry of a task's transcript, by its number; who reads the transcript reads it.
 	// (GET /orgs/{org}/tasks/{number}/transcript/{seq})
 	GetTranscriptEntry(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, seq int, params GetTranscriptEntryParams)
-	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too. With If-None-Match and wait, it waits up to wait seconds for the usage to change before it answers 304, so a client follows the usage by asking again with the answer's ETag.
 	// (GET /orgs/{org}/usage)
 	GetOrganizationUsage(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationUsageParams)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
@@ -6702,6 +6744,40 @@ func (siw *ServerInterfaceWrapper) ListOrganizationActivity(w http.ResponseWrite
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		}
 		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7933,6 +8009,40 @@ func (siw *ServerInterfaceWrapper) ListOrganizationArtifacts(w http.ResponseWrit
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOrganizationArtifacts(w, r, org, params)
 	}))
@@ -8519,8 +8629,45 @@ func (siw *ServerInterfaceWrapper) ListOrganizationAttention(w http.ResponseWrit
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationAttentionParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListOrganizationAttention(w, r, org)
+		siw.Handler.ListOrganizationAttention(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11307,6 +11454,19 @@ func (siw *ServerInterfaceWrapper) GetOrganizationOverview(w http.ResponseWriter
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "If-None-Match" -------------
@@ -11354,8 +11514,45 @@ func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoriesParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRepositories(w, r, org)
+		siw.Handler.ListRepositories(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16745,6 +16942,40 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTasks(w, r, org, params)
 	}))
@@ -17084,6 +17315,19 @@ func (siw *ServerInterfaceWrapper) GetOrganizationUsage(w http.ResponseWriter, r
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetOrganizationUsageParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
 
 	headers := r.Header
 
@@ -19613,6 +19857,7 @@ type ListOrganizationActivityResponseObject interface {
 }
 
 type ListOrganizationActivity200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -19630,12 +19875,27 @@ func (response ListOrganizationActivity200JSONResponse) VisitListOrganizationAct
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListOrganizationActivity304ResponseHeaders struct {
+	ETag string
+}
+
+type ListOrganizationActivity304Response struct {
+	Headers ListOrganizationActivity304ResponseHeaders
+}
+
+func (response ListOrganizationActivity304Response) VisitListOrganizationActivityResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListOrganizationActivity400ApplicationProblemPlusJSONResponse struct {
@@ -22142,18 +22402,40 @@ type ListOrganizationArtifactsResponseObject interface {
 	VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error
 }
 
-type ListOrganizationArtifacts200JSONResponse ArtifactList
+type ListOrganizationArtifacts200ResponseHeaders struct {
+	ETag string
+}
+
+type ListOrganizationArtifacts200JSONResponse struct {
+	Body    ArtifactList
+	Headers ListOrganizationArtifacts200ResponseHeaders
+}
 
 func (response ListOrganizationArtifacts200JSONResponse) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListOrganizationArtifacts304ResponseHeaders struct {
+	ETag string
+}
+
+type ListOrganizationArtifacts304Response struct {
+	Headers ListOrganizationArtifacts304ResponseHeaders
+}
+
+func (response ListOrganizationArtifacts304Response) VisitListOrganizationArtifactsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListOrganizationArtifacts400ApplicationProblemPlusJSONResponse struct {
@@ -23395,32 +23677,69 @@ func (response GetArtifactVersionRawdefaultApplicationProblemPlusJSONResponse) V
 }
 
 type ListOrganizationAttentionRequestObject struct {
-	Org Org `json:"org"`
+	Org    Org `json:"org"`
+	Params ListOrganizationAttentionParams
 }
 
 type ListOrganizationAttentionResponseObject interface {
 	VisitListOrganizationAttentionResponse(w http.ResponseWriter) error
 }
 
+type ListOrganizationAttention200ResponseHeaders struct {
+	ETag string
+}
+
 type ListOrganizationAttention200JSONResponse struct {
-	Branches []AttentionBranch `json:"branches"`
+	Body struct {
+		Branches []AttentionBranch `json:"branches"`
+	}
+	Headers ListOrganizationAttention200ResponseHeaders
 }
 
 func (response ListOrganizationAttention200JSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListOrganizationAttention401ApplicationProblemPlusJSONResponse struct {
+type ListOrganizationAttention304ResponseHeaders struct {
+	ETag string
+}
+
+type ListOrganizationAttention304Response struct {
+	Headers ListOrganizationAttention304ResponseHeaders
+}
+
+func (response ListOrganizationAttention304Response) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListOrganizationAttention400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListOrganizationAttention400ApplicationProblemPlusJSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrganizationAttention401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListOrganizationAttention401ApplicationProblemPlusJSONResponse) VisitListOrganizationAttentionResponse(w http.ResponseWriter) error {
 
@@ -29189,32 +29508,69 @@ func (response GetOrganizationOverviewdefaultApplicationProblemPlusJSONResponse)
 }
 
 type ListRepositoriesRequestObject struct {
-	Org Org `json:"org"`
+	Org    Org `json:"org"`
+	Params ListRepositoriesParams
 }
 
 type ListRepositoriesResponseObject interface {
 	VisitListRepositoriesResponse(w http.ResponseWriter) error
 }
 
+type ListRepositories200ResponseHeaders struct {
+	ETag string
+}
+
 type ListRepositories200JSONResponse struct {
-	Repositories []Repository `json:"repositories"`
+	Body struct {
+		Repositories []Repository `json:"repositories"`
+	}
+	Headers ListRepositories200ResponseHeaders
 }
 
 func (response ListRepositories200JSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListRepositories401ApplicationProblemPlusJSONResponse struct {
+type ListRepositories304ResponseHeaders struct {
+	ETag string
+}
+
+type ListRepositories304Response struct {
+	Headers ListRepositories304ResponseHeaders
+}
+
+func (response ListRepositories304Response) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListRepositories400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListRepositories400ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRepositories401ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
 
@@ -39080,6 +39436,7 @@ type ListTasksResponseObject interface {
 }
 
 type ListTasks200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -39097,12 +39454,27 @@ func (response ListTasks200JSONResponse) VisitListTasksResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListTasks304ResponseHeaders struct {
+	ETag string
+}
+
+type ListTasks304Response struct {
+	Headers ListTasks304ResponseHeaders
+}
+
+func (response ListTasks304Response) VisitListTasksResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListTasks400ApplicationProblemPlusJSONResponse struct {
@@ -39897,9 +40269,23 @@ func (response GetOrganizationUsage304Response) VisitGetOrganizationUsageRespons
 	return nil
 }
 
-type GetOrganizationUsage401ApplicationProblemPlusJSONResponse struct {
+type GetOrganizationUsage400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response GetOrganizationUsage400ApplicationProblemPlusJSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationUsage401ApplicationProblemPlusJSONResponse Problem
 
 func (response GetOrganizationUsage401ApplicationProblemPlusJSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
 
@@ -40241,7 +40627,7 @@ type StrictServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
-	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read.
+	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(ctx context.Context, request ListOrganizationActivityRequestObject) (ListOrganizationActivityResponseObject, error)
 	// ListAgents The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
@@ -40307,7 +40693,7 @@ type StrictServerInterface interface {
 	// RevokeAPIKeySecret Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
 	// (DELETE /orgs/{org}/api-keys/{key}/secrets/{secret})
 	RevokeAPIKeySecret(ctx context.Context, request RevokeAPIKeySecretRequestObject) (RevokeAPIKeySecretResponseObject, error)
-	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open.
+	// ListOrganizationArtifacts The organization's artifacts the caller may list or read, newest change first, without their bodies: those attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as one that doesn't open. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/artifacts)
 	ListOrganizationArtifacts(ctx context.Context, request ListOrganizationArtifactsRequestObject) (ListOrganizationArtifactsResponseObject, error)
 	// CreateOrganizationArtifact Makes an artifact of the organization attached to no repository, with its first version, and no repository audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal took, or that is attached to a repository, is refused with 409.
@@ -40343,7 +40729,7 @@ type StrictServerInterface interface {
 	// GetArtifactVersionRaw A version's body, 0 for the newest version's, served as something that runs nothing and loads nothing but data URLs, whatever it holds: an HTML page sandboxed, an SVG as an image. Takes artifacts.read on the artifact.
 	// (GET /orgs/{org}/artifacts/{id}/versions/{version}/raw)
 	GetArtifactVersionRaw(ctx context.Context, request GetArtifactVersionRawRequestObject) (GetArtifactVersionRawResponseObject, error)
-	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read.
+	// ListOrganizationAttention The branches of the organization that need the viewer, at most 20, of the repositories they read: Blocked with a head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review), Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then the latest moved first. Takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/attention)
 	ListOrganizationAttention(ctx context.Context, request ListOrganizationAttentionRequestObject) (ListOrganizationAttentionResponseObject, error)
 	// ListOrganizationConversationThreads A page of the viewer's own conversation about the organization, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listOrganizationConversationUpdates after it answers every change the page may lack.
@@ -40496,10 +40882,10 @@ type StrictServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
-	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository. With If-None-Match and wait, it waits up to wait seconds for the figures to change before it answers 304, so a client follows the figures by asking again with the answer's ETag.
 	// (GET /orgs/{org}/overview)
 	GetOrganizationOverview(ctx context.Context, request GetOrganizationOverviewRequestObject) (GetOrganizationOverviewResponseObject, error)
-	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
+	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
@@ -40778,7 +41164,7 @@ type StrictServerInterface interface {
 	// GetOrganizationSpend What the organization's agents spent in a month, in a time zone: each agent's tasks queued then and what its calls then cost, with the costliest of those tasks that the viewer sees, and what each model's calls then read, wrote and cost. Takes org.read. The counts and amounts count every task of the organization, those on repositories the viewer doesn't read too, as its usage counts every repository.
 	// (GET /orgs/{org}/spend)
 	GetOrganizationSpend(ctx context.Context, request GetOrganizationSpendRequestObject) (GetOrganizationSpendResponseObject, error)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
@@ -40799,7 +41185,7 @@ type StrictServerInterface interface {
 	// GetTranscriptEntry One entry of a task's transcript, by its number; who reads the transcript reads it.
 	// (GET /orgs/{org}/tasks/{number}/transcript/{seq})
 	GetTranscriptEntry(ctx context.Context, request GetTranscriptEntryRequestObject) (GetTranscriptEntryResponseObject, error)
-	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too. With If-None-Match and wait, it waits up to wait seconds for the usage to change before it answers 304, so a client follows the usage by asking again with the answer's ETag.
 	// (GET /orgs/{org}/usage)
 	GetOrganizationUsage(ctx context.Context, request GetOrganizationUsageRequestObject) (GetOrganizationUsageResponseObject, error)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
@@ -42607,10 +42993,11 @@ func (sh *strictHandler) GetArtifactVersionRaw(w http.ResponseWriter, r *http.Re
 }
 
 // ListOrganizationAttention operation middleware
-func (sh *strictHandler) ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) ListOrganizationAttention(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationAttentionParams) {
 	var request ListOrganizationAttentionRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListOrganizationAttention(ctx, request.(ListOrganizationAttentionRequestObject))
@@ -44172,10 +44559,11 @@ func (sh *strictHandler) GetOrganizationOverview(w http.ResponseWriter, r *http.
 }
 
 // ListRepositories operation middleware
-func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, org Org, params ListRepositoriesParams) {
 	var request ListRepositoriesRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListRepositories(ctx, request.(ListRepositoriesRequestObject))

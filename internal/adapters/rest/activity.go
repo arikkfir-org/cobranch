@@ -14,33 +14,36 @@ import (
 	"cobranch.dev/internal/services/git"
 )
 
-// ListOrganizationAttention lists the branches of the organization that need the viewer, and why.
+// ListOrganizationAttention lists the branches of the organization that need the viewer, and why, or, with
+// If-None-Match and wait, once they change.
 func (a api) ListOrganizationAttention(ctx context.Context, req ListOrganizationAttentionRequestObject) (ListOrganizationAttentionResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.code.Attention(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListOrganizationAttention200JSONResponse{Branches: mapAll(list, func(b code.Attention) AttentionBranch {
-		return AttentionBranch{Repository: b.Repo, Branch: branch(b.Branch), Need: AttentionBranchNeed(b.Need)}
-	})}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]code.Attention, error) {
+		list, err := a.code.Attention(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []code.Attention, error) {
+		lists, err := a.code.FollowAttention(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []code.Attention) (ListOrganizationAttentionResponseObject, bool, error) {
+		out := ListOrganizationAttention200JSONResponse{}
+		out.Body.Branches = mapAll(list, func(b code.Attention) AttentionBranch {
+			return AttentionBranch{Repository: b.Repo, Branch: branch(b.Branch), Need: AttentionBranchNeed(b.Need)}
+		})
+		return listAnswer("attention", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListOrganizationAttentionResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListOrganizationAttentionResponseObject {
+				return ListOrganizationAttention304Response{Headers: ListOrganizationAttention304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // ListOrganizationActivity lists a page of what happened in the organization's repositories the viewer reads, and
-// links the next.
+// links the next; with If-None-Match and wait, once the page changes.
 func (a api) ListOrganizationActivity(ctx context.Context, req ListOrganizationActivityRequestObject) (ListOrganizationActivityResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	org, err := a.org(ctx, v, req.Org)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -54,21 +57,29 @@ func (a api) ListOrganizationActivity(ctx context.Context, req ListOrganizationA
 	if req.Params.Limit != nil {
 		limit = *req.Params.Limit
 	}
-	page, err := a.code.Activity(ctx, v, org.ID, before, limit)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	out := ListOrganizationActivity200JSONResponse{}
-	out.Body.Activity = mapAll(page.Activity, activity)
-	if page.Next != (code.ActivityCursor{}) {
-		next := url.Values{"cursor": {strconv.FormatInt(page.Next.At.UnixMicro(), 10) + "." + page.Next.ID.String()}}
-		if req.Params.Limit != nil {
-			next.Set("limit", strconv.Itoa(*req.Params.Limit))
+	return readList(ctx, waits, func(ctx context.Context) (code.ActivityPage, error) {
+		page, err := a.code.Activity(ctx, v, org.ID, before, limit)
+		return page, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan code.ActivityPage, error) {
+		pages, err := a.code.FollowActivity(ctx, v, org.ID, before, limit)
+		return pages, fail(err, "organization")
+	}, func(page code.ActivityPage) (ListOrganizationActivityResponseObject, bool, error) {
+		out := ListOrganizationActivity200JSONResponse{}
+		out.Body.Activity = mapAll(page.Activity, activity)
+		if page.Next != (code.ActivityCursor{}) {
+			next := url.Values{"cursor": {strconv.FormatInt(page.Next.At.UnixMicro(), 10) + "." + page.Next.ID.String()}}
+			if req.Params.Limit != nil {
+				next.Set("limit", strconv.Itoa(*req.Params.Limit))
+			}
+			link := `<?` + next.Encode() + `>; rel="next"`
+			out.Headers.Link = &link
 		}
-		link := `<?` + next.Encode() + `>; rel="next"`
-		out.Headers.Link = &link
-	}
-	return out, nil
+		return listAnswer("activity", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListOrganizationActivityResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListOrganizationActivityResponseObject {
+				return ListOrganizationActivity304Response{Headers: ListOrganizationActivity304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // activityCursor reads a cursor a page's Link named: the microseconds since the epoch of the activity the next page

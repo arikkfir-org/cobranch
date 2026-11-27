@@ -74,17 +74,52 @@ func followAgents(ctx context.Context, t *testing.T, f *fixture, v agents.Viewer
 	return func() []string { return next(t, ch, func(a agents.Agent) string { return a.Name }) }, nil
 }
 
-func TestFollowModelSettings(t *testing.T) {
+// followTasks follows the organization's newest tasks as v, and answers a function that names those it sends next.
+func followTasks(ctx context.Context, t *testing.T, f *fixture, v agents.Viewer) (func() []string, error) {
+	ch, err := f.service.FollowTasks(ctx, v, f.org, agents.TaskFilter{}, 10)
+	if err != nil {
+		return nil, fmt.Errorf("following the tasks: %w", err)
+	}
+	return func() []string {
+		select {
+		case page, ok := <-ch:
+			if !ok {
+				t.Fatal("the follower stopped")
+			}
+			out := []string{}
+			for _, task := range page.Tasks {
+				out = append(out, task.Title)
+			}
+			return out
+		case <-time.After(5 * time.Second):
+			t.Fatal("the follower sent nothing")
+			return nil
+		}
+	}, nil
+}
+
+// assignElsewhere has Olive make an agent and assign it a task titled title, a change the followers didn't make.
+func assignElsewhere(ctx context.Context, t *testing.T, f *fixture, title string) {
+	t.Helper()
+	a, err := f.service.CreateAgent(ctx, f.olive, f.org, agents.Input{Name: "Ranger", Instructions: "Look."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.Assign(ctx, f.olive, f.org, a.ID, agents.TaskInput{Title: title}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFollow(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name string
-		// follow follows the organization's providers or models as v, and answers a function that names what the
-		// follower sends next.
+		// follow follows one of the organization's lists as v, and answers a function that names what the follower
+		// sends next.
 		follow func(ctx context.Context, t *testing.T, f *fixture, v agents.Viewer) (func() []string, error)
 		// change changes them through the service, key being the secret that holds anthropic's key.
-		change func(t *testing.T, ctx context.Context, f *fixture, key uuid.UUID)
-		before []string
-		after  []string
+		change        func(t *testing.T, ctx context.Context, f *fixture, key uuid.UUID)
+		before, after []string
 	}{
 		{name: "a provider connected elsewhere",
 			follow: followProviders,
@@ -107,6 +142,11 @@ func TestFollowModelSettings(t *testing.T) {
 					t.Fatal(err)
 				}
 			}, before: []string{}, after: []string{"Ranger"}},
+		{name: "a task assigned elsewhere",
+			follow: followTasks,
+			change: func(t *testing.T, ctx context.Context, f *fixture, _ uuid.UUID) {
+				assignElsewhere(ctx, t, f, "Look around")
+			}, before: []string{}, after: []string{"Look around"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -33,6 +34,9 @@ type Store interface {
 type Service struct {
 	store Store
 	authz *auth.Authorizer
+	// notifier says when an organization's figures may have changed, for those who follow them; nil, which never says,
+	// leaves followers to read again once a minute.
+	notifier live.Notifier
 }
 
 // NewService returns a Service over store, checking permissions with authz.

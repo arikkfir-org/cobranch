@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/limits"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -77,6 +78,9 @@ type Service struct {
 	authz  *auth.Authorizer
 	limits Limits
 	now    func() time.Time
+	// notifier says when an organization's repositories may have changed, for those who follow them; nil, which never
+	// does, leaves them to read again once a minute.
+	notifier live.Notifier
 }
 
 // NewService returns a Service over store, checking permissions with authz.

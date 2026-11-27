@@ -15,6 +15,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -90,6 +91,9 @@ type Service struct {
 	markdown Renderer
 	authz    *auth.Authorizer
 	logs     runLogs
+	// notifier says when an organization's branches or activity may have changed, for those who follow them; nil,
+	// which never says, leaves followers to read again once a minute.
+	notifier live.Notifier
 }
 
 // NewService returns a Service over store, objects for what only the Git server reads and markdown for rendering

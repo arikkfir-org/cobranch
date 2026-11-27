@@ -167,16 +167,17 @@ func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Po
 		}
 	}
 	chatHub, orgHub, changeHub := hubs(ctx, a, pool)
+	codeService.WithNotifier(changeHub)
 	agentStore := postgres.NewAgentStore(pool)
 	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...).WithNotifier(changeHub)
 	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas).WithNotifier(orgHub).WithChanges(changeHub),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: codeService,
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas).WithNotifier(changeHub), code: codeService,
 		issues:    issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
 		chats:     chats.NewService(postgres.NewChatStore(pool), chatHub, renderer, authorizer).WithAgents(agentService, agentStore),
 		agents:    agentService,
 		secrets:   secrets.NewService(postgres.NewSecretStore(pool), authorizer, box).WithNotifier(changeHub),
-		artifacts: artifacts.NewService(postgres.NewArtifactStore(pool), authorizer, renderer),
-		overview:  overview.NewService(postgres.NewOverviewStore(pool), authorizer), administration: administration}, closeLogs, nil
+		artifacts: artifacts.NewService(postgres.NewArtifactStore(pool), authorizer, renderer).WithNotifier(changeHub),
+		overview:  overview.NewService(postgres.NewOverviewStore(pool), authorizer).WithNotifier(changeHub), administration: administration}, closeLogs, nil
 }
 
 // hubs are the hubs of the chats' followers, of the followers of people's organizations and of the followers of the

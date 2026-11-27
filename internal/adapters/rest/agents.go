@@ -24,6 +24,7 @@ type Agents interface {
 	UpdateAgent(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, version int64, c agents.Change) (agents.Agent, error)
 	DeleteAgent(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, version int64) error
 	Tasks(ctx context.Context, v agents.Viewer, orgID uuid.UUID, f agents.TaskFilter, limit int) (agents.TaskPage, error)
+	FollowTasks(ctx context.Context, v agents.Viewer, orgID uuid.UUID, f agents.TaskFilter, limit int) (<-chan agents.TaskPage, error)
 	Task(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64) (agents.Task, error)
 	Assign(ctx context.Context, v agents.Viewer, orgID, agentID uuid.UUID, in agents.TaskInput) (agents.Task, error)
 	CancelTask(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number, version int64) (agents.Task, error)
@@ -275,7 +276,8 @@ func taskFilter(p ListTasksParams) (agents.TaskFilter, int, error) {
 	return f, limit, nil
 }
 
-// ListTasks lists a page of the organization's tasks, and links the next.
+// ListTasks lists a page of the organization's tasks, and links the next; with If-None-Match and wait, once the page
+// changes.
 func (a api) ListTasks(ctx context.Context, req ListTasksRequestObject) (ListTasksResponseObject, error) {
 	v, orgID, _, err := a.agentOrg(ctx, req.Org)
 	if err != nil {
@@ -285,29 +287,48 @@ func (a api) ListTasks(ctx context.Context, req ListTasksRequestObject) (ListTas
 	if err != nil {
 		return nil, err
 	}
-	page, err := a.agents.Tasks(ctx, v, orgID, f, limit)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "organization")
+		return nil, err
 	}
-	out := ListTasks200JSONResponse{}
-	out.Body.Tasks = mapAll(page.Tasks, task)
-	if page.Next != 0 {
-		next := url.Values{"cursor": {strconv.FormatInt(page.Next, 10)}}
-		for name, id := range map[string]uuid.UUID{"agent": f.AgentID, "repositoryId": f.RepoID} {
-			if id != uuid.Nil {
-				next.Set(name, id.String())
-			}
-		}
-		for _, s := range f.States {
-			next.Add("state", string(s))
-		}
-		if req.Params.Limit != nil {
-			next.Set("limit", strconv.Itoa(limit))
-		}
-		link := `<?` + next.Encode() + `>; rel="next"`
-		out.Headers.Link = &link
+	return readList(ctx, waits, func(ctx context.Context) (agents.TaskPage, error) {
+		page, err := a.agents.Tasks(ctx, v, orgID, f, limit)
+		return page, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan agents.TaskPage, error) {
+		pages, err := a.agents.FollowTasks(ctx, v, orgID, f, limit)
+		return pages, fail(err, "organization")
+	}, func(page agents.TaskPage) (ListTasksResponseObject, bool, error) {
+		out := ListTasks200JSONResponse{}
+		out.Body.Tasks = mapAll(page.Tasks, task)
+		out.Headers.Link = taskLink(req.Params, f, limit, page.Next)
+		return listAnswer("tasks", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListTasksResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListTasksResponseObject {
+				return ListTasks304Response{Headers: ListTasks304ResponseHeaders{ETag: etag}}
+			})
+	})
+}
+
+// taskLink is the Link to the page of tasks after the one that ends at next, with the same filter and limit, or nil
+// after the last page.
+func taskLink(p ListTasksParams, f agents.TaskFilter, limit int, next int64) *string {
+	if next == 0 {
+		return nil
 	}
-	return out, nil
+	query := url.Values{"cursor": {strconv.FormatInt(next, 10)}}
+	for name, id := range map[string]uuid.UUID{"agent": f.AgentID, "repositoryId": f.RepoID} {
+		if id != uuid.Nil {
+			query.Set(name, id.String())
+		}
+	}
+	for _, s := range f.States {
+		query.Add("state", string(s))
+	}
+	if p.Limit != nil {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	link := `<?` + query.Encode() + `>; rel="next"`
+	return &link
 }
 
 // AssignTask assigns a task to one of the organization's agents.
