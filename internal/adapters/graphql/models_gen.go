@@ -1577,7 +1577,7 @@ type Repository struct {
 	Artifacts []*Artifact `json:"artifacts"`
 	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
 	Chat *ChatPage `json:"chat,omitempty"`
-	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	Branches []*Branch `json:"branches"`
 	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
 	Branch *Branch `json:"branch,omitempty"`

@@ -371,7 +371,7 @@ flowchart LR
 Branch names carry `/`; the Console takes the rest of the path after `branches/` as the name.
 
 - **A repository's branches**, the tab it opens on, list each branch with its status badge, what it would merge, when it
-  moved and by whose head, and what holds it back, `main` above them; filters pick Ready, Blocked or the viewer's own.
+  moved and by whose head, and what holds it back, the latest pushed first, `main` above them ([ENG-284](https://linear.app/arikkfir/issue/ENG-284)); filters pick Ready, Blocked or the viewer's own.
   Beside them a card names `main`'s merge requirements, from `/cobranch.yaml`, and another the environments the branches
   deliver to.
 - **A branch's page** says who wants to merge how many commits into `main`, why it is Blocked, requirement by

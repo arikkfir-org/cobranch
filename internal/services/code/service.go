@@ -123,8 +123,8 @@ func (s *Service) holds(ctx context.Context, v Viewer, repoID uuid.UUID) ([]stri
 	return held, nil
 }
 
-// Branches lists the repository's live branches, main first and then by name, each with the commit it is at; it
-// takes repo.read.
+// Branches lists the repository's live branches, main first and then the latest pushed first, by name among equals, each
+// with the commit it is at; it takes repo.read.
 func (s *Service) Branches(ctx context.Context, v Viewer, repoID uuid.UUID) ([]Branch, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.Branches")
 	defer span.End()
@@ -140,7 +140,7 @@ func (s *Service) Branches(ctx context.Context, v Viewer, repoID uuid.UUID) ([]B
 		return nil, failed(span, "reading the branches", err)
 	}
 	slices.SortFunc(branches, func(a, b Branch) int {
-		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(a.Name, b.Name))
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), b.UpdatedAt.Compare(a.UpdatedAt), cmp.Compare(a.Name, b.Name))
 	})
 	return branches, nil
 }
