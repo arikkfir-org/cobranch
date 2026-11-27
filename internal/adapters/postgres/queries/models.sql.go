@@ -337,6 +337,33 @@ func (q *Queries) SecretRepository(ctx context.Context, iD uuid.UUID, orgID uuid
 	return repo_id, err
 }
 
+const setAgentImage = `-- name: SetAgentImage :one
+UPDATE agents SET image = $1, updated_at = now()
+WHERE principal_id = $2 AND org_id = $3 AND ($4::bigint < 0 OR version = $4::bigint)
+RETURNING version
+`
+
+type SetAgentImageParams struct {
+	Image   string
+	ID      uuid.UUID
+	OrgID   uuid.UUID
+	Version int64
+}
+
+// SetAgentImage names the image an agent's tasks run in, or the installation's with an empty one, when it is at
+// version, or at any version when version is negative: none otherwise.
+func (q *Queries) SetAgentImage(ctx context.Context, arg SetAgentImageParams) (int64, error) {
+	row := q.db.QueryRow(ctx, setAgentImage,
+		arg.Image,
+		arg.ID,
+		arg.OrgID,
+		arg.Version,
+	)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
 const setAgentModel = `-- name: SetAgentModel :one
 UPDATE agents SET provider = $1, model = $2, updated_at = now()
 WHERE principal_id = $3 AND org_id = $4 AND ($5::bigint < 0 OR version = $5::bigint)

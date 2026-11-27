@@ -72,7 +72,7 @@ func TestTaskPodStoreClaims(t *testing.T) {
 	want := taskrunner.Task{ID: first.ID, OrgID: f.acme.ID, AgentID: f.scout.ID, Number: first.Number, OrgSlug: "acme", Provider: "anthropic",
 		Model: "test-model", KeyID: f.key}
 	if got.ID != want.ID || got.OrgID != want.OrgID || got.AgentID != want.AgentID || got.Number != want.Number || got.OrgSlug != want.OrgSlug ||
-		got.Provider != want.Provider || got.Model != want.Model || got.KeyID != want.KeyID || got.Pods != 0 ||
+		got.Provider != want.Provider || got.Model != want.Model || got.KeyID != want.KeyID || got.Image != "" || got.Pods != 0 ||
 		!maps.Equal(got.Secrets, map[string]uuid.UUID{"TOKEN": f.token}) {
 		t.Errorf("Claim() = %+v, want %+v with Scout's secret", got, want)
 	}
@@ -87,11 +87,14 @@ func TestTaskPodStoreClaims(t *testing.T) {
 	if err := NewSecretStore(f.pool).Delete(ctx, f.olivia, f.key, secrets.AnyVersion); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := f.a.SetImage(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, "ghcr.io/acme/site-tools:1.4"); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.s.Defer(ctx, second.ID, time.Now().Add(-time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.claim(t, second.ID); got.KeyID != uuid.Nil || got.Provider != "anthropic" {
-		t.Errorf("Claim() once the key is gone = %+v, want no key", got)
+	if got := f.claim(t, second.ID); got.KeyID != uuid.Nil || got.Provider != "anthropic" || got.Image != "ghcr.io/acme/site-tools:1.4" {
+		t.Errorf("Claim() once the key is gone and Scout names an image = %+v, want no key, and the image", got)
 	}
 }
 

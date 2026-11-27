@@ -23,6 +23,7 @@ type Models interface {
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
+	SetImage(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, image string, version int64) (agents.Agent, error)
 	Models(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Model, error)
 	FollowModels(ctx context.Context, v agents.Viewer, orgID uuid.UUID) (<-chan []agents.Model, error)
 	Model(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string) (agents.Model, error)
@@ -188,6 +189,27 @@ func (a api) SetAgentModel(ctx context.Context, req SetAgentModelRequestObject) 
 		return nil, err
 	}
 	return SetAgentModel200JSONResponse{Body: body, Headers: SetAgentModel200ResponseHeaders{ETag: tag}}, nil
+}
+
+// SetAgentImage names the container image an agent's tasks run in, or the installation's.
+func (a api) SetAgentImage(ctx context.Context, req SetAgentImageRequestObject) (SetAgentImageResponseObject, error) {
+	v, orgID, _, err := a.agentOrg(ctx, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	match, err := versionMatch(req.Params.IfMatch, agents.AnyVersion)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := a.agents.SetImage(ctx, v, orgID, req.AgentID, req.Body.Image, match)
+	if err != nil {
+		return nil, fail(err, "agent")
+	}
+	body, tag, err := taggedAgent(changed)
+	if err != nil {
+		return nil, err
+	}
+	return SetAgentImage200JSONResponse{Body: body, Headers: SetAgentImage200ResponseHeaders{ETag: tag}}, nil
 }
 
 // SetAgentSecrets names the secrets an agent's tasks receive.

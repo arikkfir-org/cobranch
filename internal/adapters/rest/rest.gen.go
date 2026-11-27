@@ -1417,6 +1417,9 @@ type Agent struct {
 	// Id Its principal's ID.
 	Id openapi_types.UUID `json:"id"`
 
+	// Image The container image its tasks run in; absent while they run in the installation's.
+	Image *string `json:"image,omitempty"`
+
 	// Instructions The standing instructions, in Markdown, that every task of it starts from.
 	Instructions string `json:"instructions"`
 
@@ -1448,6 +1451,12 @@ type AgentGrant struct {
 type AgentGrantInput struct {
 	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
 	RoleId       openapi_types.UUID  `json:"roleId"`
+}
+
+// AgentImage The container image an agent's tasks run in.
+type AgentImage struct {
+	// Image A reference such as ghcr.io/acme/tools:1.4, or one pinned by digest, of at most 512 characters; empty for the installation's image. It needs sh and git, and is pulled without the installation's credentials.
+	Image string `json:"image"`
 }
 
 // AgentInput A new agent.
@@ -4309,6 +4318,12 @@ type ListAgentConversationUpdatesParams struct {
 	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
+// SetAgentImageParams defines parameters for SetAgentImage.
+type SetAgentImageParams struct {
+	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
 // SetAgentModelParams defines parameters for SetAgentModel.
 type SetAgentModelParams struct {
 	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -5107,6 +5122,9 @@ type PostAgentConversationMessageJSONRequestBody = ChatMessageInput
 // EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody defines body for EditAgentConversationMessage for application/merge-patch+json ContentType.
 type EditAgentConversationMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
 
+// SetAgentImageJSONRequestBody defines body for SetAgentImage for application/json ContentType.
+type SetAgentImageJSONRequestBody = AgentImage
+
 // SetAgentModelJSONRequestBody defines body for SetAgentModel for application/json ContentType.
 type SetAgentModelJSONRequestBody = AgentModel
 
@@ -5391,6 +5409,9 @@ type ServerInterface interface {
 	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
 	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
 	ListAgentConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationUpdatesParams)
+	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/image)
+	SetAgentImage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentImageParams)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams)
@@ -7446,6 +7467,65 @@ func (siw *ServerInterfaceWrapper) ListAgentConversationUpdates(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAgentConversationUpdates(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentImage operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAgentImageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAgent
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentImage(w, r, org, agentID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17099,6 +17179,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/model", wrapper.SetAgentModel)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/image", wrapper.SetAgentImage)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/secrets", wrapper.SetAgentSecrets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/conversation", wrapper.ListOrganizationConversationThreads)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/conversation/threads", wrapper.StartOrganizationConversationThread)
@@ -21001,6 +21082,142 @@ type ListAgentConversationUpdatesdefaultApplicationProblemPlusJSONResponse struc
 }
 
 func (response ListAgentConversationUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListAgentConversationUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImageRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  SetAgentImageParams
+	Body    *SetAgentImageJSONRequestBody
+}
+
+type SetAgentImageResponseObject interface {
+	VisitSetAgentImageResponse(w http.ResponseWriter) error
+}
+
+type SetAgentImage200ResponseHeaders struct {
+	ETag string
+}
+
+type SetAgentImage200JSONResponse struct {
+	Body    Agent
+	Headers SetAgentImage200ResponseHeaders
+}
+
+func (response SetAgentImage200JSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetAgentImage400ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentImage401ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentImage403ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentImage404ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentImage412ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImage428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentImage428ApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentImagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetAgentImagedefaultApplicationProblemPlusJSONResponse) VisitSetAgentImageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -39705,6 +39922,9 @@ type StrictServerInterface interface {
 	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
 	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
 	ListAgentConversationUpdates(ctx context.Context, request ListAgentConversationUpdatesRequestObject) (ListAgentConversationUpdatesResponseObject, error)
+	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/image)
+	SetAgentImage(ctx context.Context, request SetAgentImageRequestObject) (SetAgentImageResponseObject, error)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(ctx context.Context, request SetAgentModelRequestObject) (SetAgentModelResponseObject, error)
@@ -41435,6 +41655,41 @@ func (sh *strictHandler) ListAgentConversationUpdates(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListAgentConversationUpdatesResponseObject); ok {
 		if err := validResponse.VisitListAgentConversationUpdatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAgentImage operation middleware
+func (sh *strictHandler) SetAgentImage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentImageParams) {
+	var request SetAgentImageRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	var body SetAgentImageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAgentImage(ctx, request.(SetAgentImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAgentImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAgentImageResponseObject); ok {
+		if err := validResponse.VisitSetAgentImageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

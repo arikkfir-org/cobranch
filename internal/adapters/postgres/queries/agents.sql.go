@@ -24,7 +24,7 @@ func (q *Queries) ActiveThreadTask(ctx context.Context, threadID *uuid.UUID) (in
 }
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
@@ -54,6 +54,7 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.Secrets,
 		&i.Agent.Purpose,
 		&i.Agent.Cap,
+		&i.Agent.Image,
 		&i.CreatorName,
 	)
 	return i, err
@@ -103,7 +104,7 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
 `
@@ -139,6 +140,7 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.Secrets,
 			&i.Agent.Purpose,
 			&i.Agent.Cap,
+			&i.Agent.Image,
 			&i.CreatorName,
 		); err != nil {
 			return nil, err
@@ -581,7 +583,7 @@ UPDATE agents SET name = coalesce($1, name), description = coalesce($2, descript
     instructions = coalesce($3, instructions),
     cap = CASE WHEN $4::boolean THEN $5::bigint ELSE cap END, updated_at = now()
 WHERE principal_id = $6 AND org_id = $7 AND ($8::bigint < 0 OR version = $8::bigint)
-RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose, cap
+RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose, cap, image
 `
 
 type UpdateAgentParams struct {
@@ -625,6 +627,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Secrets,
 		&i.Purpose,
 		&i.Cap,
+		&i.Image,
 	)
 	return i, err
 }

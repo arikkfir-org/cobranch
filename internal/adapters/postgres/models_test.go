@@ -116,6 +116,28 @@ func TestAgentModelStore(t *testing.T) {
 	}
 }
 
+func TestAgentImageStore(t *testing.T) {
+	t.Parallel()
+	f := newAgentFixture(t)
+	ctx := context.Background()
+	a, err := f.a.SetImage(ctx, f.olivia, f.acme.ID, f.scout.ID, 1, "ghcr.io/acme/site-tools:1.4")
+	if err != nil || a.Image != "ghcr.io/acme/site-tools:1.4" || a.Version != 2 {
+		t.Fatalf("SetImage() = %+v, %v", a, err)
+	}
+	if read, err := f.a.Agent(ctx, f.acme.ID, f.scout.ID); err != nil || read.Image != a.Image {
+		t.Errorf("Agent() = %+v, %v, want the image", read, err)
+	}
+	if _, err := f.a.SetImage(ctx, f.olivia, f.acme.ID, f.scout.ID, 1, ""); !errors.Is(err, agents.ErrChanged) {
+		t.Errorf("SetImage() from a stale version = %v, want %v", err, agents.ErrChanged)
+	}
+	if a, err = f.a.SetImage(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, ""); err != nil || a.Image != "" {
+		t.Fatalf("SetImage(the installation's) = %+v, %v", a, err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = 'agent.image_set' AND org_id = $1", f.acme.ID); n != 2 {
+		t.Errorf("image events = %d, want 2", n)
+	}
+}
+
 func TestAgentSecretsStore(t *testing.T) {
 	t.Parallel()
 	f := newAgentFixture(t)

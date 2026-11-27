@@ -232,12 +232,24 @@ func checkoutCases() []chatCase {
 					t.Errorf("the transcript's entries are %v", got)
 				}
 			}},
+		{name: "an unfit workspace fails the task", branch: "tidy", checkout: &checkout{err: &harness.UnfitError{Reason: "No git."}}, check: failedUnfit},
 		{name: "a clone that fails", branch: "tidy", checkout: &checkout{err: errors.New("no route to host")}, turns: []harness.Turn{done}, wantErr: true,
 			check: func(t *testing.T, c *cobranch, _ *model) {
 				if len(c.entries) != 0 {
 					t.Errorf("the transcript's entries are %v", c.kinds())
 				}
 			}},
+	}
+}
+
+// failedUnfit checks that the task failed before asking the model, saying what its workspace lacks.
+func failedUnfit(t *testing.T, c *cobranch, m *model) {
+	t.Helper()
+	if got := c.kinds(); !slices.Equal(got, kinds("state")) || len(m.requests) != 0 {
+		t.Fatalf("the transcript's entries are %v, after %d requests", got, len(m.requests))
+	}
+	if body := string(c.entries[0].Body); !strings.Contains(body, `"failed"`) || !strings.Contains(body, "No git.") {
+		t.Errorf("the harness wrote %s", body)
 	}
 }
 

@@ -68,8 +68,8 @@ function remove(org, a) {
     () => api("DELETE", "/orgs/" + org.slug + "/agents/" + a.id, undefined, { "If-Match": `"${a.version}"` }).then(() => go(tabPath(org), true)));
 }
 
-// editor is agent a's editor (Card): its name, model and cap, what it is for, its standing instructions, the secrets its
-// tasks receive and its grants, with Cancel and Save. Its creator changes its words; a viewer who manages the
+// editor is agent a's editor (Card): its name, model and cap, what it is for, the image its tasks run in, its standing
+// instructions, the secrets its tasks receive and its grants, with Cancel and Save. Its creator changes its words; a viewer who manages the
 // organization's principals changes the rest too, and one who manages its grants lets it read its provider's key.
 async function editor(org, a, can, redraw) {
   const manage = can("org.principals.manage");
@@ -84,11 +84,12 @@ async function editor(org, a, can, redraw) {
   const readKey = h("input", { type: "checkbox", checked: true });
   const cap = input({ value: a.cap || "", placeholder: "None", inputmode: "decimal", pattern: "\\d{1,7}(\\.\\d{1,6})?", disabled: !manage });
   const description = input({ maxlength: 1000, value: a.description });
+  const image = input({ maxlength: 512, value: a.image || "", placeholder: "The installation's image", disabled: !manage });
   const instructions = textarea({ maxlength: 20000, rows: 5 });
   instructions.value = a.instructions;
   const secrets = secretLines(a, owned, manage);
   const save = h("button", { class: "btn btn-primary", type: "submit" }, "Save");
-  const changes = { name, description, instructions, cap, model, readKey, secrets };
+  const changes = { name, description, image, instructions, cap, model, readKey, secrets };
   return h("form", { class: "card settings-agent", onsubmit: (e) => { e.preventDefault(); saveAgent(org, a, can, changes, current, save, error).then(() => redraw(a.id, true), () => {}); } },
     h("header", { class: "card-header" }, h("h2", { class: "card-title" }, a.name), h("span", { class: "card-meta" }, "editing"),
       manage && !a.builtIn ? h("button", { class: "btn btn-danger btn-sm", type: "button", onclick: () => remove(org, a) }, "Delete agent") : ""),
@@ -96,13 +97,15 @@ async function editor(org, a, can, redraw) {
       h("div", { class: "settings-agent-fields" }, field("Name", name),
         field("Model", selectBox(model), manage ? [h("span", {}, "From Settings · Models."), can("org.grants.manage") ? checkbox(readKey, "Let it read the new model's provider key") : ""] : "Changed by whoever manages the organization's principals."),
         field("Cap per task", cap, "Optional. A task fails once it spends this much, in US dollars.")),
-      field("Description", description, "One line, shown on the Agents page and in menus."), field("Instructions", markCode(instructions), "What the agent is told before every task."),
+      field("Description", description, "One line, shown on the Agents page and in menus."),
+      field("Image", image, manage ? "Optional. The container image its tasks run in, with sh, git and the tools they need, such as ghcr.io/acme/tools:1.4." : "Changed by whoever manages the organization's principals."),
+      field("Instructions", markCode(instructions), "What the agent is told before every task."),
       secrets.el, grantsField(org, a, can, () => redraw(a.id))),
     h("footer", { class: "card-footer" }, h("button", { class: "btn", type: "button", onclick: () => go(tabPath(org)) }, "Cancel"), save));
 }
 
 // saveAgent saves what changed in agent a's editor, each step on the version the last one answered: its words and cap,
-// then its model, letting it read the model's provider key when asked, then its secrets. It shows what failed and
+// then its model, letting it read the model's provider key when asked, then its image, then its secrets. It shows what failed and
 // rejects, leaving the editor as the viewer filled it.
 async function saveAgent(org, a, can, c, current, button, error) {
   const path = "/orgs/" + org.slug + "/agents/" + a.id;
@@ -118,6 +121,7 @@ async function saveAgent(org, a, can, c, current, button, error) {
       now = await api("PUT", path + "/model", provider ? { provider, model } : {}, { "If-Match": `"${now.version}"` });
       if (provider && c.readKey.checked && can("org.grants.manage")) await readProviderKey(org, now, provider);
     }
+    if (manage && c.image.value.trim() !== (a.image || "")) now = await api("PUT", path + "/image", { image: c.image.value.trim() }, { "If-Match": `"${now.version}"` });
     if (manage && c.secrets.changed()) now = await api("PUT", path + "/secrets", { secrets: c.secrets.value() }, { "If-Match": `"${now.version}"` });
   } catch (err) {
     error.fail(err);

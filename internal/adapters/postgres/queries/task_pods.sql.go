@@ -93,7 +93,7 @@ WITH claimed AS (
     ON CONFLICT (task_id) DO UPDATE SET lease_until = excluded.lease_until
     RETURNING task_id, attempt
 )
-SELECT t.id, t.org_id, t.number, t.agent_id, o.slug AS org_slug, a.provider, a.model, a.secrets, mp.secret_id AS key_id,
+SELECT t.id, t.org_id, t.number, t.agent_id, o.slug AS org_slug, a.provider, a.model, a.image, a.secrets, mp.secret_id AS key_id,
     leased.attempt
 FROM leased JOIN agent_tasks t ON t.id = leased.task_id JOIN agents a ON a.principal_id = t.agent_id
 JOIN organizations o ON o.id = t.org_id LEFT JOIN model_providers mp ON mp.org_id = t.org_id AND mp.provider = a.provider
@@ -107,6 +107,7 @@ type ClaimTaskRow struct {
 	OrgSlug  string
 	Provider *string
 	Model    *string
+	Image    string
 	Secrets  []byte
 	KeyID    *uuid.UUID
 	Attempt  int32
@@ -126,6 +127,7 @@ func (q *Queries) ClaimTask(ctx context.Context, leaseUntil time.Time) (ClaimTas
 		&i.OrgSlug,
 		&i.Provider,
 		&i.Model,
+		&i.Image,
 		&i.Secrets,
 		&i.KeyID,
 		&i.Attempt,
@@ -278,7 +280,7 @@ func (q *Queries) TaskStates(ctx context.Context, ids []uuid.UUID) ([]TaskStates
 }
 
 const taskToStart = `-- name: TaskToStart :one
-SELECT t.id, t.org_id, t.number, t.agent_id, o.slug AS org_slug, a.provider, a.model, a.secrets, mp.secret_id AS key_id,
+SELECT t.id, t.org_id, t.number, t.agent_id, o.slug AS org_slug, a.provider, a.model, a.image, a.secrets, mp.secret_id AS key_id,
     p.attempt
 FROM agent_tasks t JOIN agent_task_pods p ON p.task_id = t.id JOIN agents a ON a.principal_id = t.agent_id
 JOIN organizations o ON o.id = t.org_id LEFT JOIN model_providers mp ON mp.org_id = t.org_id AND mp.provider = a.provider
@@ -293,6 +295,7 @@ type TaskToStartRow struct {
 	OrgSlug  string
 	Provider *string
 	Model    *string
+	Image    string
 	Secrets  []byte
 	KeyID    *uuid.UUID
 	Attempt  int32
@@ -311,6 +314,7 @@ func (q *Queries) TaskToStart(ctx context.Context, id uuid.UUID) (TaskToStartRow
 		&i.OrgSlug,
 		&i.Provider,
 		&i.Model,
+		&i.Image,
 		&i.Secrets,
 		&i.KeyID,
 		&i.Attempt,

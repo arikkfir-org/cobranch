@@ -97,7 +97,13 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 		}
 		r.deadline = start.Add(kit.Timeout)
 	}
-	return r, r.prepare(ctx)
+	var unfit *UnfitError
+	if err := r.prepare(ctx); errors.As(err, &unfit) {
+		return nil, r.fail(ctx, unfit.Reason)
+	} else if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // run is a task the harness works, and its transcript so far: the kit its kind gave it, the tools it offers, its

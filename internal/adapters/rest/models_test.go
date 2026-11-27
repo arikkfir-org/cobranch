@@ -138,6 +138,30 @@ func TestAgentModel(t *testing.T) {
 	})
 }
 
+func TestAgentImage(t *testing.T) {
+	image := func(f *orgFixture) string { return scoutPath(f) + "/image" }
+	runOrgCases(t, []orgCase{
+		{name: "name", viewer: olivia, method: "PUT", path: image, header: matchHeader(`"1"`), body: `{"image":"ghcr.io/acme/site-tools:1.4"}`,
+			wantStatus: 200, wantTag: `"2-`,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if a := decode[Agent](t, body); a.Image == nil || *a.Image != "ghcr.io/acme/site-tools:1.4" || a.Version != 2 {
+					t.Errorf("agent = %s", body)
+				}
+			}},
+		{name: "the installation's", viewer: olivia, method: "PUT", path: image, header: matchHeader("*"), body: `{"image":""}`, wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if a := decode[Agent](t, body); a.Image != nil {
+					t.Errorf("agent = %s", body)
+				}
+			}},
+		{name: "not a reference", viewer: olivia, method: "PUT", path: image, header: matchHeader("*"), body: `{"image":"python 3"}`,
+			wantStatus: 400, wantCode: "agent.image_invalid"},
+		{name: "without If-Match", viewer: olivia, method: "PUT", path: image, body: `{"image":"python:3.14"}`, wantStatus: 428, wantCode: "precondition.required"},
+		{name: "as a Member", viewer: maxim, method: "PUT", path: image, header: matchHeader("*"), body: `{"image":"python:3.14"}`,
+			wantStatus: 403, wantCode: "auth.forbidden"},
+	})
+}
+
 func TestAgentSecrets(t *testing.T) {
 	secretsOf := func(f *orgFixture) string { return scoutPath(f) + "/secrets" }
 	runOrgCases(t, []orgCase{

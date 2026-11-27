@@ -133,11 +133,20 @@ type ChatMessage struct {
 	Deleted bool
 }
 
+// UnfitError is a workspace that can't work any task, such as one whose image lacks a tool the harness needs: the task
+// fails with its reason, at once, instead of failing again in every pod.
+type UnfitError struct {
+	Reason string
+}
+
+// Error is the reason the workspace is unfit.
+func (e *UnfitError) Error() string { return e.Reason }
+
 // Checkout readies the task's workspace before the harness works it.
 type Checkout interface {
 	// Prepare readies the workspace for the task: Git's identity, the agent's, and its credentials; and, when the task
 	// names a repository that the workspace doesn't hold yet, the repository, cloned on the branch its work goes to
-	// (agents.Work.Branch). It answers the clone the workspace holds.
+	// (agents.Work.Branch). It answers the clone the workspace holds; an *UnfitError when no task can work in it.
 	Prepare(ctx context.Context, w agents.Work) (Clone, error)
 }
 

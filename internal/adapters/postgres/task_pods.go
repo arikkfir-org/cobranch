@@ -39,6 +39,7 @@ type startRow struct {
 	OrgSlug  string
 	Provider *string
 	Model    *string
+	Image    string
 	Secrets  []byte
 	KeyID    *uuid.UUID
 	Attempt  int32
@@ -47,7 +48,7 @@ type startRow struct {
 // taskToStart is the domain's view of a startRow.
 func taskToStart(r startRow) (taskrunner.Task, error) {
 	t := taskrunner.Task{ID: r.ID, OrgID: r.OrgID, AgentID: r.AgentID, Number: r.Number, OrgSlug: r.OrgSlug, KeyID: orNil(r.KeyID),
-		Pods: int(r.Attempt)}
+		Image: r.Image, Pods: int(r.Attempt)}
 	if r.Provider != nil && r.Model != nil {
 		t.Provider, t.Model = *r.Provider, *r.Model
 	}

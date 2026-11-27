@@ -40,6 +40,8 @@ type Task struct {
 	OrgSlug            string
 	// Provider and Model are its agent's model; empty until an admin picks one.
 	Provider, Model string
+	// Image is its agent's container image; empty for the installation's.
+	Image string
 	// KeyID is the organization secret that holds the provider's key; uuid.Nil when the organization has no such
 	// provider any more, or its secret is gone.
 	KeyID uuid.UUID

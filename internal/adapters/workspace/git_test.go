@@ -185,3 +185,39 @@ func TestCredential(t *testing.T) {
 		t.Errorf("another host gets %q", got)
 	}
 }
+
+func TestPrepareUnfitImage(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh here")
+	}
+	for _, tc := range []struct {
+		name     string
+		commands []string
+		want     string
+	}{
+		{name: "no shell", want: "no sh on its PATH"},
+		{name: "a shell without git", commands: []string{"sh"}, want: "no git on its PATH"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ws, err := New(t.TempDir(), time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = ws.Close() })
+			bin := t.TempDir()
+			for _, name := range tc.commands {
+				if err := os.Symlink(sh, filepath.Join(bin, name)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			url := server(t)
+			t.Setenv("PATH", bin)
+			_, err = ws.WithGit(Git{URL: url}).Prepare(context.Background(), work("website", "tidy"))
+			var unfit *harness.UnfitError
+			if !errors.As(err, &unfit) || !strings.Contains(unfit.Reason, tc.want) {
+				t.Errorf("Prepare() = %v, want an unfit workspace saying %q", err, tc.want)
+			}
+		})
+	}
+}

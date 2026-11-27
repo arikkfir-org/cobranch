@@ -87,6 +87,8 @@ type Agent struct {
 	Provider *string `json:"provider,omitempty"`
 	// The model it runs on, as its provider names it; null while it runs on none.
 	Model *string `json:"model,omitempty"`
+	// The container image its tasks run in; null while they run in the installation's.
+	Image *string `json:"image,omitempty"`
 	// The most a task of it may spend, in US dollars such as 2.00; null for none.
 	Cap *string `json:"cap,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
