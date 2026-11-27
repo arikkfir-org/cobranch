@@ -1,0 +1,5 @@
+/* Repository · Agents: its parts in the page's own flow, and the line on where its agents come from, beside the way to
+   their file. */
+.repo-agents-note { flex: 1; min-width: 0; margin: 0; color: var(--color-fg-muted); font: var(--text-body-medium); }
+.repo-agents td.cell-mono { white-space: nowrap; }
+.repo-agents-page { display: contents; }

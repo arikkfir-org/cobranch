@@ -32,7 +32,7 @@ export default async function show({ org, main, can }) {
   const agentIds = new Set(agents.map((a) => a.id));
   main.replaceChildren(h("div", { class: "activity-columns" },
     h("div", { class: "activity-main" }, attentionCard(org, attention, agentIds), repositoriesCard(org, repositories, can)),
-    h("div", { class: "activity-side" }, agentsCard(org, agents, working, can), activityCard(activity))));
+    h("div", { class: "activity-side" }, agentsCard(org, agents.filter((a) => !a.retiredAt), working, can), activityCard(activity))));
   const drawn = main.firstElementChild;
   const still = () => drawn.isConnected;
   followLists(paths.map((p, i) => [p, read[i]?.tag]), still, () => drawAgain(() => show({ org, main, can }), still));

@@ -55,6 +55,15 @@ export const stateBadge = (state) => quiet(...(taskWords[state] || [state, "neut
 // statusBadge is an agent's status: Working while one of its tasks runs or waits for an answer, Idle otherwise.
 export const statusBadge = (working) => working ? quiet("Working", "ai") : quiet("Idle", "neutral");
 
+// declaredIn is where a repository's agent a is declared: the lines of main's /cobranch.yaml that name it, as a
+// repository's Files show them.
+export const declaredIn = (org, a) => base + org.slug + "/" + a.repositorySlug + "/blob/main/cobranch.yaml" + (a.line ? "#L" + a.line : "");
+// worksIn says whether agent a takes a task in the repository of ID repoID, or anywhere when there is none: an
+// organization's agent works anywhere, a repository's in its repository alone, and a retired one nowhere.
+export const worksIn = (a, repoID) => !a.retiredAt && (!a.repositoryId || a.repositoryId === repoID);
+// retiredBadge is a retired agent's status (Badge/Quiet), Retired; none for one main's /cobranch.yaml declares.
+export const retiredBadge = (a) => a.retiredAt ? quiet("Retired", "neutral") : null;
+
 // whoAvatar is a principal's avatar, an agent's when the organization's agents (state.js) count it.
 export const whoAvatar = (p, size = 20) => avatar(p.displayName, agentIds.has(p.id), size);
 // agentPage is the address of an agent's page.
@@ -146,14 +155,16 @@ export const card = (title, meta, ...body) => h("section", { class: "card" },
   h("header", { class: "card-header" }, h("h2", { class: "card-title" }, title), meta ? h("span", { class: "card-meta" }, meta) : ""), ...body);
 
 // mayEdit is whether the viewer changes agent a: its creator does, and so does whoever manages the organization's
-// principals.
-export const mayEdit = (a, can) => (a.createdBy && a.createdBy.id === me.id) || can("org.principals.manage");
+// principals; nobody changes a repository's agent but its main's /cobranch.yaml.
+export const mayEdit = (a, can) => !a.repositoryId && ((a.createdBy && a.createdBy.id === me.id) || can("org.principals.manage"));
 // editorPage is the address of Settings · Agents with agent a's editor open.
 export const editorPage = (org, a) => base + org.slug + "/settings/agents?" + new URLSearchParams({ agent: a.id });
 
 // showAgent draws one of the organization's agents (Agent): what it works on, its queue and its latest tasks, what it
 // runs on and what it spent this month, and what happened to its tasks; Edit opens it in Settings · Agents and Assign a
-// task gives it one, once it runs on a model. It follows the agent's tasks while it shows.
+// task gives it one, once it runs on a model. A repository's agent (Agent · Repository) opens its lines of main's
+// /cobranch.yaml instead of Edit; a retired one (Agent · Retired) says so and shows its history alone. It follows the
+// agent's tasks while it shows.
 export async function showAgent(org, main, can, id) {
   let a;
   try {
@@ -172,7 +183,9 @@ export async function showAgent(org, main, can, id) {
   const refresh = () => showAgent(org, main, can, id);
   const working = tasks.filter(workingTask);
   main.replaceChildren(agentHeader(org, a, can, tasks, refresh),
-    a.model ? "" : banner("warning", "No model yet", "Pick a model in Settings · Agents. Until then " + a.name + " can't take a task.",
+    a.retiredAt ? banner("warning", "Retired", "Main's /cobranch.yaml no longer declares " + a.name + ", so it takes no new task and holds nothing on " +
+      a.repositorySlug + ". Declared there again under its name, it comes back.") : "",
+    a.model || a.retiredAt ? "" : banner("warning", "No model yet", "Pick a model in Settings · Agents. Until then " + a.name + " can't take a task.",
       mayEdit(a, can) ? h("a", { class: "btn btn-ghost btn-sm", href: editorPage(org, a), "data-nav": "" }, "Open Settings · Agents") : ""),
     h("div", { class: "agent-columns" },
       h("div", { class: "agent-column" }, ...taskCards(org, a, can, tasks, working, refresh)),
@@ -183,45 +196,51 @@ export async function showAgent(org, main, can, id) {
 }
 
 // named shows agent a's name in the breadcrumbs and the window's title once its page has read it, and puts it first
-// among the sidebar's agents.
+// among the sidebar's agents unless it is retired.
 function named(org, a) {
   const last = document.querySelector(".app-crumbs [aria-current] code");
   if (last) last.textContent = a.name;
   document.title = a.name + " · Cobranch";
-  remember(org, "agents", { key: a.id, label: a.name, href: agentPage(org, a.id), avatar: "agent" });
+  if (!a.retiredAt) remember(org, "agents", { key: a.id, label: a.name, href: agentPage(org, a.id), avatar: "agent" });
 }
 
-// agentHeader is the top of an agent's page: its avatar, name, Agent tag and status, what it runs on, who made it and
-// what it is for, then Edit and Assign a task for a viewer who may.
+// agentHeader is the top of an agent's page: its avatar, name, Agent tag and status, what it runs on, who made it, or
+// the file that declares it, and what it is for, then Edit, or a repository's agent's lines of its file, and Assign a
+// task for a viewer who may.
 function agentHeader(org, a, can, tasks, refresh) {
-  const meta = [a.provider ? providerName(a.provider) : "", a.model || "no model yet",
-    a.builtIn ? "built in" : a.createdBy ? "created " + since(a.createdAt) + " by " + a.createdBy.displayName : "",
+  const origin = a.retiredAt ? "retired " + since(a.retiredAt) + " from " + a.repositorySlug + "'s main /cobranch.yaml"
+    : a.repositoryId ? "declared in " + a.repositorySlug + "'s main /cobranch.yaml"
+      : a.builtIn ? "built in" : a.createdBy ? "created " + since(a.createdAt) + " by " + a.createdBy.displayName : "";
+  const meta = [a.provider ? providerName(a.provider) : "", a.model || (a.retiredAt ? "" : "no model yet"), origin,
     a.description || (tasks.length ? "" : "no tasks")].filter(Boolean).join(" · ");
-  const assign = can("agents.assign") ? h("button", { class: "btn btn-primary", type: "button", disabled: !a.model,
+  const assign = can("agents.assign") && !a.retiredAt ? h("button", { class: "btn btn-primary", type: "button", disabled: !a.model,
     title: a.model ? "" : a.name + " needs a model first", onclick: () => assignTask(org, [a], a, refresh) }, icon("plus"), "Assign a task") : "";
   return h("header", { class: "page-header agent-header" }, avatar(a.name, true, 40),
     h("div", { class: "page-header-text" },
       h("div", { class: "app-page-heading-title" }, h("h1", { class: "page-header-title" }, a.name), h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent"),
-        statusBadge(tasks.some(workingTask))),
+        retiredBadge(a) || statusBadge(tasks.some(workingTask))),
       h("p", { class: "page-header-description agent-header-meta", title: meta }, meta)),
     h("div", { class: "page-header-actions" },
-      mayEdit(a, can) ? h("a", { class: "btn", href: editorPage(org, a), "data-nav": "" }, icon("pencil"), "Edit") : "", assign));
+      a.repositoryId ? h("a", { class: "btn", href: declaredIn(org, a), "data-nav": "" }, icon("file"), "Open /cobranch.yaml")
+        : mayEdit(a, can) ? h("a", { class: "btn", href: editorPage(org, a), "data-nav": "" }, icon("pencil"), "Edit") : "", assign));
 }
 
 // taskCards are an agent's tasks by where they stand: what it works on now, its queue, oldest first as it takes them,
-// and the latest ten it ended.
+// and the latest ten it ended; a retired agent's, which works on nothing, the latest ten alone.
 function taskCards(org, a, can, tasks, working, refresh) {
   const rows = (list) => h("div", { class: "agent-tasks" }, list.map((t) => taskRow(org, t)));
   const queued = tasks.filter((t) => t.state === "queued").sort((x, y) => x.number - y.number);
   const ended = tasks.filter((t) => !activeTask(t)).slice(0, 10);
+  const history = card("History", ended.length ? "latest " + ended.length : "",
+    ended.length ? rows(ended) : emptyState("circle-check", "Nothing ended yet", "The tasks " + a.name + " finished, failed or had cancelled show here."));
+  if (a.retiredAt) return [history];
   const give = can("agents.assign") && a.model ? h("button", { class: "btn btn-primary btn-sm", type: "button", onclick: () => assignTask(org, [a], a, refresh) }, "Give it work") : "";
   return [
     card("Working on", working.length && working[0].startedAt ? "started " + since(working[0].startedAt) : "",
       working.length ? rows(working) : emptyState("sparkles", "Nothing right now", "Give " + a.name + " a task, and it shows here while " + a.name + " works on it.", give)),
     card("Queue", queued.length ? plural(queued.length, "task") : "",
       queued.length ? rows(queued) : emptyState("clock", "No tasks queued", "Tasks wait here until " + a.name + " starts them.")),
-    card("History", ended.length ? "latest " + ended.length : "",
-      ended.length ? rows(ended) : emptyState("circle-check", "Nothing ended yet", "The tasks " + a.name + " finished, failed or had cancelled show here.")),
+    history,
   ];
 }
 
@@ -230,8 +249,9 @@ function taskCards(org, a, can, tasks, working, refresh) {
 export const fact = (label, value, code) => h("div", { class: "fact-row" + (code ? " fact-row-code" : "") },
   h("span", { class: "fact-label" }, label), h("div", { class: "fact-value" }, value));
 
-// factsCard is what agent a runs on and as: its model, the secret its provider's key is in, the secrets its tasks
-// receive, its standing instructions, whom it acts as, its cap, and what it spent this month.
+// factsCard is what agent a runs on and as: a repository's agent's repository, its model, a repository's agent's image
+// and the permissions it declares, the secret its provider's key is in, the secrets its tasks receive, its standing
+// instructions, whom it acts as, its cap, and what it spent this month.
 function factsCard(a, providers, report) {
   const provider = providers.find((p) => p.name === a.provider);
   const key = !provider ? "–" : provider.broken ? h("span", { class: "fact-row-danger" }, "Its key is gone") : provider.secretName || "A secret you don't manage";
@@ -239,11 +259,13 @@ function factsCard(a, providers, report) {
   const month = report && report.agents.find((s) => s.agent.id === a.id);
   const spentNow = month ? micros(month.spent) : 0;
   const thisMonth = usd(spentNow) + (month && month.tasks ? " over " + plural(month.tasks, "task") : " · no tasks");
-  return card("Agent", "", h("div", { class: "agent-facts" },
-    fact("Model", a.model || "Not set", !!a.model), fact("Provider key", key, !!provider && !provider.broken && !!provider.secretName),
+  const declared = a.repositoryId ? [fact("Image", a.image || "The installation's", !!a.image),
+    fact("Permissions", a.permissions.length ? a.permissions.join(", ") : "None", a.permissions.length > 0)] : [];
+  return card("Agent", "", h("div", { class: "agent-facts" }, a.repositoryId ? fact("Repository", a.repositorySlug, true) : "",
+    fact("Model", a.model || (a.retiredAt ? "None while retired" : "Not set"), !!a.model), ...declared, fact("Provider key", key, !!provider && !provider.broken && !!provider.secretName),
     fact("Secrets", secrets.length ? secrets.join(", ") : "None", secrets.length > 0), fact("Instructions", h("span", { class: "fact-row-clamp" }, a.instructions || "None")),
     fact("Acts as", "Whoever assigned the task; never more than them."),
-    fact("Spend cap", a.cap ? dollars(a.cap) + " a task" : a.model ? "None" : "None until a model is set"),
+    fact("Spend cap", a.cap ? dollars(a.cap) + " a task" : a.model || a.retiredAt ? "None" : "None until a model is set"),
     fact("This month", report ? thisMonth : "–")));
 }
 
@@ -258,14 +280,22 @@ function activityCard(a, tasks) {
 const repoSelect = (repos, none) => h("select", {}, h("option", { value: "" }, none), repos.map((r) => h("option", { value: r.id }, r.name)));
 
 // assignTask asks for a task for one of list, the agents that may take one, picked when given, perhaps in a repository
-// the viewer reads and on one of its branches, and assigns it; done follows, or else the agent's page opens. The task
-// does no more than both the agent and the viewer may.
+// the viewer reads, in its own for a repository's agent, and on one of its branches, and assigns it; done follows, or
+// else the agent's page opens. The task does no more than both the agent and the viewer may.
 export async function assignTask(org, list, picked, done) {
   const repos = await api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories, () => []);
   const agent = h("select", { required: true }, list.map((a) => h("option", { value: a.id, selected: picked && a.id === picked.id }, a.name)));
   const title = input({ required: true, maxlength: 200, placeholder: "Write the release notes for 1.4" });
   const instructions = textarea({ maxlength: 20000, rows: 5, placeholder: "What to do, in Markdown." });
-  const repo = repoSelect(repos, "No repository");
+  const repo = h("select", {});
+  // The repositories offered are those the agent picked works in: its own alone for a repository's agent.
+  const where = () => {
+    const a = list.find((x) => x.id === agent.value);
+    repo.replaceChildren(...(a && a.repositoryId ? repos.filter((r) => r.id === a.repositoryId).map((r) => h("option", { value: r.id }, r.name))
+      : repoSelect(repos, "No repository").children));
+  };
+  agent.addEventListener("change", where);
+  where();
   const branch = input({ placeholder: "main" });
   openDialog({ title: picked ? "Give " + picked.name + " a task" : "Assign a task", action: "Assign",
     body: [picked ? "" : field("Agent", selectBox(agent)), field("Title", title), field("Instructions", markCode(instructions)),

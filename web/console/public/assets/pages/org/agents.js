@@ -58,7 +58,7 @@ export default function show({ org, main, can, sub, rest, head }) {
   return shown[1].default({ org, main, can, rest, actions: head.querySelector(".page-header-actions") });
 }
 
-// agentItems are the organization's agents as the sidebar lists them, each marked while one of its tasks runs, and
+// agentItems are the organization's agents as the sidebar lists them, but the retired, each marked while one of its tasks runs, and
 // the lists they came from, which the sidebar follows; it keeps their IDs too, for the conversation pane to tell an
 // agent's message from a person's.
 async function agentItems({ org }) {
@@ -67,7 +67,9 @@ async function agentItems({ org }) {
   const list = agents.data.agents, ids = new Set(running ? running.data.tasks.map((t) => t.agent.id) : []);
   setAgents(new Set(list.map((a) => a.id)));
   list.forEach((a) => names.set(a.id, a.name));
-  return { whole: true, count: list.length, items: list.map((a) => ({ ...agentItem(org, a), dot: ids.has(a.id) ? "ai" : null, dotLabel: ids.has(a.id) ? "Working" : null })),
+  // A retired agent keeps its avatar wherever it acted, but the sidebar lists the agents that work.
+  const working = list.filter((a) => !a.retiredAt);
+  return { whole: true, count: working.length, items: working.map((a) => ({ ...agentItem(org, a), dot: ids.has(a.id) ? "ai" : null, dotLabel: ids.has(a.id) ? "Working" : null })),
     follow: [[agentsPath, agents.tag], ...(running ? [[runningPath, running.tag]] : [])] };
 }
 

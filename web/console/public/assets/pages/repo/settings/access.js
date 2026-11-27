@@ -57,7 +57,8 @@ async function grantRole(org, path) {
     api("GET", path + "/roles").then((d) => d.roles),
     api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
     api("GET", "/orgs/" + org.slug + "/api-keys").then((d) => d.apiKeys),
-    api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
+    // A repository's agent holds no role but Secret reader, and only on its own repository; a retired one, none.
+    api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents.filter((a) => !a.retiredAt && (!a.repositorySlug || path.endsWith("/repos/" + a.repositorySlug)))),
   ]);
   const who = h("select", { name: "principalId", required: true },
     h("optgroup", { label: "Members" }, members.map((m) => h("option", { value: m.userId }, m.displayName))),

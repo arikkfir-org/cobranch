@@ -827,6 +827,7 @@ const (
 	PageViewPageOrganizationTasks          PageViewPage = "organization.tasks"
 	PageViewPageOrganizationUsage          PageViewPage = "organization.usage"
 	PageViewPageRepositoryAccess           PageViewPage = "repository.access"
+	PageViewPageRepositoryAgents           PageViewPage = "repository.agents"
 	PageViewPageRepositoryArtifacts        PageViewPage = "repository.artifacts"
 	PageViewPageRepositoryBranch           PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches         PageViewPage = "repository.branches"
@@ -885,6 +886,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganizationUsage:
 		return true
 	case PageViewPageRepositoryAccess:
+		return true
+	case PageViewPageRepositoryAgents:
 		return true
 	case PageViewPageRepositoryArtifacts:
 		return true

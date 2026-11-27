@@ -1,4 +1,4 @@
-import { taskPage } from "../../lib/agent.js";
+import { taskPage, worksIn } from "../../lib/agent.js";
 import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { issueSubject } from "../../lib/chat.js";
@@ -98,7 +98,7 @@ async function showNewIssue(org, main, can) {
   const assign = can("agents.assign");
   const assignee = h("select", { name: "assigneeId" }, h("option", { value: "" }, "Nobody yet"),
     members.map((m) => h("option", { value: m.userId }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
-    assign ? agents.map((a) => h("option", { value: a.id }, a.name + " · agent")) : null);
+    assign ? agents.filter((a) => !a.retiredAt).map((a) => h("option", { value: a.id }, a.name + (a.repositorySlug ? " · " + a.repositorySlug + "'s agent" : " · agent"))) : null);
   const named = input({ name: "labels", placeholder: labels.slice(0, 2).map((l) => l.name).join(", ") || "bug, docs", autocomplete: "off" });
   const create = h("button", { class: "btn btn-primary", type: "submit" }, "Create issue");
   main.replaceChildren(error.el, h("form", { class: "card new-issue", onsubmit: async (e) => {
@@ -275,7 +275,7 @@ function issueFacts({ org, issue, can, choices, save }) {
   };
   const { members, agents, repositories, labels } = choices;
   const held = issue.labels.map((l) => l.id);
-  const offered = agents.filter((a) => can("agents.assign") || a.id === issue.assignee?.id);
+  const offered = agents.filter((a) => (can("agents.assign") && worksIn(a, issue.repository?.id)) || a.id === issue.assignee?.id);
   return [
     menu("Status", issueStates[issue.state].word, (close) => Object.entries(issueStates).map(([s, st]) =>
       item(st.word, s === issue.state, () => { close(); save({ state: s }); }, icon(st.icon)))),
@@ -307,7 +307,7 @@ const created = (at) => Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 100
 // one picked, which takes it as a task.
 function assignToAgent({ issue, choices, save }) {
   const button = h("button", { class: "btn", type: "button", "aria-haspopup": "menu" }, icon("sparkles"), "Assign to an agent");
-  button.addEventListener("click", () => popover(button, "start", (close) => choices.agents.map((a) =>
+  button.addEventListener("click", () => popover(button, "start", (close) => choices.agents.filter((a) => worksIn(a, issue.repository?.id)).map((a) =>
     item(a.name, a.id === issue.assignee?.id, () => { close(); save({ assigneeId: a.id }); }, avatar(a.name, true)))));
   return button;
 }

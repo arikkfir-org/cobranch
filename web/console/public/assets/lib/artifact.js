@@ -216,7 +216,7 @@ function editDialog(org, a, v, refresh) {
 
 // people are the organization's members and agents, which Share offers, by name.
 const people = (org) => Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members, () => []),
-  api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents, () => [])])
+  api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents.filter((a) => !a.retiredAt), () => [])])
   .then(([members, agents]) => [...members.map((m) => ({ id: m.userId, name: m.displayName })), ...agents.map((g) => ({ id: g.id, name: g.name, agent: true }))]
     .sort((x, y) => x.name.localeCompare(y.name)));
 
