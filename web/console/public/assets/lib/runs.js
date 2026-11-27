@@ -166,17 +166,17 @@ async function pushCard(path, at, b, sha, can, fail) {
       : h("p", { class: "card-body card-note" }, h("span", {}, "No jobs ran on this push: nothing in ", h("code", {}, "/cobranch.yaml"), " names it.")));
 }
 
-// jobRow is a run in a push's card (Annotation row): its status, as its job's annotation says it; its job; what the
-// annotation found, or that it waits for a member; its job's avatar; how long it ran; and its page.
+// jobRow is a run in a push's card (Annotation row, Details off): its status, as its job's annotation says it; its job,
+// linking to its page; what the annotation found, or that it waits for a member; its job's avatar; and how long it ran.
 function jobRow(at, r, found) {
   const status = Object.entries(runStatuses).find(([, v]) => v.states.includes(r.state))[0];
   const s = annotationStatuses[status];
   const why = r.state === "waiting" ? "Waiting for a member to start it" : found || (r.reason ? capitalized(r.reason) : "");
   return h("li", { class: "annotation-row" },
     h("span", { class: "tone-" + s.tone }, icon(s.icon, runStates[r.state].word + (r.reason ? ": " + capitalized(r.reason) : ""))),
-    h("span", { class: "row-title" }, r.job.displayName), h("span", { class: "row-description", title: why || null }, why),
-    machineAvatar(r.job.displayName), h("span", { class: "row-aside", title: r.startedAt ? "Started " + whenExactly(r.startedAt) : null }, duration(r)),
-    h("a", { href: at.run(r.number), "data-nav": "", title: r.job.displayName + " #" + r.number }, "Details"));
+    h("a", { class: "row-title", href: at.run(r.number), "data-nav": "", title: r.job.displayName + " #" + r.number }, r.job.displayName),
+    h("span", { class: "row-description", title: why || null }, why),
+    machineAvatar(r.job.displayName), h("span", { class: "row-aside", title: r.startedAt ? "Started " + whenExactly(r.startedAt) : null }, duration(r)));
 }
 
 // manualRow is a job b's head starts by hand, in its card: its name, and, for a viewer holding jobs.run, Run, which
