@@ -268,7 +268,7 @@ plan.
 | App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | `.app-sidebar`, `.app-topbar` (`lib/shell.css`) |
 | App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
-| Annotation row | Status (as Badge/Annotation) | Name, description, duration; creator avatar nested | `.annotation-row` in a `.list` |
+| Annotation row | Status (as Badge/Annotation) | Name, description, duration, Details (off for a job's run, whose name links to its page); creator avatar nested | `.annotation-row` in a `.list`, a linked name `a.row-title` |
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
 | Chat message | Author: Person, Agent | Name, time, body, code reference | `.chat-message` (`lib/shell.css`) |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
@@ -361,7 +361,7 @@ Researcher waits for a task.
 | [Branch](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=18-1149) | Why it is blocked, merge requirements, commits, annotations, reviews; the branch chat in the pane |
 | [Branch · Dark](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=19-1864) | The same frame in the Dark mode, unchanged otherwise |
 | [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open, a resolved thread and a file marked Viewed, folded and checked off, beside it |
-| [Branch · Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14769) | Its pushes, newest first, each a card of its jobs' runs as Annotation rows, the head's with Re-run all, and a link that opens the earlier pushes |
+| [Branch · Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14769) | Its pushes, newest first, each a card of its jobs' runs as Annotation rows, each job's name linking to its run, the head's with Re-run all, and a link that opens the earlier pushes |
 | [Branch · Environment](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-14602) | Each environment it delivers to, a card: its health, how it stands and its URL; its cluster, namespace, renders and when it is torn down; its objects with their health, readiness and age; its deliveries of commits and teardowns; Open, Redeliver or Resume and Pause. Its failed, waiting, paused, tearing-down, degraded and no-environment states beside it |
 | [Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15120) | A repository's runs as a table: job, branch, commit, status, when, how long and who caused it, under a filter, Any job, Any branch, Any status and the count; empty, no-match and status menu states beside it |
 | [Run](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15661) | One run: its job, status and actions, what it ran and why, its steps beside the selected step's log, each line with its time, or its job's definition; running, failed, waiting, webhook, no-logs and not-found states beside it |
