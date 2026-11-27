@@ -5,7 +5,7 @@
 > from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-02 · [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Builds the [product’s
-agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Runs agents in the operator’s image · Built by
+agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Runs agents in their own images or the operator’s · Built by
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215), in eight pull requests; spend and caps by
 [ENG-257](https://linear.app/arikkfir/issue/ENG-257)
 
@@ -272,15 +272,17 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   harness reads it before every call. It acts as the agent, capped by the assigner, and only while its task hasn't
   ended: once the task ends, or its hour is up, it is refused, and maintenance sweeps it. `GET /v1/me/task` tells the
   harness which task it works, with its agent's standing instructions.
-- **The harness runs in the operator's image.** `agents.image` is any image with the tools the organization's agents
-  use, Cobranch's own by default: an init container copies the `cobranch` binary from Cobranch's image into an
+- **The harness runs in the agent's image.** An agent's own image, named on its settings page, or the installation's
+  `agents.image` without one, Cobranch's own by default: any image with `sh`, `git` and the tools the agent uses
+  ([organization and repository agents](repo-agents.md#the-image)). An init container copies the `cobranch` binary from Cobranch's image into an
   `emptyDir`, and the `harness` container runs `cobranch agent` from there, as user 65532 under Pod Security
   `restricted`, with `/workspace` and its home on `emptyDir`s, `agents.resources`, and in its environment the REST
   server's URL (`COBRANCH_REST_URL`), the Git server's (`COBRANCH_GIT_URL`), the token's file (`COBRANCH_TOKEN_FILE`),
   the agent's provider and model (`COBRANCH_MODEL_PROVIDER`, `COBRANCH_MODEL`), the model proxy's address
   (`COBRANCH_MODEL_URL`), the operator's limits (`COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT`,
   `COBRANCH_MODEL_MAX_TOKENS`), and the agent's secrets by their names. No tool's environment holds a `COBRANCH_`
-  variable. Both images are pulled with the installation's `imagePullSecrets`: the controller copies those Secrets from
+  variable. The pod pulls its images with the installation's `imagePullSecrets`, an image an agent names included,
+  since Kubernetes keeps pull secrets on the pod rather than on a container: the controller copies those Secrets from
   its own namespace into each job namespace as it prepares it, and deletes a copy the chart no longer names.
 - **The provider's key stays in the model proxy.** A sidecar in Cobranch's image, `cobranch model-proxy`, is the one
   container that mounts the key; it listens on `127.0.0.1:8090` and sends each of the harness's requests on to the
@@ -299,9 +301,9 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   answer; the quota may keep it waiting for room, as it does a run. A stop isn't a death: it counts towards none of the
   task's four deaths, so a task that stopped has more than four pods.
 
-**An agent pod: the harness in the operator’s image, and the key in a proxy beside it**
+**An agent pod: the harness in the agent’s image, and the key in a proxy beside it**
 
-![An agent pod: the harness in the operator’s image, and the key in a proxy beside it](agents/pod.svg)
+![An agent pod: the harness in the agent’s image, and the key in a proxy beside it](agents/pod.svg)
 
 The harness reads the token file before each call, so a renewed token is picked up without a restart. Its tools reach
 the proxy but never read the key. No Kubernetes token is mounted.
@@ -456,7 +458,7 @@ namespaces come with [jobs](jobs.md#the-chart).
 
 | Value | Default | What it sets |
 | --- | --- | --- |
-| `agents.image` | Cobranch's image, at the chart's version | The image the harness runs in, with the agents' tools |
+| `agents.image` | Cobranch's image, at the chart's version | The image the harness runs in, with the agents' tools, for an agent that names none |
 | `agents.resources` | `jobs.resources` | The harness's requests and memory limit |
 | `agents.timeout` | 24h | A task's longest life |
 | `agents.idle` | 30m | How long a waiting task keeps its pod |
@@ -531,7 +533,7 @@ land.
   [jobs](jobs.md#secrets)' secrets; pods, and the task token they hold, need its controller and namespaces.
 - **An operator upgrades** with nothing to do for chats, agents and tasks; agent pods need jobs' RBAC, which the
   operator already granted for job pods, and run in Cobranch's own image until the operator names one with their agents'
-  tools in `agents.image`.
+  tools in `agents.image`, or an organization names one for an agent.
 - **An organization adopts agents** by adding a provider's key as a secret, adding the provider, creating an agent and
   having an admin pick its model.
 
@@ -573,7 +575,7 @@ land.
 | A stopped task stays Waiting, and the next message someone else posts in its thread starts its next pod, which isn't counted as a death | The task never left its question; a reply wakes it at once, and stops don't count towards its four deaths | Proposed |
 | Asking is one tool call that waits, its question named by its key, rather than a turn that ends and an input that comes later | The transcript stays one conversation; a pod that starts again runs the call again and finds the answer | Proposed |
 | Agent tasks are the controller's queue beside runs, in the same namespaces, through the same secrets call | One runtime for jobs and agents | Proposed |
-| The provider's key stays in a model proxy beside the harness, in Cobranch's image; the harness runs in the operator's image, from the `cobranch` binary copied in | The tools never read the key; operators choose their agents' tools without building on Cobranch's image | Proposed |
+| The provider's key stays in a model proxy beside the harness, in Cobranch's image; the harness runs in the agent's image or the operator's, from the `cobranch` binary copied in | The tools never read the key; operators and organizations choose their agents' tools without building on Cobranch's image | Proposed |
 | A task's pods are numbered, its fourth death fails it, and the controller replaces only its newest pod | A pod that keeps dying stops costing; numbers tell a leftover from the one that runs | Proposed |
 | Task tokens are files the controller renews every half hour, each valid for an hour | The principals design's one-hour token for long tasks | Agreed |
 | Task tokens are a table of their own, hashed, not a kind of personal token or API key | They act for a task, not a person or a key, and end with it; slices' migrations don't contend for one constraint | Agreed |

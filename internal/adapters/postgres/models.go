@@ -186,6 +186,17 @@ func (s *AgentStore) SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID,
 	})
 }
 
+// SetImage names the image one of the organization's agents' tasks run in, or the installation's with an empty one,
+// for actor, at version or at any version for agents.AnyVersion, and answers it; agents.ErrChanged (agents.Store).
+func (s *AgentStore) SetImage(ctx context.Context, actor, orgID, id uuid.UUID, version int64, image string) (agents.Agent, error) {
+	return s.changeAgent(ctx, actor, orgID, id, "naming the agent's image", func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.SetAgentImage(ctx, queries.SetAgentImageParams{Image: image, ID: id, OrgID: orgID, Version: version}); err != nil {
+			return changed(err, fmt.Sprintf("naming agent %s's image", id))
+		}
+		return orgEvent(ctx, q, &orgID, actor, "agent.image_set", id, map[string]any{"image": image})
+	})
+}
+
 // changeAgent runs change on one of the organization's agents for actor under its lock, and answers the agent as it
 // left it.
 func (s *AgentStore) changeAgent(ctx context.Context, actor, orgID, id uuid.UUID, what string, change func(ctx context.Context, q *queries.Queries) error) (agents.Agent, error) {

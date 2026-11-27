@@ -47,6 +47,13 @@ UPDATE agents SET provider = sqlc.narg(provider), model = sqlc.narg(model), upda
 WHERE principal_id = @id AND org_id = @org_id AND (@version::bigint < 0 OR version = @version::bigint)
 RETURNING version, purpose;
 
+-- SetAgentImage names the image an agent's tasks run in, or the installation's with an empty one, when it is at
+-- version, or at any version when version is negative: none otherwise.
+-- name: SetAgentImage :one
+UPDATE agents SET image = @image, updated_at = now()
+WHERE principal_id = @id AND org_id = @org_id AND (@version::bigint < 0 OR version = @version::bigint)
+RETURNING version;
+
 -- SetAgentSecrets names the secrets an agent's tasks receive, when it is at version, or at any version when version
 -- is negative: none otherwise.
 -- name: SetAgentSecrets :one

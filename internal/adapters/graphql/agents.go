@@ -32,6 +32,7 @@ type Agents interface {
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
+	SetImage(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, image string, version int64) (agents.Agent, error)
 	Work(ctx context.Context, v agents.Viewer) (agents.Work, error)
 	Transcript(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, after, limit int) ([]agents.Entry, error)
 	Append(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, e agents.Entry) (agents.Entry, bool, error)
@@ -75,6 +76,7 @@ func agent(a agents.Agent) *Agent {
 	if a.Provider != "" {
 		out.Provider, out.Model = &a.Provider, &a.Model
 	}
+	out.Image = text(a.Image)
 	out.Cap = optionalUSD(a.Cap)
 	out.Secrets = make([]*AgentSecret, 0, len(a.Secrets))
 	for _, name := range slices.Sorted(maps.Keys(a.Secrets)) {

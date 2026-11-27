@@ -3,6 +3,7 @@ package agents_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -171,6 +172,41 @@ func TestSetModel(t *testing.T) {
 		}
 		if err == nil && (a.Provider != tt.wantProvider || a.Model != tt.wantModel) {
 			t.Errorf("%s: SetModel() = %q %q", tt.name, a.Provider, a.Model)
+		}
+	}
+}
+
+func TestSetImage(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	scout := f.agent(t, f.mel, "Scout")
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		viewer    agents.Viewer
+		image     string
+		version   int64
+		want      error
+		wantImage string
+	}{
+		{name: "as its creator, a member", viewer: f.mel, image: "python:3.14", version: 1, want: auth.ErrForbidden},
+		{name: "as an agent", viewer: f.bot, image: "python:3.14", version: 1, want: auth.ErrForbidden},
+		{name: "not a reference", viewer: f.stu, image: "Python 3.14", version: 1, want: invalid("agent.image_invalid")},
+		{name: "an upper-case path", viewer: f.stu, image: "ghcr.io/Acme/tools", version: 1, want: invalid("agent.image_invalid")},
+		{name: "too long", viewer: f.stu, image: "ghcr.io/acme/" + strings.Repeat("a", agents.MaxImage), version: 1, want: invalid("agent.image_invalid")},
+		{name: "as a steward", viewer: f.stu, image: " ghcr.io/acme/site-tools:1.4 ", version: 1, wantImage: "ghcr.io/acme/site-tools:1.4"},
+		{name: "from a stale version", viewer: f.stu, image: "python:3.14", version: 1, want: agents.ErrChanged},
+		{name: "a registry's port, pinned by digest", viewer: f.olive, version: agents.AnyVersion,
+			image: "localhost:5000/tools@sha256:" + strings.Repeat("ab", 32), wantImage: "localhost:5000/tools@sha256:" + strings.Repeat("ab", 32)},
+		{name: "the installation's again", viewer: f.olive, version: agents.AnyVersion},
+	}
+	for _, tt := range tests {
+		a, err := f.service.SetImage(ctx, tt.viewer, f.org, scout.ID, tt.image, tt.version)
+		if !is(err, tt.want) {
+			t.Fatalf("%s: SetImage() = %v, want %v", tt.name, err, tt.want)
+		}
+		if err == nil && a.Image != tt.wantImage {
+			t.Errorf("%s: SetImage() = %q, want %q", tt.name, a.Image, tt.wantImage)
 		}
 	}
 }

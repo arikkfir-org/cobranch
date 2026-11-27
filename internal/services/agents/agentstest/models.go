@@ -161,3 +161,13 @@ func (s *Store) SetSecrets(_ context.Context, actor, orgID, id uuid.UUID, versio
 		return nil
 	})
 }
+
+// SetImage names the image one of the organization's agents' tasks run in, at version or at any (agents.Store).
+func (s *Store) SetImage(_ context.Context, actor, orgID, id uuid.UUID, version int64, image string) (agents.Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.changeAgent(actor, orgID, id, version, "agent.image_set", func(a *agents.Agent) error {
+		a.Image = image
+		return nil
+	})
+}

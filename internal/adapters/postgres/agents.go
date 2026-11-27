@@ -79,7 +79,7 @@ func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (s
 func agent(a queries.Agent, creator *string) (agents.Agent, error) {
 	out := agents.Agent{ID: a.PrincipalID, OrgID: a.OrgID, Name: a.Name, Description: a.Description, Instructions: a.Instructions,
 		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version,
-		Secrets: map[string]uuid.UUID{}, Cap: usd(a.Cap)}
+		Image: a.Image, Secrets: map[string]uuid.UUID{}, Cap: usd(a.Cap)}
 	if a.CreatedBy != nil && creator != nil {
 		out.CreatedBy = &agents.Principal{ID: *a.CreatedBy, DisplayName: *creator}
 	}

@@ -107,6 +107,8 @@ type Agent struct {
 	// Provider and Model are the provider and the model its tasks run on; empty until an admin picks them.
 	Provider string
 	Model    string
+	// Image is the container image its tasks run in; empty for the installation's.
+	Image string
 	// Secrets are the secrets its tasks receive, each an environment variable named by its key from the secret its
 	// value names.
 	Secrets map[string]uuid.UUID

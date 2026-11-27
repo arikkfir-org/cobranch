@@ -44,9 +44,10 @@ func (p ModelProvider) Broken() bool {
 // NoVersion adds a provider only where the organization has none of that name (If-None-Match: *).
 const NoVersion int64 = 0
 
-// Limits of an agent's model and secrets.
+// Limits of an agent's model, image and secrets.
 const (
 	MaxModel   = 200
+	MaxImage   = 512
 	MaxSecrets = 50
 	MaxEnvName = 100
 )
@@ -56,6 +57,12 @@ var (
 	// ErrProviderInUse is a provider removed while agents run on it.
 	ErrProviderInUse = errors.New("agents run on this provider")
 )
+
+// imageReference is a container image's reference as registries take it: an optional registry host and port, a
+// lowercase path, and an optional tag and digest.
+var imageReference = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*(?::[0-9]+)?/)?` +
+	`[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*` +
+	`(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?$`)
 
 // envName is the name of an environment variable a secret goes in.
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -74,6 +81,17 @@ func ValidateModel(provider, model string) (string, string, error) {
 		return provider, model, invalid("model", "agent.model_invalid", "a model's name is 1 to 200 characters on one line")
 	}
 	return provider, model, nil
+}
+
+// ValidateImage normalizes the container image an agent's tasks run in, or refuses it: empty, for the installation's,
+// or a reference such as ghcr.io/acme/tools:1.4 or one pinned by digest, of at most 512 characters.
+func ValidateImage(image string) (string, error) {
+	image = strings.TrimSpace(image)
+	if image != "" && (len(image) > MaxImage || !imageReference.MatchString(image)) {
+		return image, invalid("image", "agent.image_invalid",
+			"an image is a reference such as ghcr.io/acme/tools:1.4, of at most 512 characters, or empty for the installation's")
+	}
+	return image, nil
 }
 
 // ValidateSecrets refuses an agent's secrets unless there are at most 50, each named as an environment variable the
@@ -208,6 +226,26 @@ func (s *Service) SetModel(ctx context.Context, v Viewer, orgID, id uuid.UUID, p
 	}
 	a, err := s.store.SetModel(ctx, v.ID, orgID, id, version, provider, model)
 	return a, failed(span, "picking the agent's model", err)
+}
+
+// SetImage names the container image the tasks of one of the organization's agents run in, or the installation's
+// with an empty one, at version or at any version for AnyVersion, and answers the agent. It takes
+// org.principals.manage, and a person, as picking its model does: the image is what its tasks may run.
+func (s *Service) SetImage(ctx context.Context, v Viewer, orgID, id uuid.UUID, image string, version int64) (Agent, error) {
+	ctx, span := tracer.Start(ctx, "agents.Service.SetImage", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
+	defer span.End()
+	if err := person(v, "names no image"); err != nil {
+		return Agent{}, failed(span, "naming the agent's image", err)
+	}
+	if _, err := s.require(ctx, v, orgID, orgs.PermPrincipalsManage); err != nil {
+		return Agent{}, failed(span, "naming the agent's image", err)
+	}
+	image, err := ValidateImage(image)
+	if err != nil {
+		return Agent{}, failed(span, "naming the agent's image", err)
+	}
+	a, err := s.store.SetImage(ctx, v.ID, orgID, id, version, image)
+	return a, failed(span, "naming the agent's image", err)
 }
 
 // SetSecrets names the secrets the tasks of one of the organization's agents receive, each an environment variable

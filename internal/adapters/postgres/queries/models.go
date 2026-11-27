@@ -27,6 +27,7 @@ type Agent struct {
 	Secrets      []byte
 	Purpose      *string
 	Cap          *int64
+	Image        string
 }
 
 type AgentTask struct {

@@ -36,6 +36,9 @@ func (w *Workspace) WithGit(g Git) *Workspace {
 // names no branch gets one of its own, which a clone of an earlier pod of the task may have pushed already; one that
 // works at a commit, such as a review, gets the clone at that commit, detached (harness.Checkout).
 func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clone, error) {
+	if err := fit(); err != nil {
+		return harness.Clone{}, err
+	}
 	if err := w.configure(ctx, work); err != nil {
 		return harness.Clone{}, err
 	}
@@ -73,6 +76,20 @@ func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clon
 	}
 	slog.InfoContext(ctx, "Cloned the task's repository", "repository", t.RepoSlug, "branch", branch, "commit", t.SHA)
 	return harness.Clone{Branch: branch, Commit: t.SHA, Fresh: true}, nil
+}
+
+// needed are the commands the harness runs in any task's workspace: the model's shell, and Git.
+var needed = []string{"sh", "git"}
+
+// fit checks that the image the harness runs in has the commands it runs, and answers a *harness.UnfitError naming
+// the first it lacks: every task in that image would fail the same way.
+func fit() error {
+	for _, name := range needed {
+		if _, err := exec.LookPath(name); err != nil {
+			return &harness.UnfitError{Reason: fmt.Sprintf("The agent's image has no %s on its PATH: an agent's image needs sh and git.", name)}
+		}
+	}
+	return nil
 }
 
 // own puts the clone on branch, the task's own: the Git server's, when an earlier pod of the task pushed it, or a new

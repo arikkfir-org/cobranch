@@ -126,6 +126,27 @@ func (r *mutationResolver) SetAgentSecrets(ctx context.Context, organizationID s
 	return agent(changed), nil
 }
 
+// SetAgentImage is the resolver for the setAgentImage field.
+func (r *mutationResolver) SetAgentImage(ctx context.Context, organizationID string, id string, image string, expectedVersion *int) (*Agent, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	version, err := agentVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	orgID, agentID, err := agentTarget(ctx, organizationID, id)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := r.Agents.SetImage(ctx, v.User, orgID, agentID, image, version)
+	if err != nil {
+		return nil, fail(ctx, err, "agent", "naming the agent's image")
+	}
+	return agent(changed), nil
+}
+
 // SetModelProvider is the resolver for the setModelProvider field.
 func (r *mutationResolver) SetModelProvider(ctx context.Context, organizationID string, provider string, secretID string, expectedVersion *int) (*ModelProvider, error) {
 	v, err := viewer(ctx)

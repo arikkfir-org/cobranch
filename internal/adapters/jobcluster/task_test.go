@@ -71,6 +71,43 @@ func TestStartTask(t *testing.T) {
 	}
 }
 
+func TestStartTaskImage(t *testing.T) {
+	for _, tc := range []struct {
+		name, image, wantImage string
+		wantPullSecrets        []corev1.LocalObjectReference
+	}{
+		{name: "the installation's image, with its pull secrets", wantImage: "agents:v1",
+			wantPullSecrets: []corev1.LocalObjectReference{{Name: "registry"}, {Name: "mirror"}}},
+		{name: "the agent's own image, the pod keeping the pull secrets Cobranch's containers need", image: "ghcr.io/acme/site-tools:1.4",
+			wantImage: "ghcr.io/acme/site-tools:1.4", wantPullSecrets: []corev1.LocalObjectReference{{Name: "registry"}, {Name: "mirror"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := fake.NewClientset()
+			l := taskLaunch(1)
+			l.Task.Image = tc.image
+			if err := New(client, taskConfig()).StartTask(ctx, l); err != nil {
+				t.Fatalf("StartTask() = %v", err)
+			}
+			pod, err := client.CoreV1().Pods(ns).Get(ctx, "task-"+taskID.String()+"-1", metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := pod.Spec.Containers[0].Image; got != tc.wantImage {
+				t.Errorf("harness image = %q, want %q", got, tc.wantImage)
+			}
+			for _, c := range pod.Spec.InitContainers {
+				if c.Image != "cobranch:v1" {
+					t.Errorf("%s image = %q, want Cobranch's own", c.Name, c.Image)
+				}
+			}
+			if !slices.Equal(pod.Spec.ImagePullSecrets, tc.wantPullSecrets) {
+				t.Errorf("image pull secrets = %v, want %v", pod.Spec.ImagePullSecrets, tc.wantPullSecrets)
+			}
+		})
+	}
+}
+
 // checkTaskContainers checks a task's pod's containers: the copy of the binary, the model proxy beside the harness, and
 // the harness in the agents' image, with Cobranch's variables and the task's from its Secret.
 func checkTaskContainers(t *testing.T, s corev1.PodSpec) {

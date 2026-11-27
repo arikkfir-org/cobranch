@@ -16,7 +16,8 @@ images:
     tag: ""
     pullPolicy: IfNotPresent
 # Secrets in the release's namespace that pull these images and agents.image: the chart's pods name them, and the
-# controller copies them into each job namespace, whose agents' pods name them too.
+# controller copies them into each job namespace, whose agents' pods name them too, and pull with them any image an
+# organization names for an agent: let them reach only images every organization may run.
 imagePullSecrets: []
 
 # Where you mount each workload, all under one parent domain: a host each, or paths on one host. Every workload serves
@@ -398,8 +399,9 @@ jobs:
 # Agents' tasks: each runs in a pod of its organization's job namespace, as runs do, with the job namespaces' egress,
 # quota and node placement. Without jobs.pods, a task fails as it starts.
 agents:
-  # The image the harness runs in, with the tools your agents use: Git, a shell, your languages' toolchains. Any image
-  # will do, since the pod copies the cobranch binary into it, and runs as user 65532. Empty: the cobranch image.
+  # The image the harness runs in, with the tools your agents use: Git, a shell, your languages' toolchains, for an agent
+  # whose organization names no image of its own. Any image with sh and git will do, since the pod copies the cobranch
+  # binary into it, and runs as user 65532. Empty: the cobranch image.
   image: ""
   # The harness's requests and memory limit. Empty: jobs.resources.
   resources: {}

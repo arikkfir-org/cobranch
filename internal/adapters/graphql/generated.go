@@ -96,6 +96,7 @@ type ComplexityRoot struct {
 		Description  func(childComplexity int) int
 		Grants       func(childComplexity int) int
 		ID           func(childComplexity int) int
+		Image        func(childComplexity int) int
 		Instructions func(childComplexity int) int
 		Model        func(childComplexity int) int
 		Name         func(childComplexity int) int
@@ -811,6 +812,7 @@ type ComplexityRoot struct {
 		RevokeSession             func(childComplexity int, id string) int
 		RotateAPIKey              func(childComplexity int, organizationID string, id string, input *SecretInput) int
 		RunJob                    func(childComplexity int, repositoryID string, branch string, job string) int
+		SetAgentImage             func(childComplexity int, organizationID string, id string, image string, expectedVersion *int) int
 		SetAgentModel             func(childComplexity int, organizationID string, id string, provider *string, model *string, expectedVersion *int) int
 		SetAgentSecrets           func(childComplexity int, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) int
 		SetAnnotation             func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
@@ -1369,6 +1371,7 @@ type MutationResolver interface {
 	DeleteAgent(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
 	SetAgentModel(ctx context.Context, organizationID string, id string, provider *string, model *string, expectedVersion *int) (*Agent, error)
 	SetAgentSecrets(ctx context.Context, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) (*Agent, error)
+	SetAgentImage(ctx context.Context, organizationID string, id string, image string, expectedVersion *int) (*Agent, error)
 	SetModelProvider(ctx context.Context, organizationID string, provider string, secretID string, expectedVersion *int) (*ModelProvider, error)
 	RemoveModelProvider(ctx context.Context, organizationID string, provider string, expectedVersion *int) (bool, error)
 	SetModel(ctx context.Context, organizationID string, provider string, model string, input ModelInput, expectedVersion *int) (*Model, error)
@@ -1775,6 +1778,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.ID(childComplexity), true
+	case "Agent.image":
+		if e.ComplexityRoot.Agent.Image == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.Image(childComplexity), true
 	case "Agent.instructions":
 		if e.ComplexityRoot.Agent.Instructions == nil {
 			break
@@ -5257,6 +5266,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RunJob(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["job"].(string)), true
+	case "Mutation.setAgentImage":
+		if e.ComplexityRoot.Mutation.SetAgentImage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setAgentImage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetAgentImage(childComplexity, args["organizationId"].(string), args["id"].(string), args["image"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.setAgentModel":
 		if e.ComplexityRoot.Mutation.SetAgentModel == nil {
 			break
@@ -8119,6 +8139,8 @@ type Agent {
   provider: String
   "The model it runs on, as its provider names it; null while it runs on none."
   model: String
+  "The container image its tasks run in; null while they run in the installation's."
+  image: String
   "The most a task of it may spend, in US dollars such as 2.00; null for none."
   cap: String
   "The secrets its tasks receive, by the environment variables they go in."
@@ -8346,6 +8368,8 @@ extend type Mutation {
   setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
   "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
   setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
+  "Names the container image an agent's tasks run in, such as ghcr.io/acme/tools:1.4, or the installation's with an empty one; takes org.principals.manage, and a person. The image needs sh and git, and is pulled with the installation's image pull secrets. One that isn't a reference is refused (BAD_USER_INPUT, agent.image_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  setAgentImage(organizationId: ID!, id: ID!, image: String!, expectedVersion: Int): Agent!
   "Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, or names another secret for the one it has, and answers it; takes org.manage. A provider the installation doesn't know is refused (NOT_FOUND, model_provider.not_found), and a secret that isn't the organization's own (BAD_USER_INPUT, model_provider.secret_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
   "Removes a provider from the organization, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model_provider.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
@@ -11041,6 +11065,8 @@ func (ec *executionContext) childFields_Agent(ctx context.Context, field graphql
 		return ec.fieldContext_Agent_provider(ctx, field)
 	case "model":
 		return ec.fieldContext_Agent_model(ctx, field)
+	case "image":
+		return ec.fieldContext_Agent_image(ctx, field)
 	case "cap":
 		return ec.fieldContext_Agent_cap(ctx, field)
 	case "secrets":
@@ -15463,6 +15489,44 @@ func (ec *executionContext) field_Mutation_runJob_args(ctx context.Context, rawA
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setAgentImage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "image",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["image"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setAgentModel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -18139,6 +18203,29 @@ func (ec *executionContext) _Agent_model(ctx context.Context, field graphql.Coll
 	)
 }
 func (ec *executionContext) fieldContext_Agent_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_image(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_image(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Image, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_image(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
 }
 
@@ -29388,6 +29475,50 @@ func (ec *executionContext) fieldContext_Mutation_setAgentSecrets(ctx context.Co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setAgentSecrets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setAgentImage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setAgentImage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetAgentImage(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["image"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Agent) graphql.Marshaler {
+			return ec.marshalNAgent2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAgent(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setAgentImage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Agent(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setAgentImage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -46121,6 +46252,11 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "image":
+			out.Values[i] = ec._Agent_image(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "cap":
 			out.Values[i] = ec._Agent_cap(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -50315,6 +50451,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setAgentSecrets":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setAgentSecrets(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setAgentImage":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setAgentImage(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

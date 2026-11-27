@@ -77,6 +77,9 @@ type Store interface {
 	// SetSecrets names the secrets one of the organization's agents' tasks receive, for actor, at version or at any
 	// version for AnyVersion, and answers it; ErrChanged.
 	SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID, version int64, named map[string]uuid.UUID) (Agent, error)
+	// SetImage names the image one of the organization's agents' tasks run in, or the installation's with an empty
+	// one, for actor, at version or at any version for AnyVersion, and answers it; ErrChanged.
+	SetImage(ctx context.Context, actor, orgID, id uuid.UUID, version int64, image string) (Agent, error)
 	// Models lists the organization's models by provider and name, each with the agents on it.
 	Models(ctx context.Context, orgID uuid.UUID) ([]Model, error)
 	// Model finds one of the organization's models, with the agents on it.

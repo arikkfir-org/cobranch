@@ -2761,6 +2761,47 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}/image:
+    put:
+      operationId: setAgentImage
+      summary: >-
+        Names the container image an agent's tasks run in, or the installation's with an empty one; takes
+        org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The
+        change names the agent's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentImage"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents/{agent}/secrets:
     put:
       operationId: setAgentSecrets
@@ -11062,6 +11103,9 @@ components:
         model:
           type: string
           description: The model it runs on, as its provider names it; absent while it runs on none.
+        image:
+          type: string
+          description: The container image its tasks run in; absent while they run in the installation's.
         cap:
           type: string
           description: The most a task of it may spend, in US dollars such as 2.00; absent for none.
@@ -11276,6 +11320,16 @@ components:
         model:
           type: string
           description: The model's name as the provider knows it, 1 to 200 characters on one line.
+    AgentImage:
+      type: object
+      description: The container image an agent's tasks run in.
+      required: [image]
+      properties:
+        image:
+          type: string
+          description: >-
+            A reference such as ghcr.io/acme/tools:1.4, or one pinned by digest, of at most 512 characters; empty for
+            the installation's image. It needs sh and git, and is pulled with the installation's image pull secrets.
     AgentSecrets:
       type: object
       description: The secrets an agent's tasks receive.

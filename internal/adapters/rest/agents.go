@@ -70,6 +70,7 @@ func agent(a agents.Agent) Agent {
 	if a.Provider != "" {
 		out.Provider, out.Model = &a.Provider, &a.Model
 	}
+	out.Image = optional(a.Image)
 	out.Cap = optionalUSD(a.Cap)
 	out.Secrets = make(map[string]uuid.UUID, len(a.Secrets))
 	maps.Copy(out.Secrets, a.Secrets)
