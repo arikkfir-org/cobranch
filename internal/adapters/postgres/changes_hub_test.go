@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/secrets"
@@ -171,6 +172,12 @@ func pageChanges() []settingsChange {
 		{name: "a repository's Git data grown", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
 			_, err := f.pool.Exec(ctx, "INSERT INTO packs (repo_id, org_id, name, upload, size, objects) VALUES ($1, $2, 'pack-1', $3, 10, 1)",
 				f.website.ID, f.acme.ID, uuid.New())
+			must(t, err)
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "an issue created", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			_, err := NewIssueStore(f.pool).Create(ctx, f.olivia, issues.Issue{ID: v7(), OrgID: f.acme.ID, Title: "Safari", State: issues.StateTodo,
+				CreatedBy: &issues.Principal{ID: f.olivia}, CreatedAt: now, UpdatedAt: now, Version: 1})
 			must(t, err)
 			return []uuid.UUID{f.acme.ID}
 		}},

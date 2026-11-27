@@ -296,3 +296,39 @@ func TestBranchLinksAPI(t *testing.T) {
 			}},
 	})
 }
+
+// issueLists are what Acme's issue lists and ACME-1's page read, which a read may wait on.
+var issueLists = []string{"/v1/orgs/acme/issues", "/v1/orgs/acme/issues?state=done&limit=1", "/v1/orgs/acme/issues/1",
+	"/v1/orgs/acme/issues/1/activity", "/v1/orgs/acme/issues/1/branches"}
+
+func TestIssueListsTagged(t *testing.T) {
+	for _, list := range issueLists {
+		t.Run(list, func(t *testing.T) {
+			stale := http.Header{"If-None-Match": {`"stale"`}}
+			wait := "&wait="
+			if !strings.Contains(list, "?") {
+				wait = "?wait="
+			}
+			runOrgCases(t, []orgCase{
+				{name: "tagged", viewer: withIssues(olivia), method: "GET", path: fixed(list), wantStatus: 200, wantTag: `"`},
+				{name: "still the list the caller holds", viewer: withIssues(olivia), method: "GET", path: fixed(list), wantStatus: 304, wantTag: `"`,
+					headerFor: held(olivia, fixed(list))},
+				{name: "a wait that sees no change", viewer: withIssues(olivia), method: "GET", path: fixed(list + wait + "1"), wantStatus: 304,
+					wantTag: `"`, headerFor: held(olivia, fixed(list))},
+				{name: "another list", viewer: withIssues(olivia), method: "GET", path: fixed(list + wait + "15"), header: stale, wantStatus: 200, wantTag: `"`},
+				{name: "a wait without a tag answers at once", viewer: withIssues(olivia), method: "GET", path: fixed(list + wait + "15"), wantStatus: 200},
+				{name: "a wait past 15 seconds", viewer: withIssues(olivia), method: "GET", path: fixed(list + wait + "16"), header: stale,
+					wantStatus: 400, wantCode: "wait.invalid"},
+				{name: "a wait as an outsider", viewer: withIssues(nia), method: "GET", path: fixed(list + wait + "1"), header: stale, wantStatus: 404,
+					wantCode: "organization.not_found"},
+			})
+		})
+	}
+}
+
+func TestIssueWaitGone(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "an issue there isn't", viewer: withIssues(olivia), method: "GET", path: fixed("/v1/orgs/acme/issues/9?wait=1"),
+			header: http.Header{"If-None-Match": {`"1-ACME"`}}, wantStatus: 404, wantCode: "issue.not_found"},
+	})
+}

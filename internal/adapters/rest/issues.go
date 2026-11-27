@@ -20,12 +20,16 @@ import (
 type Issues interface {
 	Labels
 	List(ctx context.Context, v issues.Viewer, orgID uuid.UUID, f issues.Filter) (issues.Page, error)
+	FollowList(ctx context.Context, v issues.Viewer, orgID uuid.UUID, f issues.Filter) (<-chan issues.Page, error)
 	Create(ctx context.Context, v issues.Viewer, orgID uuid.UUID, in issues.Input) (issues.Issue, error)
 	Get(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (issues.Issue, error)
+	FollowIssue(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (<-chan issues.Issue, error)
 	Update(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, p issues.Patch) (issues.Issue, error)
 	Delete(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, version int64) error
 	Activity(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.Event, error)
+	FollowActivity(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (<-chan []issues.Event, error)
 	Branches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.LinkedBranch, error)
+	FollowBranches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (<-chan []issues.LinkedBranch, error)
 	OfBranch(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) (*issues.Link, error)
 	Link(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string, number int) (issues.Link, error)
 	Unlink(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) error
@@ -112,13 +116,10 @@ func failIssue(err error) error {
 	return fail(err, "organization")
 }
 
-// ListIssues lists a page of the organization's issues, and links the next.
+// ListIssues lists a page of the organization's issues, and links the next, or 304 while the caller holds that page,
+// after waiting for it to change as wait asks.
 func (a api) ListIssues(ctx context.Context, req ListIssuesRequestObject) (ListIssuesResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	org, err := a.org(ctx, v, req.Org)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -126,18 +127,30 @@ func (a api) ListIssues(ctx context.Context, req ListIssuesRequestObject) (ListI
 	if err != nil {
 		return nil, err
 	}
-	page, err := a.issues.List(ctx, v, org.ID, f)
-	if err != nil {
-		return nil, failIssue(err)
-	}
-	out := ListIssues200JSONResponse{}
-	out.Body.Issues = mapAll(page.Issues, issueOf)
-	out.Body.Counts = IssueCounts{Open: page.Open, Closed: page.Closed}
-	if page.Next != "" {
-		link := `<?` + nextIssues(req.Params, page.Next).Encode() + `>; rel="next"`
-		out.Headers.Link = &link
-	}
-	return out, nil
+	return readList(ctx, waits, func(ctx context.Context) (issues.Page, error) {
+		page, err := a.issues.List(ctx, v, org.ID, f)
+		return page, failIssue(err)
+	}, func(ctx context.Context) (<-chan issues.Page, error) {
+		pages, err := a.issues.FollowList(ctx, v, org.ID, f)
+		return pages, failIssue(err)
+	}, func(page issues.Page) (ListIssuesResponseObject, bool, error) {
+		out := ListIssues200JSONResponse{}
+		out.Body.Issues = mapAll(page.Issues, issueOf)
+		out.Body.Counts = IssueCounts{Open: page.Open, Closed: page.Closed}
+		if page.Next != "" {
+			link := `<?` + nextIssues(req.Params, page.Next).Encode() + `>; rel="next"`
+			out.Headers.Link = &link
+		}
+		etag, err := bodyTag("issues", out.Body, out.Headers.Link)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches(req.Params.IfNoneMatch, etag) {
+			return ListIssues304Response{Headers: ListIssues304ResponseHeaders{ETag: etag}}, true, nil
+		}
+		out.Headers.ETag = etag
+		return out, false, nil
+	})
 }
 
 // issueFilter is the filter a list's parameters name, or 400.
@@ -252,25 +265,26 @@ func (a api) CreateIssue(ctx context.Context, req CreateIssueRequestObject) (Cre
 	return CreateIssue201JSONResponse{Body: issueOf(created), Headers: CreateIssue201ResponseHeaders{ETag: issueTag(created), Location: location}}, nil
 }
 
-// GetIssue answers one of the organization's issues, or 304 while the caller holds it.
+// GetIssue answers one of the organization's issues, or 304 while the caller holds it, after waiting for it to change
+// as wait asks.
 func (a api) GetIssue(ctx context.Context, req GetIssueRequestObject) (GetIssueResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	issue, err := a.issues.Get(ctx, v, org.ID, req.Number)
-	if err != nil {
-		return nil, failIssue(err)
-	}
-	tag := issueTag(issue)
-	if matches(req.Params.IfNoneMatch, tag) {
-		return GetIssue304Response{Headers: GetIssue304ResponseHeaders{ETag: tag}}, nil
-	}
-	return GetIssue200JSONResponse{Body: issueOf(issue), Headers: GetIssue200ResponseHeaders{ETag: tag}}, nil
+	return readList(ctx, waits, func(ctx context.Context) (issues.Issue, error) {
+		issue, err := a.issues.Get(ctx, v, org.ID, req.Number)
+		return issue, failIssue(err)
+	}, func(ctx context.Context) (<-chan issues.Issue, error) {
+		issue, err := a.issues.FollowIssue(ctx, v, org.ID, req.Number)
+		return issue, failIssue(err)
+	}, func(issue issues.Issue) (GetIssueResponseObject, bool, error) {
+		tag := issueTag(issue)
+		if matches(req.Params.IfNoneMatch, tag) {
+			return GetIssue304Response{Headers: GetIssue304ResponseHeaders{ETag: tag}}, true, nil
+		}
+		return GetIssue200JSONResponse{Body: issueOf(issue), Headers: GetIssue200ResponseHeaders{ETag: tag}}, false, nil
+	})
 }
 
 // UpdateIssue changes the fields the merge patch names.
@@ -349,21 +363,28 @@ func (a api) DeleteIssue(ctx context.Context, req DeleteIssueRequestObject) (Del
 	return DeleteIssue204Response{}, nil
 }
 
-// ListIssueActivity lists what happened to one of the organization's issues.
+// ListIssueActivity lists what happened to one of the organization's issues, or 304 while the caller holds that list,
+// after waiting for more to happen as wait asks.
 func (a api) ListIssueActivity(ctx context.Context, req ListIssueActivityRequestObject) (ListIssueActivityResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	events, err := a.issues.Activity(ctx, v, org.ID, req.Number)
-	if err != nil {
-		return nil, failIssue(err)
-	}
-	return ListIssueActivity200JSONResponse{Events: mapAll(events, issueEvent)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]issues.Event, error) {
+		events, err := a.issues.Activity(ctx, v, org.ID, req.Number)
+		return events, failIssue(err)
+	}, func(ctx context.Context) (<-chan []issues.Event, error) {
+		events, err := a.issues.FollowActivity(ctx, v, org.ID, req.Number)
+		return events, failIssue(err)
+	}, func(events []issues.Event) (ListIssueActivityResponseObject, bool, error) {
+		out := ListIssueActivity200JSONResponse{}
+		out.Body.Events = mapAll(events, issueEvent)
+		return listAnswer("issue activity", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListIssueActivityResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListIssueActivityResponseObject {
+				return ListIssueActivity304Response{Headers: ListIssueActivity304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 func issueEvent(e issues.Event) IssueEvent {
@@ -397,21 +418,28 @@ func issueChange(c issues.Change) IssueChange {
 	return out
 }
 
-// ListIssueBranches lists the branches linked to one of the organization's issues.
+// ListIssueBranches lists the branches linked to one of the organization's issues, or 304 while the caller holds that
+// list, after waiting for it to change as wait asks.
 func (a api) ListIssueBranches(ctx context.Context, req ListIssueBranchesRequestObject) (ListIssueBranchesResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	branches, err := a.issues.Branches(ctx, v, org.ID, req.Number)
-	if err != nil {
-		return nil, failIssue(err)
-	}
-	return ListIssueBranches200JSONResponse{Branches: mapAll(branches, issueBranch)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]issues.LinkedBranch, error) {
+		branches, err := a.issues.Branches(ctx, v, org.ID, req.Number)
+		return branches, failIssue(err)
+	}, func(ctx context.Context) (<-chan []issues.LinkedBranch, error) {
+		branches, err := a.issues.FollowBranches(ctx, v, org.ID, req.Number)
+		return branches, failIssue(err)
+	}, func(branches []issues.LinkedBranch) (ListIssueBranchesResponseObject, bool, error) {
+		out := ListIssueBranches200JSONResponse{}
+		out.Body.Branches = mapAll(branches, issueBranch)
+		return listAnswer("issue branches", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListIssueBranchesResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListIssueBranchesResponseObject {
+				return ListIssueBranches304Response{Headers: ListIssueBranches304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 func issueBranch(b issues.LinkedBranch) IssueBranch {
