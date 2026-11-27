@@ -5,6 +5,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"reflect"
 	"time"
@@ -21,6 +22,10 @@ type Notifier interface {
 
 // Poll is how often a follower reads again without a wake, for a change it missed.
 const Poll = time.Minute
+
+// ErrGone is what a read answers, wrapped with its own answer, once what it follows is gone or no longer the viewer's
+// to read: an issue deleted while its page shows. Its follower stops as for any failed read, without reporting one.
+var ErrGone = errors.New("what the read follows is gone")
 
 // Follow sends what read answers at once, then again each time it differs from what it sent last, until ctx ends or a
 // read fails, and then closes the channel. It reads again whenever n says a change named one of ids, and every poll
@@ -48,7 +53,7 @@ func Follow[T any](ctx context.Context, n Notifier, poll time.Duration, read fun
 }
 
 // follow sends to out what read answers each time wake receives or poll passes, while it differs from last, until ctx
-// ends or a read fails, which it logs unless ctx ended.
+// ends or a read fails, which it logs unless ctx ended or the read found what it follows gone.
 func follow[T any](ctx context.Context, wake <-chan struct{}, poll time.Duration, read func(context.Context) (T, error), last T, out chan<- T) {
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
@@ -61,7 +66,7 @@ func follow[T any](ctx context.Context, wake <-chan struct{}, poll time.Duration
 		}
 		next, err := read(ctx)
 		if err != nil {
-			if ctx.Err() == nil {
+			if ctx.Err() == nil && !errors.Is(err, ErrGone) {
 				slog.ErrorContext(ctx, "Following a read failed", "error", err)
 			}
 			return

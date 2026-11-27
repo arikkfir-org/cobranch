@@ -3,6 +3,7 @@ package live_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -63,6 +64,10 @@ func TestFollow(t *testing.T) {
 			wantValue: 3, wantSent: true},
 		{name: "a read that fails", poll: time.Hour, change: func(s *source, n *livetest.Notifier) { s.set(1, broken); n.Wake(watched) },
 			wantClosed: true},
+		{name: "a read that finds it gone", poll: time.Hour, change: func(s *source, n *livetest.Notifier) {
+			s.set(1, fmt.Errorf("%w: %w", live.ErrGone, broken))
+			n.Wake(watched)
+		}, wantClosed: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
