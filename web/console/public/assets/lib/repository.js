@@ -5,8 +5,9 @@ import { cloneMenu } from "./code.js";
 import { h } from "./dom.js";
 import { icon } from "./icons.js";
 import { frame, pageHeading } from "./layout.js";
+import { drawAgain, followLists } from "./live.js";
 import { crumbsOf, subjectOf, visibilities } from "./organization.js";
-import { go } from "./router.js";
+import { go, render } from "./router.js";
 import { remember } from "./sidebar.js";
 import { base, carried, config, setCarried } from "./state.js";
 
@@ -26,8 +27,10 @@ const repoSubject = (org, repo, orgCan) => privateSubject("repo:" + org.slug + "
 // which parts it shows. Its heading, true or a function of rest, says whether the repository's heading and tabs show
 // above it (a page about one branch, commit or run shows its own instead); its crumbs name it in the breadcrumbs after
 // the repository, and its subject the conversation the pane shows (lib/pane.js); its count(ctx), when it has one,
-// answers how many its tab holds, which the tab shows once it arrives. Any other route opens the repository's
-// branches, its first tab. Opening one of its pages puts the repository first in the sidebar's Repositories.
+// answers how many its tab holds, which the tab shows once it arrives. A page follows the lists it read with
+// ctx.follow(path, tag), and draws itself again, with the tabs' counts, once one changes or is gone (lib/live.js). Any
+// other route opens the repository's branches, its first tab. Opening one of its pages puts the repository first in
+// the sidebar's Repositories.
 export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, sub, rest) {
   let repo;
   try {
@@ -52,10 +55,18 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
   const at = repoLinks(org, repo);
   const ctx = { org, repo, path, at, rest, can, orgCan, root };
+  const counts = [];
   const tab = ([t, m]) => {
     const el = h("a", { class: "tab", href: root + (t ? "/" + t : ""), "data-nav": "", "aria-current": t === tabOf ? "page" : null }, m.nav.label);
-    // A count that fails to arrive leaves its tab without one.
-    if (m.count) Promise.resolve(m.count(ctx)).then((n) => { if (n) el.append(h("span", { class: "tab-count" }, String(n))); }, () => {});
+    // A count that fails to arrive leaves its tab as it was.
+    const count = () => Promise.resolve(m.count(ctx)).then((n) => {
+      el.querySelector(".tab-count")?.remove();
+      if (n) el.append(h("span", { class: "tab-count" }, String(n)));
+    }, () => {});
+    if (m.count) {
+      counts.push(count);
+      count();
+    }
     return el;
   };
   const visibility = visibilities[repo.visibility];
@@ -72,8 +83,32 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
     fail(carried);
     setCarried(null);
   }
-  const sections = await shown.default({ ...ctx, fail });
-  main.replaceChildren(error, ...sections);
+  const still = () => main.isConnected;
+  // draw draws the page's sections, then follows the lists they read; a page drawn again counts its tabs again too, and
+  // one whose repository is gone meanwhile shows the route anew, which says so. A list the page follows once drawn (its
+  // filter typed, which reads its first page anew) takes the place of the one it followed at that path, whatever its
+  // query, and the page follows them anew; one a page drawn since follows is no longer its own, and is dropped.
+  let drawing = 0;
+  const draw = async (again) => {
+    const mine = ++drawing;
+    const lists = new Map();
+    let drawn = false;
+    const followAll = () => followLists([...lists.values()], still,
+      () => drawAgain(() => draw(true).catch((err) => { if (err.status !== 404) throw err; render(); }), still), { gone: true });
+    const follow = (path, tag) => {
+      const at = path.split("?")[0];
+      if (!tag || mine !== drawing || (lists.get(at)?.[0] === path && lists.get(at)[1] === tag)) return;
+      lists.set(at, [path, tag]);
+      if (drawn) followAll();
+    };
+    const sections = await shown.default({ ...ctx, fail, follow });
+    if (!still() || mine !== drawing) return;
+    main.replaceChildren(error, ...sections);
+    if (again) counts.forEach((count) => count());
+    drawn = true;
+    if (lists.size) followAll();
+  };
+  await draw(false);
 }
 
 // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first

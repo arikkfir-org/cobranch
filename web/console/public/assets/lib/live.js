@@ -98,12 +98,24 @@ export async function followLists(lists, still, changed, options = {}) {
   if (await watchLists(lists, still, stop.signal, options) && still()) changed();
 }
 
-// drawAgain draws a page again with draw once a list it follows changed, keeping what the viewer typed in its filter;
-// a draw that fails leaves the page as it was and is tried again a second later, then longer, while still answers
-// true.
+// writing reports whether the viewer is in the middle of something a draw would lose: a dialog or a menu open, or the
+// focus in one of the page's fields that takes text other than its filter.
+function writing() {
+  if (document.querySelector("dialog[open], .app-popover")) return true;
+  const el = document.activeElement;
+  if (!el || !el.closest("main.page")) return false;
+  return el.isContentEditable || el.tagName === "TEXTAREA" || el.tagName === "SELECT" ||
+    (el.tagName === "INPUT" && !["search", "checkbox", "radio", "button", "submit", "reset"].includes(el.type));
+}
+
+// drawAgain draws a page again with draw once a list it follows changed, keeping what the viewer typed in its filter,
+// once the viewer is no longer writing in it (writing); a draw that fails leaves the page as it was and is tried again
+// a second later, then longer, while still answers true.
 export async function drawAgain(draw, still) {
   let delay = 1000;
   while (still()) {
+    while (writing() && still()) await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!still()) return;
     try {
       await keepingFilter(draw);
       return;

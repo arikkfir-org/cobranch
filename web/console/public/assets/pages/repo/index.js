@@ -3,28 +3,34 @@ import { branchBadge, checkShort, processingWhat } from "../../lib/branches.js";
 import { h } from "../../lib/dom.js";
 import { fromNow, plural, shortSha } from "../../lib/format.js";
 import { authorAvatar, icon } from "../../lib/icons.js";
+import { readTagged } from "../../lib/live.js";
 import { config, me } from "../../lib/state.js";
 
 export const nav = { label: "Branches", order: 0 };
 export const view = "repository.branches";
 // count is how many branches the repository has besides main, each a request to merge into it.
-export const count = ({ path }) => listBranches(path).then((branches) => branches.filter((b) => b.status).length);
+export const count = ({ path }) => listBranches(path).then(({ branches }) => branches.filter((b) => b.status).length);
 export default (ctx) => repositoryBranches(ctx);
 
-// listBranches reads the repository's branches at path, once for a page and its tab's count.
+// listBranches reads the repository's branches at path, and their ETag, once for a page and its tab's count: the one
+// that reads second within two seconds takes what the first read, and leaves nothing to take after it, so that a page
+// drawn again reads them afresh.
 let listed = null;
 function listBranches(path) {
-  if (!listed || listed.path !== path || Date.now() - listed.at > 2000) listed = { path, at: Date.now(), branches: api("GET", path + "/branches").then((d) => d.branches) };
-  return listed.branches;
+  const taken = listed && listed.path === path && Date.now() - listed.at <= 2000 ? listed.read : null;
+  listed = taken ? null : { path, at: Date.now(), read: readTagged(path + "/branches").then(({ data, tag }) => ({ branches: data.branches, tag })) };
+  return taken || listed.read;
 }
 
 // repositoryBranches is the repository's first tab, as the Repository screen draws it: its branches, filtered by
 // name and by what they are, main above the rest, and beside them what a merge into main needs and the environments
-// branches deliver to. A repository nothing was pushed to says how to push its first commit.
+// branches deliver to. A repository nothing was pushed to says how to push its first commit. It follows the branches,
+// which it draws in the API's order, as they change.
 export async function repositoryBranches(ctx) {
-  const { path, at, root } = ctx;
-  const [branches, environments] = await Promise.all([listBranches(path),
+  const { path, at, root, follow } = ctx;
+  const [{ branches, tag }, environments] = await Promise.all([listBranches(path),
     api("GET", path + "/environments").then((d) => d.environments, () => [])]);
+  follow(path + "/branches", tag);
   if (!branches.length) return [h("section", { class: "card empty-centred" }, h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon("git-branch")),
     h("h2", { class: "empty-title" }, "No branches yet"),
     h("p", { class: "empty-description" }, "Nothing has been pushed to this repository. Clone it and push main: every other branch is then a request to merge into it.")))];

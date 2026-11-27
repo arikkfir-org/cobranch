@@ -1172,6 +1172,9 @@ type ListReviewsParams struct {
 	// Limit How many reviews the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -1620,7 +1623,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
 	GetBranchDiff(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
 	ListReviews(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2375,7 +2378,7 @@ func (c *Client) GetBranchDiff(ctx context.Context, org Org, repo Repo, branchNa
 	return c.Client.Do(req)
 }
 
-// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 //
 // Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
 func (c *Client) ListReviews(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4535,6 +4538,18 @@ func NewListReviewsRequest(server string, org Org, repo Repo, sha SHA, params *L
 
 		}
 
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5655,7 +5670,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
 	GetBranchDiffWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*GetBranchDiffResponse, error)
 
-	// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9823,7 +9838,7 @@ func (c *ClientWithResponses) GetBranchDiffWithResponse(ctx context.Context, org
 	return ParseGetBranchDiffResponse(rsp)
 }
 
-// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 //
 // Returns a wrapper object for the known response body format(s).
 //

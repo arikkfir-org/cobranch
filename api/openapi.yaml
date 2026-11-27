@@ -5098,13 +5098,18 @@ paths:
   /orgs/{org}/repos/{repo}/branches:
     get:
       operationId: listBranches
-      summary: The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+      summary: The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The branches.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -5115,6 +5120,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Branch"
+        "304":
+          description: The branches are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -5124,18 +5136,30 @@ paths:
   /orgs/{org}/repos/{repo}/branches/{branch}:
     get:
       operationId: getBranch
-      summary: One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+      summary: One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. Its ETag starts with its head, so a deletion may name it in If-Match. With If-None-Match and wait, it waits up to wait seconds for the branch to change before it answers 304, so a client follows the branch by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The branch.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Branch"
+        "304":
+          description: The branch is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -6225,7 +6249,8 @@ paths:
         free), it reads the Git server (an installation without one answers 503) and leaves out any commit
         no push recorded. A path's history follows every parent and holds the commits that changed what is there, as
         git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the
-        whole history.
+        whole history. With If-None-Match and wait, it waits up to wait seconds for the page to change, a push to the
+        branch, before it answers 304, so a client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6282,6 +6307,7 @@ paths:
             maximum: 100
             default: 30
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's commits, nearest first, without their pushes.
@@ -6354,14 +6380,19 @@ paths:
   /orgs/{org}/repos/{repo}/commits/{sha}/annotations:
     get:
       operationId: listAnnotations
-      summary: The annotations principals set on one of the repository's commits, by name; takes repo.read.
+      summary: The annotations principals set on one of the repository's commits, by name; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The annotations.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -6372,6 +6403,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Annotation"
+        "304":
+          description: The annotations are still those If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -6488,7 +6524,7 @@ paths:
   /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
     get:
       operationId: listReviews
-      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6507,6 +6543,7 @@ paths:
             maximum: 100
             default: 30
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's reviews, in the order they were submitted.
@@ -6620,7 +6657,8 @@ paths:
       operationId: listRuns
       summary: >-
         A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them
-        all. Takes repo.read.
+        all. Takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it
+        answers 304, so a client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6670,10 +6708,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's runs, newest first.
           headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -6691,6 +6733,11 @@ paths:
                   total:
                     type: integer
                     description: How many runs the filters keep, on every page; on the first page alone.
+        "304":
+          description: The page is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -7772,7 +7819,7 @@ components:
     ifMatchBranch:
       name: If-Match
       in: header
-      description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
+      description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", or the ETag a read of the branch answered, which starts with it, which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
       schema:
         type: string
     ifMatchViewed:

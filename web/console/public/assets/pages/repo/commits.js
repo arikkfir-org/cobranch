@@ -7,7 +7,7 @@ import { plural, shortSha } from "../../lib/format.js";
 import { commitListRow } from "../../lib/history.js";
 import { icon } from "../../lib/icons.js";
 import { go } from "../../lib/router.js";
-import { base } from "../../lib/state.js";
+import { base, follows } from "../../lib/state.js";
 
 export const under = "";
 export const crumbs = () => [{ label: "Commits" }];
@@ -16,7 +16,7 @@ export const subject = ({ org, repo, path, at, rest, can }) => {
   const ref = rest.join("/") || "main";
   return api("GET", path + "/branches/" + encodeURIComponent(ref)).then(() => branchSubject(org, repo, path, at, ref, can), () => null);
 };
-export default ({ path, at, rest, fail }) => repositoryHistory(path, at, rest.join("/") || "main", fail);
+export default ({ path, at, rest, fail, follow }) => repositoryHistory(path, at, rest.join("/") || "main", fail, follow);
 
 // repositoryHistory is the history of a branch, a tag or a commit, as the Commits screen draws it: under the ref
 // picker, Every parent or First parent, a filter of the commits' messages and how many there are, the commits
@@ -24,8 +24,9 @@ export default ({ path, at, rest, fail }) => repositoryHistory(path, at, rest.jo
 // parents, the graph is one line, and an installation without a Git server follows first parents alone. Filtered
 // (?q=), the commits that remain draw no graph: their lines would join commits that aren't each other's parents. With
 // a path (?path=), it is the commits that changed what is there, through every parent, which takes the Git server,
-// without the graph too.
-async function repositoryHistory(path, at, ref, fail) {
+// without the graph too. It follows its first page with follow(path, tag), until the viewer reads older commits, which
+// a page drawn again would drop.
+async function repositoryHistory(path, at, ref, fail, follow) {
   const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
   if (!branches.length) return [h("section", { class: "card empty-centred" }, empty("git-commit-horizontal", "No commits yet", ["Push ", h("code", {}, "main"), " to start its history."]))];
   const params = new URLSearchParams(location.search);
@@ -75,13 +76,14 @@ async function repositoryHistory(path, at, ref, fail) {
     shown += commits.length;
   };
   const start = () => path + "/commits?" + new URLSearchParams({ ref, parents: first ? "first" : "all", ...(file ? { path: file } : {}), ...(query ? { q: query } : {}) });
-  // load adds the page at from, unless the history was drawn afresh meanwhile.
+  // load adds the page at from, unless the history was drawn afresh meanwhile, and follows the first.
   const load = async (from) => {
     const drawing = generation;
     older.disabled = true;
     try {
       const page = await apiPage(from);
       if (drawing !== generation) return;
+      if (!shown) follow(from, page.tag);
       add(page.data.commits);
       next = page.next;
       older.hidden = !next;
@@ -90,7 +92,10 @@ async function repositoryHistory(path, at, ref, fail) {
       older.disabled = false;
     }
   };
-  older.onclick = () => load(next).catch(fail);
+  older.onclick = () => {
+    follows(null);
+    load(next).catch(fail);
+  };
 
   // show draws the history from its first page, saying why when there is none, unless it was drawn afresh meanwhile.
   const show = async () => {

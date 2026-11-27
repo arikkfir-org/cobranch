@@ -4,6 +4,7 @@ import { h } from "./dom.js";
 import { capitalized, plural, shortSha, since, whenExactly } from "./format.js";
 import { actorAvatar, icon, machineAvatar } from "./icons.js";
 import { go, render } from "./router.js";
+import { follows } from "./state.js";
 
 // The run states, drawn as the annotation statuses are.
 export const runStates = {
@@ -74,15 +75,20 @@ export function runsTable(path, at, fail) {
 // card leads even before any job ran there, with the jobs it starts by hand and, once each of its runs ended, Re-run
 // all; the two newest pushes show, N earlier pushes opens the rest of those the branch's latest hundred runs name, and
 // Older pushes those the hundred before name, as long as there are more. A request that fails says so and draws none.
-export async function branchJobs(path, at, b, can, fail) {
+// It follows the runs it read with follow(path, tag), until the viewer opens earlier pushes, which a page drawn again
+// would close.
+export async function branchJobs(path, at, b, can, fail, follow) {
   try {
-    const page = await apiPage(path + "/runs?" + new URLSearchParams({ branch: b.name, limit: "100" }));
+    const runs = path + "/runs?" + new URLSearchParams({ branch: b.name, limit: "100" });
+    const page = await apiPage(runs);
+    follow(runs, page.tag);
     if (!page.data.runs.length && !(b.manualJobs || []).length) {
       return [noRuns("play", "No runs on this branch", ["Jobs run when a push to this branch matches what they name under ", h("code", {}, "on"), ". Manual jobs appear here with a Run button."])];
     }
     const pushes = [b.head, ...pushesIn(page.data.runs, new Set([b.head]))];
     const seen = new Set(pushes);
     const cards = (shas) => Promise.all(shas.map((sha) => pushCard(path, at, b, sha, can, fail)));
+    const looking = (open) => () => { follows(null); return open(); };
     // older answers the cards of the pushes the runs from next on name first, and the line that opens those before.
     const older = async (next) => {
       for (let from = next; from;) {
@@ -92,15 +98,16 @@ export async function branchJobs(path, at, b, can, fail) {
           const shown = await cards(shas);
           // Only pushes shown are seen, so that a card that fails to load is read again when the line is retried.
           for (const sha of shas) seen.add(sha);
-          return [...shown, ...(p.next ? [earlierLine("Older pushes", () => older(p.next), fail)] : [])];
+          return [...shown, ...(p.next ? [earlierLine("Older pushes", looking(() => older(p.next)), fail)] : [])];
         }
         from = p.next;
       }
       return [];
     };
     const earlier = pushes.slice(2);
-    const line = earlier.length ? earlierLine(earlier.length + " earlier push" + (earlier.length === 1 ? "" : "es"), async () => [...await cards(earlier), ...(page.next ? [earlierLine("Older pushes", () => older(page.next), fail)] : [])], fail)
-      : page.next ? earlierLine("Older pushes", () => older(page.next), fail) : null;
+    const line = earlier.length ? earlierLine(earlier.length + " earlier push" + (earlier.length === 1 ? "" : "es"),
+      looking(async () => [...await cards(earlier), ...(page.next ? [earlierLine("Older pushes", () => older(page.next), fail)] : [])]), fail)
+      : page.next ? earlierLine("Older pushes", looking(() => older(page.next)), fail) : null;
     return [...await cards(pushes.slice(0, 2)), line].filter(Boolean);
   } catch (err) {
     fail(err);

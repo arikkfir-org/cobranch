@@ -4,6 +4,7 @@ import { diffView } from "../../lib/diff.js";
 import { h } from "../../lib/dom.js";
 import { fromNow, plural, shortSha, whenExactly } from "../../lib/format.js";
 import { authorAvatar, icon } from "../../lib/icons.js";
+import { readTagged } from "../../lib/live.js";
 import { popover } from "../../lib/menu.js";
 import { commitReviews } from "../../lib/reviews.js";
 import { render } from "../../lib/router.js";
@@ -12,15 +13,20 @@ import { me } from "../../lib/state.js";
 export const under = "";
 export const accepts = (rest) => rest.length === 1;
 export const crumbs = ({ rest }) => [{ label: shortSha(rest[0]) }];
-export default ({ path, at, rest, can, fail }) => repositoryCommit(path, at, rest[0], can, fail);
+export default ({ path, at, rest, can, fail, follow }) => repositoryCommit(path, at, rest[0], can, fail, follow);
 
 // repositoryCommit is a commit's page, as the Commit screen draws it: its subject beside Browse files and its SHA,
 // its message's body, who wrote, committed and pushed it, onto which branches, and its parents, the annotations
 // principals set on it and its jobs, then its changes, and the reviews of it, which a reviewer submits on its branch.
-async function repositoryCommit(path, at, sha, can, fail) {
+// It follows its annotations and its reviews with follow(path, tag).
+async function repositoryCommit(path, at, sha, can, fail, follow) {
+  const commit = path + "/commits/" + encodeURIComponent(sha);
   let c;
   try {
-    c = await api("GET", path + "/commits/" + encodeURIComponent(sha));
+    const [read, annotations, reviews] = await Promise.all([api("GET", commit), readTagged(commit + "/annotations"), readTagged(commit + "/reviews")]);
+    c = read;
+    follow(commit + "/annotations", annotations.tag);
+    follow(commit + "/reviews", reviews.tag);
   } catch (err) {
     if (err.status !== 404 && err.status !== 400) throw err;
     return [h("section", { class: "card empty-centred" }, h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon("git-commit-horizontal")),
