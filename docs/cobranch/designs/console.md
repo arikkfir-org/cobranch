@@ -6,12 +6,12 @@
 
 **Status**: Proposed 2026-11-05 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252) · [ENG-255](https://linear.app/arikkfir/issue/ENG-255) ·
-[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · Restructures the Console of [the
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · [ENG-282](https://linear.app/arikkfir/issue/ENG-282) · Restructures the Console of [the
 architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
 Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
 [ENG-255](https://linear.app/arikkfir/issue/ENG-255), a repository’s tabs by
-[ENG-258](https://linear.app/arikkfir/issue/ENG-258)
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258), its live pages by [ENG-282](https://linear.app/arikkfir/issue/ENG-282) and the slices after it
 
 The Console was one 3,700-line index.html: its styles, router and every page in one file, which every slice that touched
 a page changed, so their pull requests conflicted and fell out of the merge queue. It becomes a shell and native ES
@@ -225,6 +225,59 @@ insert between the same two lines.
 - **Page views' names are the API's to accept:** the REST API counts only the names `api/openapi.yaml` lists
   ([monitoring](monitoring.md)), so a page that reports its own name adds it there.
 
+## Live pages
+
+**A page follows the lists it shows, and draws itself again once one changes, here or elsewhere**
+
+```mermaid
+sequenceDiagram
+    participant Page as Console page
+    participant REST as REST server
+    participant PG as PostgreSQL
+    Page->>REST: GET each list it shows
+    REST-->>Page: 200, each list and its ETag
+    Page->>REST: each again, ?wait=15, If-None-Match: its ETag
+    REST->>REST: watch the organization on its LISTEN cobranch_changes, then read the list
+    Note over PG: elsewhere: another member, an agent or the API changes a row the list shows
+    PG-->>REST: NOTIFY naming the row's organization
+    REST->>PG: read the list again
+    REST-->>Page: 200, the new list and its ETag (or 304 after 15 s without a change)
+    Page->>Page: draw again, keeping the filter, then follow anew
+```
+
+The project [The Console shows changes as they happen](https://linear.app/arikkfir/project/the-console-shows-changes-as-they-happen-7d571b3040c9)
+makes every page live, a group of pages a slice. The organization switcher was first
+([live organization lists](sign-in-and-organizations.md#live-organization-lists)), then Settings · Models
+([live settings](agents.md#live-settings)), whose pieces every page reuses:
+
+- **One channel.** Triggers notify `cobranch_changes` with the IDs a row belongs to as its transaction commits:
+  `notify_changes(columns...)` names the columns that hold them, the organization's (`org_id`) for every table so far;
+  a grant names the organization of what it is on, and a repository grant the repository too. A slice adds its tables'
+  triggers in its own migration. Every REST server listens once, and wakes the requests that follow those IDs.
+- **A list waits on its ETag.** A list a page follows carries a strong ETag and, with `If-None-Match` and `wait` (at
+  most 15 seconds), answers once it differs, or 304 (`rest/lists.go`: `readList`). Each ask reads the list first, so a
+  change no trigger names, a person's new display name, shows within one wait. Each read checks the viewer's
+  permission again, so a viewer who loses it stops following.
+- **A page follows with `followLists`** (`lib/live.js`): one follower a page, abandoned once the Console draws another
+  page or the page draws itself again; a tab out of sight stops asking until it shows. `keepingFilter` keeps what the
+  viewer typed in the page's filter, and its focus, across the draw.
+- **A draw never loses input.** A page whose editor is open with what the viewer may still change, Roles' editable role
+  and Agents' editor, doesn't follow until it closes; Settings · API keys keeps a secret just made on screen across a
+  draw.
+
+| Page | Follows | Woken by changes to |
+| --- | --- | --- |
+| Settings · Models | Model providers, models | `model_providers`, `models`, `agents`, `secrets` |
+| Settings · Agents | Agents | `agents`, `grants` |
+| Settings · Members | Members; invitations and requests to join, for a viewer who manages members | `memberships`, `grants`, `invitations`, `join_requests` |
+| Settings · Roles | Roles, with how many hold each | `roles`, `grants` |
+| Settings · API keys | API keys, with their roles and secrets | `principals`, `grants`, `credentials` |
+| Settings · Secrets | The organization's secrets | `secrets` |
+
+Settings · Secrets reads who may read each secret with a read per secret, which it doesn't follow: a grant on one secret
+alone shows at the page's next draw. Settings · Usage counts repositories and their Git data, which follow with the
+organization's repositories ([ENG-285](https://linear.app/arikkfir/issue/ENG-285)).
+
 ## Security and failure modes
 
 | Risk | What happens |
@@ -239,6 +292,8 @@ insert between the same two lines.
 | A failed load's console | Every preload of a release that isn't there logs its 404, about sixty lines, before the shell loads again |
 | A page's subject fails to arrive | The pane shows the organization's or the repository's conversation instead |
 | A browser without storage | The sections show their own newest items instead of those the viewer opened last; the pane starts closed |
+| Many open pages that follow | Each list a page shows holds one request at a time, for at most 15 seconds, and a server one listening connection whatever the number; a notification wakes only the requests that follow its IDs, and each reads its list once and answers nothing when it didn't change |
+| A notification lost while a server's listener reconnects | The next ask reads the list first, and answers the change then |
 | A Content Security Policy | None today, and none added. Modules and stylesheets are files of the Console's own origin, so a policy of `script-src 'self'` would need only the shell's bootstrap allowed by its hash; the JSON Caddy writes in is data (`application/json`), not a script, and its values are escaped as JSON escapes `<`, `>` and `&` |
 
 ## Rollout

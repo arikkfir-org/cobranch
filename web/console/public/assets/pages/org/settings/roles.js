@@ -4,6 +4,7 @@ import { h } from "../../../lib/dom.js";
 import { checkbox, failure, field, input } from "../../../lib/forms.js";
 import { plural } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
+import { followLists, readTagged } from "../../../lib/live.js";
 import { setRoles } from "../../../lib/state.js";
 
 export const tab = { label: "Roles", order: 20 };
@@ -22,14 +23,14 @@ const byWeight = (a, b) => b.builtIn - a.builtIn || (a.builtIn ? b.permissions.l
 
 // showRoles lists what each role holds, built in or the organization's own, and the permissions of the one picked, by
 // area, as ticks; a viewer with org.grants.manage defines, renames, changes and deletes the organization's own. open is
-// the ID of the role picked.
+// the ID of the role picked. It follows the roles while it shows, and draws itself again once they change, here or
+// elsewhere, unless the role picked is open to change, whose ticks a draw would lose.
 async function showRoles(org, main, can, actions, open = null) {
   const manage = can("org.grants.manage");
   const error = failure();
-  const [roles, labels] = await Promise.all([
-    api("GET", "/orgs/" + org.slug + "/roles").then((d) => d.roles),
-    api("GET", "/permissions?scope=organization").then((d) => d.labels),
-  ]);
+  const path = "/orgs/" + org.slug + "/roles";
+  const [list, labels] = await Promise.all([readTagged(path), api("GET", "/permissions?scope=organization").then((d) => d.labels)]);
+  const roles = list.data.roles;
   setRoles(roles);
   const redraw = (pick) => showRoles(org, main, can, actions, pick === undefined ? open : pick);
   const editable = (r) => manage && !r.builtIn;
@@ -59,6 +60,7 @@ async function showRoles(org, main, can, actions, open = null) {
     sectionHeader("Roles", "A role is a set of permissions. Built-in roles cannot change; a custom role can be edited, and deleted while nobody holds it."),
     h("section", { class: "card" }, [...roles].sort(byWeight).map(row)),
     ...(picked ? editor(org, picked, labels, editable(picked), error, redraw) : []));
+  if (!picked || !editable(picked)) followLists([[path, list.tag]], () => error.el.isConnected, () => redraw().catch(error.fail));
 }
 
 // editor shows a role's permissions by area, as ticks, which change it when it is the organization's own and the viewer

@@ -7,9 +7,10 @@ export const allowed = (can) => can("secrets.manage");
 export const view = "organization.secrets";
 export default ({ org, main, can, actions }) => showOrgSecrets(org, main, can, actions);
 
-// showOrgSecrets lists the organization's own secrets, which its repositories' jobs share.
+// showOrgSecrets lists the organization's own secrets, which its repositories' jobs share, and follows them while they
+// show.
 async function showOrgSecrets(org, main, can, actions) {
   const error = failure();
   const repos = can("org.grants.manage") ? (await api("GET", "/orgs/" + org.slug + "/repos")).repositories : [];
-  main.replaceChildren(error.el, ...await secretsSections(org, "/orgs/" + org.slug + "/secrets", can("org.grants.manage"), error.fail, repos, actions));
+  main.replaceChildren(error.el, ...await secretsSections(org, "/orgs/" + org.slug + "/secrets", can("org.grants.manage"), error.fail, repos, actions, { follow: true }));
 }

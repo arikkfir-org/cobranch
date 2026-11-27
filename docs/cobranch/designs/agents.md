@@ -188,8 +188,8 @@ another tab, by another member or through the API stayed missing until a reload
 - **The database says what changed.** Triggers on `model_providers`, `models`, `agents` and `secrets` notify channel
   `cobranch_changes` with the row's organization as their transaction commits: every path that changes them, the
   API, agents' own changes, a secret's deletion that leaves a provider broken, is caught alike. The channel is the
-  Console's live pages' one: a page that follows other rows adds their tables, each naming the IDs its followers
-  watch (`notify_changes('org_id')` here).
+  Console's [live pages'](console.md#live-pages) one: a page that follows other rows adds their tables, each naming the
+  IDs its followers watch (`notify_changes('org_id')` here). Settings · Agents follows the agents on it too.
 - **Each server listens once**, as for chats and people's organizations
   ([live organization lists](sign-in-and-organizations.md#live-organization-lists)), and wakes the requests that follow
   the organization; a follower also reads once a minute, for a notification lost while the listener reconnected.

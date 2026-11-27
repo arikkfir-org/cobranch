@@ -4,6 +4,7 @@ import { h } from "../../../lib/dom.js";
 import { checkbox, copyField, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, plural, when } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
+import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
 import { roles } from "../../../lib/state.js";
 
 export const tab = { label: "API keys", order: 30 };
@@ -27,13 +28,15 @@ const newest = (k, at) => k.secrets.map(at).filter(Boolean).sort().pop() || null
 
 // showApiKeys lists the organization's API keys, each with its roles, when it was made and last used, and, for a viewer
 // with org.principals.manage, Rotate and Revoke, or Delete once no secret of it works. made is a key just made or
-// rotated, whose secret this draw shows once, as the API never shows it again.
+// rotated, whose secret this draw shows once, as the API never shows it again. It follows the keys while it shows, and
+// draws itself again once they change, here or elsewhere, still showing made.
 async function showApiKeys(org, main, can, actions, made = null) {
   const manage = can("org.principals.manage");
   const error = failure();
   const refresh = (created) => showApiKeys(org, main, can, actions, created || null);
   const path = "/orgs/" + org.slug + "/api-keys";
-  const keys = (await api("GET", path)).apiKeys;
+  const list = await readTagged(path);
+  const keys = list.data.apiKeys;
   actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => makeKey(path, refresh) }, icon("plus"), "Make a key") : "");
   const ghost = (label, onclick, attrs = {}) => h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick, ...attrs }, label);
   const row = (k) => {
@@ -73,6 +76,7 @@ async function showApiKeys(org, main, can, actions, made = null) {
     ...(keys.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), counted), table, none]
       : [h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No API keys yet"),
         h("p", { class: "empty-description" }, "Make a key for a script that calls " + org.name + "'s API as itself.")))]));
+  followLists([[path, list.tag]], () => error.el.isConnected, () => keepingFilter(() => showApiKeys(org, main, can, actions, made)).catch(error.fail));
 }
 
 // reveal announces a key just made or rotated in a Card (Tone=Success) with its secret in a Copy field, as the API

@@ -4,6 +4,7 @@ import { h } from "./dom.js";
 import { field, input, selectBox, textarea } from "./forms.js";
 import { ago, plural } from "./format.js";
 import { icon } from "./icons.js";
+import { followLists, keepingFilter, readTagged } from "./live.js";
 import { render } from "./router.js";
 
 // secretsSections lists the secrets at path, an organization's or a repository's, who may read each and when it last
@@ -11,10 +12,12 @@ import { render } from "./router.js";
 // header, and each row's Change and Delete. The values are never shown: the API keeps them sealed for those granted
 // them. A viewer who manages the organization's grants grants them, in Change, to its members, its API keys, its agents
 // and the jobs of repos. Without readers, as a repository's Secrets tab draws them, the table leaves out who may read
-// each, which Change still says; description replaces the header's line.
-export async function secretsSections(org, path, grants, fail, repos, actions, { readers = true, description } = {}) {
+// each, which Change still says; description replaces the header's line. With follow, it follows the secrets while they
+// show, and draws the page again once they change, here or elsewhere.
+export async function secretsSections(org, path, grants, fail, repos, actions, { readers = true, description, follow = false } = {}) {
   const item = (s) => "/orgs/" + org.slug + "/secrets/" + s.id;
-  const list = (await api("GET", path)).secrets;
+  const read = await readTagged(path);
+  const list = read.data.secrets;
   const [access, members, keys, agents, jobs] = await Promise.all([
     Promise.all(list.map((s) => api("GET", item(s) + "/access").then((d) => d.access))),
     grants ? api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members) : [],
@@ -46,10 +49,12 @@ export async function secretsSections(org, path, grants, fail, repos, actions, {
     table.hidden = !shown;
     none.hidden = !!shown;
   } });
+  const header = h("header", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Secrets"),
+    h("p", { class: "section-header-description" }, description || ["Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it."])),
+  actions ? null : add);
+  if (follow) followLists([[path, read.tag]], () => header.isConnected, () => keepingFilter(render).catch(fail));
   return [
-    h("header", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Secrets"),
-      h("p", { class: "section-header-description" }, description || ["Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it."])),
-      actions ? null : add),
+    header,
     ...(list.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-count" }, plural(list.length, "secret"))), table, none]
       : [h("div", { class: "card empty-centred" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No secrets here yet"),
         h("p", { class: "empty-description" }, "Add a token or a password that jobs and agents need, and grant it to them.")))])];
