@@ -26,9 +26,13 @@ RETURNING last;
 SELECT * FROM environments WHERE target_id = @target_id AND branch = @branch AND deleted_at IS NULL;
 
 -- name: InsertEnvironment :one
-INSERT INTO environments (id, org_id, repo_id, target_id, branch, cluster, namespace)
-VALUES (@id, @org_id, @repo_id, @target_id, @branch, @cluster, @namespace)
+INSERT INTO environments (id, org_id, repo_id, target_id, branch, cluster, namespace, namespace_labels)
+VALUES (@id, @org_id, @repo_id, @target_id, @branch, @cluster, @namespace, @namespace_labels)
 RETURNING *;
+
+-- SetNamespaceLabels keeps an environment's target's namespace labels as the default branch now sets them.
+-- name: SetNamespaceLabels :exec
+UPDATE environments SET namespace_labels = @namespace_labels WHERE id = @id AND namespace_labels <> @namespace_labels;
 
 -- NamespaceHolder finds the live environment, of any organization, in a cluster's namespace: the installation's own
 -- cluster with a null cluster.

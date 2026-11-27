@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/deliverer"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -178,7 +182,7 @@ func (f *deliveryFixture) checkHealth(t *testing.T, d deliverer.Delivery) {
 	envs, err := f.d.Progressing(ctx)
 	want := deliverer.Environment{ID: d.EnvironmentID, OrgID: d.OrgID, RepoID: d.RepoID, TargetID: d.TargetID, Target: "production",
 		Namespace: "shop"}
-	if err != nil || len(envs) != 1 || envs[0] != want {
+	if err != nil || len(envs) != 1 || !reflect.DeepEqual(envs[0], want) {
 		t.Fatalf("Progressing() = %+v, %v, want production", envs, err)
 	}
 	healthy := code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}
@@ -345,5 +349,48 @@ func TestDeliveryStoreLateRecord(t *testing.T) {
 	}
 	if got := f.deliveries(t, f.website.ID); !slices.Contains(got, "#1 production main@a succeeded") {
 		t.Errorf("deliveries = %q, want #1 succeeded", got)
+	}
+}
+
+// TestDeliveryStoreNamespaceLabels hands an apply its target's namespace labels as main last set them: a push to main
+// that changes them changes them for the environment's next apply.
+func TestDeliveryStoreNamespaceLabels(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t)
+	ctx := context.Background()
+	file := func(level string) string {
+		return "delivery:\n  targets:\n    production:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n" +
+			"      namespace: shop\n      namespaceLabels:\n        pod-security.kubernetes.io/enforce: " + level + "\n"
+	}
+	steps := []struct {
+		name     string
+		old, new string
+		level    string
+	}{
+		{name: "main's first push", old: git.ZeroSHA, new: shaA, level: "restricted"},
+		{name: "a push that changes them", old: shaA, new: shaB, level: "baseline"},
+	}
+	for i, s := range steps {
+		f.push(t, pushOf(f.website.ID, f.olivia, fmt.Sprintf("pack-%d", i+1), []git.RefUpdate{{Name: "refs/heads/main", Old: s.old, New: s.new}},
+			commit(s.new, person("Olivia", "olivia@example.com"))), tip(t, "main", fmt.Sprintf("blob-%d", i+1), file(s.level)))
+		d := f.claim(t)
+		if _, err := f.d.MarkRendering(ctx, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.c.KeepRender(ctx, d.ID, []byte("kind: ConfigMap\n")); err != nil {
+			t.Fatal(err)
+		}
+		a, ok, err := f.d.TakeApply(ctx, d.ID, time.Now().Add(time.Hour))
+		if err != nil || !ok {
+			t.Fatalf("%s: TakeApply() = %t, %v", s.name, ok, err)
+		}
+		want := map[string]string{"pod-security.kubernetes.io/enforce": s.level}
+		if !maps.Equal(a.NamespaceLabels, want) {
+			t.Errorf("%s: TakeApply().NamespaceLabels = %v, want %v", s.name, a.NamespaceLabels, want)
+		}
+		if err := f.d.Record(ctx, deliverer.Outcome{Apply: a, Health: code.Healthy, State: code.DeliverySucceeded,
+			Report: code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

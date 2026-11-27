@@ -24,12 +24,16 @@ type DeliverySettings struct {
 // Target is where the branches its patterns match deliver: a cluster, by the ID of the secret that holds its
 // kubeconfig, or the installation's own cluster when Cluster is nil, and a namespace, which may name Variables. URL,
 // when set, is where its environments answer, which may name Variables too, and which the Console opens.
+// NamespaceLabels, which only a target with a cluster may set, label each namespace Cobranch makes for its
+// environments, beside Cobranch's own labels, so the namespace meets the cluster's conventions (its pod security
+// level, the labels its gateway admits routes by).
 type Target struct {
-	Name      string     `json:"name"`
-	Branches  []string   `json:"branches"`
-	Cluster   *uuid.UUID `json:"cluster,omitempty"`
-	Namespace string     `json:"namespace"`
-	URL       string     `json:"url,omitempty"`
+	Name            string            `json:"name"`
+	Branches        []string          `json:"branches"`
+	Cluster         *uuid.UUID        `json:"cluster,omitempty"`
+	Namespace       string            `json:"namespace"`
+	URL             string            `json:"url,omitempty"`
+	NamespaceLabels map[string]string `json:"namespaceLabels,omitempty"`
 }
 
 // Root is a directory of the commit that a delivery renders: a Helm chart when Helm is set, a kustomization when
@@ -158,13 +162,14 @@ func parseTargets(node *yaml.Node) ([]Target, error) {
 	return targets, nil
 }
 
-// parseTarget reads one target's settings: its branches, its cluster, its namespace and its URL.
+// parseTarget reads one target's settings: its branches, its cluster, its namespace, its URL and its namespace's
+// labels.
 func parseTarget(name string, node *yaml.Node) (Target, error) {
 	t := Target{Name: name}
 	if isNull(node) {
 		return t, &SettingsError{Line: node.Line, Message: name + " needs branches and a namespace"}
 	}
-	if err := onlyKeys(node, name, "branches", "cluster", "namespace", "url"); err != nil {
+	if err := onlyKeys(node, name, "branches", "cluster", "namespace", "url", "namespaceLabels"); err != nil {
 		return t, err
 	}
 	branches := valueOf(node, "branches")
@@ -198,7 +203,60 @@ func parseTarget(name string, node *yaml.Node) (Target, error) {
 			return t, &SettingsError{Line: n.Line, Message: "a URL starts with https:// or http://"}
 		}
 	}
-	return t, nil
+	t.NamespaceLabels, err = namespaceLabels(valueOf(node, "namespaceLabels"), t.Cluster)
+	return t, err
+}
+
+// labelKey is a Kubernetes label's key: a name of up to 63 characters, after an optional DNS subdomain prefix and '/'.
+var labelKey = regexp.MustCompile(`^(([a-z0-9]([-a-z0-9]*[a-z0-9])?)(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$`)
+
+// labelValue is a Kubernetes label's value: empty, or up to 63 characters that start and end alphanumeric.
+var labelValue = regexp.MustCompile(`^([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?$`)
+
+// reserved reports whether a target may not set label key: Cobranch's own, under cobranch.dev and its subdomains,
+// which say whose a namespace is, and those Kubernetes keeps for itself, under kubernetes.io and k8s.io, though their
+// subdomains (pod-security.kubernetes.io) stay open.
+func reserved(key string) bool {
+	prefix, _, ok := strings.Cut(key, "/")
+	if !ok {
+		return false
+	}
+	return prefix == "cobranch.dev" || strings.HasSuffix(prefix, ".cobranch.dev") || prefix == "kubernetes.io" || prefix == "k8s.io" ||
+		key == "app.kubernetes.io/managed-by"
+}
+
+// namespaceLabels reads a target's namespaceLabels, node: a mapping of label keys to their values, each a string, or
+// none without the key. Only a target with a cluster takes them: in the installation's own cluster they would let a
+// repository lift the Pod Security level the installation sets on its namespace.
+func namespaceLabels(node *yaml.Node, cluster *uuid.UUID) (map[string]string, error) {
+	if node == nil || isNull(node) {
+		return nil, nil
+	}
+	if cluster == nil {
+		return nil, &SettingsError{Line: node.Line, Message: "namespaceLabels needs a cluster: the installation's own cluster labels its namespaces itself"}
+	}
+	if node.Kind != yaml.MappingNode || len(node.Content) == 0 {
+		return nil, &SettingsError{Line: node.Line, Message: "namespaceLabels must map one or more label keys to their values"}
+	}
+	if err := uniqueKeys(node, "namespaceLabels"); err != nil {
+		return nil, err
+	}
+	labels := make(map[string]string, len(node.Content)/2)
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key, value := node.Content[i], node.Content[i+1]
+		prefix, _, hasPrefix := strings.Cut(key.Value, "/")
+		if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || !labelKey.MatchString(key.Value) || (hasPrefix && len(prefix) > 253) {
+			return nil, &SettingsError{Line: key.Line, Message: fmt.Sprintf("%q is not a label key", key.Value)}
+		}
+		if reserved(key.Value) {
+			return nil, &SettingsError{Line: key.Line, Message: fmt.Sprintf("label %q is Cobranch's or Kubernetes' own", key.Value)}
+		}
+		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || !labelValue.MatchString(value.Value) {
+			return nil, &SettingsError{Line: value.Line, Message: fmt.Sprintf("label %s's value must be a string of up to 63 letters, digits, '-', '_' and '.', starting and ending with a letter or digit", key.Value)}
+		}
+		labels[key.Value] = value.Value
+	}
+	return labels, nil
 }
 
 // parseRoots reads delivery.roots: a list of the directories each delivery renders, in order.

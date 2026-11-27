@@ -274,6 +274,8 @@ func TestPrepareAndRelease(t *testing.T) {
 	needServer(t)
 	ctx := context.Background()
 	target, env := open(t, server), environment()
+	// The target's labels go on the namespace, but never in place of Cobranch's own.
+	env.NamespaceLabels = map[string]string{"pod-security.kubernetes.io/enforce": "restricted", cluster.EnvironmentLabel: "another"}
 	for range 2 {
 		if err := target.Prepare(ctx, env); err != nil {
 			t.Fatalf("Prepare() = %v", err)
@@ -288,7 +290,8 @@ func TestPrepareAndRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	if l := ns.Labels; l[cluster.EnvironmentLabel] != env.ID.String() || l[cluster.OrganizationLabel] != env.OrgID.String() ||
-		l[cluster.InstallationLabel] != "acme" || l[cluster.ManagedByLabel] != "cobranch" {
+		l[cluster.InstallationLabel] != "acme" || l[cluster.ManagedByLabel] != "cobranch" ||
+		l["pod-security.kubernetes.io/enforce"] != "restricted" {
 		t.Errorf("the namespace's labels = %v", l)
 	}
 	another := env

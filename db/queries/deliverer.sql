@@ -94,8 +94,8 @@ WHERE d.state = 'rendering' OR (d.state IN ('applying', 'deleting') AND coalesce
 ORDER BY d.started_at;
 
 -- TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, a queued resync,
--- which renders nothing, or one whose apply another controller left. It answers what the apply needs; no row when it
--- is none of those.
+-- which renders nothing, or one whose apply another controller left. It answers what the apply needs, its
+-- environment's namespace labels included; no row when it is none of those.
 -- name: TakeDeliveryApply :one
 UPDATE deliveries d SET state = 'applying', reason = '', started_at = coalesce(d.started_at, now()),
     lease_until = @lease_until::timestamptz
@@ -105,7 +105,7 @@ WHERE d.id = @id AND e.id = d.environment_id AND t.principal_id = e.target_id
     OR (d.state = 'queued' AND d.kind = 'resync')
     OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now()))
 RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.cluster,
-    e.namespace, e.revision, e.health AS environment_health, e.target_id, t.name AS target;
+    e.namespace, e.namespace_labels, e.revision, e.health AS environment_health, e.target_id, t.name AS target;
 
 -- name: DeliveryRender :one
 SELECT manifests FROM delivery_renders WHERE delivery_id = $1;

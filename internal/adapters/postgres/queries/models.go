@@ -195,21 +195,22 @@ type Delivery struct {
 }
 
 type Environment struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	RepoID    uuid.UUID
-	TargetID  uuid.UUID
-	Branch    string
-	Cluster   *uuid.UUID
-	Namespace string
-	Revision  *string
-	SyncedAt  *time.Time
-	Sync      string
-	Health    string
-	Paused    bool
-	CreatedAt time.Time
-	DeletedAt *time.Time
-	Version   int64
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	RepoID          uuid.UUID
+	TargetID        uuid.UUID
+	Branch          string
+	Cluster         *uuid.UUID
+	Namespace       string
+	Revision        *string
+	SyncedAt        *time.Time
+	Sync            string
+	Health          string
+	Paused          bool
+	CreatedAt       time.Time
+	DeletedAt       *time.Time
+	Version         int64
+	NamespaceLabels []byte
 }
 
 type EnvironmentObject struct {

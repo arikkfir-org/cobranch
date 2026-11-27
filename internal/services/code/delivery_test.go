@@ -96,6 +96,27 @@ var parseDeliveryTests = []struct {
 		wantErr: "/cobranch.yaml: line 6: a URL takes no ${commit.short}: an environment keeps one URL"},
 	{name: "a URL that is no address", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: p\n      url: example.com\n",
 		wantErr: "/cobranch.yaml: line 6: a URL starts with https:// or http://"},
+	{name: "namespace labels", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        pod-security.kubernetes.io/enforce: restricted\n        team: web\n        empty: \"\"\n",
+		want: code.DeliverySettings{Targets: []code.Target{{Name: "preview", Branches: []string{"main"}, Cluster: &labelsCluster, Namespace: "p",
+			NamespaceLabels: map[string]string{"pod-security.kubernetes.io/enforce": "restricted", "team": "web", "empty": ""}}}}},
+	{name: "namespace labels on the installation's cluster", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: p\n      namespaceLabels:\n        team: web\n",
+		wantErr: "/cobranch.yaml: line 7: namespaceLabels needs a cluster: the installation's own cluster labels its namespaces itself"},
+	{name: "namespace labels as a list", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        - team\n",
+		wantErr: "/cobranch.yaml: line 8: namespaceLabels must map one or more label keys to their values"},
+	{name: "a label that is no key", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        team web: x\n",
+		wantErr: `/cobranch.yaml: line 8: "team web" is not a label key`},
+	{name: "a label of Cobranch's", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        cobranch.dev/environment: x\n",
+		wantErr: `/cobranch.yaml: line 8: label "cobranch.dev/environment" is Cobranch's or Kubernetes' own`},
+	{name: "a label under Cobranch's subdomain", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        jobs.cobranch.dev/x: y\n",
+		wantErr: `/cobranch.yaml: line 8: label "jobs.cobranch.dev/x" is Cobranch's or Kubernetes' own`},
+	{name: "a label of Kubernetes'", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        kubernetes.io/metadata.name: other\n",
+		wantErr: `/cobranch.yaml: line 8: label "kubernetes.io/metadata.name" is Cobranch's or Kubernetes' own`},
+	{name: "the manager's label", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        app.kubernetes.io/managed-by: me\n",
+		wantErr: `/cobranch.yaml: line 8: label "app.kubernetes.io/managed-by" is Cobranch's or Kubernetes' own`},
+	{name: "a label's value as a number", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        tier: 1\n",
+		wantErr: "/cobranch.yaml: line 8: label tier's value must be a string of up to 63 letters, digits, '-', '_' and '.', starting and ending with a letter or digit"},
+	{name: "a label's bad value", settings: "delivery:\n  targets:\n    preview:\n      branches: [main]\n      cluster: 0190a3a5-1111-7000-8000-000000000001\n      namespace: p\n      namespaceLabels:\n        tier: -web\n",
+		wantErr: "/cobranch.yaml: line 8: label tier's value must be a string of up to 63 letters, digits, '-', '_' and '.', starting and ending with a letter or digit"},
 	{name: "roots as a mapping", settings: "delivery:\n  roots:\n    chart: {}\n", wantErr: "/cobranch.yaml: line 3: roots must be a list of directories to render"},
 	{name: "a root as a path", settings: "delivery:\n  roots: [chart]\n", wantErr: "/cobranch.yaml: line 2: a root must be a mapping"},
 	{name: "a root's unknown key", settings: "delivery:\n  roots:\n    - path: c\n      chart: {}\n", wantErr: `/cobranch.yaml: line 4: a root takes no "chart"`},
@@ -130,6 +151,9 @@ var parseDeliveryTests = []struct {
 		wantErr: "/cobranch.yaml: line 4: substitute must be true or false"},
 	{name: "not YAML", settings: "delivery: [\n", wantErr: "/cobranch.yaml: line 1: did not find expected node content"},
 }
+
+// labelsCluster is the cluster of the namespace labels' tests.
+var labelsCluster = uuid.MustParse("0190a3a5-1111-7000-8000-000000000001")
 
 func TestParseSettingsDelivery(t *testing.T) {
 	for _, tt := range parseDeliveryTests {

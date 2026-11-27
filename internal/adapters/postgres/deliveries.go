@@ -382,9 +382,17 @@ func queuePushDelivery(ctx context.Context, q *queries.Queries, d pushDelivery) 
 // planned: refused, saying why, when that namespace is no DNS label or another live environment holds it in the
 // target's cluster.
 func environmentOf(ctx context.Context, q *queries.Queries, d pushDelivery, targetID uuid.UUID) (queries.Environment, string, error) {
+	labels, err := namespaceLabels(d.target)
+	if err != nil {
+		return queries.Environment{}, "", err
+	}
 	env, err := q.LiveEnvironment(ctx, targetID, d.branch)
-	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
-		return env, "", wrapIf(err, "finding the environment of "+d.target.Name+" and "+d.branch)
+	if err == nil {
+		err = q.SetNamespaceLabels(ctx, labels, env.ID)
+		return env, "", wrapIf(err, "keeping the namespace labels of "+d.target.Name+" and "+d.branch)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return env, "", fmt.Errorf("finding the environment of %s and %s: %w", d.target.Name, d.branch, err)
 	}
 	if d.namespace == "" {
 		return env, capitalize(d.planErr.Error()), nil
@@ -403,8 +411,21 @@ func environmentOf(ctx context.Context, q *queries.Queries, d pushDelivery, targ
 		return env, "", fmt.Errorf("making an ID: %w", err)
 	}
 	env, err = q.InsertEnvironment(ctx, queries.InsertEnvironmentParams{ID: id, OrgID: d.orgID, RepoID: d.event.RepoID,
-		TargetID: targetID, Branch: d.branch, Cluster: d.target.Cluster, Namespace: d.namespace})
+		TargetID: targetID, Branch: d.branch, Cluster: d.target.Cluster, Namespace: d.namespace, NamespaceLabels: labels})
 	return env, "", wrapIf(err, "making the environment of "+d.target.Name+" and "+d.branch)
+}
+
+// namespaceLabels is target's namespace labels as an environment keeps them: a JSON object, empty without any.
+func namespaceLabels(target code.Target) ([]byte, error) {
+	labels := target.NamespaceLabels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	out, err := json.Marshal(labels)
+	if err != nil {
+		return nil, fmt.Errorf("writing target %s's namespace labels: %w", target.Name, err)
+	}
+	return out, nil
 }
 
 // targetPrincipal finds the principal of the repository's target of name, making it on the target's first delivery,

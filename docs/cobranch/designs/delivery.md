@@ -51,6 +51,8 @@ delivery:
       branches: [main]
       cluster: 0193a8c2-71d0-7a44-8e5f-0c2d9b1e4f63
       namespace: acme-api-staging
+      namespaceLabels:                        # on the namespace Cobranch makes there
+        pod-security.kubernetes.io/enforce: restricted
     preview:
       branches: ["feature/**", "fix/**"]      # no cluster: this installation's own
       namespace: acme-api-${branch.slug}
@@ -88,6 +90,11 @@ The Git server records each tip’s parsed file in the push’s transaction
 - **`url`** is optional: where the target's environments answer, an `http` or `https` address, which the Console shows
   and opens. Cobranch routes nothing to it; the render's own ingress does. It takes the variables but the commit's, since
   an environment keeps one address, and follows `main`'s file: changing it there moves every environment's at once.
+- **`namespaceLabels`** is optional, and only for a target with a `cluster`: the labels Cobranch writes on a namespace it
+  makes for one of the target's environments, beside its own, so the namespace meets that cluster's conventions (its Pod
+  Security level, the labels its gateway or its policies select namespaces by). Keys under `cobranch.dev`, `kubernetes.io`
+  and `k8s.io`, and `app.kubernetes.io/managed-by`, are refused: they say whose a namespace is. A namespace that exists
+  already is used as it is, so a change to the labels reaches only the namespaces made after it.
 - **A root** is a directory of the commit: `helm` renders the chart there, `kustomize` builds the kustomization there,
   and neither reads every manifest under it, in path order. `targets` limits a root to some targets.
 - **Checked strictly,** as the rest of the file is: a push that brings a broken `delivery` into `main` is refused,
@@ -351,8 +358,10 @@ a private cluster’s range.
   nothing more.
 - **Opened with the installation's secrets key,** as jobs' secrets are, for the target alone, and kept open for the next
   delivery to the same kubeconfig: a changed secret is a new cluster.
-- **The namespace** is created when missing, if the kubeconfig may, and labelled as the in-cluster one is; one that
-  carries another environment's label is refused, and teardown deletes it only if Cobranch created it.
+- **The namespace** is created when missing, if the kubeconfig may, and labelled as the in-cluster one is, with the
+  target's `namespaceLabels` beside; one that carries another environment's label is refused, and teardown deletes it
+  only if Cobranch created it. In this installation's own cluster a target sets no labels: the chart's Pod Security
+  level is the installation's to set, not a repository's.
 - **Reaching it** is the controller's, never a job pod's, and only outside `jobs.egress.except`, checked at each address
   the controller dials, through no proxy: a kubeconfig can't point the controller at the installation's own network or
   the cloud's metadata server. `delivery.clusters.allowedCIDRs` admits a private cluster's control plane, and the
