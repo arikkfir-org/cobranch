@@ -99,7 +99,7 @@ under its name, it comes back.
 - **Who starts its tasks:** a member with `agents.assign`, in its repository alone (its issues and branch chats), and
   runs of the repository's jobs. Each task does no more than both the agent and whoever started it may, as today.
 - **Retired, not deleted.** An agent main's file no longer declares takes no new task, holds nothing on its repository,
-  and its running tasks are cancelled; its principal keeps its tasks, commits and audit trail. Declared again under the
+  runs on no model (so the organization may remove that model), and its running tasks are cancelled; its principal keeps its tasks, commits and audit trail. Declared again under the
   same name, it comes back. The API changes no repository agent: its file does.
 - **The Console lists them** on the repository's Agents page and in Settings › Agents under their repository, read-only,
   each with a link to its lines of main's file.
