@@ -38,6 +38,17 @@ func withRuns(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *a
 	}
 }
 
+// withAgentRun adds, after withRuns' runs, #4 of ai/check, which names agent checker, at c, running as task 12.
+func withAgentRun(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return withRuns(func(f *orgFixture) *auth.Authenticated {
+		def := jobs.Job{Name: "ai/check", Permissions: jobs.DefaultPermissions, Agent: &jobs.Agent{Name: "checker", Instructions: "Check the links."}}
+		f.codeStore.AddRun(f.website.ID, code.Run{SHA: shaOf("c"), Ref: "refs/heads/main", Definition: def, State: jobs.StateRunning, Task: 12,
+			Job: code.Principal{ID: uuid.New(), DisplayName: def.Name}, Trigger: jobs.Event{Kind: jobs.EventPush, SHA: shaOf("c"), Ref: "refs/heads/main"},
+			QueuedAt: time.Now()})
+		return viewer(f)
+	})
+}
+
 const runsPath = "/v1/orgs/acme/repos/website/runs"
 
 func TestListRunsAPI(t *testing.T) {
@@ -118,6 +129,20 @@ func listed(want []int64, total int) func(t *testing.T, f *orgFixture, body []by
 
 func TestRunAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
+		{name: "an agent's run, with its task", viewer: withAgentRun(maxReading), method: http.MethodGet, path: fixed(runsPath + "/4"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				r := decode[Run](t, body)
+				if r.Task == nil || *r.Task != 12 || r.Definition.Kind != "agent" || r.Definition.Agent == nil || r.Definition.Agent.Name != "checker" ||
+					r.Definition.Agent.Instructions == nil || *r.Definition.Agent.Instructions != "Check the links." {
+					t.Errorf("run = %s, want ai/check's, task 12", body)
+				}
+			}},
+		{name: "a script's run names no task", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/1"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if r := decode[Run](t, body); r.Task != nil || r.Definition.Agent != nil {
+					t.Errorf("run = %s, want no task and no agent", body)
+				}
+			}},
 		{name: "one by number", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"), wantStatus: 200,
 			wantHeader: http.Header{"Etag": {`"1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if r := decode[Run](t, body); r.Number != 2 || r.State != RunStateWaiting || r.CausedBy == nil || r.CausedBy.Kind != "job" {

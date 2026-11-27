@@ -203,7 +203,7 @@ const cancelTask = `-- name: CancelTask :one
 UPDATE agent_tasks SET state = 'cancelled', cancelled_by = $1, ended_at = now(), reason = $2
 WHERE org_id = $3 AND number = $4 AND state IN ('queued', 'running', 'waiting')
     AND ($5::bigint < 0 OR version = $5::bigint)
-RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id, sha, private, cap_reached
+RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id, sha, private, cap_reached, run_id
 `
 
 type CancelTaskParams struct {
@@ -249,6 +249,7 @@ func (q *Queries) CancelTask(ctx context.Context, arg CancelTaskParams) (AgentTa
 		&i.Sha,
 		&i.Private,
 		&i.CapReached,
+		&i.RunID,
 	)
 	return i, err
 }
@@ -393,9 +394,9 @@ func (q *Queries) InsertRepositoryAgent(ctx context.Context, arg InsertRepositor
 
 const insertTask = `-- name: InsertTask :exec
 INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha,
-    private)
+    private, run_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14)
+    $11, $12, $13, $14, $15)
 `
 
 type InsertTaskParams struct {
@@ -413,6 +414,7 @@ type InsertTaskParams struct {
 	IssueID      *uuid.UUID
 	Sha          *string
 	Private      bool
+	RunID        *uuid.UUID
 }
 
 // InsertTask records a task, Queued.
@@ -432,6 +434,7 @@ func (q *Queries) InsertTask(ctx context.Context, arg InsertTaskParams) error {
 		arg.IssueID,
 		arg.Sha,
 		arg.Private,
+		arg.RunID,
 	)
 	return err
 }
@@ -545,12 +548,13 @@ func (q *Queries) RetireRepositoryAgents(ctx context.Context, repoID *uuid.UUID,
 }
 
 const task = `-- name: Task :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, t.run_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(ag.cap, 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap, jr.number AS run_number
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    LEFT JOIN job_runs jr ON jr.id = t.run_id
     CROSS JOIN LATERAL (
         SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
             coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
@@ -570,10 +574,11 @@ type TaskRow struct {
 	InputTokens   int64
 	OutputTokens  int64
 	Cap           int64
+	RunNumber     *int64
 }
 
 // Task finds one of an organization's tasks by its number, with the names of its agent, assigner, canceller,
-// repository and branch, what it spent and the most it may spend: its agent's cap, or 0 for none.
+// repository and branch, its run's number, what it spent and the most it may spend: its agent's cap, or 0 for none.
 func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (TaskRow, error) {
 	row := q.db.QueryRow(ctx, task, orgID, number)
 	var i TaskRow
@@ -601,6 +606,7 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.AgentTask.Sha,
 		&i.AgentTask.Private,
 		&i.AgentTask.CapReached,
+		&i.AgentTask.RunID,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,
@@ -610,6 +616,7 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.InputTokens,
 		&i.OutputTokens,
 		&i.Cap,
+		&i.RunNumber,
 	)
 	return i, err
 }
@@ -633,12 +640,13 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 }
 
 const tasks = `-- name: Tasks :many
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, t.run_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(ag.cap, 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap, jr.number AS run_number
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    LEFT JOIN job_runs jr ON jr.id = t.run_id
     CROSS JOIN LATERAL (
         SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
             coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
@@ -676,12 +684,13 @@ type TasksRow struct {
 	InputTokens   int64
 	OutputTokens  int64
 	Cap           int64
+	RunNumber     *int64
 }
 
 // Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 // agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
-// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, what each
-// spent and the most it may spend: its agent's cap, or 0 for none.
+// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, their runs'
+// numbers, what each spent and the most it may spend: its agent's cap, or 0 for none.
 func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error) {
 	rows, err := q.db.Query(ctx, tasks,
 		arg.OrgID,
@@ -724,6 +733,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.AgentTask.Sha,
 			&i.AgentTask.Private,
 			&i.AgentTask.CapReached,
+			&i.AgentTask.RunID,
 			&i.AgentName,
 			&i.AssignerName,
 			&i.CancellerName,
@@ -733,6 +743,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.InputTokens,
 			&i.OutputTokens,
 			&i.Cap,
+			&i.RunNumber,
 		); err != nil {
 			return nil, err
 		}

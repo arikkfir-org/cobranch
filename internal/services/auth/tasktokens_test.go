@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func (tt taskTokenCase) check(t *testing.T, agent auth.Principal, grant auth.Tas
 	if !errors.Is(err, tt.wantErr) {
 		t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
 	}
-	if err == nil && (got.User.ID != agent.ID || got.Credential.Kind != auth.CredentialTaskToken || got.Credential.Task != grant ||
+	if err == nil && (got.User.ID != agent.ID || got.Credential.Kind != auth.CredentialTaskToken || !reflect.DeepEqual(got.Credential.Task, grant) ||
 		got.Session.ID != uuid.Nil) {
 		t.Errorf("Authenticate() = %+v", got)
 	}

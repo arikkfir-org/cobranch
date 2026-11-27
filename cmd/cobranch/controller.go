@@ -91,9 +91,10 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening the object store: %w", err)
 	}
-	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
+	authz := auth.NewAuthorizer(postgres.NewOrgStore(pool))
+	vault := secrets.NewService(postgres.NewSecretStore(pool), authz, box)
 	archive := blob.Logs{Bucket: bucket}
-	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, poster, runner.Settings{Pods: j.Pods, Lease: j.Lease,
+	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, poster, authz, runner.Settings{Pods: j.Pods, Lease: j.Lease,
 		RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout, ScriptImage: j.ScriptImage, RESTURL: j.RESTURL,
 		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
 	a := cfg.Agents

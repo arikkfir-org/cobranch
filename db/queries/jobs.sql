@@ -155,11 +155,14 @@ WHERE r.repo_id = @repo_id
     OR strpos(lower(regexp_replace(r.ref, '^refs/(heads|tags)/', '')), lower(@query::text)) > 0
     OR left(r.sha, length(@query::text)) = lower(@query::text));
 
--- RunByNumber finds one of a repository's runs by number, as RunsOf lists it.
+-- RunByNumber finds one of a repository's runs by number, as RunsOf lists it, with the number of its task: an agent's
+-- job's run has one.
 -- name: RunByNumber :one
-SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
+SELECT sqlc.embed(r), j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind,
+  t.number AS task_number
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
+  LEFT JOIN agent_tasks t ON t.run_id = r.id
 WHERE r.repo_id = @repo_id AND r.number = @number;
 
 -- RunSteps lists the steps the controller kept of an ended run, in the order they ran.

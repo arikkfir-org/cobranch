@@ -35,6 +35,11 @@ type store struct {
 	// scheduled are the repositories with scheduled jobs; QueueSlot fails for the jobs slotFails names.
 	scheduled []runner.Scheduled
 	slotFails map[string]bool
+	// agents are the agents jobs name, by name, and agentRuns the runs of agents that run.
+	agents    map[string]runner.JobAgent
+	agentRuns []runner.AgentRun
+	// orphans are how many tasks of ended runs CancelOrphanTasks cancels.
+	orphans int64
 }
 
 func (s *store) Claim(_ context.Context, leaseUntil time.Time) (runner.Run, bool, error) {
@@ -130,6 +135,48 @@ func (s *store) KeepSteps(_ context.Context, runID uuid.UUID, steps []jobs.Step)
 		kept = append(kept, k)
 	}
 	s.events = append(s.events, "kept "+runID.String()[:4]+"'s steps: "+strings.Join(kept, ", "))
+	return nil
+}
+
+func (s *store) JobAgent(_ context.Context, _ uuid.UUID, name string) (runner.JobAgent, error) {
+	a, ok := s.agents[name]
+	if !ok {
+		return runner.JobAgent{}, runner.ErrNoAgent
+	}
+	return a, nil
+}
+
+func (s *store) StartTask(_ context.Context, run runner.Run, t runner.RunTask) (bool, error) {
+	if s.ended {
+		return false, nil
+	}
+	s.events = append(s.events, fmt.Sprintf("running #%d as %s's task %q on %q: %s", run.Number, t.AgentID.String()[:4], t.Title, t.Branch, t.Instructions))
+	return true, nil
+}
+
+func (s *store) AgentRuns(context.Context) ([]runner.AgentRun, error) { return s.agentRuns, s.fail }
+
+func (s *store) CancelTask(_ context.Context, runID uuid.UUID, reason string) error {
+	s.events = append(s.events, fmt.Sprintf("cancelled %s's task: %s", runID.String()[:4], reason))
+	return nil
+}
+
+func (s *store) CancelOrphanTasks(context.Context) (int64, error) {
+	if s.orphans > 0 {
+		s.events = append(s.events, fmt.Sprintf("cancelled %d orphan tasks", s.orphans))
+	}
+	return s.orphans, nil
+}
+
+// authz is a runner.Authorizer that lets every principal do anything, but those it names nothing.
+type authz struct {
+	denied []uuid.UUID
+}
+
+func (a authz) Can(_ context.Context, principalID uuid.UUID, permission string, _ auth.Scope, _ uuid.UUID) error {
+	if slices.Contains(a.denied, principalID) {
+		return fmt.Errorf("%w: %s", auth.ErrForbidden, permission)
+	}
 	return nil
 }
 
@@ -299,7 +346,7 @@ func TestDispatch(t *testing.T) {
 			if tt.vault.values == nil {
 				tt.vault.values = map[uuid.UUID][]byte{id("5ec1"): []byte("s3cret")}
 			}
-			svc := runner.NewService(s, c, tt.vault, archive{}, &poster{}, set)
+			svc := runner.NewService(s, c, tt.vault, archive{}, &poster{}, authz{}, set)
 			svc.SetClock(func() time.Time { return now })
 			ok, err := svc.Dispatch(context.Background())
 			if ok != tt.wantOK || (err == nil) != (tt.wantErr == "") || (err != nil && err.Error() != tt.wantErr) {
@@ -374,7 +421,7 @@ func TestTimeouts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &store{queued: []runner.Run{scriptRun(func(j *jobs.Job) { j.Timeout = jobs.Duration(tt.timeout) })}, tokens: map[uuid.UUID]time.Time{}}
 			c := &cluster{}
-			svc := runner.NewService(s, c, vault{values: map[uuid.UUID][]byte{}}, archive{}, &poster{}, settings)
+			svc := runner.NewService(s, c, vault{values: map[uuid.UUID][]byte{}}, archive{}, &poster{}, authz{}, settings)
 			svc.SetClock(func() time.Time { return now })
 			if _, err := svc.Dispatch(context.Background()); err != nil || len(c.started) != 1 || c.started[0].Timeout != tt.want {
 				t.Errorf("Dispatch() = %v, started %+v, want a timeout of %s", err, c.started, tt.want)
@@ -433,7 +480,7 @@ func TestFollow(t *testing.T) {
 			s := &store{running: tt.running}
 			c := &cluster{pods: tt.pods, podsErr: tt.podsErr}
 			a := archive{}
-			svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
+			svc := runner.NewService(s, c, vault{}, a, &poster{}, authz{}, settings)
 			svc.SetClock(func() time.Time { return now })
 			err := svc.Follow(context.Background())
 			if (err == nil) != (tt.wantErr == "") || (err != nil && err.Error() != tt.wantErr) {
@@ -480,7 +527,7 @@ func TestSweep(t *testing.T) {
 	s := &store{standing: standing, orgs: []uuid.UUID{org}}
 	c := &cluster{pods: pods()}
 	a := archive{}
-	svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
+	svc := runner.NewService(s, c, vault{}, a, &poster{}, authz{}, settings)
 	svc.SetClock(func() time.Time { return now })
 	if err := svc.Sweep(context.Background()); err != nil {
 		t.Fatalf("Sweep() = %v", err)
@@ -524,7 +571,7 @@ func TestSweepStopsSteps(t *testing.T) {
 			s := &store{standing: map[uuid.UUID]runner.Standing{run: {RepoID: id("0002"), State: jobs.StateCancelled, EndedAt: tt.ended}}, orgs: []uuid.UUID{org}}
 			c := &cluster{pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {run: {Outcome: runner.Pending, Steps: tt.steps}}}}
 			a := archive{}
-			svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
+			svc := runner.NewService(s, c, vault{}, a, &poster{}, authz{}, settings)
 			svc.SetClock(func() time.Time { return now })
 			if err := svc.Sweep(context.Background()); err != nil {
 				t.Fatalf("Sweep() = %v", err)
@@ -562,7 +609,7 @@ func TestSchedule(t *testing.T) {
 				scheduled = append(scheduled, runner.Scheduled{RepoID: id("0004"), Jobs: []jobs.Job{broken}})
 			}
 			s := &store{scheduled: scheduled, slotFails: tt.fails}
-			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, settings)
+			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, authz{}, settings)
 			svc.SetClock(func() time.Time { return tt.at })
 			var err error
 			for range tt.passes {
@@ -607,7 +654,7 @@ func TestNoPods(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := runner.NewService(tt.store, runner.NoPods{}, vault{values: map[uuid.UUID][]byte{id("5160"): []byte("signing-key")}}, archive{}, &poster{}, off)
+			svc := runner.NewService(tt.store, runner.NoPods{}, vault{values: map[uuid.UUID][]byte{id("5160"): []byte("signing-key")}}, archive{}, &poster{}, authz{}, off)
 			svc.SetClock(func() time.Time { return now })
 			if err := tt.step(svc); err != nil {
 				t.Fatalf("step = %v", err)

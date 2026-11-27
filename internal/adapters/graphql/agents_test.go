@@ -150,6 +150,26 @@ func TestTaskCommit(t *testing.T) {
 	}
 }
 
+// TestTaskRun checks that a job's task answers the number of the run it is, and leaves run out for any other.
+func TestTaskRun(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		task agents.Task
+		want int64
+	}{
+		{name: "a job's task", task: agents.Task{Kind: agents.KindJob, RunID: uuid.New(), RunNumber: 4}, want: 4},
+		{name: "a job's task whose run is gone", task: agents.Task{Kind: agents.KindJob}},
+		{name: "an assigned task", task: agents.Task{Kind: agents.KindAssigned}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := task(tt.task).Run
+			if (got == nil) != (tt.want == 0) || got != nil && int64(*got) != tt.want {
+				t.Errorf("run = %v, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRepositoryAgents(t *testing.T) {
 	f := newOrgFixture()
 	checker := f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, RepoID: f.website.ID, RepoSlug: "website", Name: "checker",

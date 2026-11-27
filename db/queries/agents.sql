@@ -71,9 +71,9 @@ RETURNING last;
 -- InsertTask records a task, Queued.
 -- name: InsertTask :exec
 INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha,
-    private)
+    private, run_id)
 VALUES (@id, @org_id, @number, @agent_id, @kind, sqlc.narg(assigned_by), @title, @instructions, sqlc.narg(repo_id), sqlc.narg(branch_id),
-    sqlc.narg(thread_id), sqlc.narg(issue_id), sqlc.narg(sha), @private);
+    sqlc.narg(thread_id), sqlc.narg(issue_id), sqlc.narg(sha), @private, sqlc.narg(run_id));
 
 -- ActiveThreadTask finds the number of a task that talks in the thread and has yet to end.
 -- name: ActiveThreadTask :one
@@ -81,15 +81,16 @@ SELECT number FROM agent_tasks WHERE thread_id = $1 AND state IN ('queued', 'run
 
 -- Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 -- agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
--- the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, what each
--- spent and the most it may spend: its agent's cap, or 0 for none.
+-- the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, their runs'
+-- numbers, what each spent and the most it may spend: its agent's cap, or 0 for none.
 -- name: Tasks :many
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(ag.cap, 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap, jr.number AS run_number
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    LEFT JOIN job_runs jr ON jr.id = t.run_id
     CROSS JOIN LATERAL (
         SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
             coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens
@@ -105,14 +106,15 @@ WHERE t.org_id = @org_id
 ORDER BY t.number DESC LIMIT @lim;
 
 -- Task finds one of an organization's tasks by its number, with the names of its agent, assigner, canceller,
--- repository and branch, what it spent and the most it may spend: its agent's cap, or 0 for none.
+-- repository and branch, its run's number, what it spent and the most it may spend: its agent's cap, or 0 for none.
 -- name: Task :one
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(ag.cap, 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap, jr.number AS run_number
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+    LEFT JOIN job_runs jr ON jr.id = t.run_id
     CROSS JOIN LATERAL (
         SELECT coalesce(sum(s.cost), 0)::bigint AS spent, coalesce(sum(s.input_tokens), 0)::bigint AS input_tokens,
             coalesce(sum(s.output_tokens), 0)::bigint AS output_tokens

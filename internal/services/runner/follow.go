@@ -18,8 +18,8 @@ import (
 const lateSlack = 5 * time.Minute
 
 // Follow ends the runs whose pods ended, vanished or outlived their timeouts, keeping their logs and removing their
-// pods, and the webhook runs whose receivers didn't report within theirs. A run it fails to follow is followed again
-// on the next pass; Follow goes on with the rest and answers what failed.
+// pods, the webhook runs whose receivers didn't report within theirs, and the runs of agents as their tasks end. A run
+// it fails to follow is followed again on the next pass; Follow goes on with the rest and answers what failed.
 func (s *Service) Follow(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(ctx, "runner.Service.Follow")
 	defer span.End()
@@ -33,7 +33,7 @@ func (s *Service) Follow(ctx context.Context) (err error) {
 	for _, r := range running {
 		byOrg[r.OrgID] = append(byOrg[r.OrgID], r)
 	}
-	errs := []error{s.expireWebhooks(ctx)}
+	errs := []error{s.expireWebhooks(ctx), s.followTasks(ctx)}
 	for orgID, runs := range byOrg {
 		pods, err := s.cluster.Pods(ctx, orgID)
 		if err != nil {

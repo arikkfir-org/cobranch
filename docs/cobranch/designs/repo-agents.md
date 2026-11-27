@@ -4,7 +4,8 @@
 > page](https://claude.ai/artifact/QcnH4XmDH8BLcGxGkD5U11), linked with Cobranch's other designs; this file is generated
 > from it, with its diagrams, as of 2026-11-27, and synced again once Cobranch's shape settles.
 
-**Status**: Agreed 2026-11-27 · slices 1 and 2 shipped · [ENG-293](https://linear.app/arikkfir/issue/ENG-293), [ENG-295](https://linear.app/arikkfir/issue/ENG-295) · Builds on
+**Status**: Agreed 2026-11-27 · slices 1 and 2 shipped · [ENG-293](https://linear.app/arikkfir/issue/ENG-293) ·
+[ENG-295](https://linear.app/arikkfir/issue/ENG-295) · [ENG-296](https://linear.app/arikkfir/issue/ENG-296) · Builds on
 [agents](agents.md#agents) and [the agent’s pod](agents.md#the-agents-pod) · Adds a key to [jobs’
 `/cobranch.yaml`](jobs.md#cobranchyaml) · No new chart value
 
@@ -99,8 +100,9 @@ under its name, it comes back.
 - **Who starts its tasks:** a member with `agents.assign`, in its repository alone (its issues and branch chats), and
   runs of the repository's jobs. Each task does no more than both the agent and whoever started it may, as today.
 - **Retired, not deleted.** An agent main's file no longer declares takes no new task, holds nothing on its repository,
-  runs on no model (so the organization may remove that model), and its running tasks are cancelled; its principal keeps its tasks, commits and audit trail. Declared again under the
-  same name, it comes back. The API changes no repository agent: its file does.
+  runs on no model (so the organization may remove that model), and its running tasks are cancelled; its principal keeps
+  its tasks, commits and audit trail. Declared again under the same name, it comes back. The API changes no repository
+  agent: its file does.
 - **The Console lists them** on the repository's Agents page and in Settings › Agents under their repository, read-only,
   each with a link to its lines of main's file.
 
@@ -127,14 +129,19 @@ The run page links the task’s transcript in place of a pod’s logs. Cancellin
 timeout is the task’s.
 
 - **`agent` is a fourth kind of work**, beside `pod`, `script` and `webhook`. It takes the agent's name and the task's
-  instructions, and nothing about the image, the model or the agent's secrets: those are the agent's.
-- **The name resolves to the repository's agent first, then the organization's.** An organization agent must hold
-  `repo.read` on the repository; otherwise the run fails as it is queued, naming the agent.
+  instructions, and nothing about the image, the model or the agent's secrets: those are the agent's. A job of an agent
+  that names `image`, `secrets` or `checkout` is refused, naming the line.
+- **The name resolves to the repository's agent first, then the organization's.** The name matches in any case, and a
+  retired repository agent leaves it to the organization's. An organization agent must hold `repo.read` on the
+  repository; otherwise the run fails as it starts, naming the agent, as it does when neither has an agent of that name.
 - **A run is one task**, of kind `job`, at the run's commit, detached, assigned by the job's principal. It does no more
-  than both the agent and the job may, and pushes nothing. Its instructions are the agent's, then the job's.
+  than both the agent and the job's run may: while the run runs, what the job declared caps the task, as it caps the
+  run's own token, and once the run ends the task may do nothing. It pushes nothing: `repo.push`, `repo.merge` and
+  `repo.bypass` stay out of its reach, whatever the job declares. Its instructions are the agent's, then the job's.
 - **The run ends as the task ends.** `finish` with succeeded makes the run Successful; failed, a cancellation, the
-  timeout or the agent's cap make it Failed. The job's annotation takes the task's summary or reason, and links the
-  task, whose transcript the run's page shows in place of a pod's logs.
+  timeout or the agent's cap make it Failed. The job's annotation takes the task's summary or reason, cut at 500
+  characters, and the run's page links the task, whose transcript it shows in place of a pod's logs. The controller
+  follows these runs on its pass, as it follows pods.
 - **Triggers, re-runs, the outside-push gate, the ceiling and the timeout** are a job's, unchanged
   ([triggers](jobs.md#triggers), [the outside-push gate](jobs.md#the-outside-push-gate)). Cancelling the run cancels the
   task.
@@ -146,8 +153,8 @@ timeout is the task’s.
 | Table | Change |
 | --- | --- |
 | `agents` | `image text NOT NULL DEFAULT ''` (slice 1); `repo_id uuid` referencing `repositories`, the `permissions text[]` it declares, the `line` of its name in main's file, `retired_at timestamptz`, and a unique name per repository beside the one per organization (slice 2, migration 00075) |
-| `task_kinds` | Kind `job` (slice 3) |
-| `agent_tasks` | `run_id uuid` referencing `job_runs` (slice 3) |
+| `task_kinds` | Kind `job` (slice 3, migration 00077) |
+| `agent_tasks` | `run_id uuid` referencing `job_runs`, one task a run at most, and a job's task always at a commit (slice 3, migration 00077) |
 | `job_runs` | Nothing: an agent job's run has no pod, and keeps its task through `agent_tasks.run_id` |
 
 ## Rollout

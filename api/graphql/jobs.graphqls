@@ -57,6 +57,8 @@ type Run {
   rerunOf: Int
   "The job as it was declared when the run was queued."
   definition: Job!
+  "The number of the agent's task the run of a job that names an agent is, in its organization, whose transcript stands in for its logs; null for any other run, and until its task is assigned."
+  task: Int
   state: RunState!
   "Why it waits, failed or was cancelled; empty otherwise."
   reason: String!
@@ -72,13 +74,13 @@ type Run {
   """
   Its logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept
   them once it ended, from its pod while it runs, when they are live and grow. None for a run that never started a pod,
-  such as a webhook's.
+  such as a webhook's or an agent's.
   """
   logs: [RunLog!]!
   """
   Its steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its
   containers'): as the controller kept them once it ended, from its pod while it runs. None for a run that never started
-  a pod, such as a webhook's.
+  a pod, such as a webhook's or an agent's.
   """
   steps: [RunStep!]!
 }
@@ -157,7 +159,7 @@ type RunTrigger {
 "A job as /cobranch.yaml declared it."
 type Job {
   name: String!
-  "pod, script or webhook."
+  "pod, script, webhook or agent."
   kind: String!
   "What triggers it, as /cobranch.yaml's on declares it."
   on: Map!
@@ -169,6 +171,10 @@ type Job {
   image: String
   "Where a webhook posts its runs."
   webhookUrl: String
+  "The agent a run is a task of, by its name, the repository's first and then the organization's, for an agent's job."
+  agent: String
+  "What each run asks of the agent, after its own instructions, for an agent's job."
+  agentInstructions: String
   "The environment variables a run receives secrets in, each with the secret's ID."
   secrets: Map
   "What a run's token may do, within the repository's job ceiling."

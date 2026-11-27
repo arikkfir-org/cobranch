@@ -12,6 +12,130 @@ import (
 	"github.com/google/uuid"
 )
 
+const agentRuns = `-- name: AgentRuns :many
+SELECT r.id, r.org_id, r.repo_id, r.number, r.started_at, r.definition, t.number AS task_number, t.state AS task_state,
+    t.summary AS task_summary, t.reason AS task_reason
+FROM job_runs r LEFT JOIN agent_tasks t ON t.run_id = r.id
+WHERE r.state = 'running' AND r.definition -> 'agent' IS NOT NULL
+ORDER BY r.started_at
+`
+
+type AgentRunsRow struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	RepoID      uuid.UUID
+	Number      int64
+	StartedAt   *time.Time
+	Definition  []byte
+	TaskNumber  *int64
+	TaskState   *string
+	TaskSummary *string
+	TaskReason  *string
+}
+
+// AgentRuns lists the runs of jobs that name agents that run, with where their tasks stand: no task once it is gone.
+func (q *Queries) AgentRuns(ctx context.Context) ([]AgentRunsRow, error) {
+	rows, err := q.db.Query(ctx, agentRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentRunsRow
+	for rows.Next() {
+		var i AgentRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.RepoID,
+			&i.Number,
+			&i.StartedAt,
+			&i.Definition,
+			&i.TaskNumber,
+			&i.TaskState,
+			&i.TaskSummary,
+			&i.TaskReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelOrphanTasks = `-- name: CancelOrphanTasks :many
+UPDATE agent_tasks t SET state = 'cancelled', cancelled_by = t.assigned_by, ended_at = now(),
+    reason = CASE WHEN r.state = 'cancelled' THEN 'Its run was cancelled.' ELSE 'Its run ended.' END
+FROM agent_tasks o LEFT JOIN job_runs r ON r.id = o.run_id
+WHERE o.id = t.id AND t.kind = 'job' AND t.state IN ('queued', 'running', 'waiting')
+    AND (r.id IS NULL OR r.state NOT IN ('queued', 'running'))
+RETURNING t.id, t.org_id, t.number, t.assigned_by
+`
+
+type CancelOrphanTasksRow struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	Number     int64
+	AssignedBy *uuid.UUID
+}
+
+// CancelOrphanTasks cancels the jobs' tasks that haven't ended whose runs ended or are gone, as each task's job, and
+// answers them.
+func (q *Queries) CancelOrphanTasks(ctx context.Context) ([]CancelOrphanTasksRow, error) {
+	rows, err := q.db.Query(ctx, cancelOrphanTasks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CancelOrphanTasksRow
+	for rows.Next() {
+		var i CancelOrphanTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Number,
+			&i.AssignedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelRunTask = `-- name: CancelRunTask :one
+UPDATE agent_tasks t SET state = 'cancelled', cancelled_by = r.job_id, ended_at = now(), reason = $1
+FROM job_runs r
+WHERE r.id = $2 AND t.run_id = r.id AND t.state IN ('queued', 'running', 'waiting')
+RETURNING t.id, t.org_id, t.number, r.job_id
+`
+
+type CancelRunTaskRow struct {
+	ID     uuid.UUID
+	OrgID  uuid.UUID
+	Number int64
+	JobID  uuid.UUID
+}
+
+// CancelRunTask cancels a run's task that hasn't ended, as the run's job, for a reason, and answers it; no row when it
+// had ended.
+func (q *Queries) CancelRunTask(ctx context.Context, reason string, runID uuid.UUID) (CancelRunTaskRow, error) {
+	row := q.db.QueryRow(ctx, cancelRunTask, reason, runID)
+	var i CancelRunTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Number,
+		&i.JobID,
+	)
+	return i, err
+}
+
 const claimRun = `-- name: ClaimRun :one
 WITH claimed AS (
     SELECT r.id FROM job_runs r
@@ -236,6 +360,28 @@ func (q *Queries) InsertRunToken(ctx context.Context, arg InsertRunTokenParams) 
 	return err
 }
 
+const jobAgent = `-- name: JobAgent :one
+SELECT a.principal_id, a.name, (a.repo_id IS NOT NULL)::boolean AS repository
+FROM agents a JOIN repositories r ON r.org_id = a.org_id
+WHERE r.id = $1 AND lower(a.name) = lower($2) AND a.retired_at IS NULL AND (a.repo_id = r.id OR a.repo_id IS NULL)
+ORDER BY a.repo_id IS NULL LIMIT 1
+`
+
+type JobAgentRow struct {
+	PrincipalID uuid.UUID
+	Name        string
+	Repository  bool
+}
+
+// JobAgent finds the agent a job of the repository names, by its name in any case: the repository's own of that name
+// unless it is retired, and otherwise the organization's own.
+func (q *Queries) JobAgent(ctx context.Context, repoID uuid.UUID, name string) (JobAgentRow, error) {
+	row := q.db.QueryRow(ctx, jobAgent, repoID, name)
+	var i JobAgentRow
+	err := row.Scan(&i.PrincipalID, &i.Name, &i.Repository)
+	return i, err
+}
+
 const markRunRunning = `-- name: MarkRunRunning :one
 UPDATE job_runs r SET state = 'running', reason = '', started_at = now(), lease_until = NULL
 FROM jobs j
@@ -365,7 +511,7 @@ func (q *Queries) RunTokenByHash(ctx context.Context, tokenHash []byte) (RunToke
 
 const runningRuns = `-- name: RunningRuns :many
 SELECT id, org_id, repo_id, number, started_at, definition FROM job_runs
-WHERE state = 'running' AND definition -> 'webhook' IS NULL
+WHERE state = 'running' AND definition -> 'webhook' IS NULL AND definition -> 'agent' IS NULL
 ORDER BY started_at
 `
 

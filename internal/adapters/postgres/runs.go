@@ -175,6 +175,9 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 		return code.Run{}, err
 	}
 	run.CausedBy = actorOf(row.CausedByID, row.CausedByName, row.CausedByKind)
+	if row.TaskNumber != nil {
+		run.Task = *row.TaskNumber
+	}
 	return run, nil
 }
 

@@ -1,7 +1,8 @@
 // Package runner is the controller's domain: it takes the queued runs of pods and scripts, starts each in its
 // organization's job namespace with the secrets its job may read and a token of its own, follows it to its end, keeps
-// its logs and ends it with its pod's outcome; and it posts webhook runs to their receivers, signed, with a token to
-// report with. It reaches the runs, the cluster, the secrets, the object store and the receivers only through its
+// its logs and ends it with its pod's outcome; it posts webhook runs to their receivers, signed, with a token to
+// report with; and it assigns the runs of jobs that name agents to those agents as tasks, and ends each as its task
+// ends. It reaches the runs, the cluster, the secrets, the object store and the receivers only through its
 // ports (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Where a run
 // executes").
 package runner
@@ -59,7 +60,7 @@ type Store interface {
 	// Finish ends a run that hasn't ended, in state with reason, sets its job's annotation to match and deletes its
 	// token; false when it had ended already.
 	Finish(ctx context.Context, runID uuid.UUID, state jobs.State, reason string) (bool, error)
-	// Running lists the runs of pods and scripts that run.
+	// Running lists the runs of pods and scripts that run, and none of a webhook's or an agent's.
 	Running(ctx context.Context) ([]Running, error)
 	// RunningWebhooks lists the webhook runs that run: delivered, waiting for their receivers to report.
 	RunningWebhooks(ctx context.Context) ([]Running, error)
@@ -80,6 +81,19 @@ type Store interface {
 	DropSlots(ctx context.Context, before time.Time) (int64, error)
 	// KeepSteps keeps the run's steps as they stood when it ended, in place of any it kept before.
 	KeepSteps(ctx context.Context, runID uuid.UUID, steps []jobs.Step) error
+	// JobAgent finds the agent a job of the repository names: the repository's own of that name, unless it is retired,
+	// and otherwise the organization's; ErrNoAgent when neither has one that works.
+	JobAgent(ctx context.Context, repoID uuid.UUID, name string) (JobAgent, error)
+	// StartTask marks a queued run of a job that names an agent running and assigns the agent the run's task, as the
+	// job, at the run's commit, in one go; false when the run is no longer queued, when it assigns nothing.
+	StartTask(ctx context.Context, run Run, t RunTask) (bool, error)
+	// AgentRuns lists the runs of jobs that name agents that run, each with where its task stands.
+	AgentRuns(ctx context.Context) ([]AgentRun, error)
+	// CancelTask cancels the run's task, unless it ended, as the run's job, saying why.
+	CancelTask(ctx context.Context, runID uuid.UUID, reason string) error
+	// CancelOrphanTasks cancels the tasks whose runs ended without them, which a member cancelled or a newer run
+	// superseded, each as its run's job, and answers how many.
+	CancelOrphanTasks(ctx context.Context) (int64, error)
 }
 
 // Scheduled is a repository whose default branch declares jobs with schedules: those jobs.
@@ -196,14 +210,17 @@ type Service struct {
 	secrets  Secrets
 	archive  Archive
 	poster   Poster
+	authz    Authorizer
 	settings Settings
 	now      func() time.Time
 }
 
 // NewService returns a Service that runs store's runs on cluster, with the secrets secrets hands over, keeping their
-// logs in archive, and posts webhook runs with poster.
-func NewService(store Store, cluster Cluster, secrets Secrets, archive Archive, poster Poster, settings Settings) *Service {
-	return &Service{store: store, cluster: cluster, secrets: secrets, archive: archive, poster: poster, settings: settings, now: time.Now}
+// logs in archive, posts webhook runs with poster, and checks with authz that an organization's agent a job names reads
+// its repository.
+func NewService(store Store, cluster Cluster, secrets Secrets, archive Archive, poster Poster, authz Authorizer, settings Settings) *Service {
+	return &Service{store: store, cluster: cluster, secrets: secrets, archive: archive, poster: poster, authz: authz, settings: settings,
+		now: time.Now}
 }
 
 // SetClock replaces the Service's clock, for tests.

@@ -230,6 +230,15 @@ type TaskGrant struct {
 	// ThreadID alone, the thread it talks in; uuid.Nil for a task that talks in none yet.
 	Private  bool
 	ThreadID uuid.UUID
+	// Run is what the job's run the task is may do while it runs, which caps the task in place of the job's own grants;
+	// zero for a task of no run, and once the run ended.
+	Run RunGrant
+}
+
+// RunGrant is what a job's run may do: its repository, and what its job declared there.
+type RunGrant struct {
+	RepoID      uuid.UUID
+	Permissions []string
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.

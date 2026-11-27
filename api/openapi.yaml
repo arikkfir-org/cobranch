@@ -9773,6 +9773,12 @@ components:
           description: The number of the run its attempts started from; absent for a first attempt.
         definition:
           $ref: "#/components/schemas/Job"
+        task:
+          type: integer
+          format: int64
+          description: >-
+            The number of the agent's task the run of a job that names an agent is, in its organization, whose
+            transcript stands in for its logs; absent for any other run, and until its task is assigned.
         state:
           $ref: "#/components/schemas/RunState"
         reason:
@@ -9869,7 +9875,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [pod, script, webhook]
+          enum: [pod, script, webhook, agent]
         "on":
           $ref: "#/components/schemas/JobTriggers"
         pod:
@@ -9884,6 +9890,8 @@ components:
           description: The image a script runs in; the installation's when empty.
         webhook:
           $ref: "#/components/schemas/JobWebhook"
+        agent:
+          $ref: "#/components/schemas/JobAgent"
         secrets:
           type: object
           description: The environment variables a run receives secrets in, each with the secret's ID.
@@ -9900,6 +9908,17 @@ components:
           description: How long a run may take, such as 30m0s; the installation's default when absent.
         checkout:
           type: boolean
+    JobAgent:
+      type: object
+      description: >-
+        The agent a job's runs are tasks of, by its name, the repository's first and then the organization's, and what
+        each run asks of it after its own instructions. Its image, model and secrets are the agent's own.
+      required: [name]
+      properties:
+        name:
+          type: string
+        instructions:
+          type: string
     JobWebhook:
       type: object
       required: [url, signingSecret]
@@ -11578,7 +11597,8 @@ components:
           type: string
           description: >-
             What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat
-            or a private conversation, and issue_chat for one asked in an issue's.
+            or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its
+            agent.
         private:
           type: boolean
           description: >-
@@ -11610,6 +11630,10 @@ components:
         sha:
           type: string
           description: The commit it works at, such as the head a review task reviews; absent for none.
+        run:
+          type: integer
+          format: int64
+          description: The number of the job's run it is, in its repository, for a task of kind job; absent for any other, and once the run is gone.
         state:
           $ref: "#/components/schemas/TaskState"
         reason:

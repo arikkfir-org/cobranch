@@ -192,7 +192,7 @@ type Task {
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
-  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's."
+  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its agent."
   kind: String!
   "Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works."
   private: Boolean!
@@ -211,6 +211,8 @@ type Task {
   threadId: ID
   "The commit it works at, such as the head a review task reviews; null for none."
   sha: String
+  "The number of the job's run it is, in its repository, for a task of kind job; null for any other, and once the run is gone."
+  run: Int
   state: TaskState!
   "Why it failed or was cancelled; empty otherwise."
   reason: String!

@@ -8,10 +8,12 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"go.yaml.in/yaml/v3"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/jobs"
 )
@@ -91,9 +93,9 @@ func parseJob(name string, node *yaml.Node) (jobs.Job, error) {
 	job := jobs.Job{Name: name, Permissions: slices.Clone(jobs.DefaultPermissions), Checkout: true}
 	what := "job " + name
 	if isNull(node) {
-		return job, &SettingsError{Line: node.Line, Message: what + " needs on and one of pod, script or webhook"}
+		return job, &SettingsError{Line: node.Line, Message: what + " needs on and one of pod, script, webhook or agent"}
 	}
-	if err := onlyKeys(node, what, "on", "pod", "script", "image", "webhook", "secrets", "permissions", "timeout", "checkout"); err != nil {
+	if err := onlyKeys(node, what, "on", "pod", "script", "image", "webhook", "agent", "secrets", "permissions", "timeout", "checkout"); err != nil {
 		return job, err
 	}
 	var err error
@@ -124,20 +126,22 @@ func parseJob(name string, node *yaml.Node) (jobs.Job, error) {
 	return job, nil
 }
 
-// parseWork reads the work a job does: exactly one of pod, script, with an optional image, and webhook.
+// parseWork reads the work a job does: exactly one of pod, script, with an optional image, webhook and agent. An
+// agent's job takes neither secrets nor a checkout: its agent's are its own, and its task clones the run's commit.
 func parseWork(job *jobs.Job, node *yaml.Node) error {
-	pod, script, webhook, image := valueOf(node, "pod"), valueOf(node, "script"), valueOf(node, "webhook"), valueOf(node, "image")
+	pod, script, webhook, agent := valueOf(node, "pod"), valueOf(node, "script"), valueOf(node, "webhook"), valueOf(node, "agent")
+	image := valueOf(node, "image")
 	count := 0
-	for _, n := range []*yaml.Node{pod, script, webhook} {
+	for _, n := range []*yaml.Node{pod, script, webhook, agent} {
 		if n != nil {
 			count++
 		}
 	}
 	if count != 1 {
-		return &SettingsError{Line: node.Line, Message: "job " + job.Name + " needs exactly one of pod, script or webhook"}
+		return &SettingsError{Line: node.Line, Message: "job " + job.Name + " needs exactly one of pod, script, webhook or agent"}
 	}
 	if image != nil && script == nil {
-		return &SettingsError{Line: image.Line, Message: "image goes with script only"}
+		return &SettingsError{Line: image.Line, Message: "image goes with script only: an agent runs in its own image"}
 	}
 	var err error
 	switch {
@@ -145,12 +149,49 @@ func parseWork(job *jobs.Job, node *yaml.Node) error {
 		job.Pod, err = parsePod(pod)
 	case webhook != nil:
 		job.Webhook, err = parseWebhook(webhook)
+	case agent != nil:
+		job.Agent, err = parseJobAgent(agent, node)
+		job.Checkout = false
 	default:
 		if job.Script, err = stringOf(script, "script must be a Bash script"); err == nil && image != nil {
 			job.Image, err = stringOf(image, "image must name a container image")
 		}
 	}
 	return err
+}
+
+// parseJobAgent reads the agent a job's runs are tasks of: its name, 1 to 100 characters, and what each run asks of
+// it, at most 20000. The job itself, node, may name no secrets and no checkout.
+func parseJobAgent(node, job *yaml.Node) (*jobs.Agent, error) {
+	for _, key := range []string{"secrets", "checkout"} {
+		if n := valueOf(job, key); n != nil {
+			return nil, &SettingsError{Line: n.Line, Message: key + " goes with pod or script: an agent has its own"}
+		}
+	}
+	if err := onlyKeys(node, "agent", "name", "instructions"); err != nil {
+		return nil, err
+	}
+	n := valueOf(node, "name")
+	if n == nil {
+		return nil, &SettingsError{Line: node.Line, Message: "agent needs a name: the repository's agent's or the organization's"}
+	}
+	name, err := stringOf(n, "name must name an agent")
+	if name = strings.TrimSpace(name); err == nil && (name == "" || utf8.RuneCountInString(name) > agents.MaxName) {
+		err = &SettingsError{Line: n.Line, Message: "name must name an agent, in 1 to 100 characters"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := &jobs.Agent{Name: name}
+	if n := valueOf(node, "instructions"); n != nil && !isNull(n) {
+		if out.Instructions, err = stringOf(n, "instructions must be text"); err != nil {
+			return nil, err
+		}
+		if out.Instructions = strings.TrimSpace(out.Instructions); utf8.RuneCountInString(out.Instructions) > agents.MaxInstructions {
+			return nil, &SettingsError{Line: n.Line, Message: "instructions are at most 20000 characters"}
+		}
+	}
+	return out, nil
 }
 
 // parsePod reads a job's pod spec, checked against what jobs may use, as JSON.

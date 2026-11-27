@@ -47,11 +47,14 @@ func (s *Service) Dispatch(ctx context.Context) (_ bool, err error) {
 	return true, s.start(ctx, run)
 }
 
-// start starts a claimed run: a webhook's it delivers; for a pod's or a script's it makes the run's launch, prepares
-// its organization's namespace, and creates its pod.
+// start starts a claimed run: a webhook's it delivers; an agent's it assigns; for a pod's or a script's it makes the
+// run's launch, prepares its organization's namespace, and creates its pod.
 func (s *Service) start(ctx context.Context, run Run) error {
-	if run.Definition.Kind() == jobs.KindWebhook {
+	switch run.Definition.Kind() {
+	case jobs.KindWebhook:
 		return s.deliver(ctx, run)
+	case jobs.KindAgent:
+		return s.assign(ctx, run)
 	}
 	launch, refusal, err := s.launch(ctx, run)
 	if err != nil {

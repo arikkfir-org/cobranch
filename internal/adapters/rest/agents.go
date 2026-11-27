@@ -91,6 +91,9 @@ func task(t agents.Task) Task {
 		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), Sha: optional(t.SHA), State: TaskState(t.State),
 		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), Spent: usd(t.Spent), InputTokens: t.InputTokens,
 		OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap), CreatedAt: t.CreatedAt.UTC(), Version: t.Version, Private: &t.Private}
+	if t.RunNumber != 0 {
+		out.Run = &t.RunNumber
+	}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()
 		out.StartedAt = &at

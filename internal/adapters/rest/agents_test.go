@@ -235,6 +235,26 @@ var checkerID = uuid.MustParse("00000000-0000-7000-8000-00000000c4ec")
 
 func checkerPath(*orgFixture) string { return "/v1/orgs/acme/agents/" + checkerID.String() }
 
+// TestTaskRun checks that a job's task answers the number of the run it is, and leaves run out for any other.
+func TestTaskRun(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		task agents.Task
+		want int64
+	}{
+		{name: "a job's task", task: agents.Task{Kind: agents.KindJob, RunID: uuid.New(), RunNumber: 4}, want: 4},
+		{name: "a job's task whose run is gone", task: agents.Task{Kind: agents.KindJob}},
+		{name: "an assigned task", task: agents.Task{Kind: agents.KindAssigned}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := task(tt.task).Run
+			if (got == nil) != (tt.want == 0) || got != nil && *got != tt.want {
+				t.Errorf("run = %v, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRepositoryAgents(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "listed to a reader of its repository", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/agents"), before: addChecker, wantStatus: 200,
