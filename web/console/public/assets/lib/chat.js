@@ -257,21 +257,23 @@ export async function conversation(s, signal) {
       orgPages.has("agents") ? h("a", { href: base + org + "/agents", "data-nav": "" }, "Create one") : "An admin creates one", " to ask it here."];
     return ["Nobody will answer this: it asks no agent. Pick one with Ask, or type @, to give it a task in this thread."];
   };
-  // statusOf is the status a thread's end shows, if any: why the task its last ask started ended unanswered, or, in a
-  // private conversation, why the viewer's last message gets no answer. A thread whose task still works shows its state
-  // on the asked row instead, and one an agent answered last shows nothing.
+  // statusOf is the status a thread's end shows, if any: why the task its last ask started ended without answering, or,
+  // in a private conversation, why the viewer's last message gets no answer. A task that hasn't ended shows its state on
+  // the asked row instead and reads what follows the ask, replies included; a thread an agent answered last shows nothing.
   const statusOf = (v) => {
     const ms = [...v.messages.values()].map((e) => e.m).filter((m) => !m.deletedAt);
     const last = ms[ms.length - 1];
-    if (!last || byAgent(last)) return null;
+    if (!last) return null;
     const at = ms.findLastIndex((m) => m.askedTaskNumber);
-    if (at >= 0 && !ms.slice(at + 1).some(byAgent)) {
+    if (at >= 0) {
       const e = asked.get(ms[at].askedTaskNumber), t = e && e.task;
       if (!t || !ended(t)) return null;
-      const why = ending(t);
+      // A task that failed or was cancelled says so whatever its agent posted first; one that succeeded, only when its
+      // agent posted nothing after the ask.
+      const why = t.state !== "succeeded" || !ms.slice(at + 1).some(byAgent) ? ending(t) : null;
       if (why) return statusRow(t.endedAt, why);
     }
-    if (!s.alone || last.askedTaskNumber || !last.author || last.author.id !== me.id) return null;
+    if (byAgent(last) || !s.alone || last.askedTaskNumber || !last.author || last.author.id !== me.id) return null;
     if (s.ask && !rostered) agentsToAsk().then(() => settle(v), () => {});
     const why = nobody();
     return why ? statusRow(last.createdAt, why) : null;

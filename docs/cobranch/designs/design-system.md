@@ -23,7 +23,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 57 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
+| Components | 58 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
 | Screens | 70 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
@@ -234,7 +234,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 57 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 58 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by

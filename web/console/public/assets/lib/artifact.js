@@ -6,6 +6,7 @@
 import { api } from "./api.js";
 import { artifactHref, emptyCard, formats, kinds, updated } from "./artifacts.js";
 import { privateSubject } from "./chat.js";
+import { markCode } from "./codemarks.js";
 import { openDialog } from "./dialog.js";
 import { h } from "./dom.js";
 import { when } from "./format.js";
@@ -197,7 +198,7 @@ function editDialog(org, a, v, refresh) {
   let titled = a.title;
   openDialog({
     title: "Edit " + a.title,
-    body: [field("Title", title), field(formats[v.mediaType] || "Body", text, "Saving writes it as version " + (a.head + 1) + "."), field("Why", note)],
+    body: [field("Title", title), field(formats[v.mediaType] || "Body", v.mediaType === "text/markdown" ? markCode(text) : text, "Saving writes it as version " + (a.head + 1) + "."), field("Why", note)],
     action: "Save",
     submit: async () => {
       if (title.value !== titled) {
