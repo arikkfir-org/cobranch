@@ -1,8 +1,8 @@
-import { api } from "../../lib/api.js";
 import { h } from "../../lib/dom.js";
 import { plural, since } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
 import { pageHeading } from "../../lib/layout.js";
+import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { visibilities } from "../../lib/organization.js";
 import { base } from "../../lib/state.js";
 
@@ -19,14 +19,17 @@ export const mains = {
 const visibilityTags = { private: { icon: "lock", tone: "warning" }, internal: { icon: "building-2", tone: "neutral" } };
 
 // nav puts Repositories in the sidebar, with the repositories the viewer may read under it, each with main's status as
-// its dot.
+// its dot, and follows them.
 export const nav = { label: "Repositories", order: 20, icon: "folder-git-2",
-  items: ({ org }) => api("GET", "/orgs/" + org.slug + "/repos").then((d) => ({ whole: true, count: d.repositories.length,
+  items: ({ org }) => readTagged(reposPath(org)).then(({ data: d, tag }) => ({ whole: true, count: d.repositories.length,
     items: d.repositories.map((r) => {
       const main = mains[r.summary?.main] || mains.none;
       return { key: r.slug, label: r.slug, href: base + org.slug + "/" + r.slug, code: true, icon: "folder-git-2",
         dot: main === mains.none ? null : main.tone, dotLabel: "main " + main.word.toLowerCase() };
-    }) })) };
+    }), follow: [[reposPath(org), tag]] })) };
+
+// reposPath is the API's path of the organization's repositories.
+const reposPath = (org) => "/orgs/" + org.slug + "/repos";
 export const view = "organization";
 export const crumbs = [{ label: "Repositories" }];
 
@@ -35,10 +38,14 @@ export const heading = ({ org, can }) => pageHeading({ title: "Repositories",
   description: "Every repository " + org.name + " hosts. Push to one and Cobranch runs its pipelines, reviews the push and keeps the branch status current.",
   actions: can("repos.create") ? [h("a", { class: "btn btn-primary", href: base + org.slug + "/new", "data-nav": "" }, icon("plus"), "New repository")] : [] });
 
-// The organization's repositories that the viewer may read, as a table under its filters.
+// The organization's repositories that the viewer may read, as a table under its filters, followed while it shows.
 export default async function show({ org, main, can }) {
-  const list = (await api("GET", "/orgs/" + org.slug + "/repos")).repositories;
+  const { data, tag } = await readTagged(reposPath(org));
+  const list = data.repositories;
   main.replaceChildren(...(list.length ? repositoriesTable(org, list) : [noRepositories(org, can)]));
+  const drawn = main.firstElementChild;
+  const still = () => drawn.isConnected;
+  followLists([[reposPath(org), tag]], still, () => drawAgain(() => show({ org, main, can }), still));
 }
 
 // noRepositories is the card a viewer who reads no repository sees, with New repository for one who may make one.

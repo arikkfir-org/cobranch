@@ -3,6 +3,7 @@ import { agentPage, emptyState, spendReport, statusBadge, taskLink, taskTitle } 
 import { h } from "../../../lib/dom.js";
 import { plural } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
+import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
 import { recount } from "../../../lib/tabs.js";
 
 export const tab = { label: "Agents", order: 0 };
@@ -11,13 +12,17 @@ export const view = "organization.agents";
 export default ({ org, main }) => showAgents(org, main);
 
 // showAgents lists the organization's agents (Agents): what each is for, the model it runs on, whether it works and on
-// what, and how many tasks it was given this month, filtered by name or what it is for.
+// what, and how many tasks it was given this month, filtered by name or what it is for; it follows the agents and
+// their tasks at work while it shows.
 async function showAgents(org, main) {
-  const [agents, working, report] = await Promise.all([
-    api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
-    api("GET", "/orgs/" + org.slug + "/tasks?" + new URLSearchParams([["state", "running"], ["state", "waiting"], ["limit", "100"]])).then((d) => d.tasks, () => []),
-    spendReport(org).catch(() => null),
-  ]);
+  const paths = ["/orgs/" + org.slug + "/agents", "/orgs/" + org.slug + "/tasks?" + new URLSearchParams([["state", "running"], ["state", "waiting"], ["limit", "100"]])];
+  const [read, report] = await Promise.all([Promise.all([readTagged(paths[0]), readTagged(paths[1]).catch(() => null)]), spendReport(org).catch(() => null)]);
+  const agents = read[0].data.agents, working = read[1] ? read[1].data.tasks : [];
+  const follow = () => {
+    const drawn = main.firstElementChild;
+    const still = () => drawn.isConnected;
+    followLists(paths.map((path, i) => [path, read[i]?.tag]), still, () => drawAgain(() => showAgents(org, main), still));
+  };
   recount("", agents.length);
   // on is the task each agent works on now, the newest when it works on more than one.
   const on = new Map();
@@ -34,7 +39,8 @@ async function showAgents(org, main) {
       h("td", { title: "Tasks it was given this month" }, report ? String(monthly.get(a.id) || 0) : "–"));
   };
   if (!agents.length) {
-    return main.replaceChildren(h("div", { class: "card" }, emptyState("bot", "No agents yet", "An agent takes the tasks it is given. Make one with New agent.")));
+    main.replaceChildren(h("div", { class: "card" }, emptyState("bot", "No agents yet", "An agent takes the tasks it is given. Make one with New agent.")));
+    return follow();
   }
   const rows = agents.map(row);
   const table = h("table", { class: "table agents-table" }, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Model"), h("th", {}, "Status"),
@@ -49,4 +55,5 @@ async function showAgents(org, main) {
   main.replaceChildren(h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter),
     h("span", { class: "filters-count" }, plural(agents.length, "agent") + " · " + on.size + " working")),
   table, none);
+  follow();
 }

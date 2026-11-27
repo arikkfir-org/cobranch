@@ -22,7 +22,8 @@ export async function answer(response) {
   return data;
 }
 // apiPage reads a page of a list the REST API pages, at the API's path or at the URL a previous page linked, and
-// the URL of the next page, as its Link names it: null after the last.
+// the URL of the next page, as its Link names it: null after the last; and the page's ETag, which a page that follows
+// it waits on (lib/live.js).
 export async function apiPage(pathOrUrl) {
   const url = new URL(pathOrUrl.startsWith("/") ? config.restUrl + "/v1" + pathOrUrl : pathOrUrl, location.href).href;
   const r = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
@@ -30,5 +31,5 @@ export async function apiPage(pathOrUrl) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
   const next = /<([^>]*)>\s*;\s*rel="next"/.exec(r.headers.get("Link") || "");
-  return { data, next: next ? new URL(next[1], url).href : null };
+  return { data, next: next ? new URL(next[1], url).href : null, tag: r.headers.get("ETag") };
 }

@@ -1,9 +1,9 @@
-import { api } from "../../lib/api.js";
 import { h } from "../../lib/dom.js";
 import { bars, day, stat } from "../../lib/figures.js";
 import { plural } from "../../lib/format.js";
 import { icon } from "../../lib/icons.js";
 import { pageHeading } from "../../lib/layout.js";
+import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { popover } from "../../lib/menu.js";
 import { go } from "../../lib/router.js";
 import { base } from "../../lib/state.js";
@@ -46,20 +46,25 @@ function periodButton(org, shown) {
 
 // An organization's Overview over a period, in the browser's time zone: how its work stands as Stats, its tasks, spend
 // and job minutes by day as Chart/Bars, and the repositories the viewer reads that saw anything, costliest first; or
-// an Empty state while it has nothing to count.
+// an Empty state while it has nothing to count. It follows the figures while it shows.
 export default async function show({ org, main, can, head }) {
   const p = periodOf();
   const query = new URLSearchParams({ ...p.days(new Date()), zone: Intl.DateTimeFormat().resolvedOptions().timeZone });
-  const o = await api("GET", "/orgs/" + org.slug + "/overview?" + query);
+  const path = "/orgs/" + org.slug + "/overview?" + query;
+  const { data: o, tag } = await readTagged(path);
   const description = head?.querySelector(".page-header-description");
   if (!o.repositories && !o.totals.tasks && !o.totals.jobs && !o.issues?.open) {
     if (description) description.textContent = [org.name, plural(o.members, "member"), "no repositories yet"].join(" · ");
     head?.querySelector(".page-header-actions")?.replaceChildren();
     main.replaceChildren(nothingYet(org, can));
-    return;
+  } else {
+    if (description) description.textContent = [org.name + " " + p.phrase, plural(o.members, "member"), repositories(o.repositories), plural(o.agents, "agent")].join(" · ");
+    head?.querySelector(".page-header-actions")?.replaceChildren(periodButton(org, p));
+    main.replaceChildren(h("div", { class: "overview" }, stats(o, p), charts(o, p), byRepository(org, o, p)));
   }
-  if (description) description.textContent = [org.name + " " + p.phrase, plural(o.members, "member"), repositories(o.repositories), plural(o.agents, "agent")].join(" · ");
-  main.replaceChildren(h("div", { class: "overview" }, stats(o, p), charts(o, p), byRepository(org, o, p)));
+  const drawn = main.firstElementChild;
+  const still = () => drawn.isConnected;
+  followLists([[path, tag]], still, () => drawAgain(() => show({ org, main, can, head }), still));
 }
 
 // nothingYet is the Card an organization shows until a repository, an issue or a task gives it something to count,
