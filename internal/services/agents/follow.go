@@ -8,8 +8,8 @@ import (
 	"cobranch.dev/internal/services/live"
 )
 
-// WithNotifier has the service's followers read an organization's model providers and models again as soon as n says
-// its settings may have changed; without it, they read them once a minute.
+// WithNotifier has the service's followers read an organization's agents, model providers and models again as soon as
+// n says its settings may have changed; without it, they read them once a minute.
 func (s *Service) WithNotifier(n live.Notifier) *Service {
 	s.notifier = n
 	return s
@@ -37,4 +37,16 @@ func (s *Service) FollowModels(ctx context.Context, v Viewer, orgID uuid.UUID) (
 		return s.Models(ctx, v, orgID)
 	}, orgID)
 	return list, failed(span, "following the models", err)
+}
+
+// FollowAgents sends the organization's agents, as Agents lists them, at once, then again each time they change, until
+// ctx ends or a read fails, and then closes the channel. Settings · Agents follows them this way, so an agent created,
+// changed, granted a role or deleted elsewhere shows.
+func (s *Service) FollowAgents(ctx context.Context, v Viewer, orgID uuid.UUID) (<-chan []Agent, error) {
+	ctx, span := tracer.Start(ctx, "agents.Service.FollowAgents", onOrg(orgID))
+	defer span.End()
+	list, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) ([]Agent, error) {
+		return s.Agents(ctx, v, orgID)
+	}, orgID)
+	return list, failed(span, "following the agents", err)
 }

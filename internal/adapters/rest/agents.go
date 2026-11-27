@@ -18,6 +18,7 @@ import (
 type Agents interface {
 	Models
 	Agents(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Agent, error)
+	FollowAgents(ctx context.Context, v agents.Viewer, orgID uuid.UUID) (<-chan []agents.Agent, error)
 	Agent(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID) (agents.Agent, error)
 	CreateAgent(ctx context.Context, v agents.Viewer, orgID uuid.UUID, in agents.Input) (agents.Agent, error)
 	UpdateAgent(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, version int64, c agents.Change) (agents.Agent, error)
@@ -114,17 +115,32 @@ func (a api) agentOrg(ctx context.Context, slug string) (agents.Viewer, uuid.UUI
 	return v, org.ID, org.Slug, nil
 }
 
-// ListAgents lists the organization's agents by name.
+// ListAgents lists the organization's agents, each with its grants; with If-None-Match and wait, it waits up to wait
+// seconds for the list to change before it answers 304.
 func (a api) ListAgents(ctx context.Context, req ListAgentsRequestObject) (ListAgentsResponseObject, error) {
 	v, orgID, _, err := a.agentOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.agents.Agents(ctx, v, orgID)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "organization")
+		return nil, err
 	}
-	return ListAgents200JSONResponse{Agents: mapAll(list, agent)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]agents.Agent, error) {
+		list, err := a.agents.Agents(ctx, v, orgID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []agents.Agent, error) {
+		lists, err := a.agents.FollowAgents(ctx, v, orgID)
+		return lists, fail(err, "organization")
+	}, func(list []agents.Agent) (ListAgentsResponseObject, bool, error) {
+		out := ListAgents200JSONResponse{}
+		out.Body.Agents = mapAll(list, agent)
+		return listAnswer("agents", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListAgentsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListAgentsResponseObject {
+				return ListAgents304Response{Headers: ListAgents304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // taggedAgent is a as the API shows it, with its ETag.

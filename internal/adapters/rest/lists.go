@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"cobranch.dev/internal/services/orgs"
 )
 
 // listWait is how long a read of a list waits for it to change, as wait asks: none unless tag names the list the
@@ -59,4 +61,33 @@ func readList[T, R any](ctx context.Context, waits time.Duration, read func(cont
 		return none, fmt.Errorf("waiting for the list to change: %w", err)
 	}
 	return last, nil
+}
+
+// listAnswer is a list's body as a read answers it: ok with the body's ETag, or notModified while tag names it, which
+// it says.
+func listAnswer[R any](kind string, body any, tag *IfNoneMatch, ok, notModified func(etag string) R) (R, bool, error) {
+	etag, err := bodyTag(kind, body, nil)
+	if err != nil {
+		var none R
+		return none, false, err
+	}
+	if matches(tag, etag) {
+		return notModified(etag), true, nil
+	}
+	return ok(etag), false, nil
+}
+
+// orgList reads what a read of one of the organization at slug's lists needs: the viewer, the organization they may
+// read, and how long the read waits for the list to change.
+func (a api) orgList(ctx context.Context, slug string, wait *WaitForChange, tag *IfNoneMatch) (orgs.Viewer, orgs.Organization, time.Duration, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return orgs.Viewer{}, orgs.Organization{}, 0, err
+	}
+	org, err := a.org(ctx, v, slug)
+	if err != nil {
+		return orgs.Viewer{}, orgs.Organization{}, 0, err
+	}
+	waits, err := listWait(wait, tag)
+	return v, org, waits, err
 }

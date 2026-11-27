@@ -65,6 +65,15 @@ func followModels(ctx context.Context, t *testing.T, f *fixture, v agents.Viewer
 	return func() []string { return next(t, ch, func(m agents.Model) string { return m.Provider + "/" + m.Name }) }, nil
 }
 
+// followAgents follows the organization's agents as v, and answers a function that names those it sends next.
+func followAgents(ctx context.Context, t *testing.T, f *fixture, v agents.Viewer) (func() []string, error) {
+	ch, err := f.service.FollowAgents(ctx, v, f.org)
+	if err != nil {
+		return nil, fmt.Errorf("following the agents: %w", err)
+	}
+	return func() []string { return next(t, ch, func(a agents.Agent) string { return a.Name }) }, nil
+}
+
 func TestFollowModelSettings(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -91,6 +100,13 @@ func TestFollowModelSettings(t *testing.T) {
 					t.Fatal(err)
 				}
 			}, before: []string{"anthropic/claude-opus-5-5"}, after: []string{"anthropic/claude-opus-5-5", "anthropic/claude-sonnet-5-5"}},
+		{name: "an agent created elsewhere",
+			follow: followAgents,
+			change: func(t *testing.T, ctx context.Context, f *fixture, _ uuid.UUID) {
+				if _, err := f.service.CreateAgent(ctx, f.olive, f.org, agents.Input{Name: "Ranger", Instructions: "Look."}); err != nil {
+					t.Fatal(err)
+				}
+			}, before: []string{}, after: []string{"Ranger"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

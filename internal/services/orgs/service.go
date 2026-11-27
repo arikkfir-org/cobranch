@@ -12,6 +12,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/limits"
+	"cobranch.dev/internal/services/live"
 )
 
 // Store is what the database keeps for organizations. Each method is one transaction, which acts for actor where
@@ -134,7 +135,10 @@ type Service struct {
 	authz    *auth.Authorizer
 	limits   Limits
 	notifier Notifier
-	now      func() time.Time
+	// changes says when something of an organization changed, for the followers of its lists; nil, which never says,
+	// leaves them to read again once a minute.
+	changes live.Notifier
+	now     func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz.

@@ -169,12 +169,12 @@ func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Po
 	chatHub, orgHub, changeHub := hubs(ctx, a, pool)
 	agentStore := postgres.NewAgentStore(pool)
 	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...).WithNotifier(changeHub)
-	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas).WithNotifier(orgHub),
+	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas).WithNotifier(orgHub).WithChanges(changeHub),
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: codeService,
 		issues:    issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
 		chats:     chats.NewService(postgres.NewChatStore(pool), chatHub, renderer, authorizer).WithAgents(agentService, agentStore),
 		agents:    agentService,
-		secrets:   secrets.NewService(postgres.NewSecretStore(pool), authorizer, box),
+		secrets:   secrets.NewService(postgres.NewSecretStore(pool), authorizer, box).WithNotifier(changeHub),
 		artifacts: artifacts.NewService(postgres.NewArtifactStore(pool), authorizer, renderer),
 		overview:  overview.NewService(postgres.NewOverviewStore(pool), authorizer), administration: administration}, closeLogs, nil
 }

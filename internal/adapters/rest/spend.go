@@ -86,14 +86,13 @@ func (a api) ListModels(ctx context.Context, req ListModelsRequestObject) (ListM
 // listedModels is list as ListModels answers it: 304 while it is the one tag names, which it says.
 func listedModels(list []agents.Model, tag *IfNoneMatch) (ListModelsResponseObject, bool, error) {
 	body := ModelList{Models: mapAll(list, model)}
-	etag, err := bodyTag("models", body, nil)
-	if err != nil {
-		return nil, false, err
-	}
-	if matches(tag, etag) {
-		return ListModels304Response{Headers: ListModels304ResponseHeaders{ETag: etag}}, true, nil
-	}
-	return ListModels200JSONResponse{Body: body, Headers: ListModels200ResponseHeaders{ETag: etag}}, false, nil
+	return listAnswer("models", body, tag,
+		func(etag string) ListModelsResponseObject {
+			return ListModels200JSONResponse{Body: body, Headers: ListModels200ResponseHeaders{ETag: etag}}
+		},
+		func(etag string) ListModelsResponseObject {
+			return ListModels304Response{Headers: ListModels304ResponseHeaders{ETag: etag}}
+		})
 }
 
 // GetModel answers one of the organization's models.

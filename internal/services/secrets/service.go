@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -26,6 +27,9 @@ type Service struct {
 	authz  *auth.Authorizer
 	sealer auth.Sealer
 	newID  func() uuid.UUID
+	// changes says when an organization's secrets may have changed, for those who follow them; nil, which never says,
+	// leaves them to read again once a minute.
+	changes live.Notifier
 }
 
 // NewService returns a Service over store, checking permissions with authz and sealing values with sealer: nil when
@@ -118,6 +122,26 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) (
 		return nil, fmt.Errorf("listing the secrets: %w", err)
 	}
 	return list, nil
+}
+
+// WithNotifier has the service's followers read the secrets again as soon as n says their organization's changed;
+// without it, they read them once a minute.
+func (s *Service) WithNotifier(n live.Notifier) *Service {
+	s.changes = n
+	return s
+}
+
+// FollowList sends the secrets List lists at once, then again each time they change, until ctx ends or a read fails,
+// and then closes the channel. Settings · Secrets follows them this way, so a secret added, renamed or deleted
+// elsewhere shows.
+func (s *Service) FollowList(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) (_ <-chan []Secret, err error) {
+	ctx, span := tracer.Start(ctx, "secrets.Service.FollowList", trace.WithAttributes(orgAttr(orgID), repoAttr(repoID)))
+	defer span.End()
+	defer func() { record(span, err) }()
+	lists, err := live.Follow(ctx, s.changes, live.Poll, func(ctx context.Context) ([]Secret, error) {
+		return s.List(ctx, v, orgID, repoID)
+	}, orgID)
+	return lists, wrap("following the secrets", err)
 }
 
 // Jobs lists the repository's jobs, the principals its secrets are granted to, by name: each job that has queued a

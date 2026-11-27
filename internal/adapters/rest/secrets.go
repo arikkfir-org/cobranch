@@ -16,6 +16,7 @@ import (
 // Secrets is what the API needs of the secrets' service.
 type Secrets interface {
 	List(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) ([]secrets.Secret, error)
+	FollowList(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) (<-chan []secrets.Secret, error)
 	Jobs(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) ([]secrets.Principal, error)
 	Get(ctx context.Context, v secrets.Viewer, orgID, id uuid.UUID) (secrets.Secret, error)
 	Create(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID, in secrets.Input) (secrets.Secret, error)
@@ -83,21 +84,27 @@ func secretMatch(header *IfMatchSecret) (int64, error) {
 	return match, nil
 }
 
-// ListSecrets lists the organization's own secrets.
+// ListSecrets lists the organization's own secrets; with If-None-Match and wait, it waits up to wait seconds for the
+// list to change before it answers 304.
 func (a api) ListSecrets(ctx context.Context, req ListSecretsRequestObject) (ListSecretsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.secrets.List(ctx, v, org.ID, uuid.Nil)
-	if err != nil {
-		return nil, secretFail(err, "organization")
-	}
-	return ListSecrets200JSONResponse{Secrets: nonNil(mapAll(list, secret))}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]secrets.Secret, error) {
+		list, err := a.secrets.List(ctx, v, org.ID, uuid.Nil)
+		return list, secretFail(err, "organization")
+	}, func(ctx context.Context) (<-chan []secrets.Secret, error) {
+		lists, err := a.secrets.FollowList(ctx, v, org.ID, uuid.Nil)
+		return lists, secretFail(err, "organization")
+	}, func(list []secrets.Secret) (ListSecretsResponseObject, bool, error) {
+		out := ListSecrets200JSONResponse{Body: SecretList{Secrets: nonNil(mapAll(list, secret))}}
+		return listAnswer("secrets", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListSecretsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListSecretsResponseObject {
+				return ListSecrets304Response{Headers: ListSecrets304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // CreateSecret adds a secret to the organization's settings.
