@@ -163,6 +163,21 @@
 .textarea::placeholder { color: var(--color-fg-subtle); }
 .textarea:disabled::placeholder { color: var(--color-fg-disabled); }
 
+/* Inline code: text in backticks within written text (a chat message, a comment, a review), in Code/Medium on bg/code,
+   space/4 either side, radius/sm; never in a file's code view, where every line is code. Rendered Markdown's code
+   outside a block takes it too. */
+.inline-code, .chat-message-body :not(pre) > code { padding: 0 var(--space-4); border-radius: var(--radius-sm); background: var(--color-bg-code); }
+.inline-code { font: var(--text-code-medium); }
+
+/* The same background under inline code as it is typed in a Markdown text box (lib/codemarks.js): a backdrop beneath
+   the textarea with its text, transparent but for each span, backticks included, which keep its text in place. */
+.code-marks-box { position: relative; display: flex; min-width: 0; }
+.code-marks-box > textarea { flex: 1; }
+.code-marks-box > textarea.code-marks-text { position: relative; background: transparent; }
+.code-marks { position: absolute; top: 0; left: 0; overflow: hidden; border-color: transparent; color: transparent; white-space: pre-wrap;
+  overflow-wrap: break-word; pointer-events: none; }
+.code-marks-span { border-radius: var(--radius-sm); background: var(--color-bg-code); color: transparent; }
+
 /* Checkbox and Radio: a 16px box (any number on) or circle (one of a group on), filled with action/primary when on,
    beside its label; .checkbox and .radio are the label around the native input. */
 .checkbox, .radio { display: inline-flex; align-items: center; gap: var(--space-8); color: var(--color-fg-default); font: var(--text-body-medium); cursor: pointer; }

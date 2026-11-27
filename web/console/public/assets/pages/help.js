@@ -3,7 +3,8 @@ import { logo, mark, markSmall } from "../lib/brand.js";
 import { branchStatuses } from "../lib/branches.js";
 import { h } from "../lib/dom.js";
 import { bars, day, stat } from "../lib/figures.js";
-import { copyField } from "../lib/forms.js";
+import { markCode } from "../lib/codemarks.js";
+import { copyField, textarea } from "../lib/forms.js";
 import { icon } from "../lib/icons.js";
 import { reviewStates } from "../lib/reviews.js";
 import { base } from "../lib/state.js";
@@ -223,7 +224,8 @@ function patterns() {
       ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"], ["Table/Cell Issue, Person, Unassigned", ".cell-issue .cell-person .cell-unassigned"],
       ["Table/Row Muted, Selected", ".row-muted .row-selected"], ["Copy field", ".copy-field"], ["Fact row", ".facts .fact-row .fact-label .fact-value .fact-row-person .fact-person .fact-person-name .fact-person-email .fact-row-code .fact-row-who"], ["Activity/Event", ".event-row"],
       ["Swatch", ".swatches .swatch .is-chosen"], ["Pattern/Agent row", ".agent-row"], ["Activity/Item", ".activity-list .activity-item"],
-      ["Run/Step row", ".step-row .step-row-name .step-row-time .step-row-quiet"], ["Log/Line", ".log .log-line .log-time .log-text .log-note"]],
+      ["Run/Step row", ".step-row .step-row-name .step-row-time .step-row-quiet"], ["Log/Line", ".log .log-line .log-time .log-text .log-note"],
+      ["Pattern/Inline code", ".inline-code .code-marks-box .code-marks .code-marks-span"]],
     h("ul", { class: "list" },
       h("li", { class: "commit-row" }, h("span", { class: "avatar avatar-24" }, "NL"), text("Hand pushes to the push worker before returning", "Noa Levi committed 12 minutes ago"),
         h("span", { class: "row-icons" }, [annotationStatuses.successful, annotationStatuses.successful, annotationStatuses.in_progress].map((s) => h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)))),
@@ -239,6 +241,8 @@ function patterns() {
         .map(([time, text]) => h("div", { class: "log-line" }, h("span", { class: "log-time" }, time), h("span", { class: "log-text" }, text))))),
     h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "lint")),
       h("div", { class: "log" }, h("p", { class: "log-note" }, "This installation keeps no logs: it has no object store for them."))),
+    h("div", { class: "specimens-fields" }, h("p", {}, "Where does ", h("code", { class: "inline-code" }, "writeStatus"), " keep the branch status?"),
+      (() => { const t = textarea({ rows: 2, "aria-label": "Inline code as it is typed" }); t.value = "Is `ask.busy` covered by a test?"; return markCode(t); })()),
     h("ul", { class: "list" },
       h("li", { class: "branch-row" }, icon("git-branch"), text("feature/push-worker", "into main · 4 commits · updated 2 minutes ago by Noa Levi"), badge(branchStatuses.processing),
         h("span", { class: "avatar" }, "NL"), h("span", { class: "row-aside" }, icon("message-square", "Messages"), " 8"))),

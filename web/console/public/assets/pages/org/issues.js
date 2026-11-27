@@ -2,10 +2,11 @@ import { taskPage } from "../../lib/agent.js";
 import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { issueSubject } from "../../lib/chat.js";
+import { markCode } from "../../lib/codemarks.js";
 import { ask, openDialog } from "../../lib/dialog.js";
 import { h } from "../../lib/dom.js";
-import { banner, failure, field, input, selectBox, textarea } from "../../lib/forms.js";
 import { ago, capitalized, since, when, whenExactly } from "../../lib/format.js";
+import { banner, failure, field, input, selectBox, textarea } from "../../lib/forms.js";
 import { avatar, icon } from "../../lib/icons.js";
 import { branchHref, issueChoices, issueList, issuePath, issueStates, item, labelTag, labelTones, listTabLinks } from "../../lib/issues.js";
 import { pageHeading } from "../../lib/layout.js";
@@ -113,7 +114,7 @@ async function showNewIssue(org, main, can) {
   h("div", { class: "card-body" },
     field("Repository", selectBox(repository), "Optional. With a repository, its branch opens there; without one, the issue is the organization's."),
     field("Title", title),
-    field("Description", description, "Markdown. Evidence and \"Done when\" help an agent act on it."),
+    field("Description", markCode(description), "Markdown. Evidence and \"Done when\" help an agent act on it."),
     field("Assignee", selectBox(assignee), assign ? "Nobody yet, a member, or an agent, which starts on it." : "Nobody yet, or a member."),
     field("Labels", named, can("issues.manage") ? "Comma-separated; new ones are created." : "Comma-separated, of the organization's labels.")),
   h("footer", { class: "card-footer" }, h("a", { class: "btn", href: base + org.slug + "/issues", "data-nav": "" }, "Cancel"), create)));
@@ -194,7 +195,7 @@ function issueHeader({ org, issue, can, save, fail, path, tag }) {
     const title = input({ name: "title", required: true, maxlength: 200, value: issue.title });
     const description = textarea({ name: "description", rows: 10, maxlength: 65536 });
     description.value = issue.description;
-    openDialog({ title: "Edit " + issue.identifier, action: "Save", body: [field("Title", title), field("Description", description, "Markdown.")],
+    openDialog({ title: "Edit " + issue.identifier, action: "Save", body: [field("Title", title), field("Description", markCode(description), "Markdown.")],
       submit: () => save({ title: title.value, description: description.value }) });
   };
   return h("header", { class: "issue-header" },

@@ -4,10 +4,11 @@
 // viewer's Viewed marks, which fold the files they hold.
 
 import { api } from "./api.js";
+import { markCode } from "./codemarks.js";
 import { lineThreads } from "./diffthreads.js";
 import { h } from "./dom.js";
-import { banner, checkbox } from "./forms.js";
 import { plural } from "./format.js";
+import { banner, checkbox } from "./forms.js";
 import { icon } from "./icons.js";
 import { popover } from "./menu.js";
 
@@ -258,7 +259,7 @@ function lineDrafter(f, d, drafting) {
       row.replaceWith(drafted(c));
       drafting.changed();
     };
-    const row = h("div", { class: "diff-draft" }, h("form", { class: "draft-comment", onsubmit: add }, text,
+    const row = h("div", { class: "diff-draft" }, h("form", { class: "draft-comment", onsubmit: add }, markCode(text),
       h("div", { class: "draft-comment-actions" }, h("button", { class: "btn btn-sm", type: "button", onclick: () => row.remove() }, "Cancel"),
         h("button", { class: "btn btn-sm btn-primary", type: "submit" }, "Add comment"))));
     line.after(row);

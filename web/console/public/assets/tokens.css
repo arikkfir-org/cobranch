@@ -146,6 +146,7 @@
   --color-status-ai-bg: var(--violet-50); /* AI: agents and AI review: tinted background */
   --color-status-ai-border: var(--violet-200); /* AI: agents and AI review: border */
   --color-status-ai-solid: var(--violet-500); /* AI: agents and AI review: dots and solid marks */
+  --color-bg-code: var(--gray-100); /* Inline code in written text: chat messages, comments, reviews, rendered Markdown, and as it is typed */
 
   /* Spacing */
   --space-0: 0px;
@@ -280,6 +281,7 @@
     --color-status-ai-bg: var(--violet-950);
     --color-status-ai-border: var(--violet-800);
     --color-status-ai-solid: var(--violet-400);
+    --color-bg-code: var(--gray-800);
   }
 }
 :root[data-theme="dark"] {
@@ -343,4 +345,5 @@
   --color-status-ai-bg: var(--violet-950);
   --color-status-ai-border: var(--violet-800);
   --color-status-ai-solid: var(--violet-400);
+  --color-bg-code: var(--gray-800);
 }

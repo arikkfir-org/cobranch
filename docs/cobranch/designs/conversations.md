@@ -208,6 +208,9 @@ person’s private task shows as a place in the queue, nothing more.
   × asks nobody again. A thread's reply is the same box, with the same Ask. An agent's conversation has no Ask: every
   new thread asks its agent. A message that asked an agent reads "Asked Researcher · #12" under its text, the number
   linking to the task; an agent's own messages carry its Agent tag, which links to the task it works.
+- **Every message gets an answer** ([ENG-289](https://linear.app/arikkfir/issue/ENG-289)). The asked line adds the task's state ("Asked Researcher · #12 · Working"), followed while it hasn't ended. When nobody will answer, the pane answers in the thread as Cobranch, a reply it draws and never stores: a message in the viewer's private conversation that asks no agent says so, and why: the viewer may not ask one (`agents.assign`), the organization has none (with a link to make one), or the message asked none (pick one with Ask or @). A task that fails, is cancelled or ends without answering in the thread gets a reply naming its agent, its number and its reason.
+- **Copy.** Hovering a message shows Copy beside Edit and Delete, which copies its text as written.
+- **Inline code** in a message, and as it is typed in the composer, a reply or an edit, draws on `bg/code` ([ENG-290](https://linear.app/arikkfir/issue/ENG-290), [design system](design-system.md)).
 - **Private tasks in lists.** Another person's private task shows as "Asked in private", with the agent, its number,
   state and times, and no link.
 - **Artifacts in the pane.** An artifact an agent generates in a conversation shows in that conversation's pane as a

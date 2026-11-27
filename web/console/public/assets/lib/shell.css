@@ -149,11 +149,15 @@ a.app-thread-lines:hover code { text-decoration: underline; }
 @media (hover: none) { .chat-message-actions { visibility: visible; } }
 .chat-message-body { color: var(--color-fg-default); font: var(--text-body-small); overflow-wrap: anywhere; }
 /* Under a message that asked an agent: the agent, and the task it asked for. */
-.chat-message-asked { display: flex; align-items: center; gap: var(--space-6); color: var(--color-fg-muted); font: var(--text-body-small); }
+.chat-message-asked { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-6); color: var(--color-fg-muted); font: var(--text-body-small); }
+.chat-message-asked-state { display: inline-flex; align-items: center; gap: var(--space-6); }
 .chat-message-asked .icon svg { width: calc(var(--space-12) + var(--space-2)); height: calc(var(--space-12) + var(--space-2)); }
 .chat-message-asked a { color: var(--color-fg-link); text-decoration: none; }
 .chat-message-asked a:hover { text-decoration: underline; }
 .chat-message-text { white-space: pre-wrap; }
+/* Pane · Status replies: Cobranch's own reply under a thread, saying why nobody answers; drawn, never stored. */
+.chat-message-status .chat-message-body { color: var(--color-fg-muted); }
+.chat-message-status .chat-message-body a { color: var(--color-fg-link); }
 .chat-message:has(> .artifact-card) { flex-wrap: wrap; }
 .artifact-card { display: flex; flex-basis: 100%; min-width: 0; align-items: center; gap: var(--space-8); margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md); background: var(--color-bg-surface); }
@@ -172,6 +176,7 @@ a.app-thread-lines:hover code { text-decoration: underline; }
 .app-pane-composer:focus-within { box-shadow: var(--shadow-focus-ring); }
 .app-pane-composer textarea { flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--color-fg-default); font: var(--text-body-small); resize: none; }
 .app-pane-composer textarea:focus-visible { box-shadow: none; }
+.app-pane-composer > .code-marks-box { flex: 1; }
 .app-pane-composer textarea:placeholder-shown { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .app-pane-composer[aria-disabled="true"] { border-color: var(--color-border-subtle); }
 .app-pane-composer textarea:disabled::placeholder { color: var(--color-fg-disabled); }
