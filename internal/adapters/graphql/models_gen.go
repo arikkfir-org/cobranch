@@ -654,7 +654,7 @@ type DeliveryTarget struct {
 type Diff struct {
 	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
 	Base *string `json:"base,omitempty"`
-	// A branch's base's tip, which its merge base is reckoned from; null for a commit.
+	// A branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned from; null for a commit.
 	BaseTip *string `json:"baseTip,omitempty"`
 	// The commit it runs to.
 	Head string `json:"head"`
@@ -672,7 +672,7 @@ type Diff struct {
 type DiffCounts struct {
 	// The commit it runs from: a branch's merge base with its base's tip. Null when the branch shares no history with its base, so the diff runs from the empty tree.
 	Base *string `json:"base,omitempty"`
-	// The branch's base's tip, which its merge base is reckoned from.
+	// The branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned from.
 	BaseTip *string `json:"baseTip,omitempty"`
 	// The commit it runs to.
 	Head string `json:"head"`
@@ -1601,7 +1601,7 @@ type Repository struct {
 	Blob *File `json:"blob,omitempty"`
 	// Which commit last changed each line of the file at path of the commit ref names, as tree takes them, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a BAD_USER_INPUT error whose reason is path.text. A ref or a path that finds nothing is an error, as for blob.
 	Blame *Blame `json:"blame,omitempty"`
-	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
+	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// How much the branch of name's diff, as branchDiff reckons it, changes, without its files: the files and lines it adds and removes, counted in full; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. An installation without a Git server answers UNAVAILABLE.
 	BranchDiffCounts *DiffCounts `json:"branchDiffCounts,omitempty"`
