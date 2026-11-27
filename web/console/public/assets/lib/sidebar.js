@@ -23,6 +23,8 @@ const fresh = 60000;
 const read = new Map();
 // watching stops the followers of the sections the sidebar follows, by the organization's slug and the section's part.
 const watching = new Map();
+// drawn is the slug of the organization whose sidebar was drawn last, so a section read for another starts no follower.
+let drawn = "";
 
 // recentKey is where this browser keeps the sub items of an organization's section the viewer opened last.
 const recentKey = (org, part) => "cobranch.recent." + org.id + "." + part;
@@ -155,6 +157,7 @@ function switcher(org) {
 // modules name, in their order, each section with a divider before the first and its sub items, then the switcher and
 // the places at the foot.
 export function sidebar(org, can, part) {
+  drawn = org.slug;
   const places = [...orgPages].filter(([, m]) => m.nav && !m.nav.under && (!m.allowed || m.allowed(can))).sort(([, a], [, b]) => a.nav.order - b.nav.order);
   const nav = h("nav", { class: "app-sidebar-nav", "aria-label": org.name });
   let divided = false;
@@ -170,7 +173,7 @@ export function sidebar(org, can, part) {
     const section = h("div", { class: "app-sidebar-section", "data-section": p, "data-org": org.slug }, navItem(org, p, m, p === part), h("div", { class: "nav-sub-items" }));
     nav.append(section);
     drawItems(org, p, section);
-    readItems(org, can, p, m).then(() => watch(org, can, p, m));
+    readItems(org, can, p, m).then(() => drawn === org.slug && watch(org, can, p, m));
   }
   const foot = places.filter(([, m]) => m.nav.place === "foot").map(([p, m]) => navItem(org, p, m, p === part));
   return h("aside", { class: "app-sidebar" },
@@ -182,6 +185,7 @@ export function sidebar(org, can, part) {
 
 // bareSidebar is the sidebar of a viewer in no organization yet: the logo, and the page that creates or joins one.
 export function bareSidebar() {
+  drawn = "";
   stopWatching("");
   return h("aside", { class: "app-sidebar" },
     h("a", { class: "app-sidebar-logo", href: base, "data-nav": "", "aria-label": "Cobranch" }, logo()), h("hr", { class: "app-sidebar-divider" }),

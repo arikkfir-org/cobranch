@@ -17,8 +17,6 @@ CREATE TRIGGER notify_changes AFTER INSERT OR UPDATE OR DELETE ON reviews
     FOR EACH ROW EXECUTE FUNCTION notify_changes('org_id');
 CREATE TRIGGER notify_changes AFTER INSERT OR UPDATE OR DELETE ON issues
     FOR EACH ROW EXECUTE FUNCTION notify_changes('org_id');
-CREATE TRIGGER notify_changes AFTER INSERT OR UPDATE OR DELETE ON events
-    FOR EACH ROW EXECUTE FUNCTION notify_changes('org_id');
 CREATE TRIGGER notify_changes AFTER INSERT OR UPDATE OR DELETE ON agent_tasks
     FOR EACH ROW EXECUTE FUNCTION notify_changes('org_id');
 CREATE TRIGGER notify_changes AFTER INSERT OR UPDATE OR DELETE ON task_spend
@@ -43,7 +41,6 @@ DROP TRIGGER notify_changes ON deliveries;
 DROP TRIGGER notify_changes ON job_runs;
 DROP TRIGGER notify_changes ON task_spend;
 DROP TRIGGER notify_changes ON agent_tasks;
-DROP TRIGGER notify_changes ON events;
 DROP TRIGGER notify_changes ON issues;
 DROP TRIGGER notify_changes ON reviews;
 DROP TRIGGER notify_changes ON pushes;

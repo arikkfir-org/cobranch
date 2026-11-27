@@ -202,7 +202,7 @@ func TestOrganizationPagesNotify(t *testing.T) {
 		defs[table] = def
 	}
 	must(t, rows.Err())
-	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "events", "agent_tasks", "task_spend",
+	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "agent_tasks", "task_spend",
 		"job_runs", "deliveries", "artifacts", "packs", "organization_limits"} {
 		def := defs[table]
 		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, "notify_changes('org_id')") {
