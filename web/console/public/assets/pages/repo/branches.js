@@ -11,6 +11,7 @@ import { fromNow, plural, shortSha, subject as messageSubject, whenExactly } fro
 import { commitListRow } from "../../lib/history.js";
 import { authorAvatar, icon } from "../../lib/icons.js";
 import { issueBadge } from "../../lib/issues.js";
+import { readTagged } from "../../lib/live.js";
 import { popover } from "../../lib/menu.js";
 import { commitReviews, reviewDrafting } from "../../lib/reviews.js";
 import { go, render } from "../../lib/router.js";
@@ -45,11 +46,14 @@ const tabShown = () => {
 const branchView = () => branchTabs[tabShown()].view;
 
 // repositoryBranch is a branch's page: its heading, with Merge and its menu for a viewer who may; how its merge
-// stands, requirement by requirement; and its tabs. A branch that isn't live any more shows its deletion.
+// stands, requirement by requirement; and its tabs. A branch that isn't live any more shows its deletion. It follows
+// the branch, whose answer holds its head's annotations and reviews, and its Jobs tab the runs it shows.
 async function repositoryBranch(ctx, name) {
   let b;
   try {
-    b = await api("GET", ctx.path + "/branches/" + encodeURIComponent(name));
+    const read = await readTagged(ctx.path + "/branches/" + encodeURIComponent(name));
+    b = read.data;
+    ctx.follow(ctx.path + "/branches/" + encodeURIComponent(name), read.tag);
   } catch (err) {
     if (err.status !== 404) throw err;
     return deletedBranchPage(ctx, name);
@@ -74,7 +78,7 @@ async function tabContent(ctx, b, tab, envs) {
     return [...await diffView(branch + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can), me ? branch + "/viewed" : null),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
-  if (tab === "jobs") return branchJobs(path, at, b, can, fail);
+  if (tab === "jobs") return branchJobs(path, at, b, can, fail, ctx.follow);
   if (tab === "environment") return environmentsOf(ctx, b, await envs);
   if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
   return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,

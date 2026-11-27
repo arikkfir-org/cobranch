@@ -7,7 +7,7 @@ import { popover } from "../../lib/menu.js";
 import { repositoryRun } from "../../lib/run.js";
 import { go } from "../../lib/router.js";
 import { noRuns, runStatuses, runsTable } from "../../lib/runs.js";
-import { base } from "../../lib/state.js";
+import { base, follows } from "../../lib/state.js";
 
 export const nav = { label: "Jobs", order: 20 };
 export const accepts = (rest) => rest.length <= 1;
@@ -16,7 +16,7 @@ export const crumbs = ({ rest }) => [{ label: rest.length ? "#" + rest[0] : "Job
 // subject is a run's branch's conversation, on the run's page; a tag's run has none.
 export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/runs/" + encodeURIComponent(rest[0]))
   .then((r) => (r.ref.startsWith("refs/heads/") ? branchSubject(org, repo, path, at, r.ref.slice("refs/heads/".length), can) : null)) : null;
-export default async (ctx) => ctx.rest.length ? repositoryRun(ctx) : [await jobsList(ctx.path, ctx.at, ctx.fail)];
+export default async (ctx) => ctx.rest.length ? repositoryRun(ctx) : [await jobsList(ctx.path, ctx.at, ctx.fail, ctx.follow)];
 
 // filterNames are the Jobs list's filters, which the address names: a text, a job, a branch and a status.
 const filterNames = ["q", "job", "branch", "status"];
@@ -38,12 +38,14 @@ function apiQuery(params) {
 // jobsList is the repository's runs as the Jobs screen draws them, under its filters: Filter jobs, which keeps the runs
 // whose job's name or branch holds its text, or whose commit starts with it, as it is typed; Any job, Any branch and
 // Any status, whose choices reload the page; and how many runs they keep. A link to the runs at a commit names its
-// short name as the text, and one of an earlier release's, sha=, is read as one.
-async function jobsList(path, at, fail) {
+// short name as the text, and one of an earlier release's, sha=, is read as one. It follows the first page it shows
+// with follow(path, tag), until the viewer reads older runs, which a page drawn again would drop.
+async function jobsList(path, at, fail, follow) {
   const legacy = new URLSearchParams(location.search).get("sha");
   if (legacy) history.replaceState(history.state, "", base + listPath({ sha: "", q: shortSha(legacy) }).slice(1));
   const params = new URLSearchParams(location.search);
   const list = runsTable(path, at, fail);
+  list.more.addEventListener("click", () => follows(null));
   const count = h("span", { class: "filters-count" });
   const none = h("div", { hidden: true });
   let typing = 0;
@@ -62,9 +64,11 @@ async function jobsList(path, at, fail) {
     const mine = ++shown;
     const now = new URLSearchParams(location.search);
     const filtered = filterNames.some((n) => now.get(n));
-    const [page, all] = await Promise.all([list.load(path + "/runs?" + apiQuery(now), false),
+    const first = path + "/runs?" + apiQuery(now);
+    const [page, all] = await Promise.all([list.load(first, false),
       filtered ? api("GET", path + "/runs?limit=1").then((d) => d.total, () => undefined) : undefined]);
     if (!page || mine !== shown) return;
+    follow(first, page.tag);
     const n = page.data.total;
     const runs = (k) => k.toLocaleString() + (k === 1 ? " run" : " runs");
     count.textContent = n === undefined ? "" : all === undefined ? runs(n) : n.toLocaleString() + " of " + runs(all);
