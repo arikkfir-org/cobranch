@@ -1029,6 +1029,9 @@ type TaskNumber = int64
 // ThreadID defines model for thread.
 type ThreadID = openapi_types.UUID
 
+// WaitForChange defines model for waitForChange.
+type WaitForChange = int
+
 // ListAgentConversationThreadsParams defines parameters for ListAgentConversationThreads.
 type ListAgentConversationThreadsParams struct {
 	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
@@ -1225,6 +1228,12 @@ type ListTasksParams struct {
 
 	// Limit How many tasks the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListTranscriptParams defines parameters for ListTranscript.
@@ -1678,7 +1687,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
 	GetTree(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	//
 	// Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
 	ListTasks(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2543,7 +2552,7 @@ func (c *Client) GetTree(ctx context.Context, org Org, repo Repo, params *GetTre
 	return c.Client.Do(req)
 }
 
-// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 //
 // Corresponds with GET /orgs/{org}/tasks (the `ListTasks` operationId).
 func (c *Client) ListTasks(ctx context.Context, org Org, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5140,6 +5149,18 @@ func NewListTasksRequest(server string, org Org, params *ListTasksParams) (*http
 
 		}
 
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5149,6 +5170,21 @@ func NewListTasksRequest(server string, org Org, params *ListTasksParams) (*http
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5696,7 +5732,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
 	GetTreeWithResponse(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*GetTreeResponse, error)
 
-	// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+	// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8976,7 +9012,13 @@ func (r GetTreeResponse) ContentType() string {
 
 // ListTasksResponse200Headers the declared response headers of an HTTP 200 response for ListTasks
 type ListTasksResponse200Headers struct {
+	ETag string
 	Link *string
+}
+
+// ListTasksResponse304Headers the declared response headers of an HTTP 304 response for ListTasks
+type ListTasksResponse304Headers struct {
+	ETag string
 }
 
 type ListTasksResponse struct {
@@ -8996,6 +9038,8 @@ type ListTasksResponse struct {
 	ApplicationproblemJSONDefault *Problem
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *ListTasksResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *ListTasksResponse304Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9922,7 +9966,7 @@ func (c *ClientWithResponses) GetTreeWithResponse(ctx context.Context, org Org, 
 	return ParseGetTreeResponse(rsp)
 }
 
-// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
+// ListTasksWithResponse A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13006,6 +13050,9 @@ func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case rsp.StatusCode == 304:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -13039,6 +13086,13 @@ func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
 	switch {
 	case rsp.StatusCode == 200:
 		var headers ListTasksResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
 		if values := rsp.Header.Values("Link"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -13047,6 +13101,16 @@ func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
 			headers.Link = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers ListTasksResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
 	}
 
 	return response, nil
