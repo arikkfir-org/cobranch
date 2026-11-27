@@ -212,11 +212,60 @@ func TestOrganizationPagesNotify(t *testing.T) {
 	must(t, rows.Err())
 	const org, repo = "notify_changes('org_id')", "notify_changes('org_id', 'repo_id')"
 	for table, want := range map[string]string{"repositories": org, "branches": repo, "annotations": repo, "pushes": repo, "reviews": repo,
-		"issues": org, "branch_issues": org, "agent_tasks": org, "task_spend": org, "job_runs": repo, "deliveries": repo, "artifacts": org,
+		"issues": org, "branch_issues": "notify_branch_issue_changes()", "agent_tasks": org, "task_spend": org, "job_runs": repo, "deliveries": repo, "artifacts": org,
 		"packs": repo, "organization_limits": org} {
 		def := defs[table]
 		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, want) {
 			t.Errorf("table %s's trigger notify_changes = %q; want one after every change, %s", table, def, want)
+		}
+	}
+}
+
+// TestBranchIssuesNotify checks that linking a branch to an issue, or unlinking it, names the branch's repository as
+// well as its organization, since a branch's page shows the issue its branch works on.
+func TestBranchIssuesNotify(t *testing.T) {
+	t.Parallel()
+	f := newRepoFixture(t)
+	branch := uuid.New()
+	_, err := f.pool.Exec(context.Background(), `INSERT INTO branches (id, org_id, repo_id, name, head, created_at, updated_at)
+		VALUES ($1, $2, $3, 'fix', $4, now(), now())`, branch, f.acme.ID, f.website.ID, strings.Repeat("a", 40))
+	must(t, err)
+	// The steps share the branch: the link the first makes, the second removes.
+	for _, step := range []struct {
+		name string
+		sql  string
+	}{
+		{"a branch linked", "INSERT INTO branch_issues (branch_id, org_id, linked_by) VALUES ($1, $2, 'hand')"},
+		{"a branch unlinked", "DELETE FROM branch_issues WHERE branch_id = $1 AND org_id = $2"},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			hearNotified(t, f, step.sql, []any{branch, f.acme.ID}, f.acme.ID, f.website.ID)
+		})
+	}
+}
+
+// hearNotified listens on channel cobranch_changes, runs the change sql makes with args, and checks that the channel then
+// names each of want, or fails after a few seconds.
+func hearNotified(t *testing.T, f *repoFixture, sql string, args []any, want ...uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := f.pool.Acquire(ctx)
+	must(t, err)
+	defer conn.Release()
+	_, err = conn.Exec(ctx, "LISTEN cobranch_changes")
+	must(t, err)
+	_, err = f.pool.Exec(ctx, sql, args...)
+	must(t, err)
+	heard := map[string]bool{}
+	waiting, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	for _, id := range want {
+		for !heard[id.String()] {
+			n, err := conn.Conn().WaitForNotification(waiting)
+			if err != nil {
+				t.Fatalf("heard %v, then %v; want %v", heard, err, want)
+			}
+			heard[n.Payload] = true
 		}
 	}
 }
