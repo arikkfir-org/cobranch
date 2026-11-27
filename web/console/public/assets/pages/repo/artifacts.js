@@ -1,8 +1,8 @@
-import { api } from "../../lib/api.js";
 import { knowTitle } from "../../lib/artifact.js";
 import { audienceBadge, emptyCard, filterMenu, formats, kindOptions, kinds, nameCell, producer, search, updated } from "../../lib/artifacts.js";
 import { h } from "../../lib/dom.js";
 import { icon } from "../../lib/icons.js";
+import { readTagged } from "../../lib/live.js";
 import { compose } from "../../lib/pane.js";
 import { go } from "../../lib/router.js";
 
@@ -17,10 +17,13 @@ const accesses = [{ value: "", word: "Any access" }, { value: "organization", wo
 
 // The artifacts attached to the repository (Figma "Repository · Artifacts") that the viewer may list or read, newest
 // change first, filtered by kind through the API and by access and title as chosen; a viewer who may ask the
-// organization's agents asks one for another in the repository's conversation.
-export default async ({ org, repo, path, orgCan }) => {
+// organization's agents asks one for another in the repository's conversation. It follows them with follow(path, tag).
+export default async ({ org, repo, path, orgCan, follow }) => {
   const query = new URLSearchParams(location.search);
-  const list = (await api("GET", path + "/artifacts" + (query.get("kind") ? "?" + new URLSearchParams({ kind: query.get("kind") }) : ""))).artifacts;
+  const listed = path + "/artifacts" + (query.get("kind") ? "?" + new URLSearchParams({ kind: query.get("kind") }) : "");
+  const read = await readTagged(listed);
+  follow(listed, read.tag);
+  const list = read.data.artifacts;
   list.forEach(knowTitle);
   const kind = kinds[query.get("kind")];
   const ask = orgCan("agents.assign") ? h("button", { class: "btn btn-primary", type: "button",

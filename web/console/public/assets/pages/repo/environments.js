@@ -3,6 +3,7 @@ import { branchSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { emptyCentred, environmentCard, environmentsCard, targetsCard } from "../../lib/environments.js";
 import { icon } from "../../lib/icons.js";
+import { readTagged } from "../../lib/live.js";
 
 export const nav = { label: "Delivery", order: 30 };
 export const accepts = (rest) => rest.length <= 1;
@@ -14,9 +15,13 @@ export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api
 export default (ctx) => ctx.rest.length ? environmentPage(ctx, ctx.rest[0]) : deliveryPage(ctx);
 
 // deliveryPage is the repository's Delivery tab: its environments and the targets main's /cobranch.yaml declares, or
-// how to declare them when it declares none.
-async function deliveryPage({ path, at }) {
-  const [envs, targets] = await Promise.all([api("GET", path + "/environments").then((d) => d.environments), api("GET", path + "/targets").then((d) => d.targets)]);
+// how to declare them when it declares none. It follows both with follow(path, tag).
+async function deliveryPage({ path, at, follow }) {
+  const [envs, targets] = await Promise.all(["environments", "targets"].map(async (list) => {
+    const { data, tag } = await readTagged(path + "/" + list);
+    follow(path + "/" + list, tag);
+    return data[list];
+  }));
   const none = emptyCentred("globe", "No delivery targets", "Declare targets under delivery in /cobranch.yaml on main: each names the branches it delivers, " +
     "a cluster and a namespace. Every live branch a target matches then gets an environment.");
   if (!targets.length) return envs.length ? [environmentsCard(at, envs), none] : [none];
@@ -28,12 +33,16 @@ async function deliveryPage({ path, at }) {
   return [environmentsCard(at, envs), targetsCard(at, targets)];
 }
 
-// environmentPage is an environment's page: its card, the full width, under a button back to Delivery.
+// environmentPage is an environment's page: its card, the full width, under a button back to Delivery. It follows the
+// environment, which says once it is torn down.
 async function environmentPage(ctx, id) {
   const back = h("a", { class: "btn btn-ghost", href: ctx.root + "/environments", "data-nav": "" }, icon("arrow-left"), "Delivery");
+  const at = ctx.path + "/environments/" + encodeURIComponent(id);
   let e;
   try {
-    e = await api("GET", ctx.path + "/environments/" + encodeURIComponent(id));
+    const read = await readTagged(at);
+    e = read.data;
+    ctx.follow(at, read.tag);
   } catch (err) {
     if (err.status !== 404 && err.status !== 400) throw err;
     return [h("div", { class: "environment-page" }, back, emptyCentred("globe", "No such environment", "This repository has no such environment, or it was torn down."))];

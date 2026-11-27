@@ -252,9 +252,10 @@ makes every page live, a group of pages a slice. The organization switcher was f
 
 - **One channel.** Triggers notify `cobranch_changes` with the IDs a row belongs to as its transaction commits:
   `notify_changes(columns...)` names the columns that hold them, the organization's (`org_id`) for every table, and
-  the repository's (`repo_id`) too for those a repository's pages show (00071); a grant names the organization of what
-  it is on, and a repository grant the repository too, and a branch's link to an issue its branch's repository too
-  (00076). A repository's pages watch the repository alone. A slice adds its tables'
+  the repository's (`repo_id`) too for those a repository's pages show (00071, 00074); an environment's object, which
+  carries neither, names its environment's (00074); a grant names the organization of what it is on, and a repository
+  grant the repository too, and a branch's link to an issue its branch's repository too (00076). A repository's pages
+  watch the repository alone. A slice adds its tables'
   triggers in its own migration. Every REST server listens once, and wakes the requests that follow those IDs.
 - **A list waits on its ETag.** A list a page follows carries a strong ETag and, with `If-None-Match` and `wait` (at
   most 15 seconds), answers once it differs, or 304 (`rest/lists.go`: `readList`). Each ask reads the list first, so a
@@ -273,14 +274,16 @@ makes every page live, a group of pages a slice. The organization switcher was f
   one changes, until it draws another organization.
 - **A draw never loses input.** A page whose editor is open with what the viewer may still change, Roles' editable role
   and Agents' editor, doesn't follow until it closes; Settings · API keys keeps a secret just made on screen across a
-  draw. `drawAgain` waits while a dialog or a menu is open, or the viewer writes in one of the page's fields other than
-  its filter, and draws once they are done.
+  draw. `drawAgain` waits while a dialog or a menu is open, while the viewer writes in one of the page's fields other
+  than its filter, or while such a field holds text the viewer hasn't saved (its value differs from the `defaultValue`
+  the page drew it with, so a page draws a field's value as its default), and draws once they are done.
 - **A repository's pages follow through the shell.** A page of a repository names the lists it read with
   `ctx.follow(path, tag)`, and the shell (`lib/repository.js`) follows them, draws the page's sections again once one
   changes, with the tabs' counts, and shows the route anew once the repository is gone. A list a page names once drawn
   (its filter typed, which reads its first page anew) takes the place of the one it named at that path, and the shell
   follows them anew. A page that shows the first page of a longer list stops following once the viewer reads further,
-  which a draw would drop.
+  which a draw would drop. Settings · General follows the repository itself, which the shell read for the route, and
+  shows the route anew once it changes, its heading with it.
 
 | Page | Follows | Woken by changes to |
 | --- | --- | --- |
@@ -289,7 +292,7 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | Settings · Members | Members; invitations and requests to join, for a viewer who manages members | `memberships`, `grants`, `invitations`, `join_requests` |
 | Settings · Roles | Roles, with how many hold each | `roles`, `grants` |
 | Settings · API keys | API keys, with their roles and secrets | `principals`, `grants`, `credentials` |
-| Settings · Secrets | The organization's secrets | `secrets` |
+| Settings · Secrets, and a repository's | The secrets, and who reads each | `secrets`, `grants` |
 | Settings · Usage | Repositories and Git data against the limits | `repositories`, `packs`, `organization_limits` |
 | Overview | Its figures over the period | `memberships`, `repositories`, `agents`, `branches`, `pushes`, `issues`, `agent_tasks`, `task_spend`, `job_runs` |
 | Activity | Branches that need the viewer, repositories, agents and their tasks at work, what happened | `branches`, `annotations`, `reviews`, `pushes`, `repositories`, `agents`, `agent_tasks`, `deliveries` |
@@ -304,9 +307,13 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | A commit's page | Its annotations and its reviews | `annotations`, `reviews` |
 | Files | The branches, while it shows a branch's | `branches`, `pushes` |
 | Jobs | The first page of runs the filters keep | `job_runs` |
+| Delivery | Its environments and the targets main declares | `environments`, `deliveries`, `branches` (a push to main declares the targets) |
+| An environment's page, and a branch's Environment tab | The environment, or the branch's; each one's objects and first page of deliveries | `environments`, `environment_objects` (an object's health as a rollout runs), `deliveries` |
+| A repository's Artifacts | Its artifacts the viewer may list or read | `artifacts`, `grants` |
+| A repository's Settings · General | The repository | `repositories`, `grants` |
+| A repository's Settings · Access | Who holds roles on it | `grants` |
 
-Settings · Secrets reads who may read each secret with a read per secret, which it doesn't follow: a grant on one secret
-alone shows at the page's next draw. Agents · Activity follows its newest page of tasks, and an agent's page its tasks;
+Agents · Activity follows its newest page of tasks, and an agent's page its tasks;
 both read the spend report again on each draw, which they don't follow. An issue list follows its first page: a change
 draws that page again, dropping the pages More added under it. The issue lists' filters (members, agents, repositories,
 labels) are read with each draw, not followed.

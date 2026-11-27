@@ -1,10 +1,20 @@
 import { api } from "../../../lib/api.js";
 import { h } from "../../../lib/dom.js";
 import { banner, failure, field, input, textarea } from "../../../lib/forms.js";
+import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
 import { go, render } from "../../../lib/router.js";
 
 export const tab = { label: "General", order: 0 };
-export default ({ org, repo, path, can }) => showGeneral(org, repo, path, can("repo.manage"));
+
+// The repository as it reads now, rather than as the route read it, which it follows: once it changes elsewhere
+// (renamed, described anew) the whole route draws again, its heading with it, unless the viewer is changing it here.
+export default async ({ org, path, can }) => {
+  const { data: repo, tag } = await readTagged(path);
+  const sections = showGeneral(org, repo, path, can("repo.manage"));
+  const still = () => sections[0].isConnected;
+  followLists([[path, tag]], still, () => drawAgain(render, still), { gone: true });
+  return sections;
+};
 
 // sectionHeader is a section's title over the line on what it holds.
 const sectionHeader = (title, description) => h("header", { class: "section-header" },
@@ -23,7 +33,7 @@ function showGeneral(org, repo, path, manage) {
   const name = input({ name: "name", required: true, maxlength: 100, value: repo.name, disabled: !manage });
   const slug = input({ name: "slug", required: true, value: repo.slug, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100, disabled: !manage });
   const description = textarea({ name: "description", maxlength: 500, rows: 4, disabled: !manage });
-  description.value = repo.description || "";
+  description.defaultValue = repo.description || "";
   const save = h("button", { class: "btn btn-primary", type: "submit" }, "Save");
   const submit = async (e) => {
     e.preventDefault();
