@@ -277,18 +277,18 @@ export async function assignTask(org, list, picked, done) {
 }
 
 // readProviderKey grants agent a Secret reader on the secret that holds provider's key, which its tasks need to run;
-// one it already reads stays as it is. why is what was done, which the error names, as the agent may not read the key.
-export async function readProviderKey(org, a, provider, why = "The model is picked") {
+// one it already reads stays as it is.
+export async function readProviderKey(org, a, provider) {
   const p = await api("GET", "/orgs/" + org.slug + "/model-providers/" + encodeURIComponent(provider));
   if (!p.secretId) return;
   await api("POST", "/orgs/" + org.slug + "/secrets/" + p.secretId + "/access", { principalId: a.id })
-    .catch((err) => { if (err.code !== "grant.exists") throw new Error(why + ", but the agent may not read the provider's key: " + err.message); });
+    .catch((err) => { if (err.code !== "grant.exists") throw new Error("The model is picked, but the agent may not read the provider's key: " + err.message); });
 }
 
 // newAgent asks for an agent's name, what it is for, its standing instructions and its first roles (at the
 // organization, and perhaps one on a repository, each one whose every permission the viewer holds there), makes it on
 // the organization's default model, lets it read that model's provider key when can says the viewer manages the
-// organization's grants, so its tasks run, and opens its page.
+// organization's grants and reads its secrets, so its tasks run, and opens its page.
 export async function newAgent(org, can = () => false) {
   const repos = await api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories, () => []);
   const name = input({ required: true, maxlength: 100, placeholder: "Release notes writer" });
@@ -312,7 +312,8 @@ export async function newAgent(org, can = () => false) {
       const grants = picks.map((l) => l.querySelector("input")).filter((c) => c.checked).map((c) => ({ roleId: c.value }));
       if (repo.value && repoRole.value) grants.push({ roleId: repoRole.value, repositoryId: repo.value });
       const made = await api("POST", "/orgs/" + org.slug + "/agents", { name: name.value, description: description.value, instructions: instructions.value, grants });
-      if (made.provider && can("org.grants.manage")) await readProviderKey(org, made, made.provider, "The agent is made");
+      // Best effort: the agent is made either way, and a task that can't read the key says so in its chat.
+      if (made.provider && can("org.grants.manage") && can("secrets.read")) await readProviderKey(org, made, made.provider).catch(() => {});
       go("/" + org.slug + "/agents/" + made.id);
     } });
   name.focus();

@@ -95,12 +95,21 @@ func (s *Service) agentTalks(ctx context.Context, agentID uuid.UUID, subj Subjec
 		return fmt.Errorf("reading the agent's permissions: %w", err)
 	}
 	if !slices.Contains(held, r.view) || !slices.Contains(held, r.read) {
-		return &orgs.ValidationError{Field: "ask", Code: "ask.unreadable", Message: "the agent can't read this chat, where its task would talk: give it a role with " + r.read + " " + r.where + " in Settings · Agents"}
+		return &orgs.ValidationError{Field: "ask", Code: "ask.unreadable", Message: "the agent can't read this chat, where its task would talk: " + needs(r, r.read)}
 	}
 	if !slices.Contains(held, r.post) {
-		return &orgs.ValidationError{Field: "ask", Code: "ask.readonly", Message: "the agent reads this chat but can't post there, so its task couldn't answer: give it a role with " + r.post + " " + r.where + " in Settings · Agents"}
+		return &orgs.ValidationError{Field: "ask", Code: "ask.readonly", Message: "the agent reads this chat but can't post there, so its task couldn't answer: " + needs(r, r.post)}
 	}
 	return nil
+}
+
+// needs says what an agent lacking permission in a chat of r's rules needs, and how it gets it: a role on a repository
+// is added in Settings · Agents, while its roles at the organization are those it was made with.
+func needs(r rules, permission string) string {
+	if r.scope == auth.ScopeRepository {
+		return "give it a role with " + permission + " " + r.where + " in Settings · Agents"
+	}
+	return "it needs a role with " + permission + " " + r.where + ", which an agent gets when it is made"
 }
 
 // record runs write, which starts a thread or posts a message with task's ID as what it asks, and then, when write
