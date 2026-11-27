@@ -137,28 +137,35 @@ func TestAuthCodeURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("AuthCodeURL() = %v", err)
 			}
-			u, err := url.Parse(got)
-			if err != nil {
-				t.Fatal(err)
-			}
-			q := u.Query()
-			want := map[string]string{
-				"client_id": "client", "redirect_uri": "https://auth.example.com/callback", "response_type": "code",
-				"scope": "openid email profile", "state": "s1", "nonce": "n1", "code_challenge_method": "S256",
-				"prompt": tt.wantPrompt,
-			}
-			for k, v := range want {
-				if q.Get(k) != v {
-					t.Errorf("%s = %q, want %q", k, q.Get(k), v)
-				}
-			}
-			if _, ok := q["prompt"]; ok != (tt.wantPrompt != "") {
-				t.Errorf("AuthCodeURL() = %s, want a prompt %t", got, tt.wantPrompt != "")
-			}
-			if q.Get("code_challenge") == "" || !strings.HasSuffix(u.Path, "/auth") {
-				t.Errorf("AuthCodeURL() = %s", got)
-			}
+			checkAuthCodeURL(t, got, tt.wantPrompt)
 		})
+	}
+}
+
+// checkAuthCodeURL fails t unless got is the fake provider's authorization endpoint with the request's parameters, and
+// a prompt only when wantPrompt is one.
+func checkAuthCodeURL(t *testing.T, got, wantPrompt string) {
+	t.Helper()
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	want := map[string]string{
+		"client_id": "client", "redirect_uri": "https://auth.example.com/callback", "response_type": "code",
+		"scope": "openid email profile", "state": "s1", "nonce": "n1", "code_challenge_method": "S256",
+		"prompt": wantPrompt,
+	}
+	for k, v := range want {
+		if q.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, q.Get(k), v)
+		}
+	}
+	if _, ok := q["prompt"]; ok != (wantPrompt != "") {
+		t.Errorf("AuthCodeURL() = %s, want a prompt %t", got, wantPrompt != "")
+	}
+	if q.Get("code_challenge") == "" || !strings.HasSuffix(u.Path, "/auth") {
+		t.Errorf("AuthCodeURL() = %s", got)
 	}
 }
 
