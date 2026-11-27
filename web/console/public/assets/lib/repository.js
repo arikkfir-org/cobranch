@@ -85,14 +85,28 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   }
   const still = () => main.isConnected;
   // draw draws the page's sections, then follows the lists they read; a page drawn again counts its tabs again too, and
-  // one whose repository is gone meanwhile shows the route anew, which says so.
+  // one whose repository is gone meanwhile shows the route anew, which says so. A list the page follows once drawn (its
+  // filter typed, which reads its first page anew) takes the place of the one it followed at that path, whatever its
+  // query, and the page follows them anew; one a page drawn since follows is no longer its own, and is dropped.
+  let drawing = 0;
   const draw = async (again) => {
-    const lists = [];
-    const sections = await shown.default({ ...ctx, fail, follow: (path, tag) => tag && lists.push([path, tag]) });
-    if (!still()) return;
+    const mine = ++drawing;
+    const lists = new Map();
+    let drawn = false;
+    const followAll = () => followLists([...lists.values()], still,
+      () => drawAgain(() => draw(true).catch((err) => { if (err.status !== 404) throw err; render(); }), still), { gone: true });
+    const follow = (path, tag) => {
+      const at = path.split("?")[0];
+      if (!tag || mine !== drawing || (lists.get(at)?.[0] === path && lists.get(at)[1] === tag)) return;
+      lists.set(at, [path, tag]);
+      if (drawn) followAll();
+    };
+    const sections = await shown.default({ ...ctx, fail, follow });
+    if (!still() || mine !== drawing) return;
     main.replaceChildren(error, ...sections);
     if (again) counts.forEach((count) => count());
-    if (lists.length) followLists(lists, still, () => drawAgain(() => draw(true).catch((err) => { if (err.status !== 404) throw err; render(); }), still), { gone: true });
+    drawn = true;
+    if (lists.size) followAll();
   };
   await draw(false);
 }
