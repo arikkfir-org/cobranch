@@ -3,7 +3,7 @@
 // asking until it shows again, and its first ask then answers at once with what changed meanwhile.
 
 import { answer } from "./api.js";
-import { config } from "./state.js";
+import { config, follows } from "./state.js";
 
 // readTagged reads the list at the API's path, waiting up to wait seconds for it to differ from the one tag names, and
 // answers its data and ETag, or null when it is still the one tag names; signal, when given, abandons the read.
@@ -31,9 +31,11 @@ export async function pause(delay) {
 
 // followLists follows the lists a page shows, each a path and the ETag of what the page read, while still answers
 // true, and calls changed once one of them changes, and then stops: a page draws itself again then, reading them
-// again and following them anew. A list the viewer may no longer read stops it too, without changed.
+// again and following them anew. A list the viewer may no longer read stops it too, without changed, and so does the
+// Console drawing another page, or the page following anew, which abandon the reads in flight.
 export async function followLists(lists, still, changed) {
   const stop = new AbortController();
+  follows(stop);
   const follow = async ([path, tag]) => {
     let delay = 1000;
     while (!stop.signal.aborted) {
