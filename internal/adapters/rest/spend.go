@@ -61,17 +61,39 @@ func modelInput(b ModelInput) (agents.ModelInput, error) {
 	return in, err
 }
 
-// ListModels lists the organization's models, each with the agents on it.
+// ListModels lists the organization's models, each with the agents on it; with If-None-Match and wait, it waits up to
+// wait seconds for the list to change before it answers 304.
 func (a api) ListModels(ctx context.Context, req ListModelsRequestObject) (ListModelsResponseObject, error) {
 	v, orgID, _, err := a.agentOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.agents.Models(ctx, v, orgID)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "organization")
+		return nil, err
 	}
-	return ListModels200JSONResponse{Models: mapAll(list, model)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]agents.Model, error) {
+		list, err := a.agents.Models(ctx, v, orgID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []agents.Model, error) {
+		lists, err := a.agents.FollowModels(ctx, v, orgID)
+		return lists, fail(err, "organization")
+	}, func(list []agents.Model) (ListModelsResponseObject, bool, error) {
+		return listedModels(list, req.Params.IfNoneMatch)
+	})
+}
+
+// listedModels is list as ListModels answers it: 304 while it is the one tag names, which it says.
+func listedModels(list []agents.Model, tag *IfNoneMatch) (ListModelsResponseObject, bool, error) {
+	body := ModelList{Models: mapAll(list, model)}
+	etag, err := bodyTag("models", body, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if matches(tag, etag) {
+		return ListModels304Response{Headers: ListModels304ResponseHeaders{ETag: etag}}, true, nil
+	}
+	return ListModels200JSONResponse{Body: body, Headers: ListModels200ResponseHeaders{ETag: etag}}, false, nil
 }
 
 // GetModel answers one of the organization's models.

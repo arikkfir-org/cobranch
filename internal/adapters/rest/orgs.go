@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -229,52 +228,23 @@ func (a api) ListMyOrganizations(ctx context.Context, req ListMyOrganizationsReq
 	if err != nil {
 		return nil, err
 	}
-	waits := time.Duration(0)
-	if w := req.Params.Wait; w != nil {
-		if *w < 0 || time.Duration(*w)*time.Second > maxWait {
-			return nil, refuse(http.StatusBadRequest, "wait.invalid", "A read waits 0 to 15 seconds for the list to change.")
-		}
-		waits = time.Duration(*w) * time.Second
-	}
-	if waits == 0 || req.Params.IfNoneMatch == nil {
-		list, err := a.orgs.Memberships(ctx, v)
-		if err != nil {
-			return nil, fail(err, "organization")
-		}
-		return myOrganizations(list, req.Params.IfNoneMatch)
-	}
-	return a.awaitMyOrganizations(ctx, v, *req.Params.IfNoneMatch, waits)
-}
-
-// awaitMyOrganizations answers the viewer's organizations once they are no longer those tag names, or 304 once
-// waits passes with them still those.
-func (a api) awaitMyOrganizations(ctx context.Context, v orgs.Viewer, tag IfNoneMatch, waits time.Duration) (ListMyOrganizationsResponseObject, error) {
-	following, cancel := context.WithTimeout(ctx, waits)
-	defer cancel()
-	lists, err := a.orgs.FollowMemberships(following, v)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "organization")
+		return nil, err
 	}
-	var last ListMyOrganizationsResponseObject
-	for list := range lists {
-		if last, err = myOrganizations(list, &tag); err != nil {
-			return nil, err
-		}
-		if _, same := last.(ListMyOrganizations304Response); !same {
-			return last, nil
-		}
-	}
-	if following.Err() == nil {
-		return nil, errors.New("following the viewer's organizations stopped before the wait ended")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("waiting for the viewer's organizations: %w", err)
-	}
-	return last, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.Membership, error) {
+		list, err := a.orgs.Memberships(ctx, v)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.Membership, error) {
+		lists, err := a.orgs.FollowMemberships(ctx, v)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.Membership) (ListMyOrganizationsResponseObject, bool, error) {
+		return myOrganizations(list, req.Params.IfNoneMatch)
+	})
 }
 
-// myOrganizations is list as listMyOrganizations answers it: 304 while it is the one tag names.
-func myOrganizations(list []orgs.Membership, tag *IfNoneMatch) (ListMyOrganizationsResponseObject, error) {
+// myOrganizations is list as ListMyOrganizations answers it: 304 while it is the one tag names, which it says.
+func myOrganizations(list []orgs.Membership, tag *IfNoneMatch) (ListMyOrganizationsResponseObject, bool, error) {
 	out := ListMyOrganizations200JSONResponse{}
 	out.Body.Organizations = make([]Organization, 0, len(list))
 	for _, m := range list {
@@ -282,13 +252,13 @@ func myOrganizations(list []orgs.Membership, tag *IfNoneMatch) (ListMyOrganizati
 	}
 	etag, err := bodyTag("organizations", out.Body, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if matches(tag, etag) {
-		return ListMyOrganizations304Response{Headers: ListMyOrganizations304ResponseHeaders{ETag: etag}}, nil
+		return ListMyOrganizations304Response{Headers: ListMyOrganizations304ResponseHeaders{ETag: etag}}, true, nil
 	}
 	out.Headers.ETag = etag
-	return out, nil
+	return out, false, nil
 }
 
 // CreateOrganization makes an organization with the viewer its first Owner.

@@ -360,14 +360,7 @@ paths:
         revoked) by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/ifNoneMatch"
-        - name: wait
-          in: query
-          description: How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
-          schema:
-            type: integer
-            minimum: 0
-            maximum: 15
-            default: 0
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The organizations.
@@ -2109,16 +2102,31 @@ paths:
       operationId: listModelProviders
       summary: >-
         The model providers the organization added, by name, and those the installation knows; takes org.read. The
-        names of their secrets show to a viewer holding secrets.manage at the organization.
+        names of their secrets show to a viewer holding secrets.manage at the organization. With If-None-Match and
+        wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the
+        providers (one connected, given another secret or removed elsewhere, or its secret renamed or deleted) by
+        asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The providers.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ModelProviderList"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -2238,16 +2246,30 @@ paths:
       operationId: listModels
       summary: >-
         The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps
-        its own tasks. Takes org.read.
+        its own tasks. Takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change
+        before it answers 304, so a client follows the models (one added, repriced, made the default or removed
+        elsewhere, or an agent put on one) by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The models.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ModelList"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -7656,6 +7678,15 @@ components:
       description: The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
       schema:
         type: string
+    waitForChange:
+      name: wait
+      in: query
+      description: How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 15
+        default: 0
     agent:
       name: agent
       in: path

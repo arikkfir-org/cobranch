@@ -26,9 +26,9 @@ func ListenPushes(ctx context.Context, pool *pgxpool.Pool) <-chan struct{} {
 	return wake
 }
 
-// Hub tells a server's followers when what they follow may have changed (chats.Notifier, orgs.Notifier): a connection
-// of its own listens for the notifications each change's transaction sends, naming an ID (a chat's subject; a principal
-// or an organization), and wakes those who watch that ID. After losing its connection it takes another, waking every
+// Hub tells a server's followers when what they follow may have changed (chats.Notifier, orgs.Notifier, live.Notifier):
+// a connection of its own listens for the notifications each change's transaction sends, naming an ID (a chat's
+// subject; a principal or an organization), and wakes those who watch that ID. After losing its connection it takes another, waking every
 // watcher then, since they may have missed some.
 type Hub struct {
 	mu       sync.Mutex
@@ -44,6 +44,12 @@ func ListenChats(ctx context.Context, pool *pgxpool.Pool) *Hub {
 // ends: a change wakes those who watch the principal or the organization it names.
 func ListenOrganizations(ctx context.Context, pool *pgxpool.Pool) *Hub {
 	return listenHub(ctx, pool, "organizations", (*queries.Queries).ListenOrganizations)
+}
+
+// ListenChanges returns the hub of the followers of the Console's live pages, listening outside pool until ctx ends: a
+// change wakes those who watch what it names, such as its organization.
+func ListenChanges(ctx context.Context, pool *pgxpool.Pool) *Hub {
+	return listenHub(ctx, pool, "changes", (*queries.Queries).ListenChanges)
 }
 
 // listenHub returns a hub that start's notifications wake, listening outside pool until ctx ends.

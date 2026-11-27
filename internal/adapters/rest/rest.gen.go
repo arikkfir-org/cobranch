@@ -4178,10 +4178,13 @@ type ThreadID = openapi_types.UUID
 // UserID defines model for user.
 type UserID = openapi_types.UUID
 
+// WaitForChange defines model for waitForChange.
+type WaitForChange = int
+
 // ListMyOrganizationsParams defines parameters for ListMyOrganizations.
 type ListMyOrganizationsParams struct {
 	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
-	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
@@ -4550,6 +4553,15 @@ type GrantRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
 }
 
+// ListModelProvidersParams defines parameters for ListModelProviders.
+type ListModelProvidersParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // RemoveModelProviderParams defines parameters for RemoveModelProvider.
 type RemoveModelProviderParams struct {
 	// IfMatch The ETag of the provider the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -4569,6 +4581,15 @@ type SetModelProviderParams struct {
 
 	// IfNoneMatch *, to add a provider the organization hasn't added: one it has refuses with 412.
 	IfNoneMatch *IfNoneMatchModelProvider `json:"If-None-Match,omitempty"`
+}
+
+// ListModelsParams defines parameters for ListModels.
+type ListModelsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // RemoveModelParams defines parameters for RemoveModel.
@@ -5556,9 +5577,9 @@ type ServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(w http.ResponseWriter, r *http.Request, org Org, userID UserID, roleID RoleID)
-	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the providers (one connected, given another secret or removed elsewhere, or its secret renamed or deleted) by asking again with the answer's ETag.
 	// (GET /orgs/{org}/model-providers)
-	ListModelProviders(w http.ResponseWriter, r *http.Request, org Org)
+	ListModelProviders(w http.ResponseWriter, r *http.Request, org Org, params ListModelProvidersParams)
 	// RemoveModelProvider Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409 model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/model-providers/{provider})
 	RemoveModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params RemoveModelProviderParams)
@@ -5568,9 +5589,9 @@ type ServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams)
-	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the models (one added, repriced, made the default or removed elsewhere, or an agent put on one) by asking again with the answer's ETag.
 	// (GET /orgs/{org}/models)
-	ListModels(w http.ResponseWriter, r *http.Request, org Org)
+	ListModels(w http.ResponseWriter, r *http.Request, org Org, params ListModelsParams)
 	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/models/{provider}/{model})
 	RemoveModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params RemoveModelParams)
@@ -10451,8 +10472,45 @@ func (siw *ServerInterfaceWrapper) ListModelProviders(w http.ResponseWriter, r *
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelProvidersParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListModelProviders(w, r, org)
+		siw.Handler.ListModelProviders(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10673,8 +10731,45 @@ func (siw *ServerInterfaceWrapper) ListModels(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListModels(w, r, org)
+		siw.Handler.ListModels(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -27518,30 +27613,67 @@ func (response RevokeRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeR
 }
 
 type ListModelProvidersRequestObject struct {
-	Org Org `json:"org"`
+	Org    Org `json:"org"`
+	Params ListModelProvidersParams
 }
 
 type ListModelProvidersResponseObject interface {
 	VisitListModelProvidersResponse(w http.ResponseWriter) error
 }
 
-type ListModelProviders200JSONResponse ModelProviderList
+type ListModelProviders200ResponseHeaders struct {
+	ETag string
+}
+
+type ListModelProviders200JSONResponse struct {
+	Body    ModelProviderList
+	Headers ListModelProviders200ResponseHeaders
+}
 
 func (response ListModelProviders200JSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListModelProviders401ApplicationProblemPlusJSONResponse struct {
+type ListModelProviders304ResponseHeaders struct {
+	ETag string
+}
+
+type ListModelProviders304Response struct {
+	Headers ListModelProviders304ResponseHeaders
+}
+
+func (response ListModelProviders304Response) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListModelProviders400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListModelProviders400ApplicationProblemPlusJSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelProviders401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListModelProviders401ApplicationProblemPlusJSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
 
@@ -27961,30 +28093,67 @@ func (response SetModelProviderdefaultApplicationProblemPlusJSONResponse) VisitS
 }
 
 type ListModelsRequestObject struct {
-	Org Org `json:"org"`
+	Org    Org `json:"org"`
+	Params ListModelsParams
 }
 
 type ListModelsResponseObject interface {
 	VisitListModelsResponse(w http.ResponseWriter) error
 }
 
-type ListModels200JSONResponse ModelList
+type ListModels200ResponseHeaders struct {
+	ETag string
+}
+
+type ListModels200JSONResponse struct {
+	Body    ModelList
+	Headers ListModels200ResponseHeaders
+}
 
 func (response ListModels200JSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListModels401ApplicationProblemPlusJSONResponse struct {
+type ListModels304ResponseHeaders struct {
+	ETag string
+}
+
+type ListModels304Response struct {
+	Headers ListModels304ResponseHeaders
+}
+
+func (response ListModels304Response) VisitListModelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListModels400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListModels400ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModels401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListModels401ApplicationProblemPlusJSONResponse) VisitListModelsResponse(w http.ResponseWriter) error {
 
@@ -39722,7 +39891,7 @@ type StrictServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(ctx context.Context, request RevokeRoleRequestObject) (RevokeRoleResponseObject, error)
-	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the providers (one connected, given another secret or removed elsewhere, or its secret renamed or deleted) by asking again with the answer's ETag.
 	// (GET /orgs/{org}/model-providers)
 	ListModelProviders(ctx context.Context, request ListModelProvidersRequestObject) (ListModelProvidersResponseObject, error)
 	// RemoveModelProvider Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409 model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
@@ -39734,7 +39903,7 @@ type StrictServerInterface interface {
 	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/model-providers/{provider})
 	SetModelProvider(ctx context.Context, request SetModelProviderRequestObject) (SetModelProviderResponseObject, error)
-	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
+	// ListModels The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the models (one added, repriced, made the default or removed elsewhere, or an agent put on one) by asking again with the answer's ETag.
 	// (GET /orgs/{org}/models)
 	ListModels(ctx context.Context, request ListModelsRequestObject) (ListModelsResponseObject, error)
 	// RemoveModel Removes one of the organization's models; takes org.manage. While agents run on it, the answer is 409 model.in_use. The removal names the model's ETag in If-Match; without it, the answer is 428.
@@ -43151,10 +43320,11 @@ func (sh *strictHandler) RevokeRole(w http.ResponseWriter, r *http.Request, org 
 }
 
 // ListModelProviders operation middleware
-func (sh *strictHandler) ListModelProviders(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) ListModelProviders(w http.ResponseWriter, r *http.Request, org Org, params ListModelProvidersParams) {
 	var request ListModelProvidersRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListModelProviders(ctx, request.(ListModelProvidersRequestObject))
@@ -43268,10 +43438,11 @@ func (sh *strictHandler) SetModelProvider(w http.ResponseWriter, r *http.Request
 }
 
 // ListModels operation middleware
-func (sh *strictHandler) ListModels(w http.ResponseWriter, r *http.Request, org Org) {
+func (sh *strictHandler) ListModels(w http.ResponseWriter, r *http.Request, org Org, params ListModelsParams) {
 	var request ListModelsRequestObject
 
 	request.Org = org
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListModels(ctx, request.(ListModelsRequestObject))
