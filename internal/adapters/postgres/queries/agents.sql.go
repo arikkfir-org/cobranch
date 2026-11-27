@@ -516,13 +516,14 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 }
 
 const retireRepositoryAgents = `-- name: RetireRepositoryAgents :many
-UPDATE agents SET retired_at = now(), updated_at = now()
+UPDATE agents SET retired_at = now(), provider = NULL, model = NULL, updated_at = now()
 WHERE repo_id = $1 AND retired_at IS NULL AND NOT (name = ANY ($2::text[]))
 RETURNING principal_id
 `
 
 // RetireRepositoryAgents retires those of a repository's agents its main /cobranch.yaml no longer declares, and
-// answers their IDs.
+// answers their IDs. A retired agent runs on no model, so it holds none of the organization's models or providers in
+// use; declaring it again puts it back on the file's.
 func (q *Queries) RetireRepositoryAgents(ctx context.Context, repoID *uuid.UUID, declared []string) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, retireRepositoryAgents, repoID, declared)
 	if err != nil {

@@ -149,9 +149,10 @@ WHERE principal_id = @id AND repo_id = @repo_id
         IS DISTINCT FROM (@description, @instructions, @image, sqlc.narg(provider), sqlc.narg(model), @permissions::text[], @secrets, @line, true);
 
 -- RetireRepositoryAgents retires those of a repository's agents its main /cobranch.yaml no longer declares, and
--- answers their IDs.
+-- answers their IDs. A retired agent runs on no model, so it holds none of the organization's models or providers in
+-- use; declaring it again puts it back on the file's.
 -- name: RetireRepositoryAgents :many
-UPDATE agents SET retired_at = now(), updated_at = now()
+UPDATE agents SET retired_at = now(), provider = NULL, model = NULL, updated_at = now()
 WHERE repo_id = @repo_id AND retired_at IS NULL AND NOT (name = ANY (@declared::text[]))
 RETURNING principal_id;
 

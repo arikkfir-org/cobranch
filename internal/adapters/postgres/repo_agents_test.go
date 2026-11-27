@@ -88,7 +88,7 @@ func TestGitStoreSyncsRepositoryAgents(t *testing.T) {
 	f.addModels(t)
 	both := []string{"checker website python:3.14.0 anthropic/opus annotations.write,repo.read line 2",
 		"writer website  anthropic/haiku messages.post,repo.read line 6"}
-	retired := []string{both[0], "writer website  anthropic/haiku messages.post,repo.read line 9 retired"}
+	retired := []string{both[0], "writer website  / messages.post,repo.read line 9 retired"}
 	steps := []struct {
 		name    string
 		push    git.Push
@@ -113,7 +113,7 @@ func TestGitStoreSyncsRepositoryAgents(t *testing.T) {
 		{name: "main drops writer", push: f.mainTo(t, f.shaD, shaB, checkerFile), want: retired},
 		{name: "main declares writer again", push: f.mainTo(t, shaB, f.shaD, agentsFile), want: both},
 		{name: "main drops the file", push: f.mainTo(t, f.shaD, shaB, ""),
-			want: []string{both[0] + " retired", both[1] + " retired"}},
+			want: []string{"checker website python:3.14.0 / annotations.write,repo.read line 2 retired", "writer website  / messages.post,repo.read line 6 retired"}},
 	}
 	var writer uuid.UUID
 	for _, s := range steps {
@@ -136,6 +136,10 @@ func TestGitStoreSyncsRepositoryAgents(t *testing.T) {
 		} else if id != writer {
 			t.Errorf("%s: writer is %s, want the same principal, %s", s.name, id, writer)
 		}
+	}
+	// Retired, checker no longer holds opus in use.
+	if err := f.a.RemoveModel(ctx, f.olivia, f.acme.ID, "anthropic", "opus", agents.AnyVersion); err != nil {
+		t.Errorf("RemoveModel(opus) once its agent is retired = %v, want nil", err)
 	}
 }
 
