@@ -754,10 +754,11 @@ paths:
   /orgs/{org}/usage:
     get:
       operationId: getOrganizationUsage
-      summary: What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+      summary: What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too. With If-None-Match and wait, it waits up to wait seconds for the usage to change before it answers 304, so a client follows the usage by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The organization's usage.
@@ -769,10 +770,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrganizationUsage"
         "304":
-          description: The usage is still the one If-None-Match names.
+          description: The usage is still the one If-None-Match names, after waiting wait seconds for a change.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -788,6 +791,8 @@ paths:
         agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes
         org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding
         issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+        With If-None-Match and wait, it waits up to wait seconds for the figures to change before it answers 304, so a
+        client follows the figures by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: from
@@ -806,6 +811,7 @@ paths:
           schema:
             type: string
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The organization's figures.
@@ -817,7 +823,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrganizationOverview"
         "304":
-          description: The figures are still the ones If-None-Match names.
+          description: The figures are still the ones If-None-Match names, after waiting wait seconds for a change.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -837,11 +843,18 @@ paths:
         head they wrote (fix), waiting for an approval they may give of a head they neither wrote nor reviewed (review),
         Ready and theirs to merge (merge), or Processing with a head they wrote (watch); by need in that order, then
         the latest moved first. Takes org.read.
+        With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a
+        client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The branches that need the viewer.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -852,6 +865,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/AttentionBranch"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -865,6 +885,8 @@ paths:
         A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges
         into main, reviews, deliveries that ended (but those that applied a render again) and repositories created;
         takes org.read.
+        With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a
+        client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: cursor
@@ -880,10 +902,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's activity, newest first.
           headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -898,6 +924,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Activity"
+        "304":
+          description: The page is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -1537,6 +1568,8 @@ paths:
         attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says
         which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as
         one that doesn't open.
+        With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a
+        client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: kind
@@ -1555,13 +1588,23 @@ paths:
           description: Only the caller's own artifacts.
           schema:
             type: boolean
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The artifacts.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArtifactList"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -3490,6 +3533,8 @@ paths:
       summary: >-
         A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read,
         and those of issues without issues.read; takes org.read.
+        With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a
+        client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: agent
@@ -3528,10 +3573,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's tasks, newest first.
           headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -3546,6 +3595,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Task"
+        "304":
+          description: The page is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -4579,12 +4633,17 @@ paths:
   /orgs/{org}/repos:
     get:
       operationId: listRepositories
-      summary: The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
+      summary: The organization's repositories the viewer reads, by slug, each with its summary; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The repositories.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -4595,6 +4654,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Repository"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":

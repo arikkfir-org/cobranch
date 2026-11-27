@@ -13,7 +13,9 @@ import (
 type Repositories interface {
 	Create(ctx context.Context, v repos.Viewer, orgID uuid.UUID, in repos.Input) (repos.Repository, error)
 	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Listed, error)
+	FollowList(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (<-chan []repos.Listed, error)
 	Usage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (repos.Usage, error)
+	FollowUsage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (<-chan repos.Usage, error)
 	Get(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (repos.Repository, []string, error)
 	Locate(ctx context.Context, v repos.Viewer, orgSlug, slug string) (repos.Repository, []string, error)
 	ByID(ctx context.Context, v repos.Viewer, repoID uuid.UUID) (repos.Repository, []string, error)
@@ -68,31 +70,37 @@ func (a api) repo(ctx context.Context, v repos.Viewer, orgSlug, slug string) (re
 	return repo, held, nil
 }
 
-// ListRepositories lists the organization's repositories the viewer reads.
+// ListRepositories lists the organization's repositories the viewer reads, or, with If-None-Match and wait, once they
+// change.
 func (a api) ListRepositories(ctx context.Context, req ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.repos.List(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	out := make([]Repository, 0, len(list))
-	for _, r := range list {
-		_, held, err := a.repos.ByID(ctx, v, r.ID)
-		if err != nil {
-			return nil, fail(err, "repository")
+	return readList(ctx, waits, func(ctx context.Context) ([]repos.Listed, error) {
+		list, err := a.repos.List(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []repos.Listed, error) {
+		lists, err := a.repos.FollowList(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []repos.Listed) (ListRepositoriesResponseObject, bool, error) {
+		out := ListRepositories200JSONResponse{}
+		out.Body.Repositories = make([]Repository, 0, len(list))
+		for _, r := range list {
+			_, held, err := a.repos.ByID(ctx, v, r.ID)
+			if err != nil {
+				return nil, false, fail(err, "repository")
+			}
+			listed := repository(r.Repository, held)
+			listed.Summary = summary(r.Summary)
+			out.Body.Repositories = append(out.Body.Repositories, listed)
 		}
-		listed := repository(r.Repository, held)
-		listed.Summary = summary(r.Summary)
-		out = append(out, listed)
-	}
-	return ListRepositories200JSONResponse{Repositories: out}, nil
+		return listAnswer("repositories", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListRepositoriesResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListRepositoriesResponseObject {
+				return ListRepositories304Response{Headers: ListRepositories304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // CreateRepository makes a repository with the viewer its Maintainer.

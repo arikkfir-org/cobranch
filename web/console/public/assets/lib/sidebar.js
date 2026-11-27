@@ -1,12 +1,14 @@
 // The app shell's sidebar (App/Sidebar): the logo, which opens the organization's Overview, the organization's
 // places, the switcher between the viewer's organizations, and Settings at its foot. No list here names a page: each
 // place is an organization page whose module's nav puts it there (lib/assets.js), and a section's five sub items are
-// those the viewer opened last in this browser, topped up from the section's own items.
+// those the viewer opened last in this browser, topped up from the section's own items. The sidebar follows the lists
+// its sections read, across pages, and draws a section again once its list changes (lib/live.js).
 
 import { orgPages } from "./assets.js";
 import { logo } from "./brand.js";
 import { h } from "./dom.js";
 import { avatar, icon } from "./icons.js";
+import { watchLists } from "./live.js";
 import { popover } from "./menu.js";
 import { go } from "./router.js";
 import { base, orgs } from "./state.js";
@@ -16,8 +18,13 @@ const shown = 5;
 // fresh is how long a section's items stay as the sidebar last read them, in milliseconds, before a page that draws it
 // reads them again.
 const fresh = 60000;
-// read holds each section's items as last read, by the organization's slug and the section's part.
+// read holds each section's items as last read, with the lists they came from, by the organization's slug and the
+// section's part.
 const read = new Map();
+// watching stops the followers of the sections the sidebar follows, by the organization's slug and the section's part.
+const watching = new Map();
+// drawn is the slug of the organization whose sidebar was drawn last, so a section read for another starts no follower.
+let drawn = "";
 
 // recentKey is where this browser keeps the sub items of an organization's section the viewer opened last.
 const recentKey = (org, part) => "cobranch.recent." + org.id + "." + part;
@@ -80,17 +87,47 @@ function drawItems(org, part, section) {
   section.querySelector(".nav-sub-items").replaceChildren(...subItems(org, part).map(subItem));
 }
 
-// readItems reads a section's items from its module's nav.items, unless the sidebar read them less than a minute ago,
-// and draws them again once they arrive; a section that fails to read keeps those it showed.
-function readItems(org, can, part, m, section) {
+// readItems reads a section's items from its module's nav.items, unless the sidebar read them less than a minute ago
+// and again is false, and draws them again once they arrive where the section shows; a section that fails to read
+// keeps those it showed. nav.items answers the items, their count, whether they are all of them (whole), and the lists
+// they came from (follow), each an API path and the ETag of what it read.
+async function readItems(org, can, part, m, again = false) {
   const key = org.slug + "/" + part;
   const got = read.get(key);
-  if (got && Date.now() - got.at < fresh) return;
+  if (!again && got && Date.now() - got.at < fresh) return;
   read.set(key, { ...(got || { items: [] }), at: Date.now() });
-  Promise.resolve(m.nav.items({ org, can })).then((r) => {
-    read.set(key, { items: r.items, count: r.count, whole: !!r.whole, at: Date.now() });
-    if (section.isConnected) drawItems(org, part, section);
-  }).catch(() => { /* the section keeps what it showed; the next page tries again */ });
+  try {
+    const r = await m.nav.items({ org, can });
+    read.set(key, { items: r.items, count: r.count, whole: !!r.whole, follow: r.follow || [], at: Date.now() });
+  } catch {
+    // The section keeps what it showed, and stops following what it read; the next page reads and follows it again.
+    read.set(key, { ...read.get(key), follow: [] });
+    return;
+  }
+  const section = document.querySelector('.app-sidebar [data-section="' + part + '"]');
+  if (section && section.dataset.org === org.slug) drawItems(org, part, section);
+}
+
+// stopWatching stops following the sections of every organization but the one whose slug is kept.
+function stopWatching(kept) {
+  for (const [key, stop] of watching) {
+    if (key.startsWith(kept + "/")) continue;
+    stop.abort();
+    watching.delete(key);
+  }
+}
+
+// watch follows the lists a section of org's sidebar read, across pages, and reads the section again once one of them
+// changes, until the sidebar draws another organization; a section whose lists the viewer may no longer read, or that
+// read none it can follow, stops, and the next page that draws it follows it anew.
+async function watch(org, can, part, m) {
+  const key = org.slug + "/" + part;
+  stopWatching(org.slug);
+  if (watching.has(key)) return;
+  const stop = new AbortController();
+  watching.set(key, stop);
+  while (!stop.signal.aborted && await watchLists(read.get(key)?.follow || [], () => true, stop.signal)) await readItems(org, can, part, m, true);
+  if (watching.get(key) === stop) watching.delete(key);
 }
 
 // navItem is one of the sidebar's places (Nav item): its icon, its label and, for a section, its count.
@@ -120,6 +157,7 @@ function switcher(org) {
 // modules name, in their order, each section with a divider before the first and its sub items, then the switcher and
 // the places at the foot.
 export function sidebar(org, can, part) {
+  drawn = org.slug;
   const places = [...orgPages].filter(([, m]) => m.nav && !m.nav.under && (!m.allowed || m.allowed(can))).sort(([, a], [, b]) => a.nav.order - b.nav.order);
   const nav = h("nav", { class: "app-sidebar-nav", "aria-label": org.name });
   let divided = false;
@@ -135,7 +173,7 @@ export function sidebar(org, can, part) {
     const section = h("div", { class: "app-sidebar-section", "data-section": p, "data-org": org.slug }, navItem(org, p, m, p === part), h("div", { class: "nav-sub-items" }));
     nav.append(section);
     drawItems(org, p, section);
-    readItems(org, can, p, m, section);
+    readItems(org, can, p, m).then(() => drawn === org.slug && watch(org, can, p, m));
   }
   const foot = places.filter(([, m]) => m.nav.place === "foot").map(([p, m]) => navItem(org, p, m, p === part));
   return h("aside", { class: "app-sidebar" },
@@ -146,7 +184,11 @@ export function sidebar(org, can, part) {
 }
 
 // bareSidebar is the sidebar of a viewer in no organization yet: the logo, and the page that creates or joins one.
-export const bareSidebar = () => h("aside", { class: "app-sidebar" },
-  h("a", { class: "app-sidebar-logo", href: base, "data-nav": "", "aria-label": "Cobranch" }, logo()), h("hr", { class: "app-sidebar-divider" }),
-  h("nav", { class: "app-sidebar-nav", "aria-label": "Cobranch" }, h("a", { class: "nav-item", href: base + "new", "data-nav": "" }, icon("plus"), h("span", { class: "nav-item-label" }, "Create or join an organization"))),
-  h("div", { class: "app-sidebar-flex" }), h("p", { class: "app-sidebar-credit" }, "Cobranch is a Kfirs project"));
+export function bareSidebar() {
+  drawn = "";
+  stopWatching("");
+  return h("aside", { class: "app-sidebar" },
+    h("a", { class: "app-sidebar-logo", href: base, "data-nav": "", "aria-label": "Cobranch" }, logo()), h("hr", { class: "app-sidebar-divider" }),
+    h("nav", { class: "app-sidebar-nav", "aria-label": "Cobranch" }, h("a", { class: "nav-item", href: base + "new", "data-nav": "" }, icon("plus"), h("span", { class: "nav-item-label" }, "Create or join an organization"))),
+    h("div", { class: "app-sidebar-flex" }), h("p", { class: "app-sidebar-credit" }, "Cobranch is a Kfirs project"));
+}

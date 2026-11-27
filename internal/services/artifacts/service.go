@@ -16,6 +16,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -29,6 +30,9 @@ type Service struct {
 	authz    *auth.Authorizer
 	markdown code.Renderer
 	newID    func() uuid.UUID
+	// notifier says when an organization's artifacts may have changed, for those who follow them; nil, which never
+	// says, leaves followers to read again once a minute.
+	notifier live.Notifier
 }
 
 // NewService returns a Service over store, checking permissions with authz and rendering Markdown bodies with

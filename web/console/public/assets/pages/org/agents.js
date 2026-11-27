@@ -5,6 +5,7 @@ import { agentSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { icon } from "../../lib/icons.js";
 import { pageHeading } from "../../lib/layout.js";
+import { readTagged } from "../../lib/live.js";
 import { go } from "../../lib/router.js";
 import { setAgents } from "../../lib/state.js";
 import { tabBar, tabsOf } from "../../lib/tabs.js";
@@ -57,15 +58,17 @@ export default function show({ org, main, can, sub, rest, head }) {
   return shown[1].default({ org, main, can, rest, actions: head.querySelector(".page-header-actions") });
 }
 
-// agentItems are the organization's agents as the sidebar lists them, each marked while one of its tasks runs; it
-// keeps their IDs too, for the conversation pane to tell an agent's message from a person's.
+// agentItems are the organization's agents as the sidebar lists them, each marked while one of its tasks runs, and
+// the lists they came from, which the sidebar follows; it keeps their IDs too, for the conversation pane to tell an
+// agent's message from a person's.
 async function agentItems({ org }) {
-  const [agents, running] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
-    api("GET", "/orgs/" + org.slug + "/tasks?state=running&limit=100").then((d) => new Set(d.tasks.map((t) => t.agent.id)), () => new Set())]);
-  setAgents(new Set(agents.map((a) => a.id)));
-  agents.forEach((a) => names.set(a.id, a.name));
-  return { whole: true, count: agents.length, items: agents.map((a) => ({ ...agentItem(org, a),
-    dot: running.has(a.id) ? "ai" : null, dotLabel: running.has(a.id) ? "Working" : null })) };
+  const agentsPath = "/orgs/" + org.slug + "/agents", runningPath = "/orgs/" + org.slug + "/tasks?state=running&limit=100";
+  const [agents, running] = await Promise.all([readTagged(agentsPath), readTagged(runningPath).catch(() => null)]);
+  const list = agents.data.agents, ids = new Set(running ? running.data.tasks.map((t) => t.agent.id) : []);
+  setAgents(new Set(list.map((a) => a.id)));
+  list.forEach((a) => names.set(a.id, a.name));
+  return { whole: true, count: list.length, items: list.map((a) => ({ ...agentItem(org, a), dot: ids.has(a.id) ? "ai" : null, dotLabel: ids.has(a.id) ? "Working" : null })),
+    follow: [[agentsPath, agents.tag], ...(running ? [[runningPath, running.tag]] : [])] };
 }
 
 // agentItem is agent a as a sub item of the sidebar's Agents: it opens the agent's page.

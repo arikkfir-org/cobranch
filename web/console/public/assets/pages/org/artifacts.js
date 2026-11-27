@@ -1,9 +1,9 @@
-import { api } from "../../lib/api.js";
 import { artifactSubject, knowTitle, showArtifact, titleOf } from "../../lib/artifact.js";
 import { artifactHref, audienceBadge, emptyCard, filterMenu, formats, kindOptions, kinds, listedOnly, nameCell, producer, search, updated } from "../../lib/artifacts.js";
 import { h } from "../../lib/dom.js";
 import { icon } from "../../lib/icons.js";
 import { pageHeader } from "../../lib/layout.js";
+import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { go } from "../../lib/router.js";
 
 // nav puts Artifacts in the sidebar after Agents, with the artifacts the viewer may open under it.
@@ -15,32 +15,44 @@ export const subject = ({ org, can, sub }) => (sub ? artifactSubject(org, can, s
 // The organization's artifacts the viewer may list or read, or, under /artifacts/<id>, one of them.
 export default ({ org, main, can, sub }) => (sub ? showArtifact(org, main, can, sub) : showArtifacts(org, main));
 
-// artifactItems are the organization's artifacts the viewer may open, newest change first, as the sidebar lists them.
+// artifactItems are the organization's artifacts the viewer may open, newest change first, as the sidebar lists them,
+// and the list they came from, which the sidebar follows.
 async function artifactItems({ org }) {
-  const list = (await api("GET", "/orgs/" + org.slug + "/artifacts")).artifacts;
+  const path = "/orgs/" + org.slug + "/artifacts";
+  const { data, tag } = await readTagged(path);
+  const list = data.artifacts;
   list.forEach(knowTitle);
-  return { whole: true, count: list.length, items: list.filter((a) => !listedOnly(a)).map((a) => ({ key: a.id, label: a.title, href: artifactHref(org, a), code: true, icon: "file" })) };
+  return { whole: true, count: list.length, items: list.filter((a) => !listedOnly(a)).map((a) => ({ key: a.id, label: a.title, href: artifactHref(org, a), code: true, icon: "file" })),
+    follow: [[path, tag]] };
 }
 
 // listPath is the page's path with the filters query names.
 const listPath = (org, query) => "/" + org.slug + "/artifacts" + (query.size ? "?" + query : "");
 
 // showArtifacts draws the organization's artifacts (Figma "Artifacts"): those the viewer may list or read, newest
-// change first, filtered by the page's query (repository, kind, mine) through the API and by title as typed.
+// change first, filtered by the page's query (repository, kind, mine) through the API and by title as typed, and
+// follows them and the repositories it filters by while it shows.
 async function showArtifacts(org, main) {
   const query = new URLSearchParams(location.search);
   const params = new URLSearchParams();
   if (query.get("repository")) params.set("repositoryId", query.get("repository"));
   if (query.get("kind")) params.set("kind", query.get("kind"));
   if (query.get("mine")) params.set("mine", "true");
-  const [list, repos] = await Promise.all([api("GET", "/orgs/" + org.slug + "/artifacts" + (params.size ? "?" + params : "")).then((d) => d.artifacts),
-    api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
+  const paths = ["/orgs/" + org.slug + "/artifacts" + (params.size ? "?" + params : ""), "/orgs/" + org.slug + "/repos"];
+  const read = await Promise.all(paths.map((path) => readTagged(path)));
+  const [list, repos] = [read[0].data.artifacts, read[1].data.repositories];
   list.forEach(knowTitle);
   const repoCount = new Set(list.filter((a) => a.repository).map((a) => a.repository.id)).size;
   const description = list.length + (list.length === 1 ? " artifact" : " artifacts") + " across " + repoCount + (repoCount === 1 ? " repository" : " repositories") + " · what agents produced for you and your organization";
   const header = pageHeader({ title: "Artifacts", description });
+  const follow = () => {
+    const drawn = main.firstElementChild;
+    const still = () => drawn.isConnected;
+    followLists(paths.map((path, i) => [path, read[i].tag]), still, () => drawAgain(() => showArtifacts(org, main), still));
+  };
   if (!list.length && !query.size) {
-    return main.replaceChildren(header, emptyCard("No artifacts yet", "Ask an agent in a conversation for a document, a diagram, a report or a page, and it shows here."));
+    main.replaceChildren(header, emptyCard("No artifacts yet", "Ask an agent in a conversation for a document, a diagram, a report or a page, and it shows here."));
+    return follow();
   }
   const refilter = (q) => go(listPath(org, q), true);
   const tbody = h("tbody", {});
@@ -73,4 +85,5 @@ async function showArtifacts(org, main) {
   main.replaceChildren(header, h("div", { class: "filters" }, filter.el, h("span", { class: "artifact-spacer" }),
     filterMenu("repository", "folder-git-2", "Any repository", repoOptions, refilter), scope,
     filterMenu("kind", "file", "Any kind", kindOptions("Any kind"), refilter), count), table, none);
+  follow();
 }

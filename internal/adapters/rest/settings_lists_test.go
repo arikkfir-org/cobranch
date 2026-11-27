@@ -9,8 +9,12 @@ import (
 var settingsLists = []string{"/v1/orgs/acme/members", "/v1/orgs/acme/invitations", "/v1/orgs/acme/join-requests",
 	"/v1/orgs/acme/roles", "/v1/orgs/acme/api-keys", "/v1/orgs/acme/secrets", "/v1/orgs/acme/agents"}
 
-func TestSettingsListsTagged(t *testing.T) {
-	for _, list := range settingsLists {
+// pageLists are the lists and figures of Acme's other pages, and of its sidebar, that a read may wait on.
+var pageLists = []string{"/v1/orgs/acme/repos", "/v1/orgs/acme/tasks", "/v1/orgs/acme/artifacts", "/v1/orgs/acme/overview",
+	"/v1/orgs/acme/attention", "/v1/orgs/acme/activity", "/v1/orgs/acme/usage"}
+
+func TestFollowedListsTagged(t *testing.T) {
+	for _, list := range append(settingsLists, pageLists...) {
 		t.Run(list, func(t *testing.T) {
 			stale := http.Header{"If-None-Match": {`"stale"`}}
 			runOrgCases(t, []orgCase{

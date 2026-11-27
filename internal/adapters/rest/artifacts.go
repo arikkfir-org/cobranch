@@ -20,6 +20,7 @@ import (
 type Artifacts interface {
 	List(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, kind artifacts.Kind) ([]artifacts.Artifact, error)
 	ListOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) ([]artifacts.Artifact, error)
+	FollowOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) (<-chan []artifacts.Artifact, error)
 	Get(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Artifact, error)
 	Create(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, in artifacts.Input) (artifacts.Artifact, bool, error)
 	Update(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID, version int64, p artifacts.Patch) (artifacts.Artifact, error)
@@ -175,13 +176,10 @@ func (a api) ListArtifacts(ctx context.Context, req ListArtifactsRequestObject) 
 	return ListArtifacts200JSONResponse{Artifacts: nonNil(mapAll(list, artifact))}, nil
 }
 
-// ListOrganizationArtifacts lists the organization's artifacts that the caller may list or read.
+// ListOrganizationArtifacts lists the organization's artifacts that the caller may list or read, or, with
+// If-None-Match and wait, once they change.
 func (a api) ListOrganizationArtifacts(ctx context.Context, req ListOrganizationArtifactsRequestObject) (ListOrganizationArtifactsResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	org, err := a.org(ctx, v, req.Org)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -189,11 +187,21 @@ func (a api) ListOrganizationArtifacts(ctx context.Context, req ListOrganization
 	if req.Params.RepositoryId != nil {
 		f.RepoID = *req.Params.RepositoryId
 	}
-	list, err := a.artifacts.ListOrganization(ctx, v, org.ID, f)
-	if err != nil {
-		return nil, artifactFail(err, "organization")
-	}
-	return ListOrganizationArtifacts200JSONResponse{Artifacts: nonNil(mapAll(list, artifact))}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]artifacts.Artifact, error) {
+		list, err := a.artifacts.ListOrganization(ctx, v, org.ID, f)
+		return list, artifactFail(err, "organization")
+	}, func(ctx context.Context) (<-chan []artifacts.Artifact, error) {
+		lists, err := a.artifacts.FollowOrganization(ctx, v, org.ID, f)
+		return lists, artifactFail(err, "organization")
+	}, func(list []artifacts.Artifact) (ListOrganizationArtifactsResponseObject, bool, error) {
+		out := ListOrganizationArtifacts200JSONResponse{}
+		out.Body.Artifacts = nonNil(mapAll(list, artifact))
+		return listAnswer("artifacts", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListOrganizationArtifactsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListOrganizationArtifactsResponseObject {
+				return ListOrganizationArtifacts304Response{Headers: ListOrganizationArtifacts304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // artifactInput is what b makes.

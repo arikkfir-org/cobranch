@@ -45,14 +45,15 @@ export async function keepingFilter(draw) {
   if (focused) filter.focus();
 }
 
-// followLists follows the lists a page shows, each a path and the ETag of what the page read, while still answers
-// true, and calls changed once one of them changes, and then stops: a page draws itself again then, reading them
-// again and following them anew. A list the viewer may no longer read stops it too, without changed, and so does the
-// Console drawing another page, or the page following anew, which abandon the reads in flight.
-export async function followLists(lists, still, changed) {
+// watchLists asks the API again about the lists it is given, each a path and the ETag of what was read, while still
+// answers true and until signal aborts, and answers true once one of them changes, abandoning the others' reads. A
+// list read without an ETag isn't asked about, and a list the viewer may no longer read stops being asked about; it
+// answers false once none is left to ask about.
+export async function watchLists(lists, still, signal) {
   const stop = new AbortController();
-  follows(stop);
-  const follow = async ([path, tag]) => {
+  const abort = () => stop.abort();
+  signal.addEventListener("abort", abort, { once: true });
+  const watch = async ([path, tag]) => {
     let delay = 1000;
     while (!stop.signal.aborted) {
       await shown();
@@ -67,11 +68,41 @@ export async function followLists(lists, still, changed) {
     }
     return false;
   };
-  let told = false;
-  await Promise.all(lists.map((list) => follow(list).then((change) => {
-    if (!change || told) return;
-    told = true;
-    stop.abort();
-    if (still()) changed();
-  })));
+  const tagged = lists.filter(([, tag]) => tag);
+  const changed = await new Promise((resolve) => {
+    let left = tagged.length;
+    if (!left) resolve(false);
+    tagged.forEach((list) => watch(list).then((change) => {
+      left--;
+      if (change || !left) resolve(change);
+    }));
+  });
+  stop.abort();
+  signal.removeEventListener("abort", abort);
+  return changed && !signal.aborted;
+}
+
+// followLists follows the lists a page shows, each a path and the ETag of what the page read, while still answers
+// true, and calls changed once one of them changes, and then stops: a page draws itself again then, reading them
+// again and following them anew. A list the viewer may no longer read stops it too, without changed, and so does the
+// Console drawing another page, or the page following anew, which abandon the reads in flight.
+export async function followLists(lists, still, changed) {
+  const stop = new AbortController();
+  follows(stop);
+  if (await watchLists(lists, still, stop.signal) && still()) changed();
+}
+
+// drawAgain draws a page again with draw once a list it follows changed, keeping what the viewer typed in its filter;
+// a draw that fails leaves the page as it was and is tried again a second later, then longer, while still answers
+// true.
+export async function drawAgain(draw, still) {
+  let delay = 1000;
+  while (still()) {
+    try {
+      await keepingFilter(draw);
+      return;
+    } catch {
+      delay = await pause(delay);
+    }
+  }
 }

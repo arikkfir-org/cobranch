@@ -34,29 +34,30 @@ func (a api) GetMyUsage(ctx context.Context, req GetMyUsageRequestObject) (GetMy
 }
 
 // GetOrganizationUsage answers what the organization takes of what its limits cap, with the Git data of each of its
-// repositories the viewer reads, or 304 while the caller holds that answer.
+// repositories the viewer reads, or 304 while the caller holds that answer, after waiting for it to change as wait
+// asks.
 func (a api) GetOrganizationUsage(ctx context.Context, req GetOrganizationUsageRequestObject) (GetOrganizationUsageResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	usage, err := a.repos.Usage(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	body := organizationUsage(usage)
-	tag, err := usageTag("organization", body)
-	if err != nil {
-		return nil, err
-	}
-	if matches(req.Params.IfNoneMatch, tag) {
-		return GetOrganizationUsage304Response{Headers: GetOrganizationUsage304ResponseHeaders{ETag: tag}}, nil
-	}
-	return GetOrganizationUsage200JSONResponse{Body: body, Headers: GetOrganizationUsage200ResponseHeaders{ETag: tag}}, nil
+	return readList(ctx, waits, func(ctx context.Context) (repos.Usage, error) {
+		usage, err := a.repos.Usage(ctx, v, org.ID)
+		return usage, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan repos.Usage, error) {
+		usage, err := a.repos.FollowUsage(ctx, v, org.ID)
+		return usage, fail(err, "organization")
+	}, func(u repos.Usage) (GetOrganizationUsageResponseObject, bool, error) {
+		body := organizationUsage(u)
+		tag, err := usageTag("organization", body)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches(req.Params.IfNoneMatch, tag) {
+			return GetOrganizationUsage304Response{Headers: GetOrganizationUsage304ResponseHeaders{ETag: tag}}, true, nil
+		}
+		return GetOrganizationUsage200JSONResponse{Body: body, Headers: GetOrganizationUsage200ResponseHeaders{ETag: tag}}, false, nil
+	})
 }
 
 // quota is q as the API shows it.

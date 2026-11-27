@@ -12,16 +12,14 @@ import (
 // Overview is the service of an organization's figures, as the API uses it.
 type Overview interface {
 	Overview(ctx context.Context, v overview.Viewer, orgID uuid.UUID, p overview.Period) (overview.Overview, error)
+	FollowOverview(ctx context.Context, v overview.Viewer, orgID uuid.UUID, p overview.Period) (<-chan overview.Overview, error)
 }
 
 // GetOrganizationOverview answers how the organization's work stands and what it did over a span of days in a time
-// zone, this month so far in UTC by default, or 304 while the caller holds that answer.
+// zone, this month so far in UTC by default, or 304 while the caller holds that answer, after waiting for it to change
+// as wait asks.
 func (a api) GetOrganizationOverview(ctx context.Context, req GetOrganizationOverviewRequestObject) (GetOrganizationOverviewResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	org, err := a.org(ctx, v, req.Org)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -29,19 +27,22 @@ func (a api) GetOrganizationOverview(ctx context.Context, req GetOrganizationOve
 	if err != nil {
 		return nil, fail(err, "organization")
 	}
-	o, err := a.overview.Overview(ctx, v, org.ID, p)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	body := organizationOverview(o)
-	tag, err := bodyTag("overview", body, nil)
-	if err != nil {
-		return nil, err
-	}
-	if matches(req.Params.IfNoneMatch, tag) {
-		return GetOrganizationOverview304Response{Headers: GetOrganizationOverview304ResponseHeaders{ETag: tag}}, nil
-	}
-	return GetOrganizationOverview200JSONResponse{Body: body, Headers: GetOrganizationOverview200ResponseHeaders{ETag: tag}}, nil
+	return readList(ctx, waits, func(ctx context.Context) (overview.Overview, error) {
+		o, err := a.overview.Overview(ctx, v, org.ID, p)
+		return o, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan overview.Overview, error) {
+		o, err := a.overview.FollowOverview(ctx, v, org.ID, p)
+		return o, fail(err, "organization")
+	}, func(o overview.Overview) (GetOrganizationOverviewResponseObject, bool, error) {
+		body := organizationOverview(o)
+		return listAnswer("overview", body, req.Params.IfNoneMatch,
+			func(etag string) GetOrganizationOverviewResponseObject {
+				return GetOrganizationOverview200JSONResponse{Body: body, Headers: GetOrganizationOverview200ResponseHeaders{ETag: etag}}
+			},
+			func(etag string) GetOrganizationOverviewResponseObject {
+				return GetOrganizationOverview304Response{Headers: GetOrganizationOverview304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // organizationOverview is o as the API shows it, its days written in the period's zone.

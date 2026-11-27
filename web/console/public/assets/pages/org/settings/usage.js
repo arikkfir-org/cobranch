@@ -1,7 +1,7 @@
-import { api } from "../../../lib/api.js";
 import { h } from "../../../lib/dom.js";
 import { size } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
+import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
 import { base } from "../../../lib/state.js";
 
 export const tab = { label: "Usage", order: 70 };
@@ -34,9 +34,10 @@ function gauge(label, usage, format) {
 }
 
 // showUsage is what the organization takes of what its limits cap, for anyone who reads it, and the Git data of each
-// repository the viewer reads, largest first, with its share of the organization's.
+// repository the viewer reads, largest first, with its share of the organization's; it follows them while it shows.
 async function showUsage(org, main) {
-  const usage = await api("GET", "/orgs/" + org.slug + "/usage");
+  const path = "/orgs/" + org.slug + "/usage";
+  const { data: usage, tag } = await readTagged(path);
   const list = [...usage.byRepository].sort((a, b) => b.gitData - a.gitData || a.slug.localeCompare(b.slug));
   const unread = usage.repositories.used - list.length;
   const whole = usage.gitData.used;
@@ -56,4 +57,7 @@ async function showUsage(org, main) {
       : h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("folder-git-2")), h("h2", { class: "empty-title" }, "No repositories yet"),
         h("p", { class: "empty-description" }, "Their Git data shows here once there are some."))),
     unread > 0 ? h("p", { class: "usage-unread" }, (unread === 1 ? "1 repository you can't read counts" : unread + " repositories you can't read count") + " toward these too.") : "");
+  const drawn = main.firstElementChild;
+  const still = () => drawn.isConnected;
+  followLists([[path, tag]], still, () => drawAgain(() => showUsage(org, main), still));
 }

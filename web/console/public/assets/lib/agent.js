@@ -9,6 +9,7 @@ import { h } from "./dom.js";
 import { ago, capitalized, plural } from "./format.js";
 import { banner, checkbox, field, input, selectBox, textarea } from "./forms.js";
 import { avatar, icon } from "./icons.js";
+import { drawAgain, followLists, readTagged } from "./live.js";
 import { go } from "./router.js";
 import { remember } from "./sidebar.js";
 import { agents as agentIds, base, me, roles } from "./state.js";
@@ -152,7 +153,7 @@ export const editorPage = (org, a) => base + org.slug + "/settings/agents?" + ne
 
 // showAgent draws one of the organization's agents (Agent): what it works on, its queue and its latest tasks, what it
 // runs on and what it spent this month, and what happened to its tasks; Edit opens it in Settings · Agents and Assign a
-// task gives it one, once it runs on a model.
+// task gives it one, once it runs on a model. It follows the agent's tasks while it shows.
 export async function showAgent(org, main, can, id) {
   let a;
   try {
@@ -161,8 +162,9 @@ export async function showAgent(org, main, can, id) {
     if (err.status !== 404 && err.status !== 400) throw err;
     return main.replaceChildren(emptyState("bot", "No such agent", "There is no such agent in " + org.name + ", or you may not see it."));
   }
-  const [tasks, report, providers] = await Promise.all([
-    api("GET", "/orgs/" + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id, limit: "100" })).then((d) => d.tasks),
+  const queue = "/orgs/" + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id, limit: "100" });
+  const [{ data: { tasks }, tag }, report, providers] = await Promise.all([
+    readTagged(queue),
     spendReport(org).catch(() => null),
     api("GET", "/orgs/" + org.slug + "/model-providers").then((d) => d.modelProviders, () => []),
   ]);
@@ -175,6 +177,9 @@ export async function showAgent(org, main, can, id) {
     h("div", { class: "agent-columns" },
       h("div", { class: "agent-column" }, ...taskCards(org, a, can, tasks, working, refresh)),
       h("div", { class: "agent-column" }, factsCard(a, providers, report), activityCard(a, tasks))));
+  const drawn = main.firstElementChild;
+  const still = () => drawn.isConnected;
+  followLists([[queue, tag]], still, () => drawAgain(refresh, still));
 }
 
 // named shows agent a's name in the breadcrumbs and the window's title once its page has read it, and puts it first

@@ -113,8 +113,8 @@ type Service struct {
 	// providers are the names of the model providers the installation knows, sorted.
 	providers []string
 	guards    map[string]string
-	// notifier says when an organization's settings may have changed, for those who follow them; nil, which never
-	// says, leaves followers to read again once a minute.
+	// notifier says when an organization's settings or tasks may have changed, for those who follow them; nil, which
+	// never says, leaves followers to read again once a minute.
 	notifier live.Notifier
 }
 

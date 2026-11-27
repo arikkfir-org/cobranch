@@ -8,8 +8,8 @@ import (
 	"cobranch.dev/internal/services/live"
 )
 
-// WithNotifier has the service's followers read an organization's agents, model providers and models again as soon as
-// n says its settings may have changed; without it, they read them once a minute.
+// WithNotifier has the service's followers read an organization's agents, model providers, models and tasks again as
+// soon as n says they may have changed; without it, they read them once a minute.
 func (s *Service) WithNotifier(n live.Notifier) *Service {
 	s.notifier = n
 	return s
@@ -49,4 +49,16 @@ func (s *Service) FollowAgents(ctx context.Context, v Viewer, orgID uuid.UUID) (
 		return s.Agents(ctx, v, orgID)
 	}, orgID)
 	return list, failed(span, "following the agents", err)
+}
+
+// FollowTasks sends the page of the organization's tasks that Tasks answers for the filter and limit at once, then
+// again each time it changes (a task assigned, started, ended or cancelled, or what one spent), until ctx ends or a
+// read fails, and then closes the channel. The Agents and Activity pages and the sidebar follow the tasks at work.
+func (s *Service) FollowTasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFilter, limit int) (<-chan TaskPage, error) {
+	ctx, span := tracer.Start(ctx, "agents.Service.FollowTasks", onOrg(orgID))
+	defer span.End()
+	page, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (TaskPage, error) {
+		return s.Tasks(ctx, v, orgID, f, limit)
+	}, orgID)
+	return page, failed(span, "following the tasks", err)
 }

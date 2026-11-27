@@ -6,7 +6,7 @@
 
 **Status**: Proposed 2026-11-05 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252) · [ENG-255](https://linear.app/arikkfir/issue/ENG-255) ·
-[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · [ENG-282](https://linear.app/arikkfir/issue/ENG-282) · Restructures the Console of [the
+[ENG-258](https://linear.app/arikkfir/issue/ENG-258) · [ENG-282](https://linear.app/arikkfir/issue/ENG-282) · [ENG-285](https://linear.app/arikkfir/issue/ENG-285) · Restructures the Console of [the
 architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
 Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
 [ENG-252](https://linear.app/arikkfir/issue/ENG-252), its app shell drawn by
@@ -260,7 +260,11 @@ makes every page live, a group of pages a slice. The organization switcher was f
   permission again, so a viewer who loses it stops following.
 - **A page follows with `followLists`** (`lib/live.js`): one follower a page, abandoned once the Console draws another
   page or the page draws itself again; a tab out of sight stops asking until it shows. `keepingFilter` keeps what the
-  viewer typed in the page's filter, and its focus, across the draw.
+  viewer typed in the page's filter, and its focus, across the draw, and `drawAgain` tries a draw that fails again,
+  leaving the page as it was meanwhile.
+- **The sidebar follows across pages.** A section's `nav.items` answers the lists its items came from with their ETags,
+  and the sidebar waits on them (`watchLists`) whatever page shows, drawing the section's count and items again once
+  one changes, until it draws another organization.
 - **A draw never loses input.** A page whose editor is open with what the viewer may still change, Roles' editable role
   and Agents' editor, doesn't follow until it closes; Settings · API keys keeps a secret just made on screen across a
   draw.
@@ -273,10 +277,17 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | Settings · Roles | Roles, with how many hold each | `roles`, `grants` |
 | Settings · API keys | API keys, with their roles and secrets | `principals`, `grants`, `credentials` |
 | Settings · Secrets | The organization's secrets | `secrets` |
+| Settings · Usage | Repositories and Git data against the limits | `repositories`, `packs`, `organization_limits` |
+| Overview | Its figures over the period | `memberships`, `repositories`, `agents`, `branches`, `pushes`, `issues`, `agent_tasks`, `task_spend`, `job_runs` |
+| Activity | Branches that need the viewer, repositories, agents and their tasks at work, what happened | `branches`, `annotations`, `reviews`, `pushes`, `repositories`, `agents`, `agent_tasks`, `deliveries` |
+| Repositories, and the sidebar's | Repositories, each with its branches, main's status and last push | `repositories`, `branches`, `annotations`, `pushes`, `grants` |
+| Agents, an agent's page, Agents · Activity, and the sidebar's agents | Agents, and their tasks | `agents`, `agent_tasks`, `task_spend`, `grants` |
+| Artifacts, and the sidebar's | Artifacts the viewer may list or read | `artifacts`, `grants` |
 
 Settings · Secrets reads who may read each secret with a read per secret, which it doesn't follow: a grant on one secret
-alone shows at the page's next draw. Settings · Usage counts repositories and their Git data, which follow with the
-organization's repositories ([ENG-285](https://linear.app/arikkfir/issue/ENG-285)).
+alone shows at the page's next draw. The sidebar's issues follow with the issues' pages
+([ENG-286](https://linear.app/arikkfir/issue/ENG-286)). Agents · Activity follows its newest page of tasks, and an
+agent's page its tasks; both read the spend report again on each draw, which they don't follow.
 
 ## Security and failure modes
 

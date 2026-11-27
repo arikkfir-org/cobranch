@@ -1,10 +1,10 @@
 import { agentPage } from "../../lib/agent.js";
-import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { h } from "../../lib/dom.js";
 import { ago, capitalized, plural, shortSha, since, whenExactly } from "../../lib/format.js";
 import { actorAvatar, avatar, icon } from "../../lib/icons.js";
 import { pageHeading } from "../../lib/layout.js";
+import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { visibilities } from "../../lib/organization.js";
 import { base } from "../../lib/state.js";
 
@@ -20,20 +20,22 @@ const shownRepositories = 3;
 const shownActivity = 10;
 
 // The organization's Activity: the branches that need the viewer and the repositories pushed to last in its main
-// column, and beside them its agents at work and what happened last in the repositories the viewer reads.
+// column, and beside them its agents at work and what happened last in the repositories the viewer reads. It follows
+// them all while it shows.
 export default async function show({ org, main, can }) {
   const path = "/orgs/" + org.slug;
-  const [attention, repositories, agents, working, activity] = await Promise.all([
-    api("GET", path + "/attention").then((d) => d.branches),
-    api("GET", path + "/repos").then((d) => d.repositories),
-    api("GET", path + "/agents").then((d) => d.agents),
-    api("GET", path + "/tasks?state=running&state=waiting&limit=100").then((d) => d.tasks, () => []),
-    api("GET", path + "/activity?limit=" + shownActivity).then((d) => d.activity),
-  ]);
+  const paths = [path + "/attention", path + "/repos", path + "/agents", path + "/tasks?state=running&state=waiting&limit=100",
+    path + "/activity?limit=" + shownActivity];
+  const read = await Promise.all(paths.map((p, i) => i === 3 ? readTagged(p).catch(() => null) : readTagged(p)));
+  const [attention, repositories, agents, working, activity] = [read[0].data.branches, read[1].data.repositories, read[2].data.agents,
+    read[3] ? read[3].data.tasks : [], read[4].data.activity];
   const agentIds = new Set(agents.map((a) => a.id));
   main.replaceChildren(h("div", { class: "activity-columns" },
     h("div", { class: "activity-main" }, attentionCard(org, attention, agentIds), repositoriesCard(org, repositories, can)),
     h("div", { class: "activity-side" }, agentsCard(org, agents, working, can), activityCard(activity))));
+  const drawn = main.firstElementChild;
+  const still = () => drawn.isConnected;
+  followLists(paths.map((p, i) => [p, read[i]?.tag]), still, () => drawAgain(() => show({ org, main, can }), still));
 }
 
 // branches is how many branches n is, as a count says it.
