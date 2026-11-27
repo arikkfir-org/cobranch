@@ -132,7 +132,7 @@ function accessCard(grants, refresh, fail) {
 async function shareArtifacts(refresh, fail) {
   const people = new Map();
   await Promise.all(orgs.map((o) => Promise.all([api("GET", "/orgs/" + o.slug + "/members").then((d) => d.members, () => []),
-    api("GET", "/orgs/" + o.slug + "/agents").then((d) => d.agents, () => [])]).then(([members, agents]) => {
+    api("GET", "/orgs/" + o.slug + "/agents").then((d) => d.agents.filter((a) => !a.retiredAt), () => [])]).then(([members, agents]) => {
     members.filter((m) => m.userId !== me.id).forEach((m) => people.set(m.userId, m.displayName));
     agents.forEach((a) => people.set(a.id, a.name + " (agent of " + o.name + ")"));
   }))).catch(fail);

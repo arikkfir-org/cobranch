@@ -7,7 +7,7 @@ import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
 import { recount } from "../../../lib/tabs.js";
 
 export const tab = { label: "Agents", order: 0 };
-export const count = ({ org }) => api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents.length);
+export const count = ({ org }) => api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents.filter((a) => !a.retiredAt).length);
 export const view = "organization.agents";
 export default ({ org, main }) => showAgents(org, main);
 
@@ -17,7 +17,7 @@ export default ({ org, main }) => showAgents(org, main);
 async function showAgents(org, main) {
   const paths = ["/orgs/" + org.slug + "/agents", "/orgs/" + org.slug + "/tasks?" + new URLSearchParams([["state", "running"], ["state", "waiting"], ["limit", "100"]])];
   const [read, report] = await Promise.all([Promise.all([readTagged(paths[0]), readTagged(paths[1]).catch(() => null)]), spendReport(org).catch(() => null)]);
-  const agents = read[0].data.agents, working = read[1] ? read[1].data.tasks : [];
+  const agents = read[0].data.agents.filter((a) => !a.retiredAt), working = read[1] ? read[1].data.tasks : [];
   const follow = () => {
     const drawn = main.firstElementChild;
     const still = () => drawn.isConnected;

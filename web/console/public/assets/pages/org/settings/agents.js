@@ -1,4 +1,4 @@
-import { agentPage, emptyState, mayEdit, newAgent, readProviderKey, spendReport } from "../../../lib/agent.js";
+import { agentPage, declaredIn, emptyState, mayEdit, newAgent, readProviderKey, spendReport } from "../../../lib/agent.js";
 import { api } from "../../../lib/api.js";
 import { markCode } from "../../../lib/codemarks.js";
 import { ask, openDialog } from "../../../lib/dialog.js";
@@ -8,6 +8,7 @@ import { avatar, icon } from "../../../lib/icons.js";
 import { followLists, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
 import { go } from "../../../lib/router.js";
+import { base } from "../../../lib/state.js";
 
 export const tab = { label: "Agents", order: 40 };
 export const allowed = (can) => can("agents.create") || can("org.principals.manage");
@@ -23,13 +24,14 @@ const sectionHeader = (title, description, action) => h("header", { class: "sect
   h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, title), h("p", { class: "section-header-description" }, description)), action || "");
 
 // showAgents lists the organization's agents (Settings · Agents): the model each runs on, its cap, the secrets its tasks
-// receive, its grants and its tasks this month, each with a menu; the agent editing names, when the viewer may change it,
-// opens in its editor under them. saved says the last save worked. Without an editor open, whose changes a draw would
+// receive, its grants and its tasks this month, each with a menu, then its repositories' agents, which only their
+// files change; the agent editing names, when the viewer may change it, opens in its editor under them. saved says the last save worked. Without an editor open, whose changes a draw would
 // lose, it follows the agents while they show, and draws itself again once they change, here or elsewhere.
 async function showAgents(org, main, can, editing, saved = false) {
   const path = "/orgs/" + org.slug + "/agents";
   const [list, report] = await Promise.all([readTagged(path), spendReport(org).catch(() => null)]);
-  const agents = list.data.agents;
+  const agents = list.data.agents.filter((a) => !a.repositoryId);
+  const declared = list.data.agents.filter((a) => a.repositoryId && !a.retiredAt);
   const monthly = new Map((report ? report.agents : []).map((s) => [s.agent.id, s.tasks]));
   const error = failure();
   const redraw = (id, ok) => showAgents(org, main, can, id, ok).catch(error.fail);
@@ -49,17 +51,34 @@ async function showAgents(org, main, can, editing, saved = false) {
   main.replaceChildren(error.el, saved ? banner("success", null, "Saved.") : "",
     sectionHeader("Agents", "Each agent runs on one model with its own instructions, the secrets it may use, an optional cap, and the grants that say what it may touch.",
       can("agents.create") ? h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org, can).catch(error.fail) }, icon("plus"), "New agent") : ""),
-    table, open ? await editor(org, open, can, redraw) : "");
+    table, ...(declared.length ? repositoryAgents(org, declared, report, monthly) : []), open ? await editor(org, open, can, redraw) : "");
   if (!open) followLists([[path, list.tag]], () => error.el.isConnected, () => redraw(editing, saved));
 }
 
+// repositoryAgents lists the agents the organization's repositories declare (Settings · Agents, Repository agents),
+// read-only: the repository of each, the model it runs on, its image, the permissions it declares and its tasks this
+// month, each with a menu.
+function repositoryAgents(org, declared, report, monthly) {
+  const mono = (text, none) => h("td", { class: text ? "cell-mono" : "cell-muted" }, text || none);
+  const row = (a) => h("tr", {},
+    h("td", {}, h("a", { class: "agents-agent agents-agent-small", href: agentPage(org, a.id), "data-nav": "" }, avatar(a.name, true, 24),
+      h("span", { class: "cell-two-lines" }, h("span", {}, a.name), a.description ? h("span", {}, a.description) : ""))),
+    h("td", {}, a.repositorySlug), mono(a.model, "Not set"), mono(a.image, "The installation's"), mono(a.permissions.join(", "), "None"),
+    h("td", {}, report ? String(monthly.get(a.id) || 0) : "–"),
+    h("td", { class: "cell-actions" }, rowMenu(org, a, () => false)));
+  return [sectionHeader("Repository agents", "Declared in each repository's main /cobranch.yaml, and changed only by a push to its main. Each works in its repository alone."),
+    h("table", { class: "table settings-agents" }, h("thead", {}, h("tr", {}, ["Agent", "Repository", "Model", "Image", "Permissions", "Tasks"].map((t) => h("th", {}, t)),
+      h("th", { "aria-label": "Actions" }))), h("tbody", {}, declared.map(row)))];
+}
+
 // rowMenu is an agent's menu: edit it and open its page, and delete it for a viewer who manages the organization's
-// principals, unless Cobranch made it.
+// principals, unless Cobranch made it; a repository's agent's opens its lines of main's /cobranch.yaml instead.
 function rowMenu(org, a, can) {
   const items = [
     mayEdit(a, can) ? ["Edit", "pencil", () => go(tabPath(org, a.id))] : null,
     ["Open its page", "bot", () => go("/" + org.slug + "/agents/" + a.id)],
-    can("org.principals.manage") && !a.builtIn ? ["Delete " + a.name, "trash-2", () => remove(org, a), true] : null,
+    a.repositoryId ? ["Open its lines", "file", () => go(declaredIn(org, a).slice(base.length - 1))] : null,
+    can("org.principals.manage") && !a.builtIn && !a.repositoryId ? ["Delete " + a.name, "trash-2", () => remove(org, a), true] : null,
   ].filter(Boolean);
   const button = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-haspopup": "menu", "aria-label": "More for " + a.name, title: "More for " + a.name }, icon("ellipsis"));
   button.addEventListener("click", () => popover(button, "end", (close) => items.map(([word, glyph, run, danger]) =>

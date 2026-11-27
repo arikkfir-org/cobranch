@@ -124,9 +124,11 @@ export async function conversation(s, signal) {
   // atBottom says whether the viewer reads the newest messages, which the list then keeps in view as more come.
   const atBottom = () => messages.scrollHeight - messages.scrollTop - messages.clientHeight < 24;
   const keepDown = (was) => { if (was) messages.scrollTop = messages.scrollHeight; };
-  let roster = null; // the organization's agents, read once Ask first opens them or a status needs them
+  let roster = null; // the agents that work here, read once Ask first opens them or a status needs them
   let rostered = null; // the same, once read
-  const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => (rostered = d.agents),
+  // The agents asked here are the organization's, and a repository's own in its branches' chats; never a retired one.
+  const worksHere = (a) => !a.retiredAt && (!a.repositorySlug || chat.includes("/repos/" + a.repositorySlug + "/"));
+  const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => (rostered = d.agents.filter(worksHere)),
     (err) => { roster = null; throw err; }));
 
   // The tasks the conversation's messages asked for, by number: each task as last read, the badges on its asked rows
