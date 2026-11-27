@@ -1455,7 +1455,7 @@ type AgentGrantInput struct {
 
 // AgentImage The container image an agent's tasks run in.
 type AgentImage struct {
-	// Image A reference such as ghcr.io/acme/tools:1.4, or one pinned by digest, of at most 512 characters; empty for the installation's image. It needs sh and git, and is pulled without the installation's credentials.
+	// Image A reference such as ghcr.io/acme/tools:1.4, or one pinned by digest, of at most 512 characters; empty for the installation's image. It needs sh and git, and is pulled with the installation's image pull secrets.
 	Image string `json:"image"`
 }
 
