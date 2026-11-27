@@ -18,9 +18,14 @@ import { base, me } from "./state.js";
 // principals, while it hasn't ended.
 const mayCancel = (t, can) => activeTask(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"));
 // kindOf is what t is for, as its facts name it.
-const kindOf = (t) => t.private ? "Private conversation" : { assigned: "Assigned", chat: "Chat", issue_chat: "Issue chat" }[t.kind] || capitalized(t.kind);
+const kindOf = (t) => t.private ? "Private conversation" : { assigned: "Assigned", chat: "Chat", issue_chat: "Issue chat", job: "Job run" }[t.kind] || capitalized(t.kind);
 // origins are where a task the agent was asked for in a conversation came from, as the page's header says it.
 const origins = { chat: "from a chat", issue_chat: "from an issue's chat" };
+// originOf is where t came from, as the page's header says it: a conversation, or the run of a job, which assigned it.
+const originOf = (t) => t.private ? "from a private conversation"
+  : t.kind === "job" && t.run ? "for run #" + t.run + (t.assignedBy ? " of " + t.assignedBy.displayName : "") : origins[t.kind];
+// runOf is the address of the run whose task t is, or nothing for a task no run started.
+const runOf = (org, t) => t.kind === "job" && t.run && t.repositorySlug ? repoLinks(org, { slug: t.repositorySlug }).run(t.run) : null;
 // ends are what the header says a task that ended did.
 const ends = { succeeded: "finished", failed: "failed", cancelled: "cancelled" };
 // whenOf is when t started, or was queued, and by whom, then when it ended.
@@ -94,14 +99,17 @@ function named(org, id, name, title) {
 }
 
 // taskHeader is the top of t's page: its number, title and state, whose it is, where it came from, where it works,
-// when and by whom, and, once it started, how many turns its model took; then Open branch and, for a viewer who may,
-// Cancel task.
+// when and by whom, and, once it started, how many turns its model took; then Open run for a job's run, or Open branch,
+// and, for a viewer who may, Cancel task. A job's run works at its commit, which the header names.
 function taskHeader(org, t, can, turns, cancel) {
-  const where = t.repositorySlug && "on " + [t.repositorySlug, t.branch].filter(Boolean).join(" ");
-  const said = [t.agent.displayName, t.private ? "from a private conversation" : origins[t.kind], where, ...whenOf(t), t.startedAt ? turnsOf(t, turns) : ""]
+  const at = t.kind === "job" && t.sha ? " at " + t.sha.slice(0, 7) : "";
+  const where = t.repositorySlug && "on " + (at ? t.repositorySlug + at : [t.repositorySlug, t.branch].filter(Boolean).join(" "));
+  const said = [t.agent.displayName, originOf(t), where, ...whenOf(t), t.startedAt ? turnsOf(t, turns) : ""]
     .filter(Boolean).join(" · ");
-  const branch = t.repositorySlug && t.branch
-    ? h("a", { class: "btn", href: repoLinks(org, { slug: t.repositorySlug }).branchPage(t.branch), "data-nav": "" }, icon("git-branch"), "Open branch") : "";
+  const run = runOf(org, t);
+  const branch = run ? h("a", { class: "btn", href: run, "data-nav": "" }, icon("bot"), "Open run")
+    : t.repositorySlug && t.branch
+      ? h("a", { class: "btn", href: repoLinks(org, { slug: t.repositorySlug }).branchPage(t.branch), "data-nav": "" }, icon("git-branch"), "Open branch") : "";
   return h("header", { class: "page-header agent-header" },
     h("div", { class: "page-header-text" },
       h("div", { class: "app-page-heading-title" }, h("span", { class: "task-number" }, "#" + t.number),
@@ -122,14 +130,16 @@ function outcome(t) {
   return "";
 }
 
-// factsCard is what t is (Task): its agent and kind, the branch it works on, or its repository when it works on none,
-// who assigned it, and when it started, or was queued.
+// factsCard is what t is (Task): its agent and kind, the run whose task it is, the branch it works on, or its
+// repository when it works on neither, who assigned it, and when it started, or was queued.
 function factsCard(org, t) {
   const moment = (at) => h("span", { title: whenExactly(at) }, since(at));
   const who = (p, agent) => h("span", { class: "task-fact-who" }, agent ? avatar(p.displayName, true) : whoAvatar(p), p.displayName);
   const links = t.repositorySlug ? repoLinks(org, { slug: t.repositorySlug }) : null;
   const rows = [fact("Agent", h("a", { href: agentPage(org, t.agent.id), "data-nav": "" }, who(t.agent, true))), fact("Kind", kindOf(t))];
-  if (links && t.branch) rows.push(fact("Branch", h("a", { href: links.branchPage(t.branch), "data-nav": "", title: t.repositorySlug + " " + t.branch }, t.branch), true));
+  const run = runOf(org, t);
+  if (run) rows.push(fact("Run", h("a", { href: run, "data-nav": "" }, (t.assignedBy ? t.assignedBy.displayName + " " : "") + "#" + t.run), true));
+  else if (links && t.branch) rows.push(fact("Branch", h("a", { href: links.branchPage(t.branch), "data-nav": "", title: t.repositorySlug + " " + t.branch }, t.branch), true));
   else if (links) rows.push(fact("Repository", h("a", { href: base + org.slug + "/" + t.repositorySlug, "data-nav": "" }, t.repositorySlug), true));
   rows.push(fact("Assigned by", t.assignedBy ? who(t.assignedBy) : "Someone since gone"));
   rows.push(t.startedAt ? fact("Started", moment(t.startedAt)) : fact("Queued", moment(t.createdAt)));
@@ -157,7 +167,7 @@ function spendCard(t, turns, calls) {
 // transcriptCard is t's transcript (Transcript): its steps, read a page at a time from the API, how many turns it took
 // and what it spent, and Follow while t hasn't ended, which keeps the newest step in view. Its assigner,
 // org.principals.manage and its repository's readers read it; anyone else sees a note that says so.
-function transcriptCard(t) {
+export function transcriptCard(t) {
   const entries = [];
   const opened = new Set();
   let task = t;
@@ -276,7 +286,8 @@ function stepParts(s, t) {
   if (s.kind === "input") return s.first ? ["user", "neutral", t.assignedBy ? t.assignedBy.displayName : "Its assigner", "assigned", b.text] : ["message-square", "neutral", "Its thread", "answered", b.text];
   if (s.kind === "state") {
     const [glyph, tone, word] = stateWords[b.state] || ["info", "neutral", capitalized(String(b.state))];
-    const where = b.state === "running" && t.repositorySlug ? " on " + [t.repositorySlug, t.branch].filter(Boolean).join(" · ") : "";
+    const at = t.kind === "job" && t.sha ? t.repositorySlug + " at " + t.sha.slice(0, 7) : [t.repositorySlug, t.branch].filter(Boolean).join(" · ");
+    const where = b.state === "running" && t.repositorySlug ? " on " + at : "";
     const said = b.summary || (b.reason && capitalized(b.reason));
     return [glyph, tone, "Task", "", word + where + (said ? ": " + said : "")];
   }

@@ -8,6 +8,7 @@ import { recrumb } from "./layout.js";
 import { render } from "./router.js";
 import { duration, noRuns, runActions, runStates, runStatuses } from "./runs.js";
 import { base, config, follows } from "./state.js";
+import { transcriptCard } from "./task.js";
 
 // stepStates are how a step's state draws in its row and its log's header: its icon, its tone, and, for a step that
 // hasn't started, quiet.
@@ -24,9 +25,10 @@ const active = ["waiting", "queued", "running"];
 // repositoryRun is a run's page (Repository · Jobs · Run): its job, number and status, with Start, Cancel or Re-run
 // and Download logs; a line of its ref, commit, cause, when it started, how long it ran and which attempt it is; a
 // banner when it failed or was cancelled; and its steps beside the log of the one selected, or its job's definition.
-// A webhook's run shows where it posted, and a run that hasn't started an Empty state. While it waits, is queued or
-// runs, the page reads it again every five seconds, its steps and logs too while it runs, and draws again once its
-// state changes.
+// A webhook's run shows where it posted; an agent's run, its task in place of steps and its transcript in place of a
+// log; and a run that hasn't started an Empty state. While it waits, is queued or runs, the page reads it again every
+// five seconds, its steps and logs, or its task and transcript, too while it runs, and draws again once its state
+// changes.
 export async function repositoryRun({ org, repo, path, at, rest, can, root, fail }) {
   const runPath = path + "/runs/" + encodeURIComponent(rest[0]);
   let r;
@@ -37,7 +39,8 @@ export async function repositoryRun({ org, repo, path, at, rest, can, root, fail
     return [noRuns("search", "No run #" + rest[0], "This repository has no run with that number. Jobs lists every run it has.")];
   }
   recrumb([{ label: org.name, href: base + org.slug }, { label: repo.slug, href: root }, { label: r.job.displayName + " #" + r.number }]);
-  const ran = r.definition.kind !== "webhook" && Boolean(r.startedAt);
+  const pod = r.definition.kind !== "webhook" && r.definition.kind !== "agent";
+  const ran = pod && Boolean(r.startedAt);
   // A commit or a first attempt that can't be read leaves the line without its subject or its pusher's name; steps
   // that can't be read, as from a rest-server of the release before while a rollout replaces it, leave those its logs
   // name; logs that can't be read leave the log card saying why.
@@ -47,16 +50,16 @@ export async function repositoryRun({ org, repo, path, at, rest, can, root, fail
     ran ? api("GET", runPath + "/steps").then((d) => d.steps, () => []) : [],
     ran ? api("GET", runPath + "/logs").then((d) => d.logs, (err) => err) : [],
   ]);
-  const view = { r, commit, first, steps, logs };
+  const view = { r, commit, first, steps, logs, task: await runTask(org, r) };
   const meta = h("div", { class: "run-meta-slot" });
   const body = h("div", { class: "run-body" });
   const draw = () => {
     meta.replaceChildren(...[metaLine(at, view.r, commit, first), failure(view.r, can)].filter(Boolean));
-    body.replaceChildren(...runBody(path, view, select));
+    body.replaceChildren(...runBody(org, path, view, select));
   };
   // select shows a step's log, or the definition (step null), and names it in the address, so a reload or a link keeps it.
   const select = (step) => {
-    history.replaceState(history.state, "", location.pathname + (step === null ? "?definition" : "?step=" + encodeURIComponent(step)));
+    history.replaceState(history.state, "", location.pathname + (step === null ? "?definition" : step ? "?step=" + encodeURIComponent(step) : ""));
     draw();
   };
   draw();
@@ -66,7 +69,7 @@ export async function repositoryRun({ org, repo, path, at, rest, can, root, fail
     h("div", { class: "run-title-line" }, icon("bot"), h("h1", { class: "run-title" }, h("span", {}, r.job.displayName), h("span", { class: "run-number" }, "#" + r.number)),
       statusBadge(r), h("div", { class: "run-actions" }, runActions(path, at, r, can, fail), downloadable ? downloadButton(runPath, r, fail) : null)),
     meta);
-  if (active.includes(r.state)) follow(runPath, view, header, draw);
+  if (active.includes(r.state)) follow(org, runPath, view, header, draw);
   return [h("div", { class: "run-page" }, header, body)];
 }
 
@@ -118,8 +121,9 @@ function cause(r, first) {
 }
 
 // failure is the banner of a run that failed or was cancelled, saying why, and, for a viewer who may re-run it, what
-// Re-run does.
+// Re-run does; an agent's run that succeeded says what its task found.
 function failure(r, can) {
+  if (r.state === "succeeded" && r.definition.kind === "agent" && r.reason && r.reason !== "Succeeded") return banner("success", null, r.reason);
   if (r.state === "cancelled") return banner("danger", null, capitalized(r.reason || "cancelled") + ".");
   if (r.state !== "failed") return null;
   const branch = r.ref.startsWith("refs/heads/");
@@ -127,10 +131,11 @@ function failure(r, can) {
   return banner("danger", null, "Failed: " + (r.reason || "it ended with an error") + "." + (next.length ? " " + next.join("; ") + "." : ""));
 }
 
-// runBody is what a run's page shows under its header: a webhook's card; an Empty state while it has no steps; or
-// its Steps card beside the selected step's log, or its definition.
-function runBody(path, view, select) {
+// runBody is what a run's page shows under its header: a webhook's card; an agent's task; an Empty state while it has
+// no steps; or its Steps card beside the selected step's log, or its definition.
+function runBody(org, path, view, select) {
   const { r, steps, logs } = view;
+  if (r.definition.kind === "agent") return agentBody(org, view, select);
   if (r.definition.kind === "webhook") {
     const url = r.definition.webhook.url;
     return [h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Webhook")),
@@ -146,6 +151,57 @@ function runBody(path, view, select) {
   const card = h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Steps"),
     r.startedAt ? h("span", { class: "card-meta" }, duration(r)) : null), h("nav", { "aria-label": "Steps" }, rows));
   return [h("div", { class: "run-columns" }, card, picked ? stepLog(path, r, picked, logs) : definition(r))];
+}
+
+// runTask is the task an agent's run started, as {t, transcript}, its transcript read; null for another run, one
+// that started none, or a task the viewer may not see.
+async function runTask(org, r) {
+  if (r.definition.kind !== "agent" || !r.task) return null;
+  const path = "/orgs/" + org.slug + "/tasks/" + r.task;
+  const t = await api("GET", path).catch(() => null);
+  if (!t) return null;
+  const transcript = transcriptCard(t);
+  await transcript.read(path).catch(() => false);
+  return { t, path, transcript };
+}
+
+// taskSteps are how a task's state draws as its run's one step: a cancelled task failed the run, and a task that waits
+// for an answer still runs.
+const taskSteps = { queued: "waiting", running: "running", waiting: "running", succeeded: "succeeded", failed: "failed", cancelled: "failed" };
+
+// agentBody is an agent's run under its header (Run · Agent): its Task card, with its task's row and Definition,
+// beside the task's transcript, with Open task, or the run's definition; an Empty state while the run has no task.
+function agentBody(org, view, select) {
+  const { r, task } = view;
+  if (!task) return [noTask(r)];
+  const { t, transcript } = task;
+  const picked = !new URLSearchParams(location.search).has("definition");
+  const row = stepRow({ name: t.agent.displayName + " #" + t.number, state: taskSteps[t.state] || "waiting", startedAt: t.startedAt, endedAt: t.endedAt, reason: "" }, picked, () => select(""));
+  row.href = "?";
+  const rows = [row, h("a", { class: "step-row step-row-quiet", href: "?definition", "aria-current": String(!picked),
+    onclick: (e) => { e.preventDefault(); select(null); } }, icon("file-code"), h("span", { class: "step-row-name" }, "Definition"))];
+  const card = h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Task"),
+    t.startedAt ? h("span", { class: "card-meta" }, duration(t)) : null), h("nav", { "aria-label": "Task" }, rows));
+  if (!picked) return [h("div", { class: "run-columns" }, card, definition(r))];
+  transcript.redraw(t);
+  const head = transcript.el.querySelector(".card-header");
+  if (!head.querySelector("[data-open-task]")) {
+    // In a span, since a card's header draws a link of its own as the Card's link, and Open task is a Ghost button.
+    head.append(h("span", { "data-open-task": "" }, h("a", { class: "btn btn-ghost btn-sm", href: base + org.slug + "/agents/" + t.agent.id + "/tasks/" + t.number, "data-nav": "" }, "Open task")));
+  }
+  return [h("div", { class: "run-columns" }, card, transcript.el)];
+}
+
+// noTask is the Empty state of an agent's run with no task to show: it waits for a member or the controller, it ended
+// before it started one, or its task is one the viewer may not see.
+function noTask(r) {
+  const says = {
+    waiting: "The run starts when a member starts it; its agent's task appears here.",
+    queued: "The run starts when the controller takes it; its agent's task appears here.",
+  }[r.state];
+  if (says) return noRuns("clock", "No task yet", says);
+  if (r.task) return noRuns("eye", "Not yours to read", "Its task's assigner, the organization's admins and whoever reads its repository see its task.");
+  return noRuns("ban", "No task", "The run ended before it started" + (r.reason ? ": " + r.reason : "") + ".");
 }
 
 // keptSteps are the steps of a run that ended before runs kept their steps: its logs' containers, in their order,
@@ -254,7 +310,7 @@ function downloadButton(runPath, r, fail) {
 
 // follow reads a run that hasn't ended again every five seconds while its page shows: the page draws again whole once
 // its state changes, and while it runs, its line, its steps and their logs draw again from what it reads.
-function follow(runPath, view, header, draw) {
+function follow(org, runPath, view, header, draw) {
   const stop = new AbortController();
   follows(stop);
   (async () => {
@@ -265,6 +321,12 @@ function follow(runPath, view, header, draw) {
         const now = await api("GET", runPath, undefined, {}, stop.signal);
         if (now.state !== view.r.state) return void render();
         if (now.state !== "running" || now.definition.kind === "webhook") continue;
+        if (now.definition.kind === "agent") {
+          await followTask(org, now, view, stop.signal);
+          if (!header.isConnected) return;
+          draw();
+          continue;
+        }
         const [steps, logs] = await Promise.all([api("GET", runPath + "/steps", undefined, {}, stop.signal).then((d) => d.steps),
           api("GET", runPath + "/logs", undefined, {}, stop.signal).then((d) => d.logs)]);
         if (!header.isConnected) return;
@@ -278,14 +340,23 @@ function follow(runPath, view, header, draw) {
   })();
 }
 
+// followTask reads an agent's run's task again, and the steps its transcript recorded since, into view; it reads the
+// whole of a task the page didn't show yet, as one the run started since the page drew.
+async function followTask(org, r, view, signal) {
+  view.r = r;
+  if (!view.task) return void (view.task = await runTask(org, r));
+  view.task.t = await api("GET", view.task.path, undefined, {}, signal);
+  await view.task.transcript.read(view.task.path);
+}
+
 // jobYaml is a job's definition as /cobranch.yaml declares it, a line each, under its name: its triggers, timeout,
-// permissions and secrets, then its work: a pod spec, a script and its image, or a webhook.
+// permissions and secrets, then its work: a pod spec, a script and its image, a webhook, or an agent.
 export function jobYaml(d) {
   const job = { on: d.on };
   if (d.timeout) job.timeout = d.timeout.replace(/(\d)m0s$/, "$1m").replace(/(\d)h0m$/, "$1h");
   job.permissions = d.permissions;
-  for (const k of ["secrets", "pod", "script", "image", "webhook"]) if (d[k]) job[k] = d[k];
-  if (!d.checkout && d.kind !== "webhook") job.checkout = false;
+  for (const k of ["secrets", "pod", "script", "image", "webhook", "agent"]) if (d[k]) job[k] = d[k];
+  if (!d.checkout && d.kind !== "webhook" && d.kind !== "agent") job.checkout = false;
   // The job's own keys keep the order above; yamlLines orders those of the objects in it.
   return [d.name + ":", ...Object.entries(job).flatMap(([k, x]) => yamlEntry("  " + k + ":", x, "    "))];
 }
