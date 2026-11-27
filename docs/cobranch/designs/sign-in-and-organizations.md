@@ -62,6 +62,7 @@ and the page offers to start again.
   and a cookie binds the row to the browser that began it. Any replica finishes a flow another began, no signing key is
   needed, and a code delivered to another browser fails, which stops login CSRF.
 - **PKCE and a nonce** on every sign-in, so neither a stolen code nor a replayed ID token signs anyone in.
+- **The person chooses the account.** Every sign-in asks the provider for `prompt=select_account`, so signing out of Cobranch and in again offers the provider's account chooser instead of returning the account that just left. A provider whose discovery document lists its prompts without `select_account` gets no prompt, since it may refuse one it doesn't know.
 - **An identity is its provider's issuer and subject.** **Agreed:** OpenID Connect's own unique pair, never the email,
   so renaming a provider in the chart's values keeps its users.
 - **The return path** is a path of the Console's own URL, or a URL under the Back-office's
