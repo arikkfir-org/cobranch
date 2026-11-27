@@ -49,9 +49,11 @@ slices that build it. Choices beyond the four rules are under [Decisions](#decis
   pod](agents.md#the-agents-pod)); the harness clones and pushes with `git`, and its shell tool runs `sh -c`. The
   harness checks both as it starts, and a task whose image lacks one fails at once, naming the missing tool, instead of
   after the model's first turns.
-- **A chosen image pulls without the installation's credentials.** The installation's image pull secrets serve its own
-  images only; an image an organization or a repository names is pulled as anyone, as a job's are ([pods and
-  scripts](jobs.md#where-a-run-executes)). A private image is a later question ([Open questions](#open-questions)).
+- **A chosen image pulls with the pod's credentials.** Kubernetes keeps image pull secrets on the pod, not on a
+  container, and the pod's own containers in Cobranch's image need the installation's: so an image an organization or a
+  repository names is pulled with them too. The chart tells operators to let those secrets reach only images every
+  organization may run. A private image of the organization's own is a later question ([Open
+  questions](#open-questions)).
 - **The pod is otherwise the same:** the model proxy and the binary's copy keep running Cobranch's own image, so the
   provider's key never enters the agent's image.
 
@@ -155,7 +157,7 @@ Slice 3 runs organization agents without slice 2, and reaches repository agents 
 
 | Slice | Delivers | Unblocks |
 | --- | --- | --- |
-| 1. Organization agents' images | The agent's Image field and API, the controller using it without the installation's pull secrets, the harness's preflight | The website's reviewer, once its image has Python and Git |
+| 1. Organization agents' images | The agent's Image field and API, the controller using it, the harness's preflight | The website's reviewer, once its image has Python and Git |
 | 2. Repository agents | `agents:` in main's `/cobranch.yaml`, their principals, permissions, secrets, retirement, and the Console's lists | Agents a repository owns, assignable in it |
 | 3. Jobs that name an agent | `agent:` as a job's work, the task of kind `job`, the run following it | A repository's own AI checks, such as `ai/site` |
 
@@ -165,7 +167,7 @@ Slice 3 runs organization agents without slice 2, and reaches repository agents 
 | --- | --- |
 | An image without `sh` or `git` fails its tasks after spending model turns | The harness's preflight fails the task first, naming what's missing |
 | A branch grants itself an agent with more power | Agents come from main only, within main's ceiling; a branch's job can only name an agent, and the task stays within the job's permissions too |
-| An organization's image pulls with the installation's registry credentials | Chosen images get no image pull secrets |
+| An organization names a private image the installation's registry credentials reach | The chart's `imagePullSecrets` says to let them reach only images every organization may run |
 | Every push of a busy repository starts a model's task | A job's triggers and branch filters apply; the agent's cap and the organization's quotas bound the spend |
 
 ## Decisions
@@ -176,7 +178,7 @@ Slice 3 runs organization agents without slice 2, and reaches repository agents 
 | Main's `repository.jobs.ceiling` caps repository agents too | One ceiling for everything main's file declares; the owner already sets it | A ceiling of its own: a second knob with the same meaning |
 | A job names its agent by name, the repository's first | The common case reads plainly; a repository can't reach another repository's agents | A prefix such as `org/reviewer`: noise for the common case |
 | A run is one task that pushes nothing | A run checks a commit, as every job does; pushing is an assigned task's work | Tasks that push from a job: a job that writes needs its own branch rules |
-| Chosen images pull as anyone | The installation's credentials are for its own images | Passing them on: any organization could pull the installation's private images |
+| Chosen images pull with the pod's pull secrets | Kubernetes has no pull secrets per container, and Cobranch's own containers in the pod need them | Dropping them for a chosen image: an installation whose own image is private could then run no such task |
 | A preflight for `sh` and `git` | A clear failure before any spend | A copied static `git`: no portable one exists for every image's C library |
 
 ## Open questions

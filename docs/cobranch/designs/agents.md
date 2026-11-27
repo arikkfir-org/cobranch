@@ -5,7 +5,7 @@
 > from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-02 · [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Builds the [product’s
-agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Runs agents in the operator’s image · Built by
+agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Runs agents in their own images or the operator’s · Built by
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215), in eight pull requests; spend and caps by
 [ENG-257](https://linear.app/arikkfir/issue/ENG-257)
 
@@ -280,8 +280,8 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   the agent's provider and model (`COBRANCH_MODEL_PROVIDER`, `COBRANCH_MODEL`), the model proxy's address
   (`COBRANCH_MODEL_URL`), the operator's limits (`COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT`,
   `COBRANCH_MODEL_MAX_TOKENS`), and the agent's secrets by their names. No tool's environment holds a `COBRANCH_`
-  variable. The installation's images, its `agents.image` included, are pulled with its `imagePullSecrets`, and an
-  image an agent names is pulled without them: the controller copies those Secrets from
+  variable. The pod pulls its images with the installation's `imagePullSecrets`, an image an agent names included,
+  since Kubernetes keeps pull secrets on the pod rather than on a container: the controller copies those Secrets from
   its own namespace into each job namespace as it prepares it, and deletes a copy the chart no longer names.
 - **The provider's key stays in the model proxy.** A sidecar in Cobranch's image, `cobranch model-proxy`, is the one
   container that mounts the key; it listens on `127.0.0.1:8090` and sends each of the harness's requests on to the
@@ -300,9 +300,9 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   answer; the quota may keep it waiting for room, as it does a run. A stop isn't a death: it counts towards none of the
   task's four deaths, so a task that stopped has more than four pods.
 
-**An agent pod: the harness in the operator’s image, and the key in a proxy beside it**
+**An agent pod: the harness in the agent’s image, and the key in a proxy beside it**
 
-![An agent pod: the harness in the operator’s image, and the key in a proxy beside it](agents/pod.svg)
+![An agent pod: the harness in the agent’s image, and the key in a proxy beside it](agents/pod.svg)
 
 The harness reads the token file before each call, so a renewed token is picked up without a restart. Its tools reach
 the proxy but never read the key. No Kubernetes token is mounted.

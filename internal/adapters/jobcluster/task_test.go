@@ -78,7 +78,8 @@ func TestStartTaskImage(t *testing.T) {
 	}{
 		{name: "the installation's image, with its pull secrets", wantImage: "agents:v1",
 			wantPullSecrets: []corev1.LocalObjectReference{{Name: "registry"}, {Name: "mirror"}}},
-		{name: "the agent's own image, pulled as anyone", image: "ghcr.io/acme/site-tools:1.4", wantImage: "ghcr.io/acme/site-tools:1.4"},
+		{name: "the agent's own image, the pod keeping the pull secrets Cobranch's containers need", image: "ghcr.io/acme/site-tools:1.4",
+			wantImage: "ghcr.io/acme/site-tools:1.4", wantPullSecrets: []corev1.LocalObjectReference{{Name: "registry"}, {Name: "mirror"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()

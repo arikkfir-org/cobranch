@@ -111,9 +111,9 @@ func (c *Cluster) StartTask(ctx context.Context, l taskrunner.Launch) (err error
 	return nil
 }
 
-// taskPodOf is the pod numbered l.Pod of the task: the harness in its agent's image or the agents' default, beside the model proxy, which
-// alone holds the provider's key and reports each turn's spend as the task's token, and after the copy of the cobranch
-// binary it runs.
+// taskPodOf is the pod numbered l.Pod of the task: the harness in its agent's image or the agents' default, beside the
+// model proxy, which alone holds the provider's key and reports each turn's spend as the task's token, and after the
+// copy of the cobranch binary it runs.
 func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 	name := taskPodName(l.Task.ID, l.Pod)
 	deadline := int64(l.Timeout.Seconds())
@@ -135,11 +135,9 @@ func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 	if u := c.cfg.ProviderURLs[l.Task.Provider]; u != "" {
 		proxy.Env = append(proxy.Env, corev1.EnvVar{Name: "COBRANCH_MODEL_URL", Value: u})
 	}
-	image, pullSecrets := c.cfg.AgentImage, c.pullSecretRefs()
+	image := c.cfg.AgentImage
 	if l.Task.Image != "" {
-		// An image the agent names is pulled as anyone, as a job's are: the installation's pull secrets serve its own
-		// images alone.
-		image, pullSecrets = l.Task.Image, nil
+		image = l.Task.Image
 	}
 	harness := corev1.Container{Name: "harness", Image: image, Command: []string{binDir + "/cobranch", "agent"}, WorkingDir: workspace,
 		Env: append([]corev1.EnvVar{{Name: "HOME", Value: home}, {Name: "COBRANCH_WORKSPACE", Value: workspace},
@@ -157,7 +155,9 @@ func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 		Spec: corev1.PodSpec{InitContainers: []corev1.Container{copyBin, proxy}, Containers: []corev1.Container{harness},
 			RestartPolicy: corev1.RestartPolicyNever, ActiveDeadlineSeconds: &deadline, EnableServiceLinks: new(false),
 			AutomountServiceAccountToken: new(false), NodeSelector: c.cfg.NodeSelector, Tolerations: c.cfg.Tolerations, Affinity: c.cfg.Affinity,
-			SecurityContext: podSecurity(nil), ImagePullSecrets: pullSecrets,
+			// Pull secrets are the pod's, not a container's: the copy of the binary and the model proxy need them, so an
+			// image the agent names is pulled with them too.
+			SecurityContext: podSecurity(nil), ImagePullSecrets: c.pullSecretRefs(),
 			Volumes: []corev1.Volume{emptyDir(volumeWorkspace), emptyDir(volumeHome), emptyDir(volumeBin), secretVolume(volumeToken, keyToken, "token"),
 				secretVolume(volumeKey, keyKey, "key")}}}
 }
