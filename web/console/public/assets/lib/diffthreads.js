@@ -5,6 +5,7 @@
 
 import { api, apiPage } from "./api.js";
 import { messageBody } from "./chat.js";
+import { markCode } from "./codemarks.js";
 import { h } from "./dom.js";
 import { ago, whenExactly } from "./format.js";
 import { avatar, icon } from "./icons.js";
@@ -79,7 +80,7 @@ function threadView(t, c) {
       }, (err) => { send.disabled = false; fail(err); });
     };
     text.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-    reply = h("form", { class: "diff-thread-reply", onsubmit: submit }, text,
+    reply = h("form", { class: "diff-thread-reply", onsubmit: submit }, markCode(text),
       h("div", { class: "draft-comment-actions" }, h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: close }, "Cancel"), send));
     draw();
     text.focus();

@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { messageBody } from "./chat.js";
+import { markCode } from "./codemarks.js";
 import { h } from "./dom.js";
 import { fromNow, plural, shortSha, whenExactly } from "./format.js";
 import { icon, principalAvatar } from "./icons.js";
@@ -119,7 +120,7 @@ function reviewForm(path, c, fail, drafting) {
       .catch((err) => { button.disabled = false; fail(err); });
   };
   return h("form", { class: "card-body review-form", onsubmit: submit },
-    h("label", { class: "field" }, h("span", { class: "field-label" }, "Your review of " + shortSha(c.sha)), body),
+    h("label", { class: "field" }, h("span", { class: "field-label" }, "Your review of " + shortSha(c.sha)), markCode(body)),
     h("div", { class: "review-form-actions" }, h("div", { class: "review-states", role: "radiogroup", "aria-label": "Verdict" },
       states.map(([value, label], i) => h("label", { class: "radio" }, h("input", { type: "radio", name: "state", value, checked: i === 2, required: true }), label))),
     drafted, button));

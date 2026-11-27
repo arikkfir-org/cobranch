@@ -3,6 +3,7 @@
 // to tasks as events, the month's spend report, and the dialogs that make an agent and give one a task.
 
 import { api } from "./api.js";
+import { markCode } from "./codemarks.js";
 import { openDialog } from "./dialog.js";
 import { h } from "./dom.js";
 import { ago, capitalized, plural } from "./format.js";
@@ -262,7 +263,7 @@ export async function assignTask(org, list, picked, done) {
   const repo = repoSelect(repos, "No repository");
   const branch = input({ placeholder: "main" });
   openDialog({ title: picked ? "Give " + picked.name + " a task" : "Assign a task", action: "Assign",
-    body: [picked ? "" : field("Agent", selectBox(agent)), field("Title", title), field("Instructions", instructions),
+    body: [picked ? "" : field("Agent", selectBox(agent)), field("Title", title), field("Instructions", markCode(instructions)),
       field("Repository", selectBox(repo), "Where it works, if anywhere."), field("Branch", branch, "A branch of that repository; a new one of its own when left empty."),
       h("p", { class: "field-help" }, "The task does no more than both the agent and you may, as you are whenever it acts.")],
     submit: async () => {
@@ -293,7 +294,7 @@ export async function newAgent(org) {
     if (chosen) api("GET", "/orgs/" + org.slug + "/repos/" + chosen.slug + "/roles").then((d) => repoRole.append(...d.roles.map((r) => h("option", { value: r.id }, r.name))), () => {});
   });
   openDialog({ title: "New agent", action: "Make the agent",
-    body: [field("Name", name), field("Description", description), field("Instructions", instructions, "It starts on the organization's default model, which Settings · Agents changes."),
+    body: [field("Name", name), field("Description", description), field("Instructions", markCode(instructions), "It starts on the organization's default model, which Settings · Agents changes."),
       h("div", { class: "field" }, h("span", { class: "field-label" }, "Roles"), h("div", { class: "agent-picks" }, picks),
         h("span", { class: "field-help" }, "Only roles whose every permission you hold.")),
       field("A role on a repository", h("div", { class: "agent-pair" }, selectBox(repo), selectBox(repoRole)))],

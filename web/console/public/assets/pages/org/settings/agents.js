@@ -1,5 +1,6 @@
-import { api } from "../../../lib/api.js";
 import { agentPage, emptyState, mayEdit, newAgent, spendReport } from "../../../lib/agent.js";
+import { api } from "../../../lib/api.js";
+import { markCode } from "../../../lib/codemarks.js";
 import { ask, openDialog } from "../../../lib/dialog.js";
 import { h } from "../../../lib/dom.js";
 import { banner, checkbox, failure, field, input, selectBox, textarea } from "../../../lib/forms.js";
@@ -95,7 +96,7 @@ async function editor(org, a, can, redraw) {
       h("div", { class: "settings-agent-fields" }, field("Name", name),
         field("Model", selectBox(model), manage ? [h("span", {}, "From Settings · Models."), can("org.grants.manage") ? checkbox(readKey, "Let it read the new model's provider key") : ""] : "Changed by whoever manages the organization's principals."),
         field("Cap per task", cap, "Optional. A task fails once it spends this much, in US dollars.")),
-      field("Description", description, "One line, shown on the Agents page and in menus."), field("Instructions", instructions, "What the agent is told before every task."),
+      field("Description", description, "One line, shown on the Agents page and in menus."), field("Instructions", markCode(instructions), "What the agent is told before every task."),
       secrets.el, grantsField(org, a, can, () => redraw(a.id))),
     h("footer", { class: "card-footer" }, h("button", { class: "btn", type: "button", onclick: () => go(tabPath(org)) }, "Cancel"), save));
 }

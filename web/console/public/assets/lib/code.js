@@ -1,8 +1,9 @@
 import { api } from "./api.js";
 import { linesAnchor } from "./chat.js";
+import { markCode } from "./codemarks.js";
 import { h } from "./dom.js";
-import { failure, field, input, textarea } from "./forms.js";
 import { fromNow, plural, shortSha, size, subject, whenExactly } from "./format.js";
+import { failure, field, input, textarea } from "./forms.js";
 import { authorAvatar, icon, principalAvatar } from "./icons.js";
 import { rendered } from "./markdown.js";
 import { popover } from "./menu.js";
@@ -564,7 +565,7 @@ async function threadsCard(path, at, branch, f, can, start, end) {
         .catch((err) => { button.disabled = false; fail(err); });
     };
     form = h("form", { class: "file-thread-form", onsubmit: startThread }, field("From line", start), field("To line", end),
-      field("Message", body, "Everyone who can see the branch reads it; @mention an agent to bring it in."), h("div", { class: "file-thread-form-footer" }, button));
+      field("Message", markCode(body), "Everyone who can see the branch reads it; @mention an agent to bring it in."), h("div", { class: "file-thread-form-footer" }, button));
   }
   return h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Threads on this file"),
     h("span", { class: "card-meta" }, threads.length ? threads.length + " on this branch" : "Shift-click two lines to pick a range")), error,

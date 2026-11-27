@@ -4,14 +4,14 @@ import { base } from "./state.js";
 import { onThemeChange } from "./theme.js";
 
 // frameStyle draws a rendered document with the design system's tokens, which the frame takes from the page (tokens), as
-// the File · Markdown screen draws one.
+// the File · Markdown screen draws one, its inline code as Figma's Inline code does.
 const frameStyle = "html,body{margin:0;background:transparent}body{color:var(--color-fg-default);font:var(--text-body-medium);overflow-wrap:break-word}" +
   "body>:first-child{margin-top:0}body>:last-child{margin-bottom:0}a{color:var(--color-fg-link)}img{max-width:100%}" +
   "h1{font:var(--text-heading-medium);letter-spacing:var(--text-heading-medium-tracking)}" +
   "h2{font:var(--text-heading-small);letter-spacing:var(--text-heading-small-tracking)}" +
   "h3,h4,h5,h6{font:var(--text-body-medium-strong);letter-spacing:var(--text-body-medium-strong-tracking)}" +
   "h1,h2,h3,h4,h5,h6,p,ul,ol,table,pre,blockquote,details{margin:0 0 var(--space-12)}ul,ol{padding-left:var(--space-20)}li+li{margin-top:var(--space-4)}" +
-  "code{font:var(--text-code-small);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);background:var(--color-bg-hover)}" +
+  "code{font:var(--text-code-medium);padding:0 var(--space-4);border-radius:var(--radius-sm);background:var(--color-bg-code)}" +
   "pre{padding:var(--space-12);overflow:auto;border-radius:var(--radius-md);background:var(--color-bg-sunken)}" +
   "pre code{padding:0;font:var(--text-code-small);background:none}" +
   "table{display:block;max-width:100%;overflow:auto;border-collapse:collapse}th,td{padding:var(--space-6) var(--space-12);border:1px solid var(--color-border-default)}" +
