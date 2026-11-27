@@ -161,6 +161,42 @@ Google and xAI are added the same way. Model names are the provider’s; Cobranc
 - **Secrets a task receives** are the agent's `secrets` map, each an environment variable named after its key, from a
   secret ID the agent may read; the provider's key is not among them: only the pod's model proxy holds it.
 
+#### Live settings
+
+**Settings · Models shows the providers and models as they are now, in every open tab**
+
+```mermaid
+sequenceDiagram
+    participant Tab as Console tab (Settings · Models)
+    participant REST as REST server
+    participant PG as PostgreSQL
+    Tab->>REST: GET /orgs/{org}/model-providers and /models
+    REST-->>Tab: 200, each list and its ETag
+    Tab->>REST: each again, ?wait=15, If-None-Match: its ETag
+    REST->>PG: LISTEN cobranch_settings (one connection per server)
+    Note over PG: elsewhere: a provider connected or removed, a model added, repriced or removed, an agent put on a model, a secret renamed or deleted
+    PG-->>REST: NOTIFY naming the organization
+    REST->>PG: read the list again
+    REST-->>Tab: 200, the new list and its ETag (or 304 after 15 s without a change)
+    Tab->>Tab: draw the page again, then follow anew
+```
+
+The page used to read both lists once and again only after its own edits, so a provider connected or a model added in
+another tab, by another member or through the API stayed missing until a reload
+([ENG-282](https://linear.app/arikkfir/issue/ENG-282)).
+
+- **The database says what changed.** Triggers on `model_providers`, `models`, `agents` and `secrets` notify channel
+  `cobranch_settings` with the row's organization as their transaction commits: every path that changes them, the
+  API, agents' own changes, a secret's deletion that leaves a provider broken, is caught alike.
+- **Each server listens once**, as for chats and people's organizations
+  ([live organization lists](sign-in-and-organizations.md#live-organization-lists)), and wakes the requests that follow
+  the organization; a follower also reads once a minute, for a notification lost while the listener reconnected.
+- **REST waits on each list's ETag.** `GET /orgs/{org}/model-providers` and `GET /orgs/{org}/models` carry a strong
+  ETag of what they answer; with `If-None-Match` and `wait` (at most 15 seconds) they answer once the list differs, or
+  304. Each read checks `org.read` again, so a viewer who loses it stops following.
+- **The Console follows while the page shows**, and draws the page again once either list changes; a tab out of sight
+  stops asking until it shows again.
+
 ## Tasks
 
 **Agreed** ([principals](principals-and-permissions.md#agents)): a user with `agents.assign` assigns a task to an agent,
@@ -526,6 +562,7 @@ land.
 | Agents are principals of kind `agent`, owned by the organization, with a row in `agents` | The principals design | Agreed |
 | An agent's creator gives its first grants, each within their own permissions, without `org.grants.manage` | Members create agents; nobody grants more than they hold | Proposed |
 | Providers are organization settings naming an organization secret; `org.manage` adds them | The architecture's providers as secrets | Proposed |
+| Settings · Models follows its lists live: database triggers notify `cobranch_settings` with the organization, REST waits on each list's ETag | The same mechanism as the organization switcher's, for every way a provider, model, agent or secret changes ([ENG-282](https://linear.app/arikkfir/issue/ENG-282)) | Proposed |
 | `org.principals.manage` picks an agent's model and secrets; Cobranch doesn't validate model names | An admin picks the model; new models work at once | Agreed |
 | A task's permissions are the agent's intersected with the assigner's, checked at every call | The assigner cap; revocation applies at once | Agreed |
 | A task receives the agent's secrets whoever assigned it | The principals design | Agreed |

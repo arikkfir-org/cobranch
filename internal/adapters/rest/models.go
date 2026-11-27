@@ -17,12 +17,14 @@ import (
 type Models interface {
 	ProviderNames() []string
 	ModelProviders(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.ModelProvider, error)
+	FollowModelProviders(ctx context.Context, v agents.Viewer, orgID uuid.UUID) (<-chan []agents.ModelProvider, error)
 	ModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string) (agents.ModelProvider, error)
 	SetModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, secretID uuid.UUID, version int64) (agents.ModelProvider, bool, error)
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
 	Models(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Model, error)
+	FollowModels(ctx context.Context, v agents.Viewer, orgID uuid.UUID) (<-chan []agents.Model, error)
 	Model(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string) (agents.Model, error)
 	PutModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (agents.Model, bool, error)
 	RemoveModel(ctx context.Context, v agents.Viewer, orgID uuid.UUID, provider, name string, version int64) error
@@ -72,17 +74,39 @@ func putPrecondition(ifMatchHeader, ifNoneMatch *string, what string) (int64, er
 	return versionMatch(ifMatchHeader, agents.AnyVersion)
 }
 
-// ListModelProviders lists the providers the organization added, and those the installation knows.
+// ListModelProviders lists the providers the organization added, and those the installation knows; with If-None-Match
+// and wait, it waits up to wait seconds for the list to change before it answers 304.
 func (a api) ListModelProviders(ctx context.Context, req ListModelProvidersRequestObject) (ListModelProvidersResponseObject, error) {
 	v, orgID, _, err := a.agentOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.agents.ModelProviders(ctx, v, orgID)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "organization")
+		return nil, err
 	}
-	return ListModelProviders200JSONResponse{ModelProviders: mapAll(list, modelProvider), Available: nonNil(a.agents.ProviderNames())}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]agents.ModelProvider, error) {
+		list, err := a.agents.ModelProviders(ctx, v, orgID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []agents.ModelProvider, error) {
+		lists, err := a.agents.FollowModelProviders(ctx, v, orgID)
+		return lists, fail(err, "organization")
+	}, func(list []agents.ModelProvider) (ListModelProvidersResponseObject, bool, error) {
+		return a.modelProviders(list, req.Params.IfNoneMatch)
+	})
+}
+
+// modelProviders is list as ListModelProviders answers it: 304 while it is the one tag names, which it says.
+func (a api) modelProviders(list []agents.ModelProvider, tag *IfNoneMatch) (ListModelProvidersResponseObject, bool, error) {
+	body := ModelProviderList{ModelProviders: mapAll(list, modelProvider), Available: nonNil(a.agents.ProviderNames())}
+	etag, err := bodyTag("model_providers", body, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if matches(tag, etag) {
+		return ListModelProviders304Response{Headers: ListModelProviders304ResponseHeaders{ETag: etag}}, true, nil
+	}
+	return ListModelProviders200JSONResponse{Body: body, Headers: ListModelProviders200ResponseHeaders{ETag: etag}}, false, nil
 }
 
 // GetModelProvider answers a provider the organization added.

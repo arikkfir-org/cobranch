@@ -5,6 +5,7 @@ import { h } from "../../../lib/dom.js";
 import { checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { plural } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
+import { followLists, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
 import { base } from "../../../lib/state.js";
 
@@ -30,13 +31,16 @@ function more(label, items) {
 // showModels is Settings · Models: the providers the organization's agents reach, each through one of its secrets, those
 // the installation knows that it hasn't connected, and its models, which its agents pick from: their provider, the
 // agents on them and the default a new agent starts on, each priced per million tokens, from which Cobranch prices
-// every call. What a task may spend is its agent's cap, in Settings · Agents.
+// every call. What a task may spend is its agent's cap, in Settings · Agents. It follows both lists while it shows, and
+// draws itself again once one changes, here or elsewhere.
 async function showModels(org, main, can) {
   const error = failure();
   const refresh = () => showModels(org, main, can).catch(error.fail);
-  const [{ modelProviders: providers, available }, models, keys] = await Promise.all([api("GET", "/orgs/" + org.slug + "/model-providers"),
-    api("GET", "/orgs/" + org.slug + "/models").then((d) => d.models),
+  const lists = ["/orgs/" + org.slug + "/model-providers", "/orgs/" + org.slug + "/models"];
+  const [providerList, modelList, keys] = await Promise.all([...lists.map((path) => readTagged(path)),
     can("secrets.manage") ? api("GET", "/orgs/" + org.slug + "/secrets").then((d) => d.secrets) : []]);
+  const { modelProviders: providers, available } = providerList.data;
+  const models = modelList.data.models;
   const left = available.filter((name) => !providers.some((p) => p.name === name));
   const connect = (name) => connectProvider(org, keys, left, name, null, refresh);
   main.replaceChildren(error.el,
@@ -52,6 +56,7 @@ async function showModels(org, main, can) {
     models.length ? modelsTable(org, providers, models, refresh, error.fail)
       : h("div", { class: "card" }, providers.length ? emptyState("sparkles", "No models yet", "Add the models the organization's agents may run on, with what they cost.")
         : emptyState("sparkles", "No models until a provider is connected", "Each provider brings the models it serves; add them here with their prices.")));
+  followLists([[lists[0], providerList.tag], [lists[1], modelList.tag]], () => error.el.isConnected, refresh);
 }
 
 // providerRow is a provider the organization connected: the secret its key is in and how many models it has, whether

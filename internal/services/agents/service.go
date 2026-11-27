@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -112,6 +113,9 @@ type Service struct {
 	// providers are the names of the model providers the installation knows, sorted.
 	providers []string
 	guards    map[string]string
+	// notifier says when an organization's settings may have changed, for those who follow them; nil, which never
+	// says, leaves followers to read again once a minute.
+	notifier live.Notifier
 }
 
 // NewService returns a Service over store that checks permissions with authz.
