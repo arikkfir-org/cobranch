@@ -41,6 +41,17 @@ func TestOrganizationHub(t *testing.T) {
 			}
 			return f.max
 		}},
+		{name: "a custom role redefined", change: func(ctx context.Context, t *testing.T, f *orgFixture) uuid.UUID {
+			release := orgs.Role{ID: uuid.New(), Name: "Release manager", Permissions: []string{"org.read"}, OrgID: f.acme.ID}
+			if err := f.s.CreateRole(ctx, f.olivia, release); err != nil {
+				t.Fatal(err)
+			}
+			release.Permissions = []string{"org.read", "repos.create"}
+			if err := f.s.UpdateRole(ctx, f.olivia, release); err != nil {
+				t.Fatal(err)
+			}
+			return f.acme.ID
+		}},
 		{name: "the organization renamed", change: func(ctx context.Context, t *testing.T, f *orgFixture) uuid.UUID {
 			acme := f.acme
 			acme.Name = "Acme Corp"

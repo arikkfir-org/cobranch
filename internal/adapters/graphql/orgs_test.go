@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -425,5 +426,16 @@ func TestOrganizationsSubscription(t *testing.T) {
 	notifier.Wake(f.nia.User.ID)
 	if m := c.read(); m.Type != "next" || !strings.Contains(string(m.Payload), `{"slug":"initech","viewerPermissions":[`) {
 		t.Fatalf("list after creating one = %s %s, want Initech", m.Type, m.Payload)
+	}
+}
+
+// TestOrganizationsLeaveOutWhatTheViewerMayNotRead checks that a member whose roles were all revoked gets the list
+// without that organization, as the subscription and REST answer it, rather than an error for its permissions.
+func TestOrganizationsLeaveOutWhatTheViewerMayNotRead(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture()
+	f.store.Grants = slices.DeleteFunc(f.store.Grants, func(g orgstest.Grant) bool { return g.Principal == f.max.User.ID })
+	if body := f.query(&f.max, `{ viewer { organizations { slug viewerPermissions } } }`); body != `{"data":{"viewer":{"organizations":[]}}}` {
+		t.Errorf("organizations of a member who may no longer read Acme = %s, want none", body)
 	}
 }

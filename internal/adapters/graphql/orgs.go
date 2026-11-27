@@ -22,7 +22,7 @@ import (
 type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
-	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	Memberships(ctx context.Context, v orgs.Viewer) ([]orgs.Membership, error)
 	FollowMemberships(ctx context.Context, v orgs.Viewer) (<-chan []orgs.Membership, error)
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
@@ -160,6 +160,11 @@ func organization(o orgs.Organization) *Organization {
 	return &Organization{ID: o.ID.String(), Slug: o.Slug, Name: o.Name, MembershipRoleID: o.MembershipRoleID.String(),
 		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt,
 		Version: int(o.Version)}
+}
+
+// membership is the organization of m as the API shows it; its viewerPermissions field reads the viewer's own.
+func membership(m orgs.Membership) *Organization {
+	return organization(m.Organization)
 }
 
 // organizationVersion is the version of an organization a mutation expects, orgs.AnyVersion without one.
@@ -307,12 +312,8 @@ func followOrganizations(ctx context.Context, lists <-chan []orgs.Membership) <-
 	go func() {
 		defer close(out)
 		for list := range lists {
-			shown := make([]*Organization, 0, len(list))
-			for _, m := range list {
-				shown = append(shown, organization(m.Organization))
-			}
 			select {
-			case out <- shown:
+			case out <- mapAll(list, membership):
 			case <-ctx.Done():
 				return
 			}

@@ -169,9 +169,9 @@ func TestGetAndUpdate(t *testing.T) {
 			return got(err)
 		}, wantErr: orgs.ErrNotFound},
 		{name: "the viewer's organizations", run: func(ctx context.Context, f *fixture) error {
-			list, err := f.service.Organizations(ctx, f.max)
+			list, err := f.service.Memberships(ctx, f.max)
 			if err == nil && (len(list) != 2 || list[0].Slug != "acme" || list[1].Slug != "globex") {
-				t.Errorf("Organizations() = %+v, want Acme then Globex", list)
+				t.Errorf("Memberships() = %+v, want Acme then Globex", list)
 			}
 			return got(err)
 		}},
