@@ -29,6 +29,8 @@ type idp struct {
 	nonce string
 	// got records the token endpoint's last request.
 	got url.Values
+	// prompts is the discovery document's prompt_values_supported; nil leaves it out.
+	prompts []string
 }
 
 func newIDP(t *testing.T) *idp {
@@ -41,6 +43,20 @@ func newIDP(t *testing.T) *idp {
 	ts := &oidctest.Server{PublicKeys: []oidctest.PublicKey{{PublicKey: &key.PublicKey, KeyID: "k1", Algorithm: "RS256"}}}
 	mux := http.NewServeMux()
 	mux.Handle("/", ts)
+	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		rec := httptest.NewRecorder()
+		ts.ServeHTTP(rec, r)
+		var doc map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if p.prompts != nil {
+			doc["prompt_values_supported"] = p.prompts
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(doc)
+	})
 	mux.HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		p.got = r.PostForm
@@ -102,27 +118,47 @@ func TestNew(t *testing.T) {
 }
 
 func TestAuthCodeURL(t *testing.T) {
-	p := newIDP(t).provider(t)
-	got, err := p.AuthCodeURL(context.Background(), "s1", "n1", "verifier-verifier-verifier-verifier-verifier")
-	if err != nil {
-		t.Fatalf("AuthCodeURL() = %v", err)
+	tests := []struct {
+		name string
+		// prompts is the provider's prompt_values_supported; nil leaves it out of discovery.
+		prompts    []string
+		wantPrompt string
+	}{
+		{name: "prompts not listed", wantPrompt: "select_account"},
+		{name: "select_account listed", prompts: []string{"none", "login", "consent", "select_account"}, wantPrompt: "select_account"},
+		{name: "select_account not listed", prompts: []string{"none", "login", "consent"}},
+		{name: "no prompts listed", prompts: []string{}},
 	}
-	u, err := url.Parse(got)
-	if err != nil {
-		t.Fatal(err)
-	}
-	q := u.Query()
-	want := map[string]string{
-		"client_id": "client", "redirect_uri": "https://auth.example.com/callback", "response_type": "code",
-		"scope": "openid email profile", "state": "s1", "nonce": "n1", "code_challenge_method": "S256",
-	}
-	for k, v := range want {
-		if q.Get(k) != v {
-			t.Errorf("%s = %q, want %q", k, q.Get(k), v)
-		}
-	}
-	if q.Get("code_challenge") == "" || !strings.HasSuffix(u.Path, "/auth") {
-		t.Errorf("AuthCodeURL() = %s", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idp := newIDP(t)
+			idp.prompts = tt.prompts
+			got, err := idp.provider(t).AuthCodeURL(context.Background(), "s1", "n1", "verifier-verifier-verifier-verifier-verifier")
+			if err != nil {
+				t.Fatalf("AuthCodeURL() = %v", err)
+			}
+			u, err := url.Parse(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q := u.Query()
+			want := map[string]string{
+				"client_id": "client", "redirect_uri": "https://auth.example.com/callback", "response_type": "code",
+				"scope": "openid email profile", "state": "s1", "nonce": "n1", "code_challenge_method": "S256",
+				"prompt": tt.wantPrompt,
+			}
+			for k, v := range want {
+				if q.Get(k) != v {
+					t.Errorf("%s = %q, want %q", k, q.Get(k), v)
+				}
+			}
+			if _, ok := q["prompt"]; ok != (tt.wantPrompt != "") {
+				t.Errorf("AuthCodeURL() = %s, want a prompt %t", got, tt.wantPrompt != "")
+			}
+			if q.Get("code_challenge") == "" || !strings.HasSuffix(u.Path, "/auth") {
+				t.Errorf("AuthCodeURL() = %s", got)
+			}
+		})
 	}
 }
 

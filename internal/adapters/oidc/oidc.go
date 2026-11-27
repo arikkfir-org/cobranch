@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -106,13 +107,33 @@ func (p *Provider) oauth2Config(provider *gooidc.Provider) *oauth2.Config {
 }
 
 // AuthCodeURL is where the browser signs in: the provider's authorization endpoint, with state, nonce and the PKCE
-// challenge of codeVerifier.
+// challenge of codeVerifier, asking the person to choose their account where the provider can (accountPrompt).
 func (p *Provider) AuthCodeURL(ctx context.Context, state, nonce, codeVerifier string) (string, error) {
 	provider, err := p.discover(ctx)
 	if err != nil {
 		return "", err
 	}
-	return p.oauth2Config(provider).AuthCodeURL(state, gooidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier)), nil
+	opts := []oauth2.AuthCodeOption{gooidc.Nonce(nonce), oauth2.S256ChallengeOption(codeVerifier)}
+	return p.oauth2Config(provider).AuthCodeURL(state, append(opts, accountPrompt(provider)...)...), nil
+}
+
+// selectAccount is OpenID Connect's prompt that has the provider ask which of its accounts signs in, even while one is
+// signed in there.
+const selectAccount = "select_account"
+
+// accountPrompt asks provider to let the person choose their account. Without it, a provider that remembers its own
+// session signs the browser straight back in as the account that just signed out of Cobranch, with no way to choose
+// another. A provider whose discovery document lists the prompts it supports without select_account gets no prompt,
+// since it may refuse one it doesn't know; most that support it (Google among them) list none.
+func accountPrompt(provider *gooidc.Provider) []oauth2.AuthCodeOption {
+	var doc struct {
+		Prompts []string `json:"prompt_values_supported"`
+	}
+	if err := provider.Claims(&doc); err != nil || (doc.Prompts != nil && !slices.Contains(doc.Prompts, selectAccount)) {
+		// A document that no longer parses says nothing of its prompts: ask none, as for one that lacks select_account.
+		return nil
+	}
+	return []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("prompt", selectAccount)}
 }
 
 // Exchange trades code for the provider's tokens, verifies the ID token's signature, issuer, audience, expiry and
