@@ -281,10 +281,20 @@ export async function assignTask(org, list, picked, done) {
   title.focus();
 }
 
+// readProviderKey grants agent a Secret reader on the secret that holds provider's key, which its tasks need to run;
+// one it already reads stays as it is.
+export async function readProviderKey(org, a, provider) {
+  const p = await api("GET", "/orgs/" + org.slug + "/model-providers/" + encodeURIComponent(provider));
+  if (!p.secretId) return;
+  await api("POST", "/orgs/" + org.slug + "/secrets/" + p.secretId + "/access", { principalId: a.id })
+    .catch((err) => { if (err.code !== "grant.exists") throw new Error("The model is picked, but the agent may not read the provider's key: " + err.message); });
+}
+
 // newAgent asks for an agent's name, what it is for, its standing instructions and its first roles (at the
 // organization, and perhaps one on a repository, each one whose every permission the viewer holds there), makes it on
-// the organization's default model, and opens its page.
-export async function newAgent(org) {
+// the organization's default model, lets it read that model's provider key when can says the viewer manages the
+// organization's grants and reads its secrets, so its tasks run, and opens its page.
+export async function newAgent(org, can = () => false) {
   const repos = await api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories, () => []);
   const name = input({ required: true, maxlength: 100, placeholder: "Release notes writer" });
   const description = input({ maxlength: 1000, placeholder: "Writes the release notes of every version" });
@@ -301,12 +311,14 @@ export async function newAgent(org) {
   openDialog({ title: "New agent", action: "Make the agent",
     body: [field("Name", name), field("Description", description), field("Instructions", markCode(instructions), "It starts on the organization's default model, which Settings · Agents changes."),
       h("div", { class: "field" }, h("span", { class: "field-label" }, "Roles"), h("div", { class: "agent-picks" }, picks),
-        h("span", { class: "field-help" }, "Only roles whose every permission you hold.")),
+        h("span", { class: "field-help" }, "Only roles whose every permission you hold. With none that sees the organization, it gets Guest, so it can talk in conversations.")),
       field("A role on a repository", h("div", { class: "agent-pair" }, selectBox(repo), selectBox(repoRole)))],
     submit: async () => {
       const grants = picks.map((l) => l.querySelector("input")).filter((c) => c.checked).map((c) => ({ roleId: c.value }));
       if (repo.value && repoRole.value) grants.push({ roleId: repoRole.value, repositoryId: repo.value });
       const made = await api("POST", "/orgs/" + org.slug + "/agents", { name: name.value, description: description.value, instructions: instructions.value, grants });
+      // Best effort: the agent is made either way, and a task that can't read the key says so in its chat.
+      if (made.provider && can("org.grants.manage") && can("secrets.read")) await readProviderKey(org, made, made.provider).catch(() => {});
       go("/" + org.slug + "/agents/" + made.id);
     } });
   name.focus();

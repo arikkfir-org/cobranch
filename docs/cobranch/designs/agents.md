@@ -122,6 +122,7 @@ admin changes its model, its secrets, or deletes it.
 - **Its first grants come from its creator,** each a role at the organization or one of its repositories whose
   permissions the creator holds there, as every grant must; creating it needs no `org.grants.manage`. Later grants are
   ordinary grants.
+- **Every agent sees its organization.** An agent made without an organization role that holds `org.read` gets Guest there besides, as a member does, so it reads and posts in the conversations it is asked in; without it, asking it was refused (`ask.unreadable`). Migration 00072 gave Guest to the agents made before, and its trigger `agent_sees_its_organization` gives it, as the transaction that made an agent commits, to one any writer made without such a role: an older release still rolling out, or a built-in agent.
 - **Its creator and `org.principals.manage`** change its name, description and instructions. **Only
   `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it, holding every permission
   of the roles the agent holds where they apply, as revoking them would take; its creator alone can't delete it.

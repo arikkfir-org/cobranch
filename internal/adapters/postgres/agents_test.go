@@ -91,8 +91,8 @@ func TestAgentStoreCreate(t *testing.T) {
 	f.created(t, "Archivist")
 	list, err := f.a.Agents(ctx, f.acme.ID)
 	if err != nil || len(list) != 3 || list[0].Name != agents.ReviewerName || list[1].Name != "Archivist" || list[2].Name != "Scout" ||
-		len(list[2].Grants) != 2 || len(list[1].Grants) != 0 {
-		t.Errorf("Agents() = %+v, %v; want the AI reviewer, Archivist, then Scout with its grants", list, err)
+		len(list[2].Grants) != 2 || len(list[1].Grants) != 1 || list[1].Grants[0].RoleID != auth.RoleGuest {
+		t.Errorf("Agents() = %+v, %v; want the AI reviewer, Archivist with Guest, made without a role, then Scout with its grants", list, err)
 	}
 	if _, err := f.a.Agent(ctx, uuid.New(), s.ID); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Agent(of another organization) = %v, want %v", err, orgs.ErrNotFound)

@@ -113,7 +113,10 @@ func TestCreateAgent(t *testing.T) {
 		want   error
 		grants []agents.Grant
 	}{
-		{name: "no grants", viewer: f.mel, in: agents.Input{Name: " Helper ", Description: "Helps"}},
+		{name: "no grants: Guest, to see the organization", viewer: f.mel, in: agents.Input{Name: " Helper ", Description: "Helps"},
+			grants: []agents.Grant{{RoleID: auth.RoleGuest, RoleName: "Guest"}}},
+		{name: "a repository role alone: Guest besides", viewer: f.mel, in: agents.Input{Name: "Reader", Grants: []agents.Grant{repo(auth.RoleReader, f.website)}},
+			grants: []agents.Grant{{RoleID: auth.RoleGuest, RoleName: "Guest"}, {RoleID: auth.RoleReader, RoleName: "Reader", RepoID: f.website, RepoSlug: "website"}}},
 		{name: "a role the creator holds", viewer: f.mel, in: agents.Input{Name: "Member", Grants: []agents.Grant{org(auth.RoleMember)}},
 			grants: []agents.Grant{{RoleID: auth.RoleMember, RoleName: "Member"}}},
 		{name: "a repository role the creator holds there", viewer: f.mel, in: agents.Input{Name: "Dev", Grants: []agents.Grant{org(auth.RoleGuest), repo(auth.RoleDeveloper, f.website)}},

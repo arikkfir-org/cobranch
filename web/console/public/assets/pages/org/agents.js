@@ -43,7 +43,7 @@ export const heading = ({ org, can, sub, root }) => {
   if (agentID(sub)) return null;
   const head = pageHeading({ title: "Agents",
     description: "The agents " + org.name + " runs: what each one is for, the model it runs on, and what it is doing now. Give one a task and it works on it.",
-    actions: can("agents.create") ? [h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org) }, icon("plus"), "New agent")] : [] });
+    actions: can("agents.create") ? [h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org, can) }, icon("plus"), "New agent")] : [] });
   head.append(tabBar(tabsOf("org/agents", can), sub || "", (p) => root + "/agents" + (p ? "/" + p : ""), { org, can }, "Agents"));
   return head;
 };
