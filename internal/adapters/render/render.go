@@ -63,7 +63,12 @@ func Render(ctx context.Context, dir string, plan delivery.Plan, opts Options) (
 
 // render is Render without its span.
 func render(ctx context.Context, dir string, plan delivery.Plan, opts Options) ([]byte, error) {
-	repo, err := filepath.EvalSymlinks(dir)
+	// Absolute, so that every root's path, resolved the same way, starts with it: a delivery's pod names its checkout
+	// as ".", which resolves to itself and prefixes nothing.
+	repo, err := filepath.Abs(dir)
+	if err == nil {
+		repo, err = filepath.EvalSymlinks(repo)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: the checkout %s: %w", ErrRender, dir, err)
 	}

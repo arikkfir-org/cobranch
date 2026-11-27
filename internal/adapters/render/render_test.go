@@ -278,3 +278,38 @@ func TestRenderMissingCheckout(t *testing.T) {
 		t.Fatalf("Render() = %v, want ErrRender", err)
 	}
 }
+
+// TestRenderRelativeCheckout renders a checkout named relative to the working directory, as a delivery's pod names
+// its own: `cobranch render` runs in the checkout without --dir.
+func TestRenderRelativeCheckout(t *testing.T) {
+	configMap := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+	tests := []struct {
+		name  string
+		dir   string
+		files map[string]string
+		root  delivery.PlannedRoot
+	}{
+		{name: "manifests", dir: ".", files: map[string]string{"d/a.yaml": configMap}, root: delivery.PlannedRoot{Path: "d", Kind: delivery.Manifests}},
+		{name: "a kustomization", dir: ".", files: map[string]string{"k/kustomization.yaml": "resources: [a.yaml]\n", "k/a.yaml": configMap},
+			root: delivery.PlannedRoot{Path: "k", Kind: delivery.Kustomize}},
+		{name: "a chart", dir: ".", files: map[string]string{"c/Chart.yaml": "apiVersion: v2\nname: c\nversion: 0.1.0\n", "c/templates/a.yaml": configMap},
+			root: delivery.PlannedRoot{Path: "c", Kind: delivery.Helm, Release: "c"}},
+		{name: "a checkout below the working directory", dir: "checkout", files: map[string]string{"checkout/d/a.yaml": configMap},
+			root: delivery.PlannedRoot{Path: "d", Kind: delivery.Manifests}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			work := t.TempDir()
+			files(t, work, tt.files)
+			t.Chdir(work)
+			plan := delivery.Plan{Namespace: "n", Roots: []delivery.PlannedRoot{tt.root}}
+			out, err := render.Render(context.Background(), tt.dir, plan, render.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := names(objects(t, out)); !reflect.DeepEqual(got, []string{"ConfigMap/a"}) {
+				t.Fatalf("Render() = %v, want [ConfigMap/a]\n%s", got, out)
+			}
+		})
+	}
+}
