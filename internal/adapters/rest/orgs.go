@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,7 +23,8 @@ import (
 type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
-	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	Memberships(ctx context.Context, v orgs.Viewer) ([]orgs.Membership, error)
+	FollowMemberships(ctx context.Context, v orgs.Viewer) (<-chan []orgs.Membership, error)
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
@@ -220,25 +222,73 @@ func (a api) org(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organiza
 	return org, nil
 }
 
-// ListMyOrganizations lists the viewer's organizations.
-func (a api) ListMyOrganizations(ctx context.Context, _ ListMyOrganizationsRequestObject) (ListMyOrganizationsResponseObject, error) {
+// ListMyOrganizations lists the viewer's organizations, each with the permissions they hold there; with If-None-Match
+// and wait, it waits up to wait seconds for the list to change before it answers 304.
+func (a api) ListMyOrganizations(ctx context.Context, req ListMyOrganizationsRequestObject) (ListMyOrganizationsResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.orgs.Organizations(ctx, v)
+	waits := time.Duration(0)
+	if w := req.Params.Wait; w != nil {
+		if *w < 0 || time.Duration(*w)*time.Second > maxWait {
+			return nil, refuse(http.StatusBadRequest, "wait.invalid", "A read waits 0 to 15 seconds for the list to change.")
+		}
+		waits = time.Duration(*w) * time.Second
+	}
+	if waits == 0 || req.Params.IfNoneMatch == nil {
+		list, err := a.orgs.Memberships(ctx, v)
+		if err != nil {
+			return nil, fail(err, "organization")
+		}
+		return myOrganizations(list, req.Params.IfNoneMatch)
+	}
+	return a.awaitMyOrganizations(ctx, v, *req.Params.IfNoneMatch, waits)
+}
+
+// awaitMyOrganizations answers the viewer's organizations once they are no longer those tag names, or 304 once
+// waits passes with them still those.
+func (a api) awaitMyOrganizations(ctx context.Context, v orgs.Viewer, tag IfNoneMatch, waits time.Duration) (ListMyOrganizationsResponseObject, error) {
+	following, cancel := context.WithTimeout(ctx, waits)
+	defer cancel()
+	lists, err := a.orgs.FollowMemberships(following, v)
 	if err != nil {
 		return nil, fail(err, "organization")
 	}
-	out := make([]Organization, 0, len(list))
-	for _, o := range list {
-		shown, err := a.withPermissions(ctx, v, o)
-		if err != nil {
+	var last ListMyOrganizationsResponseObject
+	for list := range lists {
+		if last, err = myOrganizations(list, &tag); err != nil {
 			return nil, err
 		}
-		out = append(out, shown)
+		if _, same := last.(ListMyOrganizations304Response); !same {
+			return last, nil
+		}
 	}
-	return ListMyOrganizations200JSONResponse{Organizations: out}, nil
+	if following.Err() == nil {
+		return nil, errors.New("following the viewer's organizations stopped before the wait ended")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("waiting for the viewer's organizations: %w", err)
+	}
+	return last, nil
+}
+
+// myOrganizations is list as listMyOrganizations answers it: 304 while it is the one tag names.
+func myOrganizations(list []orgs.Membership, tag *IfNoneMatch) (ListMyOrganizationsResponseObject, error) {
+	out := ListMyOrganizations200JSONResponse{}
+	out.Body.Organizations = make([]Organization, 0, len(list))
+	for _, m := range list {
+		out.Body.Organizations = append(out.Body.Organizations, organization(m.Organization, m.Permissions))
+	}
+	etag, err := bodyTag("organizations", out.Body, nil)
+	if err != nil {
+		return nil, err
+	}
+	if matches(tag, etag) {
+		return ListMyOrganizations304Response{Headers: ListMyOrganizations304ResponseHeaders{ETag: etag}}, nil
+	}
+	out.Headers.ETag = etag
+	return out, nil
 }
 
 // CreateOrganization makes an organization with the viewer its first Owner.

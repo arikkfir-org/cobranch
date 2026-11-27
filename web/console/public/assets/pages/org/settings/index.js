@@ -4,8 +4,9 @@ import { h } from "../../../lib/dom.js";
 import { banner, checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { icon } from "../../../lib/icons.js";
 import { roleSelect } from "../../../lib/organization.js";
+import { readOrganizations } from "../../../lib/orgs.js";
 import { go, render } from "../../../lib/router.js";
-import { base, config, setOrgs } from "../../../lib/state.js";
+import { base, config } from "../../../lib/state.js";
 
 export const tab = { label: "General", order: 0 };
 export const view = "organization.settings";
@@ -37,7 +38,7 @@ async function showGeneral(org, main, can) {
     button.disabled = true;
     try {
       const updated = await api("PATCH", "/orgs/" + org.slug, fields, { "If-Match": `"${org.version}"` });
-      setOrgs((await api("GET", "/me/organizations")).organizations);
+      await readOrganizations();
       if (updated.slug !== org.slug) return go("/" + updated.slug + "/settings");
       // The whole page draws again, so the sidebar, breadcrumb and heading take a new name too.
       await render();
@@ -94,7 +95,7 @@ function remove(org) {
     field("Type " + org.name + " to confirm", name)],
     submit: async () => {
       await api("DELETE", "/orgs/" + org.slug, undefined, { "If-Match": `"${org.version}"` });
-      setOrgs((await api("GET", "/me/organizations")).organizations);
+      await readOrganizations();
       location.replace(base);
     } });
   // The action waits for the name, as typed.

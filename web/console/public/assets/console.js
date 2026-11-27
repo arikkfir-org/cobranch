@@ -5,8 +5,9 @@ import { answer, api } from "./lib/api.js";
 import { load } from "./lib/assets.js";
 import { h } from "./lib/dom.js";
 import { showCard } from "./lib/layout.js";
+import { followOrganizations, readOrganizations } from "./lib/orgs.js";
 import { show } from "./lib/router.js";
-import { setBase, setConfig, setMe, setOrgs, setPermissions } from "./lib/state.js";
+import { setBase, setConfig, setMe, setPermissions } from "./lib/state.js";
 import { followPreferences } from "./lib/theme.js";
 
 // unavailable says the Console couldn't load its pages.
@@ -25,9 +26,9 @@ export function start(loaded, root, again) {
     try {
       setMe(await answer(c.me));
       followPreferences();
-      const [orgs, permissions] = await Promise.all([api("GET", "/me/organizations").then((d) => d.organizations), api("GET", "/permissions?scope=organization").then((d) => d.permissions)]);
-      setOrgs(orgs);
+      const [, permissions] = await Promise.all([readOrganizations(), api("GET", "/permissions?scope=organization").then((d) => d.permissions)]);
       setPermissions(permissions);
+      followOrganizations();
     } catch (err) {
       if (err.status !== 401) throw err;
     }

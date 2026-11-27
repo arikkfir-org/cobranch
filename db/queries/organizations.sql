@@ -32,6 +32,11 @@ RETURNING version;
 SELECT sqlc.embed(o) FROM organizations o JOIN memberships m ON m.org_id = o.id
 WHERE m.user_id = $1 AND o.deleting_at IS NULL ORDER BY o.name, o.slug;
 
+-- ListenOrganizations has the connection hear the notifications that migration 00065's triggers send when a
+-- membership, a grant, an organization or one of its roles changes, naming the principal or the organization.
+-- name: ListenOrganizations :exec
+LISTEN cobranch_organizations;
+
 -- name: InsertMembership :exec
 INSERT INTO memberships (org_id, user_id, joined_at) VALUES ($1, $2, $3);
 

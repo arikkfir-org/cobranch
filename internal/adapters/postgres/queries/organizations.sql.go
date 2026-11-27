@@ -270,6 +270,17 @@ func (q *Queries) InsertSlug(ctx context.Context, slug string, orgID uuid.UUID) 
 	return err
 }
 
+const listenOrganizations = `-- name: ListenOrganizations :exec
+LISTEN cobranch_organizations
+`
+
+// ListenOrganizations has the connection hear the notifications that migration 00065's triggers send when a
+// membership, a grant, an organization or one of its roles changes, naming the principal or the organization.
+func (q *Queries) ListenOrganizations(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, listenOrganizations)
+	return err
+}
+
 const lockOrganization = `-- name: LockOrganization :one
 SELECT id FROM organizations WHERE id = $1 AND deleting_at IS NULL FOR UPDATE
 `

@@ -155,6 +155,11 @@ extend type User {
   joinRequests: [JoinRequest!]!
 }
 
+extend type Subscription {
+  "The organizations the viewer belongs to, at once and then again each time the list changes: one created, joined, left, renamed or deleted elsewhere, or a role granted or revoked. Over WebSocket (graphql-transport-ws)."
+  organizations: [Organization!]!
+}
+
 extend type Mutation {
   "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!

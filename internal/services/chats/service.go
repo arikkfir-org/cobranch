@@ -77,10 +77,10 @@ type Store interface {
 
 // Notifier tells the servers that follow a chat when it may have changed.
 type Notifier interface {
-	// Watch returns a channel that receives soon after a change to the chat of a subject, a branch, an issue or a
-	// conversation, commits, and a function that stops it. Changes that come while the channel is full make one
+	// Watch returns a channel that receives soon after a change to the chat of one of the subjects, branches, issues
+	// or conversations, commits, and a function that stops it. Changes that come while the channel is full make one
 	// receive.
-	Watch(subjectID uuid.UUID) (<-chan struct{}, func())
+	Watch(subjectIDs ...uuid.UUID) (<-chan struct{}, func())
 }
 
 // MaxUpdates is the most updates a read answers.

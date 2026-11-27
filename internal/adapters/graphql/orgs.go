@@ -23,6 +23,7 @@ type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
 	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	FollowMemberships(ctx context.Context, v orgs.Viewer) (<-chan []orgs.Membership, error)
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
@@ -297,4 +298,25 @@ func resolveOrg[T any](ctx context.Context, obj *Organization, read func(context
 		return zero, fail(ctx, err, "organization", what)
 	}
 	return out, nil
+}
+
+// followOrganizations sends each list of the viewer's organizations that lists sends, as the API shows it, until
+// lists closes or ctx ends.
+func followOrganizations(ctx context.Context, lists <-chan []orgs.Membership) <-chan []*Organization {
+	out := make(chan []*Organization)
+	go func() {
+		defer close(out)
+		for list := range lists {
+			shown := make([]*Organization, 0, len(list))
+			for _, m := range list {
+				shown = append(shown, organization(m.Organization))
+			}
+			select {
+			case out <- shown:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
 }

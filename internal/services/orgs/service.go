@@ -130,10 +130,11 @@ type Limits interface {
 
 // Service runs organizations: every operation checks its viewer's permissions through the authorizer first.
 type Service struct {
-	store  Store
-	authz  *auth.Authorizer
-	limits Limits
-	now    func() time.Time
+	store    Store
+	authz    *auth.Authorizer
+	limits   Limits
+	notifier Notifier
+	now      func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz.

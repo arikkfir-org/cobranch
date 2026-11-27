@@ -353,10 +353,27 @@ paths:
   /me/organizations:
     get:
       operationId: listMyOrganizations
-      summary: The organizations the user belongs to, by name.
+      summary: >-
+        The organizations the user belongs to, by name, each with the permissions the user holds there. With
+        If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client
+        follows the user's organizations (one created, joined, left, renamed or deleted elsewhere, or a role granted or
+        revoked) by asking again with the answer's ETag.
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - name: wait
+          in: query
+          description: How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+            default: 0
       responses:
         "200":
           description: The organizations.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -367,6 +384,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Organization"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         default:

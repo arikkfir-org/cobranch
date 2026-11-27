@@ -399,3 +399,31 @@ func TestJoinRequestMutations(t *testing.T) {
 			document: fixed(`{ viewer { joinRequests { organizationSlug userName } } }`), want: []string{`"organizationSlug":"acme","userName":"Nia"`}},
 	})
 }
+
+func TestOrganizationsSubscription(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture()
+	notifier := &orgstest.Notifier{}
+	f.service.WithNotifier(notifier)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	srv := httptest.NewServer(as(&f.nia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets, f.artifacts, f.overview)))
+	defer srv.Close()
+	conn, err := dialWS(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), "https://console.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.CloseNow() }() // the test is done with it
+	c := &wsClient{t: t, ctx: ctx, conn: conn}
+	c.subscribe(`subscription { organizations { slug viewerPermissions } }`)
+	if m := c.read(); m.Type != "next" || string(m.Payload) != `{"data":{"organizations":[]}}` {
+		t.Fatalf("first list = %s %s, want none", m.Type, m.Payload)
+	}
+	if body := f.query(&f.nia, `mutation { createOrganization(slug: "initech", name: "Initech") { id } }`); strings.Contains(body, `"errors"`) {
+		t.Fatal(body)
+	}
+	notifier.Wake(f.nia.User.ID)
+	if m := c.read(); m.Type != "next" || !strings.Contains(string(m.Payload), `{"slug":"initech","viewerPermissions":[`) {
+		t.Fatalf("list after creating one = %s %s, want Initech", m.Type, m.Payload)
+	}
+}
