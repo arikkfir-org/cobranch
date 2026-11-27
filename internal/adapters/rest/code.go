@@ -17,6 +17,7 @@ import (
 
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -250,32 +251,51 @@ func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBran
 	if err != nil {
 		return nil, err
 	}
-	return readList(ctx, waits, func(ctx context.Context) (code.Branch, error) {
+	return readList(ctx, waits, func(ctx context.Context) (shownBranch, error) {
 		b, err := a.code.Branch(ctx, v, repo.ID, req.BranchName)
-		return b, fail(err, "branch")
-	}, func(ctx context.Context) (<-chan code.Branch, error) {
-		b, err := a.code.FollowBranch(ctx, v, repo.ID, req.BranchName)
-		return b, fail(err, "branch")
-	}, func(b code.Branch) (GetBranchResponseObject, bool, error) {
-		out := branch(b)
-		link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
 		if err != nil {
-			return nil, false, failIssue(err)
+			return shownBranch{}, fail(err, "branch")
 		}
-		if link != nil {
-			issue := branchIssue(*link)
+		link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
+		return shownBranch{b, link}, failIssue(err)
+	}, func(ctx context.Context) (<-chan shownBranch, error) {
+		return a.followBranch(ctx, v, repo, req.BranchName)
+	}, func(shown shownBranch) (GetBranchResponseObject, bool, error) {
+		out := branch(shown.branch)
+		if shown.link != nil {
+			issue := branchIssue(*shown.link)
 			out.Issue = &issue
 		}
 		digest, err := bodyTag("branch", out, nil)
 		if err != nil {
 			return nil, false, err
 		}
-		etag := `"` + b.Head + "-" + strings.Trim(digest, `"`) + `"`
+		etag := `"` + shown.branch.Head + "-" + strings.Trim(digest, `"`) + `"`
 		if matches(req.Params.IfNoneMatch, etag) {
 			return GetBranch304Response{Headers: GetBranch304ResponseHeaders{ETag: etag}}, true, nil
 		}
 		return GetBranch200JSONResponse{Body: out, Headers: GetBranch200ResponseHeaders{ETag: etag}}, false, nil
 	})
+}
+
+// shownBranch is a branch as its page shows it: with the issue it works on, nil for none.
+type shownBranch struct {
+	branch code.Branch
+	link   *issues.Link
+}
+
+// followBranch follows one of repo's branches and the issue it works on, sending them together each time either
+// changes, until ctx ends or either follower stops; ending ctx stops both.
+func (a api) followBranch(ctx context.Context, v repos.Viewer, repo repos.Repository, name string) (<-chan shownBranch, error) {
+	branches, err := a.code.FollowBranch(ctx, v, repo.ID, name)
+	if err != nil {
+		return nil, fail(err, "branch")
+	}
+	links, err := a.issues.FollowBranchLink(ctx, v, repo.OrgID, repo.ID, name)
+	if err != nil {
+		return nil, failIssue(err)
+	}
+	return paired(ctx, branches, links, func(b code.Branch, link *issues.Link) shownBranch { return shownBranch{b, link} }), nil
 }
 
 // MergeBranch merges a branch into its base for the viewer.

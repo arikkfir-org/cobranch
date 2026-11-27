@@ -175,3 +175,58 @@ func TestFollowGone(t *testing.T) {
 		t.Error("the follower went on after the issue was deleted")
 	}
 }
+
+func TestFollowBranchLink(t *testing.T) {
+	t.Parallel()
+	link := func(ctx context.Context, t *testing.T, f *fixture) {
+		t.Helper()
+		if _, err := f.service.Link(ctx, f.olivia, f.acme.ID, f.website.ID, "login", 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		name string
+		// before links the branch, or not, before it is followed; change changes its link behind the follower's back.
+		before, change func(ctx context.Context, t *testing.T, f *fixture)
+		want           [2]string
+	}{
+		{name: "a branch linked elsewhere", before: func(context.Context, *testing.T, *fixture) {}, change: link, want: [2]string{"none", "ACME-1"}},
+		{name: "a branch unlinked elsewhere", before: link, change: func(ctx context.Context, t *testing.T, f *fixture) {
+			if err := f.service.Unlink(ctx, f.olivia, f.acme.ID, f.website.ID, "login"); err != nil {
+				t.Fatal(err)
+			}
+		}, want: [2]string{"ACME-1", "none"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			f := newFixture(t)
+			f.create(t, f.max, issues.Input{Title: "First", State: issues.StateTodo})
+			f.store.AddBranch(f.website.ID, "login")
+			tt.before(ctx, t, f)
+			notifier := &livetest.Notifier{}
+			f.service.WithNotifier(notifier)
+			links, err := f.service.FollowBranchLink(ctx, f.max, f.acme.ID, f.website.ID, "login")
+			if err != nil {
+				t.Fatal(err)
+			}
+			named := func() string {
+				if l := sent(t, links); l != nil {
+					return fmt.Sprintf("%s-%d", l.Issue.Key, l.Issue.Number)
+				}
+				return "none"
+			}
+			if got := named(); got != tt.want[0] {
+				t.Errorf("first = %s; want %s", got, tt.want[0])
+			}
+			tt.change(ctx, t, f)
+			// A link names the branch's repository, which the follower follows.
+			notifier.Wake(f.website.ID)
+			if got := named(); got != tt.want[1] {
+				t.Errorf("after the change = %s; want %s", got, tt.want[1])
+			}
+		})
+	}
+}

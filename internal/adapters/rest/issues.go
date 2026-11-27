@@ -31,6 +31,7 @@ type Issues interface {
 	Branches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.LinkedBranch, error)
 	FollowBranches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (<-chan []issues.LinkedBranch, error)
 	OfBranch(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) (*issues.Link, error)
+	FollowBranchLink(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) (<-chan *issues.Link, error)
 	Link(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string, number int) (issues.Link, error)
 	Unlink(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) error
 }
