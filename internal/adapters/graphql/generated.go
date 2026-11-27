@@ -653,17 +653,19 @@ type ComplexityRoot struct {
 	}
 
 	Job struct {
-		Checkout    func(childComplexity int) int
-		Image       func(childComplexity int) int
-		Kind        func(childComplexity int) int
-		Name        func(childComplexity int) int
-		On          func(childComplexity int) int
-		Permissions func(childComplexity int) int
-		Pod         func(childComplexity int) int
-		Script      func(childComplexity int) int
-		Secrets     func(childComplexity int) int
-		Timeout     func(childComplexity int) int
-		WebhookURL  func(childComplexity int) int
+		Agent             func(childComplexity int) int
+		AgentInstructions func(childComplexity int) int
+		Checkout          func(childComplexity int) int
+		Image             func(childComplexity int) int
+		Kind              func(childComplexity int) int
+		Name              func(childComplexity int) int
+		On                func(childComplexity int) int
+		Permissions       func(childComplexity int) int
+		Pod               func(childComplexity int) int
+		Script            func(childComplexity int) int
+		Secrets           func(childComplexity int) int
+		Timeout           func(childComplexity int) int
+		WebhookURL        func(childComplexity int) int
 	}
 
 	JoinRequest struct {
@@ -1137,6 +1139,7 @@ type ComplexityRoot struct {
 		StartedBy  func(childComplexity int) int
 		State      func(childComplexity int) int
 		Steps      func(childComplexity int) int
+		Task       func(childComplexity int) int
 		Trigger    func(childComplexity int) int
 		Version    func(childComplexity int) int
 	}
@@ -1239,6 +1242,7 @@ type ComplexityRoot struct {
 		Reason         func(childComplexity int) int
 		RepositoryID   func(childComplexity int) int
 		RepositorySlug func(childComplexity int) int
+		Run            func(childComplexity int) int
 		Sha            func(childComplexity int) int
 		Spent          func(childComplexity int) int
 		StartedAt      func(childComplexity int) int
@@ -4137,6 +4141,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.IssueTask.State(childComplexity), true
 
+	case "Job.agent":
+		if e.ComplexityRoot.Job.Agent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.Agent(childComplexity), true
+	case "Job.agentInstructions":
+		if e.ComplexityRoot.Job.AgentInstructions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.AgentInstructions(childComplexity), true
 	case "Job.checkout":
 		if e.ComplexityRoot.Job.Checkout == nil {
 			break
@@ -7060,6 +7076,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.Steps(childComplexity), true
+	case "Run.task":
+		if e.ComplexityRoot.Run.Task == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.Task(childComplexity), true
 	case "Run.trigger":
 		if e.ComplexityRoot.Run.Trigger == nil {
 			break
@@ -7517,6 +7539,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.RepositorySlug(childComplexity), true
+	case "Task.run":
+		if e.ComplexityRoot.Task.Run == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Run(childComplexity), true
 	case "Task.sha":
 		if e.ComplexityRoot.Task.Sha == nil {
 			break
@@ -8226,7 +8254,7 @@ type Task {
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
-  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's."
+  "What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its agent."
   kind: String!
   "Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works."
   private: Boolean!
@@ -8245,6 +8273,8 @@ type Task {
   threadId: ID
   "The commit it works at, such as the head a review task reviews; null for none."
   sha: String
+  "The number of the job's run it is, in its repository, for a task of kind job; null for any other, and once the run is gone."
+  run: Int
   state: TaskState!
   "Why it failed or was cancelled; empty otherwise."
   reason: String!
@@ -10231,6 +10261,8 @@ type Run {
   rerunOf: Int
   "The job as it was declared when the run was queued."
   definition: Job!
+  "The number of the agent's task the run of a job that names an agent is, in its organization, whose transcript stands in for its logs; null for any other run, and until its task is assigned."
+  task: Int
   state: RunState!
   "Why it waits, failed or was cancelled; empty otherwise."
   reason: String!
@@ -10246,13 +10278,13 @@ type Run {
   """
   Its logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept
   them once it ended, from its pod while it runs, when they are live and grow. None for a run that never started a pod,
-  such as a webhook's.
+  such as a webhook's or an agent's.
   """
   logs: [RunLog!]!
   """
   Its steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its
   containers'): as the controller kept them once it ended, from its pod while it runs. None for a run that never started
-  a pod, such as a webhook's.
+  a pod, such as a webhook's or an agent's.
   """
   steps: [RunStep!]!
 }
@@ -10331,7 +10363,7 @@ type RunTrigger {
 "A job as /cobranch.yaml declared it."
 type Job {
   name: String!
-  "pod, script or webhook."
+  "pod, script, webhook or agent."
   kind: String!
   "What triggers it, as /cobranch.yaml's on declares it."
   on: Map!
@@ -10343,6 +10375,10 @@ type Job {
   image: String
   "Where a webhook posts its runs."
   webhookUrl: String
+  "The agent a run is a task of, by its name, the repository's first and then the organization's, for an agent's job."
+  agent: String
+  "What each run asks of the agent, after its own instructions, for an agent's job."
+  agentInstructions: String
   "The environment variables a run receives secrets in, each with the secret's ID."
   secrets: Map
   "What a run's token may do, within the repository's job ceiling."
@@ -12230,6 +12266,10 @@ func (ec *executionContext) childFields_Job(ctx context.Context, field graphql.C
 		return ec.fieldContext_Job_image(ctx, field)
 	case "webhookUrl":
 		return ec.fieldContext_Job_webhookUrl(ctx, field)
+	case "agent":
+		return ec.fieldContext_Job_agent(ctx, field)
+	case "agentInstructions":
+		return ec.fieldContext_Job_agentInstructions(ctx, field)
 	case "secrets":
 		return ec.fieldContext_Job_secrets(ctx, field)
 	case "permissions":
@@ -12950,6 +12990,8 @@ func (ec *executionContext) childFields_Run(ctx context.Context, field graphql.C
 		return ec.fieldContext_Run_rerunOf(ctx, field)
 	case "definition":
 		return ec.fieldContext_Run_definition(ctx, field)
+	case "task":
+		return ec.fieldContext_Run_task(ctx, field)
 	case "state":
 		return ec.fieldContext_Run_state(ctx, field)
 	case "reason":
@@ -13148,6 +13190,8 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_threadId(ctx, field)
 	case "sha":
 		return ec.fieldContext_Task_sha(ctx, field)
+	case "run":
+		return ec.fieldContext_Task_run(ctx, field)
 	case "state":
 		return ec.fieldContext_Task_state(ctx, field)
 	case "reason":
@@ -27811,6 +27855,52 @@ func (ec *executionContext) fieldContext_Job_webhookUrl(_ context.Context, field
 	return graphql.NewScalarFieldContext("Job", field, false, false, "String")
 }
 
+func (ec *executionContext) _Job_agent(ctx context.Context, field graphql.CollectedField, obj *Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_agent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Agent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Job_agent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, "String")
+}
+
+func (ec *executionContext) _Job_agentInstructions(ctx context.Context, field graphql.CollectedField, obj *Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_agentInstructions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AgentInstructions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Job_agentInstructions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, "String")
+}
+
 func (ec *executionContext) _Job_secrets(ctx context.Context, field graphql.CollectedField, obj *Job) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -39310,6 +39400,29 @@ func (ec *executionContext) fieldContext_Run_definition(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Run_task(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_task(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Task, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Run_task(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Run", field, false, false, "Int")
+}
+
 func (ec *executionContext) _Run_state(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -41200,6 +41313,29 @@ func (ec *executionContext) _Task_sha(ctx context.Context, field graphql.Collect
 }
 func (ec *executionContext) fieldContext_Task_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
+}
+
+func (ec *executionContext) _Task_run(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_run(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Run, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Task_run(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
 }
 
 func (ec *executionContext) _Task_state(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
@@ -50000,6 +50136,16 @@ func (ec *executionContext) _Job(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "agent":
+			out.Values[i] = ec._Job_agent(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "agentInstructions":
+			out.Values[i] = ec._Job_agentInstructions(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "secrets":
 			out.Values[i] = ec._Job_secrets(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -53126,6 +53272,11 @@ func (ec *executionContext) _Run(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "task":
+			out.Values[i] = ec._Run_task(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "state":
 			out.Values[i] = ec._Run_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -53764,6 +53915,11 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "sha":
 			out.Values[i] = ec._Task_sha(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "run":
+			out.Values[i] = ec._Task_run(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

@@ -26,7 +26,7 @@ func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, e
 		return agents.Work{}, fmt.Errorf("finding task %s: %w", id, notFound(err))
 	}
 	t := task(taskRow{t: r.AgentTask, agent: r.AgentName, assigner: r.AssignerName, canceller: r.CancellerName, repo: r.RepoSlug, branchOf: r.BranchName,
-		spent: r.Spent, input: r.InputTokens, output: r.OutputTokens, cap: r.Cap})
+		spent: r.Spent, input: r.InputTokens, output: r.OutputTokens, cap: r.Cap, run: r.RunNumber})
 	w := agents.Work{Task: t, OrgSlug: r.OrgSlug, AgentInstructions: r.AgentInstructions, AgentEmail: agents.Email(t.Agent.ID)}
 	if issue := cmp.Or(r.IssueNumber, r.ThreadIssueNumber); issue != nil {
 		w.IssueKey, w.IssueNumber = r.IssueKey, int64(*issue)

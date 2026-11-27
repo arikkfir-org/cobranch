@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Kind is the kind of work a job does: one of a pod, a script or a webhook.
+// Kind is the kind of work a job does: one of a pod, a script, a webhook or an agent's task.
 type Kind string
 
 // The kinds of work.
@@ -20,6 +20,7 @@ const (
 	KindPod     Kind = "pod"
 	KindScript  Kind = "script"
 	KindWebhook Kind = "webhook"
+	KindAgent   Kind = "agent"
 )
 
 // MaxTimeout is the longest a run of any job may take, whatever the installation allows.
@@ -44,6 +45,8 @@ type Job struct {
 	Image string `json:"image,omitempty"`
 	// Webhook is where the job posts its runs; nil unless the job is a webhook.
 	Webhook *Webhook `json:"webhook,omitempty"`
+	// Agent is the agent whose task each run is; nil unless the job names one.
+	Agent *Agent `json:"agent,omitempty"`
 	// Secrets maps environment variables to the IDs of the secrets whose values they carry.
 	Secrets map[string]uuid.UUID `json:"secrets,omitempty"`
 	// Permissions are what a run's token may do, within the repository's job ceiling, sorted.
@@ -57,6 +60,8 @@ type Job struct {
 // Kind is the kind of work the job does.
 func (j Job) Kind() Kind {
 	switch {
+	case j.Agent != nil:
+		return KindAgent
 	case j.Webhook != nil:
 		return KindWebhook
 	case j.Pod != nil:
@@ -70,6 +75,14 @@ func (j Job) Kind() Kind {
 type Webhook struct {
 	URL           string    `json:"url"`
 	SigningSecret uuid.UUID `json:"signingSecret"`
+}
+
+// Agent is the agent a job's runs are tasks of, by its name, the repository's agent first and then the
+// organization's, and what each run asks of it beside the agent's own standing instructions. The agent's image, model
+// and secrets are its own.
+type Agent struct {
+	Name         string `json:"name"`
+	Instructions string `json:"instructions,omitempty"`
 }
 
 // Triggers are the events that trigger a job; a nil field never does.

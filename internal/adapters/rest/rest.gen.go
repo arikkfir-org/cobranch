@@ -706,19 +706,22 @@ func (e IssueState) Valid() bool {
 
 // Defines values for JobKind.
 const (
-	Pod     JobKind = "pod"
-	Script  JobKind = "script"
-	Webhook JobKind = "webhook"
+	JobKindAgent   JobKind = "agent"
+	JobKindPod     JobKind = "pod"
+	JobKindScript  JobKind = "script"
+	JobKindWebhook JobKind = "webhook"
 )
 
 // Valid indicates whether the value is a known member of the JobKind enum.
 func (e JobKind) Valid() bool {
 	switch e {
-	case Pod:
+	case JobKindAgent:
 		return true
-	case Script:
+	case JobKindPod:
 		return true
-	case Webhook:
+	case JobKindScript:
+		return true
+	case JobKindWebhook:
 		return true
 	default:
 		return false
@@ -2696,7 +2699,9 @@ type IssueTask struct {
 
 // Job A job as /cobranch.yaml declared it.
 type Job struct {
-	Checkout bool `json:"checkout"`
+	// Agent The agent a job's runs are tasks of, by its name, the repository's first and then the organization's, and what each run asks of it after its own instructions. Its image, model and secrets are the agent's own.
+	Agent    *JobAgent `json:"agent,omitempty"`
+	Checkout bool      `json:"checkout"`
 
 	// Image The image a script runs in; the installation's when empty.
 	Image *string `json:"image,omitempty"`
@@ -2725,6 +2730,12 @@ type Job struct {
 
 // JobKind defines model for Job.Kind.
 type JobKind string
+
+// JobAgent The agent a job's runs are tasks of, by its name, the repository's first and then the organization's, and what each run asks of it after its own instructions. Its image, model and secrets are the agent's own.
+type JobAgent struct {
+	Instructions *string `json:"instructions,omitempty"`
+	Name         string  `json:"name"`
+}
 
 // JobTriggers What triggers a job; an absent trigger never does.
 type JobTriggers struct {
@@ -3635,6 +3646,9 @@ type Run struct {
 	// State Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
 	State RunState `json:"state"`
 
+	// Task The number of the agent's task the run of a job that names an agent is, in its organization, whose transcript stands in for its logs; absent for any other run, and until its task is assigned.
+	Task *int64 `json:"task,omitempty"`
+
 	// Trigger The event that queued a run.
 	Trigger RunTrigger `json:"trigger"`
 
@@ -3832,7 +3846,7 @@ type Task struct {
 	InputTokens  int64  `json:"inputTokens"`
 	Instructions string `json:"instructions"`
 
-	// Kind What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
+	// Kind What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its agent.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
@@ -3850,6 +3864,9 @@ type Task struct {
 	// RepositoryId The repository it works in; absent for none.
 	RepositoryId   *openapi_types.UUID `json:"repositoryId,omitempty"`
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
+
+	// Run The number of the job's run it is, in its repository, for a task of kind job; absent for any other, and once the run is gone.
+	Run *int64 `json:"run,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
 	Sha *string `json:"sha,omitempty"`

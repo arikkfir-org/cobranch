@@ -18,7 +18,7 @@ merge requirements can require.
 How a repository runs work on its commits ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)): jobs declared in
 `/cobranch.yaml`, the events that trigger them, where and as whom a run executes, the secrets it receives, and the
 annotations it reports, which a branch's [merge requirements](branch-status.md#merge-requirements) can require. The
-[product design](product.md#jobs) fixed the events, the three kinds of work and the override policy; the
+[product design](product.md#jobs) fixed the events, the kinds of work and the override policy; the
 [architecture](architecture.md#job-isolation) fixed one namespace per organization and the controller; [principals and
 permissions](principals-and-permissions.md#jobs) fixed a principal per job name, the job ceiling and `secrets.read`.
 This page builds them on [Git hosting](git-hosting.md#a-push) and [branch status](branch-status.md), and names what it
@@ -97,7 +97,8 @@ The Git server parses and records each tip’s file in the push’s transaction;
 - **One job per name,** the map's key: 1 to 100 lowercase letters, digits and `-`, `_`, `.`, `/`, starting with a letter
   or digit, the [annotation](branch-status.md#annotations) rules, because a job reports the annotation of its own name.
   So `branches.main.requires.annotations: [ci/build]` requires job `ci/build` to pass.
-- **Exactly one kind of work:** `pod`, `script` or `webhook` ([Where a run executes](#where-a-run-executes)).
+- **Exactly one kind of work:** `pod`, `script`, `webhook` ([Where a run executes](#where-a-run-executes)) or `agent`,
+  whose run is one task of an agent ([jobs that name an agent](repo-agents.md#jobs-that-name-an-agent)).
 - **`permissions`,** optional: what the run's token may do, within the ceiling; `[repo.read, annotations.write]` by
   default ([Who a run is](#who-a-run-is)).
 - **Checked strictly, as the merge requirements are.** Unknown keys, a key named twice, a misspelt trigger, a secret's
@@ -219,9 +220,9 @@ next attempt.
 | --- | --- | --- |
 | Waiting | Pending: `waits for a member to start it` | The tip was pushed from outside the organization, and `main` doesn't let such runs start ([below](#the-outside-push-gate)) |
 | Queued | Pending | Waiting for the controller, or for room in the organization's quota |
-| Running | In progress | Its pod started, or its webhook was delivered |
-| Succeeded | Successful | Exit code 0, or the webhook's receiver reported Successful |
-| Failed | Failed, with the reason | Any other exit, a timeout, a pod that vanished, a refusal: a secret the job may not read, a pod spec jobs may not use, an installation that runs no pods |
+| Running | In progress | Its pod started, its webhook was delivered, or its agent's task was assigned |
+| Succeeded | Successful | Exit code 0, the webhook's receiver reported Successful, or the agent's task finished |
+| Failed | Failed, with the reason | Any other exit, a timeout, a pod that vanished, a refusal: a secret the job may not read, a pod spec jobs may not use, an installation that runs no pods, an agent's task that failed or was cancelled, no agent of the job's name |
 | Cancelled | Failed: `cancelled by …` or `superseded by #n` | A member with `jobs.run` cancelled it, or a newer run superseded it |
 
 - **Runs are their own queue.** A controller replica claims a queued run `FOR UPDATE SKIP LOCKED` under a lease, as the
@@ -258,7 +259,8 @@ A newer push supersedes a waiting run. `manual`, `event`, `tag` and `schedule` r
 ## Where a run executes
 
 **Agreed** (product): pod specs in Cobranch's own cluster; webhooks for anything elsewhere. A `script` is a pod of one
-container.
+container. An `agent`'s run executes as one task of that agent, in the agent's own pod and image ([jobs that name an
+agent](repo-agents.md#jobs-that-name-an-agent)); the rest of this section is about pods.
 
 ### Job namespaces
 
@@ -386,7 +388,8 @@ The chart adds one workload and the Kubernetes access it needs.
 
 Cluster-scoped names start with the release’s namespace, so two installations of one release name never share them; the
 job namespaces name the controller’s role as their owner, so uninstalling deletes them; the servers mount a token for
-`jobs-logs`. `jobs.pods: false` renders none of it: the controller still delivers webhooks; pods and scripts don’t run.
+`jobs-logs`. `jobs.pods: false` renders none of it: the controller still delivers webhooks and assigns agents’ tasks;
+pods and scripts don’t run.
 
 | Object | What it allows |
 | --- | --- |
@@ -402,7 +405,7 @@ job namespaces name the controller’s role as their owner, so uninstalling dele
   Cluster-scoped objects carry the release's namespace in their names, so two installations of one release name never
   share them; `jobs.admissionPolicy: false` leaves the holding to the cluster's own policies.
 - **`jobs.pods: false`** renders none of the RBAC and no policy, for an operator who can't grant it: the controller
-  still runs, without a Kubernetes token, and delivers webhooks; pod and script runs fail with
+  still runs, without a Kubernetes token, delivers webhooks and assigns agents' tasks; pod and script runs fail with
   `this installation runs no pods`, and no server mounts a token.
 
 | Value | Default | What it sets |

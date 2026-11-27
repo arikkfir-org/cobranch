@@ -60,8 +60,8 @@ func (a *Authorizer) Holds(ctx context.Context, principalID uuid.UUID, scope Sco
 		return nil, fmt.Errorf("reading %s's permissions: %w", principalID, err)
 	}
 	permissions = widened(ctx, principalID, scope, scopeID, narrowed(ctx, principalID, permissions))
-	if assigner, capped := assignedBy(ctx, principalID); capped {
-		if permissions, err = a.capped(ctx, assigner, permissions, scope, scopeID); err != nil {
+	if task, capped := assignedBy(ctx, principalID); capped {
+		if permissions, err = a.capped(ctx, task, permissions, scope, scopeID); err != nil {
 			return nil, err
 		}
 	}
@@ -105,26 +105,44 @@ func narrowed(ctx context.Context, principalID uuid.UUID, held []string) []strin
 }
 
 // assignedBy reports whether the request comes with a task token of principalID's whose assigner caps what
-// principalID holds, and who that assigner is: uuid.Nil once the assigner is gone, when the token holds nothing. A task
-// Cobranch started names the agent itself, whose own grants are the cap.
-func assignedBy(ctx context.Context, principalID uuid.UUID) (uuid.UUID, bool) {
+// principalID holds, and that task's grant, whose AssignerID is uuid.Nil once the assigner is gone, when the token
+// holds nothing. A task Cobranch started names the agent itself, whose own grants are the cap.
+func assignedBy(ctx context.Context, principalID uuid.UUID) (TaskGrant, bool) {
 	v, ok := Viewer(ctx)
 	if !ok || v.Credential.Kind != CredentialTaskToken || v.User.ID != principalID || v.Credential.Task.AssignerID == principalID {
-		return uuid.Nil, false
+		return TaskGrant{}, false
 	}
-	return v.Credential.Task.AssignerID, true
+	return v.Credential.Task, true
 }
 
-// capped keeps of held what the assigner holds at the scope too: nothing for uuid.Nil.
-func (a *Authorizer) capped(ctx context.Context, assigner uuid.UUID, held []string, scope Scope, scopeID uuid.UUID) ([]string, error) {
-	if assigner == uuid.Nil {
+// runWithholds are what a job's task never may, whatever its job declared: it checks a commit, and pushes nothing.
+var runWithholds = []string{"repo.push", "repo.merge", "repo.bypass"}
+
+// capped keeps of held what the task's assigner holds at the scope too: nothing once the assigner is gone. A job's
+// task is capped by what the job's run may do, as the run's own token is (widened), and pushes nothing.
+func (a *Authorizer) capped(ctx context.Context, task TaskGrant, held []string, scope Scope, scopeID uuid.UUID) ([]string, error) {
+	if task.AssignerID == uuid.Nil || ended(task) {
 		return nil, nil
 	}
-	theirs, err := a.grants.Permissions(ctx, assigner, scope, scopeID)
+	theirs, err := a.grants.Permissions(ctx, task.AssignerID, scope, scopeID)
 	if err != nil {
-		return nil, fmt.Errorf("reading the permissions of %s, who assigned the task: %w", assigner, err)
+		return nil, fmt.Errorf("reading the permissions of %s, who assigned the task: %w", task.AssignerID, err)
+	}
+	if run := task.Run; run.RepoID != uuid.Nil {
+		switch {
+		case scope == ScopeOrganization && scopeID == task.OrgID:
+			theirs = append(theirs, "org.read")
+		case scope == ScopeRepository && scopeID == run.RepoID:
+			theirs = append(theirs, run.Permissions...)
+		}
+		theirs = slices.DeleteFunc(theirs, func(p string) bool { return slices.Contains(runWithholds, p) })
 	}
 	return slices.DeleteFunc(slices.Clone(held), func(p string) bool { return !slices.Contains(theirs, p) }), nil
+}
+
+// ended reports whether task is a job's run's whose run ended, which leaves it nothing to do.
+func ended(task TaskGrant) bool {
+	return task.Job && task.Run.RepoID == uuid.Nil
 }
 
 // Can reports whether principalID holds permission at the scope: nil when it does, ErrForbidden when it doesn't.
@@ -155,16 +173,24 @@ func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.U
 		!slices.Contains(ids, run.RepoID) {
 		ids = append(ids, run.RepoID)
 	}
-	assigner, capped := assignedBy(ctx, principalID)
+	task, capped := assignedBy(ctx, principalID)
 	switch {
 	case !capped:
 		return ids, nil
-	case assigner == uuid.Nil:
+	case task.AssignerID == uuid.Nil, ended(task):
 		return nil, nil
 	}
-	theirs, err := a.grants.Repositories(ctx, assigner, orgID, permission)
+	theirs, err := a.grants.Repositories(ctx, task.AssignerID, orgID, permission)
 	if err != nil {
-		return nil, fmt.Errorf("listing the repositories where %s, who assigned the task, holds %s: %w", assigner, permission, err)
+		return nil, fmt.Errorf("listing the repositories where %s, who assigned the task, holds %s: %w", task.AssignerID, permission, err)
+	}
+	if run := task.Run; run.RepoID != uuid.Nil {
+		if slices.Contains(runWithholds, permission) {
+			return nil, nil
+		}
+		if task.OrgID == orgID && slices.Contains(run.Permissions, permission) {
+			theirs = append(theirs, run.RepoID)
+		}
 	}
 	kept := make([]uuid.UUID, 0, len(ids))
 	for _, id := range ids {
@@ -187,16 +213,16 @@ func (a *Authorizer) Among(ctx context.Context, principalID uuid.UUID, permissio
 	if err != nil {
 		return nil, fmt.Errorf("listing where %s holds %s: %w", principalID, permission, err)
 	}
-	assigner, capped := assignedBy(ctx, principalID)
+	task, capped := assignedBy(ctx, principalID)
 	switch {
 	case !capped:
 		return ids, nil
-	case assigner == uuid.Nil:
+	case task.AssignerID == uuid.Nil, ended(task):
 		return nil, nil
 	}
-	theirs, err := list(ctx, assigner)
+	theirs, err := list(ctx, task.AssignerID)
 	if err != nil {
-		return nil, fmt.Errorf("listing where %s, who assigned the task, holds %s: %w", assigner, permission, err)
+		return nil, fmt.Errorf("listing where %s, who assigned the task, holds %s: %w", task.AssignerID, permission, err)
 	}
 	return slices.DeleteFunc(ids, func(id uuid.UUID) bool { return !slices.Contains(theirs, id) }), nil
 }

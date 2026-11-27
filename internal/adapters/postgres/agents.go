@@ -295,6 +295,7 @@ type taskRow struct {
 	agent                               string
 	assigner, canceller, repo, branchOf *string
 	spent, input, output, cap           int64
+	run                                 *int64
 }
 
 // task is the domain's view of a task's row.
@@ -318,6 +319,9 @@ func task(r taskRow) agents.Task {
 		out.IssueID = *t.IssueID
 	}
 	out.SHA = orEmpty(t.Sha)
+	if t.RunID != nil && r.run != nil {
+		out.RunID, out.RunNumber = *t.RunID, *r.run
+	}
 	out.Spent, out.InputTokens, out.OutputTokens, out.Cap = agents.USD(r.spent), r.input, r.output, agents.USD(r.cap)
 	return out
 }
@@ -367,7 +371,7 @@ func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFi
 	out := make([]agents.Task, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName, r.Spent, r.InputTokens,
-			r.OutputTokens, r.Cap}))
+			r.OutputTokens, r.Cap, r.RunNumber}))
 	}
 	return out, nil
 }
@@ -384,7 +388,7 @@ func findTask(ctx context.Context, q *queries.Queries, orgID uuid.UUID, number i
 		return agents.Task{}, fmt.Errorf("finding task %d: %w", number, notFound(err))
 	}
 	return task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName, r.Spent, r.InputTokens, r.OutputTokens,
-		r.Cap}), nil
+		r.Cap, r.RunNumber}), nil
 }
 
 // Assign numbers the task in its organization and records it for actor, Queued, and answers it; orgs.ErrNotFound

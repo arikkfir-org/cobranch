@@ -205,6 +205,9 @@ type Task struct {
 	IssueID uuid.UUID
 	// SHA is the commit it works at, such as the head a review task reviews; empty for none.
 	SHA string
+	// RunID and RunNumber name the job's run a task of KindJob is; uuid.Nil and 0 for none, and once the run is gone.
+	RunID     uuid.UUID
+	RunNumber int64
 	// Private is whether its assigner asked for it in their private conversation: it shows what it is and where it
 	// works to them alone, and to others only Redacted, as a place in its agent's queue.
 	Private bool

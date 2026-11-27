@@ -241,6 +241,53 @@ func TestAuthorizerUnderATaskToken(t *testing.T) {
 	}
 }
 
+// TestAuthorizerUnderAJobsTaskToken caps the task of a job's run by what the run may do, as the run's own token does,
+// and never lets it push.
+func TestAuthorizerUnderAJobsTaskToken(t *testing.T) {
+	agent, job, org, repo, other := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	g := byPrincipal{
+		agent: {held: []string{"annotations.write", "org.read", "repo.push", "repo.read", "secrets.read"}, repos: []uuid.UUID{repo, other}},
+		job:   {held: []string{"secrets.read"}, repos: []uuid.UUID{repo}},
+	}
+	token := func(run auth.RunGrant) context.Context {
+		return auth.WithViewer(context.Background(), auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: agent, Kind: auth.KindAgent}},
+			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent,
+				Task: auth.TaskGrant{ID: uuid.New(), OrgID: org, AssignerID: job, Job: true, Run: run}}})
+	}
+	running := auth.RunGrant{RepoID: repo, Permissions: []string{"annotations.write", "repo.push", "repo.read"}}
+	tests := []struct {
+		name       string
+		ctx        context.Context
+		scope      auth.Scope
+		scopeID    uuid.UUID
+		wantHeld   []string
+		permission string
+		wantRepos  []uuid.UUID
+	}{
+		{name: "what the run declared, in its repository, pushing nothing", ctx: token(running), scope: auth.ScopeRepository, scopeID: repo,
+			wantHeld: []string{"annotations.write", "repo.read", "secrets.read"}, permission: "repo.read", wantRepos: []uuid.UUID{repo}},
+		{name: "its organization, which it reads", ctx: token(running), scope: auth.ScopeOrganization, scopeID: org,
+			wantHeld: []string{"org.read", "secrets.read"}, permission: "annotations.write", wantRepos: []uuid.UUID{repo}},
+		{name: "another repository, where the job holds its grants alone", ctx: token(running), scope: auth.ScopeRepository, scopeID: other,
+			wantHeld: []string{"secrets.read"}, permission: "repo.push"},
+		{name: "a run that ended leaves it nothing, not even the job's grants", ctx: token(auth.RunGrant{}), scope: auth.ScopeRepository,
+			scopeID: repo, permission: "secrets.read"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := auth.NewAuthorizer(g)
+			held, err := a.Holds(tt.ctx, agent, tt.scope, tt.scopeID)
+			if err != nil || !slices.Equal(held, tt.wantHeld) {
+				t.Errorf("Holds() = %v, %v, want %v", held, err, tt.wantHeld)
+			}
+			repos, err := a.Repositories(tt.ctx, agent, org, tt.permission)
+			if err != nil || !slices.Equal(repos, tt.wantRepos) {
+				t.Errorf("Repositories(%s) = %v, %v, want %v", tt.permission, repos, err, tt.wantRepos)
+			}
+		})
+	}
+}
+
 // TestAuthorizerUnderADeliveryToken holds a delivery's token, which acts as its target while it renders, to reading
 // its organization and repository, and to uploading its own delivery's render.
 func TestAuthorizerUnderADeliveryToken(t *testing.T) {

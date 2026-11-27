@@ -58,6 +58,7 @@ type AgentTask struct {
 	Sha          *string
 	Private      bool
 	CapReached   bool
+	RunID        *uuid.UUID
 }
 
 type AgentTaskEntry struct {

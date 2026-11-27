@@ -51,7 +51,10 @@ type Run struct {
 	RerunOf int64
 	// Definition is the job as it was declared when the run was queued.
 	Definition jobs.Job
-	State      jobs.State
+	// Task is the number of the agent's task the run of a job that names an agent is, in its organization; 0 for any
+	// other run, and before the task is assigned. Only a run read alone names it.
+	Task  int64
+	State jobs.State
 	// Reason says why it waits, failed or was cancelled.
 	Reason string
 	// StartedBy is who started it from Waiting, or re-ran it; nil for any other run.

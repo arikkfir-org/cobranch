@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -38,8 +39,16 @@ func (s *AuthStore) TaskToken(ctx context.Context, tokenHash []byte) (auth.Crede
 	if err != nil {
 		return auth.Credential{}, auth.User{}, err
 	}
+	grant := auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner, Private: row.Private, ThreadID: orNil(row.ThreadID),
+		Job: row.OfJob}
+	if row.RunRepoID != nil {
+		grant.Run.RepoID = *row.RunRepoID
+		if err := json.Unmarshal(row.RunPermissions, &grant.Run.Permissions); err != nil {
+			return auth.Credential{}, auth.User{}, fmt.Errorf("reading the permissions of task %s's run: %w", row.TaskID, err)
+		}
+	}
 	return auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent.ID, CreatedAt: row.CreatedAt, ExpiresAt: row.ExpiresAt,
-		Task: auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner, Private: row.Private, ThreadID: orNil(row.ThreadID)}}, agent, nil
+		Task: grant}, agent, nil
 }
 
 // DeleteExpiredTaskTokens deletes the task tokens that expired before now, and those of tasks that ended.

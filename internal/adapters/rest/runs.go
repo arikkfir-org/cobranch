@@ -26,6 +26,9 @@ func run(r code.Run) (Run, error) {
 	if r.RerunOf != 0 {
 		out.RerunOf = &r.RerunOf
 	}
+	if r.Task != 0 {
+		out.Task = &r.Task
+	}
 	if err := recode(r.Definition, &out.Definition); err != nil {
 		return Run{}, fmt.Errorf("encoding run #%d's definition: %w", r.Number, err)
 	}

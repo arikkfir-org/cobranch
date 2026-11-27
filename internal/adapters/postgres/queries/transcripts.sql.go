@@ -142,14 +142,15 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (int64, erro
 }
 
 const taskByID = `-- name: TaskByID :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, t.private, t.cap_reached, t.run_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug, o.issue_key, ag.instructions AS agent_instructions,
     i.number AS issue_number, ti.number AS thread_issue_number, th.conversation_id, cr.slug AS conversation_repo_slug,
-    cv.agent_id AS conversation_agent_id, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(ag.cap, 0)::bigint AS cap
+    cv.agent_id AS conversation_agent_id, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(ag.cap, 0)::bigint AS cap,
+    jr.number AS run_number
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
-    LEFT JOIN issues i ON i.id = t.issue_id
+    LEFT JOIN issues i ON i.id = t.issue_id LEFT JOIN job_runs jr ON jr.id = t.run_id
     LEFT JOIN chat_threads th ON th.id = t.thread_id LEFT JOIN issues ti ON ti.id = th.issue_id
     LEFT JOIN conversations cv ON cv.id = th.conversation_id LEFT JOIN repositories cr ON cr.id = cv.repo_id
     CROSS JOIN LATERAL (
@@ -179,6 +180,7 @@ type TaskByIDRow struct {
 	InputTokens          int64
 	OutputTokens         int64
 	Cap                  int64
+	RunNumber            *int64
 }
 
 // TaskByID finds a task by its ID, with the names Task gives it, its organization's slug and issue key, its agent's
@@ -212,6 +214,7 @@ func (q *Queries) TaskByID(ctx context.Context, id uuid.UUID) (TaskByIDRow, erro
 		&i.AgentTask.Sha,
 		&i.AgentTask.Private,
 		&i.AgentTask.CapReached,
+		&i.AgentTask.RunID,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,
@@ -229,6 +232,7 @@ func (q *Queries) TaskByID(ctx context.Context, id uuid.UUID) (TaskByIDRow, erro
 		&i.InputTokens,
 		&i.OutputTokens,
 		&i.Cap,
+		&i.RunNumber,
 	)
 	return i, err
 }

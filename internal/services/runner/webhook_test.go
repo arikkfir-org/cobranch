@@ -64,7 +64,7 @@ func TestDeliver(t *testing.T) {
 			p := &poster{err: tt.postErr}
 			set := settings
 			set.Pods = tt.pods
-			svc := runner.NewService(s, &cluster{}, tt.vault, archive{}, p, set)
+			svc := runner.NewService(s, &cluster{}, tt.vault, archive{}, p, authz{}, set)
 			svc.SetClock(func() time.Time { return now })
 			if ok, err := svc.Dispatch(context.Background()); !ok || err != nil {
 				t.Fatalf("Dispatch() = %t, %v", ok, err)
@@ -120,7 +120,7 @@ func TestFollowExpiresWebhooks(t *testing.T) {
 		Timeout: 2 * time.Hour}
 	recent := runner.Running{ID: id("2ece"), OrgID: id("0001"), RepoID: id("0002"), Number: 5, StartedAt: now.Add(-10 * time.Minute)}
 	s := &store{webhooks: []runner.Running{late, ownTimeout, recent}, tokens: map[uuid.UUID]time.Time{}}
-	svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, settings)
+	svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, authz{}, settings)
 	svc.SetClock(func() time.Time { return now })
 	if err := svc.Follow(context.Background()); err != nil {
 		t.Fatal(err)

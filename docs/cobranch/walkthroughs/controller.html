@@ -57,7 +57,7 @@
     <tr><td class="p">Pod holds</td><td>An init container that checks the commit out (<code>cobranch checkout</code>), then the job's script</td><td><code>cobranch agent</code> (the harness) beside <code>cobranch model-proxy</code>, the one container with the model's key</td><td><code>cobranch render</code>, which uploads what the commit renders</td></tr>
     <tr><td class="p">After the pod</td><td>Keep the logs, masked, in the object store; set the run's state</td><td>A task that waits loses its pod after the idle time and gets a new one when someone answers</td><td>Apply the render to the target, prune what it dropped, follow health until Healthy</td></tr>
     <tr><td class="p">Schedules</td><td>Cron-triggered runs, every minute</td><td>None</td><td>A resync of each environment's last render, every 10 minutes; a teardown of each of a deleted organization's environments, within a minute</td></tr>
-    <tr><td class="p">Besides pods</td><td>Posts webhook jobs' runs, signed, to their receivers</td><td>Renews a long task's token</td><td>Tears an environment down when its branch goes</td></tr>
+    <tr><td class="p">Besides pods</td><td>Posts webhook jobs' runs, signed, to their receivers; starts an agent job's run as its agent's task, and ends the run as the task ends</td><td>Renews a long task's token</td><td>Tears an environment down when its branch goes</td></tr>
     <tr><td class="p">Reaches out through</td><td><code>jobcluster</code>, <code>webhook</code></td><td><code>jobcluster</code></td><td><code>jobcluster</code> for the render; <code>incluster</code> or <code>remote</code> → <code>cluster</code> for the target</td></tr>
   </table></div>
 </section>

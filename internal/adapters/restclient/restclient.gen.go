@@ -852,7 +852,7 @@ type Task struct {
 	InputTokens  int64  `json:"inputTokens"`
 	Instructions string `json:"instructions"`
 
-	// Kind What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
+	// Kind What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its agent.
 	Kind string `json:"kind"`
 
 	// Number Counts the organization's tasks from 1.
@@ -870,6 +870,9 @@ type Task struct {
 	// RepositoryId The repository it works in; absent for none.
 	RepositoryId   *openapi_types.UUID `json:"repositoryId,omitempty"`
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
+
+	// Run The number of the job's run it is, in its repository, for a task of kind job; absent for any other, and once the run is gone.
+	Run *int64 `json:"run,omitempty"`
 
 	// Sha The commit it works at, such as the head a review task reviews; absent for none.
 	Sha *string `json:"sha,omitempty"`

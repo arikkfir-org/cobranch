@@ -1056,7 +1056,7 @@ type IssueTask struct {
 // A job as /cobranch.yaml declared it.
 type Job struct {
 	Name string `json:"name"`
-	// pod, script or webhook.
+	// pod, script, webhook or agent.
 	Kind string `json:"kind"`
 	// What triggers it, as /cobranch.yaml's on declares it.
 	On map[string]any `json:"on"`
@@ -1068,6 +1068,10 @@ type Job struct {
 	Image *string `json:"image,omitempty"`
 	// Where a webhook posts its runs.
 	WebhookURL *string `json:"webhookUrl,omitempty"`
+	// The agent a run is a task of, by its name, the repository's first and then the organization's, for an agent's job.
+	Agent *string `json:"agent,omitempty"`
+	// What each run asks of the agent, after its own instructions, for an agent's job.
+	AgentInstructions *string `json:"agentInstructions,omitempty"`
 	// The environment variables a run receives secrets in, each with the secret's ID.
 	Secrets map[string]any `json:"secrets,omitempty"`
 	// What a run's token may do, within the repository's job ceiling.
@@ -1893,7 +1897,7 @@ type Task struct {
 	// Counts the organization's tasks from 1.
 	Number int              `json:"number"`
 	Agent  *CommitPrincipal `json:"agent"`
-	// What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, and issue_chat for one asked in an issue's.
+	// What it is for: assigned for a task a principal assigned, chat for one a message asked for in a branch's chat or a private conversation, issue_chat for one asked in an issue's, and job for a run of a job that names its agent.
 	Kind string `json:"kind"`
 	// Whether its assigner asked for it in their private conversation. To anyone else such a task shows only its number, agent, kind, state and times, which place it in its agent's queue: its title, instructions, reason and summary are empty and nothing says who assigned it or where it works.
 	Private bool `json:"private"`
@@ -1911,7 +1915,9 @@ type Task struct {
 	// The thread of the chat it talks in, its branch's, its issue's or a private conversation; null for none.
 	ThreadID *string `json:"threadId,omitempty"`
 	// The commit it works at, such as the head a review task reviews; null for none.
-	Sha   *string   `json:"sha,omitempty"`
+	Sha *string `json:"sha,omitempty"`
+	// The number of the job's run it is, in its repository, for a task of kind job; null for any other, and once the run is gone.
+	Run   *int      `json:"run,omitempty"`
 	State TaskState `json:"state"`
 	// Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`

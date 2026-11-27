@@ -38,6 +38,32 @@ func withRuns(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *aut
 	}
 }
 
+// withAgentRun adds a run of ai/check, which names agent checker, to website before next's setup: #1 at b, running as
+// task 12.
+func withAgentRun(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		def := jobs.Job{Name: "ai/check", Permissions: jobs.DefaultPermissions, On: jobs.Triggers{Push: &jobs.PushTrigger{}},
+			Agent: &jobs.Agent{Name: "checker", Instructions: "Check the links."}}
+		f.codeStore.AddRun(f.website.ID, code.Run{SHA: shaOf("b"), Ref: "refs/heads/main", Definition: def, State: jobs.StateRunning, Task: 12,
+			Job: code.Principal{ID: uuid.New(), DisplayName: def.Name}, Trigger: jobs.Event{Kind: jobs.EventPush, SHA: shaOf("b"), Ref: "refs/heads/main"}})
+		return next(f)
+	}
+}
+
+func TestAgentRunQueries(t *testing.T) {
+	repo := func(fields string) func(*orgFixture) string {
+		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
+	}
+	runOrgCases(t, []orgCase{
+		{name: "an agent's run names its task and its agent", viewer: withAgentRun(maxHolding(auth.RoleReader)),
+			document: repo(`run(number: 1) { task definition { kind agent agentInstructions script webhookUrl } logs { container } steps { name } }`),
+			want: []string{`"task":12`, `"definition":{"kind":"agent","agent":"checker","agentInstructions":"Check the links.","script":null,"webhookUrl":null}`,
+				`"logs":[]`, `"steps":[]`}},
+		{name: "a script's run names no task", viewer: withRuns(maxHolding(auth.RoleReader)), document: repo(`run(number: 1) { task definition { agent } }`),
+			want: []string{`"task":null`, `"definition":{"agent":null}`}},
+	})
+}
+
 func TestRunQueries(t *testing.T) {
 	repo := func(fields string) func(*orgFixture) string {
 		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)

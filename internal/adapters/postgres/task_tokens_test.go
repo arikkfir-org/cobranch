@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestAuthStoreTaskTokens(t *testing.T) {
 	}
 	want := auth.TaskGrant{ID: task.ID, OrgID: f.acme.ID, AssignerID: f.max}
 	c, agent, err := s.TaskToken(ctx, live)
-	if err != nil || c.Kind != auth.CredentialTaskToken || c.Task != want || c.PrincipalID != f.scout.ID || !c.ExpiresAt.Equal(expires) ||
+	if err != nil || c.Kind != auth.CredentialTaskToken || !reflect.DeepEqual(c.Task, want) || c.PrincipalID != f.scout.ID || !c.ExpiresAt.Equal(expires) ||
 		agent.ID != f.scout.ID || agent.Kind != auth.KindAgent {
 		t.Fatalf("TaskToken() = %+v, %+v, %v", c, agent, err)
 	}

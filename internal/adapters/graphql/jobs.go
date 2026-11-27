@@ -27,6 +27,7 @@ type Run struct {
 	Attempt    int              `json:"attempt"`
 	RerunOf    *int             `json:"rerunOf,omitempty"`
 	Definition *Job             `json:"definition"`
+	Task       *int             `json:"task,omitempty"`
 	State      RunState         `json:"state"`
 	Reason     string           `json:"reason"`
 	StartedBy  *CommitPrincipal `json:"startedBy,omitempty"`
@@ -56,6 +57,10 @@ func run(r code.Run) (*Run, error) {
 	if r.RerunOf != 0 {
 		first := int(r.RerunOf)
 		out.RerunOf = &first
+	}
+	if r.Task != 0 {
+		task := int(r.Task)
+		out.Task = &task
 	}
 	return out, nil
 }
@@ -113,6 +118,9 @@ func job(j jobs.Job) (*Job, error) {
 	}
 	if j.Webhook != nil {
 		out.WebhookURL = &j.Webhook.URL
+	}
+	if j.Agent != nil {
+		out.Agent, out.AgentInstructions = &j.Agent.Name, nonEmpty(j.Agent.Instructions)
 	}
 	if j.Timeout != 0 {
 		timeout := time.Duration(j.Timeout).String()

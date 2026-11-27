@@ -369,9 +369,11 @@ func (q *Queries) RepositoryRolePermissions(ctx context.Context, name string) ([
 }
 
 const runByNumber = `-- name: RunByNumber :one
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind,
+  t.number AS task_number
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
+  LEFT JOIN agent_tasks t ON t.run_id = r.id
 WHERE r.repo_id = $1 AND r.number = $2
 `
 
@@ -382,9 +384,11 @@ type RunByNumberRow struct {
 	CausedByID    *uuid.UUID
 	CausedByName  *string
 	CausedByKind  *string
+	TaskNumber    *int64
 }
 
-// RunByNumber finds one of a repository's runs by number, as RunsOf lists it.
+// RunByNumber finds one of a repository's runs by number, as RunsOf lists it, with the number of its task: an agent's
+// job's run has one.
 func (q *Queries) RunByNumber(ctx context.Context, repoID uuid.UUID, number int64) (RunByNumberRow, error) {
 	row := q.db.QueryRow(ctx, runByNumber, repoID, number)
 	var i RunByNumberRow
@@ -414,6 +418,7 @@ func (q *Queries) RunByNumber(ctx context.Context, repoID uuid.UUID, number int6
 		&i.CausedByID,
 		&i.CausedByName,
 		&i.CausedByKind,
+		&i.TaskNumber,
 	)
 	return i, err
 }
@@ -524,9 +529,11 @@ func (q *Queries) RunSteps(ctx context.Context, runID uuid.UUID) ([]JobRunStep, 
 }
 
 const runsOf = `-- name: RunsOf :many
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind,
+  t.number AS task_number
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
+  LEFT JOIN agent_tasks t ON t.run_id = r.id
 WHERE r.repo_id = $1 AND ($2::bigint = 0 OR r.number < $2::bigint)
   AND ($3::text = '' OR r.sha = $3::text)
   AND ($4::text = '' OR j.name = $4::text)
@@ -557,12 +564,13 @@ type RunsOfRow struct {
 	CausedByID    *uuid.UUID
 	CausedByName  *string
 	CausedByKind  *string
+	TaskNumber    *int64
 }
 
 // RunsOf lists a page of a repository's runs, newest first, before run number before (0 for the newest), each with its
-// job's name, who started it and who caused it: who started it, else its trigger's actor. Each filter left empty keeps
-// every run: the commit, the job's name, the ref, the states, and a query that the job's name or the branch or tag
-// holds, ignoring case, or that the commit starts with.
+// job's name, who started it and who caused it: who started it, else its trigger's actor; and an agent's run's task's
+// number. Each filter left empty keeps every run: the commit, the job's name, the ref, the states, and a query that the
+// job's name or the branch or tag holds, ignoring case, or that the commit starts with.
 func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, error) {
 	rows, err := q.db.Query(ctx, runsOf,
 		arg.RepoID,
@@ -607,6 +615,7 @@ func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, er
 			&i.CausedByID,
 			&i.CausedByName,
 			&i.CausedByKind,
+			&i.TaskNumber,
 		); err != nil {
 			return nil, err
 		}

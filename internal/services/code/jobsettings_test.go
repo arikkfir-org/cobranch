@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,15 @@ func TestParseSettingsJobs(t *testing.T) {
 			settings: "jobs:\n  ci/test:\n    on: {push: }\n    pod:\n      containers:\n        - name: test\n          image: golang:1.27\n",
 			jobs: []jobs.Job{{Name: "ci/test", On: jobs.Triggers{Push: &jobs.PushTrigger{}}, Permissions: jobs.DefaultPermissions, Checkout: true,
 				Pod: json.RawMessage(`{"containers":[{"image":"golang:1.27","name":"test"}]}`)}}},
+		{name: "an agent", repository: defaults,
+			settings: "jobs:\n  ai/site:\n    on: {push: }\n    agent:\n      name: site-checker\n      instructions: |\n        Check the links.\n" +
+				"    permissions: [repo.read, annotations.write]\n    timeout: 30m\n",
+			jobs: []jobs.Job{{Name: "ai/site", On: jobs.Triggers{Push: &jobs.PushTrigger{}}, Permissions: []string{"annotations.write", "repo.read"},
+				Timeout: jobs.Duration(30 * time.Minute), Agent: &jobs.Agent{Name: "site-checker", Instructions: "Check the links."}}}},
+		{name: "an organization's agent by its name alone", repository: defaults,
+			settings: "jobs:\n  ai/review:\n    on: {manual: }\n    agent: {name: AI reviewer}\n",
+			jobs: []jobs.Job{{Name: "ai/review", On: jobs.Triggers{Manual: &jobs.ManualTrigger{}}, Permissions: jobs.DefaultPermissions,
+				Agent: &jobs.Agent{Name: "AI reviewer"}}}},
 	})
 }
 
@@ -119,15 +129,27 @@ func TestParseSettingsRefused(t *testing.T) {
 			wantErr: "/cobranch.yaml: line 2: a job's name must be 1 to 100 lowercase letters, digits, '-', '_', '.' and '/', starting with a letter or digit"},
 		{name: "a delivery's name", settings: "jobs:\n  delivery/prod:\n    on: {push: }\n    script: x\n",
 			wantErr: "/cobranch.yaml: line 2: a job's name can't start with delivery/, which deliveries report"},
-		{name: "a job of nothing", settings: "jobs:\n  a:\n", wantErr: "/cobranch.yaml: line 2: job a needs on and one of pod, script or webhook"},
+		{name: "a job of nothing", settings: "jobs:\n  a:\n", wantErr: "/cobranch.yaml: line 2: job a needs on and one of pod, script, webhook or agent"},
 		{name: "no trigger", settings: "jobs:\n  a:\n    script: x\n", wantErr: "/cobranch.yaml: line 3: job a needs on, naming what triggers it"},
 		{name: "an empty on", settings: "jobs:\n  a:\n    on: {}\n    script: x\n", wantErr: "/cobranch.yaml: line 3: job a needs a trigger under on"},
 		{name: "a misspelt trigger", settings: "jobs:\n  a:\n    on: {pushed: }\n    script: x\n", wantErr: `/cobranch.yaml: line 3: on takes no "pushed"`},
-		{name: "no work", settings: "jobs:\n  a:\n    on: {push: }\n", wantErr: "/cobranch.yaml: line 3: job a needs exactly one of pod, script or webhook"},
+		{name: "no work", settings: "jobs:\n  a:\n    on: {push: }\n", wantErr: "/cobranch.yaml: line 3: job a needs exactly one of pod, script, webhook or agent"},
 		{name: "two kinds of work", settings: "jobs:\n  a:\n    on: {push: }\n    script: x\n    pod: {containers: [{name: a, image: b}]}\n",
-			wantErr: "/cobranch.yaml: line 3: job a needs exactly one of pod, script or webhook"},
+			wantErr: "/cobranch.yaml: line 3: job a needs exactly one of pod, script, webhook or agent"},
+		{name: "an agent without a name", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {instructions: x}\n",
+			wantErr: "/cobranch.yaml: line 4: agent needs a name: the repository's agent's or the organization's"},
+		{name: "an agent's misspelt key", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {name: x, image: y}\n",
+			wantErr: `/cobranch.yaml: line 4: agent takes no "image"`},
+		{name: "an agent's job with secrets", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {name: x}\n    secrets: {A: " + secretID + "}\n",
+			wantErr: "/cobranch.yaml: line 5: secrets goes with pod or script: an agent has its own"},
+		{name: "an agent's job with a checkout", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {name: x}\n    checkout: true\n",
+			wantErr: "/cobranch.yaml: line 5: checkout goes with pod or script: an agent has its own"},
+		{name: "an agent's job with an image", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {name: x}\n    image: y\n",
+			wantErr: "/cobranch.yaml: line 5: image goes with script only: an agent runs in its own image"},
+		{name: "an agent's name too long", settings: "jobs:\n  a:\n    on: {push: }\n    agent: {name: " + strings.Repeat("x", 101) + "}\n",
+			wantErr: "/cobranch.yaml: line 4: name must name an agent, in 1 to 100 characters"},
 		{name: "an image without a script", settings: "jobs:\n  a:\n    on: {push: }\n    pod: {containers: [{name: a, image: b}]}\n    image: x\n",
-			wantErr: "/cobranch.yaml: line 5: image goes with script only"},
+			wantErr: "/cobranch.yaml: line 5: image goes with script only: an agent runs in its own image"},
 		{name: "a pod on the host", settings: "jobs:\n  a:\n    on: {push: }\n    pod: {hostNetwork: true, containers: [{name: a, image: b}]}\n",
 			wantErr: "/cobranch.yaml: line 4: a job's pod may not set hostNetwork"},
 		{name: "a webhook over http", settings: "jobs:\n  a:\n    on: {push: }\n    webhook: {url: \"http://x.example\", signingSecret: " + secretID + "}\n",
