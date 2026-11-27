@@ -287,8 +287,8 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | Repositories, and the sidebar's | Repositories, each with its branches, main's status and last push | `repositories`, `branches`, `annotations`, `pushes`, `grants` |
 | Agents, an agent's page, Agents · Activity, and the sidebar's agents | Agents, and their tasks | `agents`, `agent_tasks`, `task_spend`, `grants` |
 | Artifacts, and the sidebar's | Artifacts the viewer may list or read | `artifacts`, `grants` |
-| Issues, a repository's Issues, and the sidebar's | The first page of issues the filters match, with the tabs' counts | `issues` (a label renamed touches its issues), `agent_tasks`, `branches`, `events` |
-| An issue's page | The issue, its activity and its linked branches; its comments follow in the conversation pane | `issues`, `events` (a branch linked or a task's progress writes one), `agent_tasks`, `branches` |
+| Issues, a repository's Issues, and the sidebar's | The first page of issues the filters match, with the tabs' counts | `issues` (a label renamed touches its issues), `agent_tasks`, `branches`, `branch_issues` |
+| An issue's page | The issue, its activity and its linked branches; its comments follow in the conversation pane | `issues`, `branch_issues` (a branch linked or unlinked), `agent_tasks` (a task's progress), `branches` |
 
 Settings · Secrets reads who may read each secret with a read per secret, which it doesn't follow: a grant on one secret
 alone shows at the page's next draw. Agents · Activity follows its newest page of tasks, and an agent's page its tasks;
