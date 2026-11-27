@@ -126,7 +126,7 @@ type AgentGrantInput struct {
 
 // A new agent.
 type AgentInput struct {
-	// 1 to 100 characters, unique in the organization in any case.
+	// 1 to 100 characters, unique in any case among the organization's own agents; a repository's agent may share it.
 	Name string `json:"name"`
 	// At most 1000 characters.
 	Description *string `json:"description,omitempty"`

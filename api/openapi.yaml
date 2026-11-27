@@ -2600,8 +2600,8 @@ paths:
       operationId: createAgent
       summary: >-
         Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every
-        permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case,
-        answers 409 agent.name_taken.
+        permission of each grant where it applies. An agent makes no agents. A name another of the organization's own
+        agents has, in any case, answers 409 agent.name_taken; a repository's agent may share it.
       parameters:
         - $ref: "#/components/parameters/org"
       requestBody:
@@ -11379,7 +11379,7 @@ components:
       properties:
         name:
           type: string
-          description: 1 to 100 characters, unique in the organization in any case.
+          description: 1 to 100 characters, unique in any case among the organization's own agents; a repository's agent may share it.
         description:
           type: string
           description: At most 1000 characters.

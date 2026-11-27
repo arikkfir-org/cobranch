@@ -1488,7 +1488,7 @@ type AgentInput struct {
 	// Instructions At most 20000 characters of Markdown.
 	Instructions *string `json:"instructions,omitempty"`
 
-	// Name 1 to 100 characters, unique in the organization in any case.
+	// Name 1 to 100 characters, unique in any case among the organization's own agents; a repository's agent may share it.
 	Name string `json:"name"`
 }
 
@@ -5634,7 +5634,7 @@ type ServerInterface interface {
 	// ListAgents The organization's agents by name, each with its grants, its own and those its repositories' main /cobranch.yaml declares, of the repositories the viewer reads; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org, params ListAgentsParams)
-	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
+	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another of the organization's own agents has, in any case, answers 409 agent.name_taken; a repository's agent may share it.
 	// (POST /orgs/{org}/agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request, org Org)
 	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in, and a repository's, which its main /cobranch.yaml retires, 409 agent.declared. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
@@ -42123,7 +42123,7 @@ type StrictServerInterface interface {
 	// ListAgents The organization's agents by name, each with its grants, its own and those its repositories' main /cobranch.yaml declares, of the repositories the viewer reads; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/agents)
 	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
-	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
+	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another of the organization's own agents has, in any case, answers 409 agent.name_taken; a repository's agent may share it.
 	// (POST /orgs/{org}/agents)
 	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
 	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in, and a repository's, which its main /cobranch.yaml retires, 409 agent.declared. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
