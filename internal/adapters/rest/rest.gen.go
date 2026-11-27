@@ -4783,10 +4783,28 @@ type GetBlobParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListBranchesParams defines parameters for ListBranches.
+type ListBranchesParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // DeleteBranchParams defines parameters for DeleteBranch.
 type DeleteBranchParams struct {
-	// IfMatch The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
+	// IfMatch The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", or the ETag a read of the branch answered, which starts with it, which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
 	IfMatch *IfMatchBranch `json:"If-Match,omitempty"`
+}
+
+// GetBranchParams defines parameters for GetBranch.
+type GetBranchParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListChatThreadsParams defines parameters for ListChatThreads.
@@ -4884,12 +4902,24 @@ type ListCommitsParams struct {
 	// Limit How many commits the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // ListCommitsParamsParents defines parameters for ListCommits.
 type ListCommitsParamsParents string
+
+// ListAnnotationsParams defines parameters for ListAnnotations.
+type ListAnnotationsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
 
 // DeleteAnnotationParams defines parameters for DeleteAnnotation.
 type DeleteAnnotationParams struct {
@@ -4919,6 +4949,9 @@ type ListReviewsParams struct {
 
 	// Limit How many reviews the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
@@ -5054,6 +5087,12 @@ type ListRunsParams struct {
 
 	// Limit How many runs the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetRunParams defines parameters for GetRun.
@@ -5790,15 +5829,15 @@ type ServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
-	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/branches)
-	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListBranchesParams)
 	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.
 	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch})
 	DeleteBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params DeleteBranchParams)
-	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. Its ETag starts with its head, so a deletion may name it in If-Match. With If-None-Match and wait, it waits up to wait seconds for the branch to change before it answers 304, so a client follows the branch by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
-	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchParams)
 	// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat)
 	ListChatThreads(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatThreadsParams)
@@ -5853,15 +5892,15 @@ type ServerInterface interface {
 	// UpdateViewedFiles Marks the viewer's files of the branch Viewed, or takes their marks off, as the merge patch (RFC 7396) names: a path given {"object": …} is marked at that object, {} marks a file the branch deletes, and null takes the mark off. A mark already at its object keeps the moment it was made. The change names the ETag of the marks it was made from in If-Match, or * for whichever are there: without it, the answer is 428, and once they changed, 412. It takes repo.read and a signed-in viewer; at most 3,000 files at once, and a branch keeps at most 10,000 marks of a person's (400 viewed.too_many).
 	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
 	UpdateViewedFiles(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params UpdateViewedFilesParams)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history. With If-None-Match and wait, it waits up to wait seconds for the page to change, a push to the branch, before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
 	GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
-	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
+	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
-	ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListAnnotationsParams)
 	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams)
@@ -5871,7 +5910,7 @@ type ServerInterface interface {
 	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
 	GetCommitDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params GetCommitDiffParams)
-	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
@@ -5955,7 +5994,7 @@ type ServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read.
+	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRunsParams)
 	// GetRun One of the repository's runs by its number; takes repo.read.
@@ -12298,8 +12337,45 @@ func (siw *ServerInterfaceWrapper) ListBranches(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBranchesParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListBranches(w, r, org, repo)
+		siw.Handler.ListBranches(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12410,8 +12486,45 @@ func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBranchParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetBranch(w, r, org, repo, branchName)
+		siw.Handler.GetBranch(w, r, org, repo, branchName, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13695,6 +13808,19 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "If-None-Match" -------------
@@ -13804,8 +13930,45 @@ func (siw *ServerInterfaceWrapper) ListAnnotations(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAnnotationsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAnnotations(w, r, org, repo, sha)
+		siw.Handler.ListAnnotations(w, r, org, repo, sha, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14114,6 +14277,19 @@ func (siw *ServerInterfaceWrapper) ListReviews(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
 		}
 		return
 	}
@@ -15808,6 +15984,40 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		}
 		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31086,33 +31296,70 @@ func (response GetBlobdefaultApplicationProblemPlusJSONResponse) VisitGetBlobRes
 }
 
 type ListBranchesRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListBranchesParams
 }
 
 type ListBranchesResponseObject interface {
 	VisitListBranchesResponse(w http.ResponseWriter) error
 }
 
+type ListBranches200ResponseHeaders struct {
+	ETag string
+}
+
 type ListBranches200JSONResponse struct {
-	Branches []Branch `json:"branches"`
+	Body struct {
+		Branches []Branch `json:"branches"`
+	}
+	Headers ListBranches200ResponseHeaders
 }
 
 func (response ListBranches200JSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListBranches401ApplicationProblemPlusJSONResponse struct {
+type ListBranches304ResponseHeaders struct {
+	ETag string
+}
+
+type ListBranches304Response struct {
+	Headers ListBranches304ResponseHeaders
+}
+
+func (response ListBranches304Response) VisitListBranchesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListBranches400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListBranches400ApplicationProblemPlusJSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBranches401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListBranches401ApplicationProblemPlusJSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
 
@@ -31311,29 +31558,66 @@ type GetBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
 	BranchName BranchName `json:"branch"`
+	Params     GetBranchParams
 }
 
 type GetBranchResponseObject interface {
 	VisitGetBranchResponse(w http.ResponseWriter) error
 }
 
-type GetBranch200JSONResponse Branch
+type GetBranch200ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranch200JSONResponse struct {
+	Body    Branch
+	Headers GetBranch200ResponseHeaders
+}
 
 func (response GetBranch200JSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetBranch401ApplicationProblemPlusJSONResponse struct {
+type GetBranch304ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranch304Response struct {
+	Headers GetBranch304ResponseHeaders
+}
+
+func (response GetBranch304Response) VisitGetBranchResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetBranch400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response GetBranch400ApplicationProblemPlusJSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranch401ApplicationProblemPlusJSONResponse Problem
 
 func (response GetBranch401ApplicationProblemPlusJSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
 
@@ -33638,29 +33922,52 @@ func (response GetCommitdefaultApplicationProblemPlusJSONResponse) VisitGetCommi
 }
 
 type ListAnnotationsRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
-	SHA  SHA  `json:"sha"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Params ListAnnotationsParams
 }
 
 type ListAnnotationsResponseObject interface {
 	VisitListAnnotationsResponse(w http.ResponseWriter) error
 }
 
+type ListAnnotations200ResponseHeaders struct {
+	ETag string
+}
+
 type ListAnnotations200JSONResponse struct {
-	Annotations []Annotation `json:"annotations"`
+	Body struct {
+		Annotations []Annotation `json:"annotations"`
+	}
+	Headers ListAnnotations200ResponseHeaders
 }
 
 func (response ListAnnotations200JSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListAnnotations304ResponseHeaders struct {
+	ETag string
+}
+
+type ListAnnotations304Response struct {
+	Headers ListAnnotations304ResponseHeaders
+}
+
+func (response ListAnnotations304Response) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListAnnotations400ApplicationProblemPlusJSONResponse struct {
@@ -37117,6 +37424,7 @@ type ListRunsResponseObject interface {
 }
 
 type ListRuns200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -37137,12 +37445,27 @@ func (response ListRuns200JSONResponse) VisitListRunsResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListRuns304ResponseHeaders struct {
+	ETag string
+}
+
+type ListRuns304Response struct {
+	Headers ListRuns304ResponseHeaders
+}
+
+func (response ListRuns304Response) VisitListRunsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListRuns400ApplicationProblemPlusJSONResponse struct {
@@ -41348,13 +41671,13 @@ type StrictServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
-	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(ctx context.Context, request ListBranchesRequestObject) (ListBranchesResponseObject, error)
 	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.
 	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch})
 	DeleteBranch(ctx context.Context, request DeleteBranchRequestObject) (DeleteBranchResponseObject, error)
-	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read. Its ETag starts with its head, so a deletion may name it in If-Match. With If-None-Match and wait, it waits up to wait seconds for the branch to change before it answers 304, so a client follows the branch by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
 	// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
@@ -41411,13 +41734,13 @@ type StrictServerInterface interface {
 	// UpdateViewedFiles Marks the viewer's files of the branch Viewed, or takes their marks off, as the merge patch (RFC 7396) names: a path given {"object": …} is marked at that object, {} marks a file the branch deletes, and null takes the mark off. A mark already at its object keeps the moment it was made. The change names the ETag of the marks it was made from in If-Match, or * for whichever are there: without it, the answer is 428, and once they changed, 412. It takes repo.read and a signed-in viewer; at most 3,000 files at once, and a branch keeps at most 10,000 marks of a person's (400 viewed.too_many).
 	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
 	UpdateViewedFiles(ctx context.Context, request UpdateViewedFilesRequestObject) (UpdateViewedFilesResponseObject, error)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history. With If-None-Match and wait, it waits up to wait seconds for the page to change, a push to the branch, before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
 	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
-	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
+	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
 	ListAnnotations(ctx context.Context, request ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error)
 	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
@@ -41429,7 +41752,7 @@ type StrictServerInterface interface {
 	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
 	GetCommitDiff(ctx context.Context, request GetCommitDiffRequestObject) (GetCommitDiffResponseObject, error)
-	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(ctx context.Context, request ListReviewsRequestObject) (ListReviewsResponseObject, error)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
@@ -41513,7 +41836,7 @@ type StrictServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
-	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read.
+	// ListRuns A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them all. Takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
 	// GetRun One of the repository's runs by its number; takes repo.read.
@@ -45356,11 +45679,12 @@ func (sh *strictHandler) GetBlob(w http.ResponseWriter, r *http.Request, org Org
 }
 
 // ListBranches operation middleware
-func (sh *strictHandler) ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+func (sh *strictHandler) ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListBranchesParams) {
 	var request ListBranchesRequestObject
 
 	request.Org = org
 	request.Repo = repo
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListBranches(ctx, request.(ListBranchesRequestObject))
@@ -45412,12 +45736,13 @@ func (sh *strictHandler) DeleteBranch(w http.ResponseWriter, r *http.Request, or
 }
 
 // GetBranch operation middleware
-func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchParams) {
 	var request GetBranchRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.BranchName = branchName
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetBranch(ctx, request.(GetBranchRequestObject))
@@ -46073,12 +46398,13 @@ func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, org O
 }
 
 // ListAnnotations operation middleware
-func (sh *strictHandler) ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+func (sh *strictHandler) ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListAnnotationsParams) {
 	var request ListAnnotationsRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.SHA = sha
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListAnnotations(ctx, request.(ListAnnotationsRequestObject))

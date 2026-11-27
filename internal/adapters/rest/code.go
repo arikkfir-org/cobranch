@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -23,13 +24,18 @@ import (
 // Code is what the API needs of the code's service.
 type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
+	FollowBranches(ctx context.Context, v code.Viewer, repoID uuid.UUID) (<-chan []code.Branch, error)
 	Branch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.Branch, error)
+	FollowBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (<-chan code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.HistoryQuery) (code.Page, error)
+	FollowHistory(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.HistoryQuery) (<-chan code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
+	FollowAnnotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (<-chan []code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 	Reviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, q code.ReviewQuery) (code.ReviewPage, error)
+	FollowReviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, q code.ReviewQuery) (<-chan code.ReviewPage, error)
 	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
 	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
 	RequestReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.AIReview, error)
@@ -49,6 +55,7 @@ type Code interface {
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.RunsQuery) (code.RunPage, error)
+	FollowRuns(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.RunsQuery) (<-chan code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunLogs(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]code.RunLog, error)
 	RunSteps(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]jobs.Step, error)
@@ -191,47 +198,78 @@ func (a api) codeRepo(ctx context.Context, v repos.Viewer, orgSlug, slug string)
 	return repo, nil
 }
 
-// ListBranches lists the repository's live branches.
-func (a api) ListBranches(ctx context.Context, req ListBranchesRequestObject) (ListBranchesResponseObject, error) {
+// codeList reads what a read of one of a repository's lists of code needs: the viewer, the repository whose code the
+// path names, and how long the read waits for the list to change.
+func (a api) codeList(ctx context.Context, orgSlug, slug string, wait *WaitForChange, tag *IfNoneMatch) (repos.Viewer, repos.Repository, time.Duration, error) {
 	v, err := viewer(ctx)
 	if err != nil {
-		return nil, err
+		return repos.Viewer{}, repos.Repository{}, 0, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	repo, err := a.codeRepo(ctx, v, orgSlug, slug)
 	if err != nil {
-		return nil, err
+		return repos.Viewer{}, repos.Repository{}, 0, err
 	}
-	list, err := a.code.Branches(ctx, v, repo.ID)
-	if err != nil {
-		return nil, fail(err, "repository")
-	}
-	return ListBranches200JSONResponse{Branches: mapAll(list, branch)}, nil
+	waits, err := listWait(wait, tag)
+	return v, repo, waits, err
 }
 
-// GetBranch finds one of the repository's live branches.
+// ListBranches lists the repository's live branches, or 304 while the caller holds them, after waiting for them to
+// change as wait asks.
+func (a api) ListBranches(ctx context.Context, req ListBranchesRequestObject) (ListBranchesResponseObject, error) {
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
+	if err != nil {
+		return nil, err
+	}
+	return readList(ctx, waits, func(ctx context.Context) ([]code.Branch, error) {
+		list, err := a.code.Branches(ctx, v, repo.ID)
+		return list, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan []code.Branch, error) {
+		lists, err := a.code.FollowBranches(ctx, v, repo.ID)
+		return lists, fail(err, "repository")
+	}, func(list []code.Branch) (ListBranchesResponseObject, bool, error) {
+		out := ListBranches200JSONResponse{}
+		out.Body.Branches = mapAll(list, branch)
+		return listAnswer("branches", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListBranchesResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListBranchesResponseObject {
+				return ListBranches304Response{Headers: ListBranches304ResponseHeaders{ETag: etag}}
+			})
+	})
+}
+
+// GetBranch finds one of the repository's live branches, with the issue it works on, or 304 while the caller holds
+// it, after waiting for it to change as wait asks. Its ETag starts with its head, which a deletion's If-Match names.
 func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBranchResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	b, err := a.code.Branch(ctx, v, repo.ID, req.BranchName)
-	if err != nil {
-		return nil, fail(err, "branch")
-	}
-	out := branch(b)
-	link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
-	if err != nil {
-		return nil, failIssue(err)
-	}
-	if link != nil {
-		issue := branchIssue(*link)
-		out.Issue = &issue
-	}
-	return GetBranch200JSONResponse(out), nil
+	return readList(ctx, waits, func(ctx context.Context) (code.Branch, error) {
+		b, err := a.code.Branch(ctx, v, repo.ID, req.BranchName)
+		return b, fail(err, "branch")
+	}, func(ctx context.Context) (<-chan code.Branch, error) {
+		b, err := a.code.FollowBranch(ctx, v, repo.ID, req.BranchName)
+		return b, fail(err, "branch")
+	}, func(b code.Branch) (GetBranchResponseObject, bool, error) {
+		out := branch(b)
+		link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
+		if err != nil {
+			return nil, false, failIssue(err)
+		}
+		if link != nil {
+			issue := branchIssue(*link)
+			out.Issue = &issue
+		}
+		digest, err := bodyTag("branch", out, nil)
+		if err != nil {
+			return nil, false, err
+		}
+		etag := `"` + b.Head + "-" + strings.Trim(digest, `"`) + `"`
+		if matches(req.Params.IfNoneMatch, etag) {
+			return GetBranch304Response{Headers: GetBranch304ResponseHeaders{ETag: etag}}, true, nil
+		}
+		return GetBranch200JSONResponse{Body: out, Headers: GetBranch200ResponseHeaders{ETag: etag}}, false, nil
+	})
 }
 
 // MergeBranch merges a branch into its base for the viewer.
@@ -280,7 +318,8 @@ func (a api) DeleteBranch(ctx context.Context, req DeleteBranchRequestObject) (D
 	return DeleteBranch204Response{}, nil
 }
 
-// headIfMatch is the head a deletion's If-Match names: "" for *, which deletes the branch wherever it is; a refusal
+// headIfMatch is the head a deletion's If-Match names, alone or as the start of the branch's ETag: "" for *, which
+// deletes the branch wherever it is; a refusal
 // with 428 without the header, and with 412 for a tag that names no commit, a weak one included, since If-Match
 // compares strongly.
 func headIfMatch(header *IfMatchBranch) (string, error) {
@@ -292,7 +331,7 @@ func headIfMatch(header *IfMatchBranch) (string, error) {
 	if tag == "*" {
 		return "", nil
 	}
-	head := strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`)
+	head, _, _ := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), "-")
 	if code.ValidateSHA("head", head) != nil {
 		return "", refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no head of the branch.")
 	}
@@ -359,24 +398,39 @@ func mergeFail(err error) error {
 	return fail(err, "branch")
 }
 
-// ListCommits lists a page of history, links the next, and answers 304 while the caller holds the page.
+// ListCommits lists a page of history, links the next, and answers 304 while the caller holds the page, after waiting
+// for it to change as wait asks.
 func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (ListCommitsResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
 	q := historyQuery(req.Params)
-	page, err := a.code.History(ctx, v, repo.ID, q)
+	return readList(ctx, waits, func(ctx context.Context) (code.Page, error) {
+		page, err := a.code.History(ctx, v, repo.ID, q)
+		return page, historyFail(err)
+	}, func(ctx context.Context) (<-chan code.Page, error) {
+		pages, err := a.code.FollowHistory(ctx, v, repo.ID, q)
+		return pages, historyFail(err)
+	}, func(page code.Page) (ListCommitsResponseObject, bool, error) {
+		return historyAnswer(req.Params.IfNoneMatch, q, page)
+	})
+}
+
+// historyFail maps what a read of history failed with: a branch there isn't, then codeFail's.
+func historyFail(err error) error {
 	switch {
+	case err == nil:
+		return nil
 	case errors.Is(err, repos.ErrNotFound):
-		return nil, fail(err, "branch")
-	case err != nil:
-		return nil, codeFail(err)
+		return fail(err, "branch")
 	}
+	return codeFail(err)
+}
+
+// historyAnswer is a page of the history q asks for as a read answers it, with the link to its next page: 304, which
+// it says, while tag names it.
+func historyAnswer(tag *IfNoneMatch, q code.HistoryQuery, page code.Page) (ListCommitsResponseObject, bool, error) {
 	out := ListCommits200JSONResponse{}
 	out.Body.Commits, out.Body.Total = mapAll(page.Commits, commit), page.Total
 	if page.Next != "" {
@@ -399,15 +453,15 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 		link := `<?` + next.Encode() + `>; rel="next"`
 		out.Headers.Link = &link
 	}
-	tag, err := bodyTag("history", out.Body, out.Headers.Link)
+	etag, err := bodyTag("history", out.Body, out.Headers.Link)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if matches(req.Params.IfNoneMatch, tag) {
-		return ListCommits304Response{Headers: ListCommits304ResponseHeaders{ETag: tag}}, nil
+	if matches(tag, etag) {
+		return ListCommits304Response{Headers: ListCommits304ResponseHeaders{ETag: etag}}, true, nil
 	}
-	out.Headers.ETag = tag
-	return out, nil
+	out.Headers.ETag = etag
+	return out, false, nil
 }
 
 // historyQuery is the history a listing's parameters ask for: main's when they name no branch.
@@ -473,29 +527,31 @@ func (a api) GetCommit(ctx context.Context, req GetCommitRequestObject) (GetComm
 
 // ListAnnotations lists the annotations on one of the repository's commits.
 func (a api) ListAnnotations(ctx context.Context, req ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.code.Annotations(ctx, v, repo.ID, req.SHA)
-	if err != nil {
-		return nil, fail(err, "commit")
-	}
-	return ListAnnotations200JSONResponse{Annotations: mapAll(list, annotation)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]code.Annotation, error) {
+		list, err := a.code.Annotations(ctx, v, repo.ID, req.SHA)
+		return list, fail(err, "commit")
+	}, func(ctx context.Context) (<-chan []code.Annotation, error) {
+		lists, err := a.code.FollowAnnotations(ctx, v, repo.ID, req.SHA)
+		return lists, fail(err, "commit")
+	}, func(list []code.Annotation) (ListAnnotationsResponseObject, bool, error) {
+		out := ListAnnotations200JSONResponse{}
+		out.Body.Annotations = mapAll(list, annotation)
+		return listAnswer("annotations", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListAnnotationsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListAnnotationsResponseObject {
+				return ListAnnotations304Response{Headers: ListAnnotations304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // ListReviews lists a page of the reviews submitted of one of the repository's commits, links the next, and answers
-// 304 while the caller holds the page.
+// 304 while the caller holds the page, after waiting for it to change as wait asks.
 func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (ListReviewsResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -506,10 +562,20 @@ func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (Lis
 	if req.Params.Limit != nil {
 		q.Limit = *req.Params.Limit
 	}
-	page, err := a.code.Reviews(ctx, v, repo.ID, req.SHA, q)
-	if err != nil {
-		return nil, fail(err, "commit")
-	}
+	return readList(ctx, waits, func(ctx context.Context) (code.ReviewPage, error) {
+		page, err := a.code.Reviews(ctx, v, repo.ID, req.SHA, q)
+		return page, fail(err, "commit")
+	}, func(ctx context.Context) (<-chan code.ReviewPage, error) {
+		pages, err := a.code.FollowReviews(ctx, v, repo.ID, req.SHA, q)
+		return pages, fail(err, "commit")
+	}, func(page code.ReviewPage) (ListReviewsResponseObject, bool, error) {
+		return reviewsAnswer(page, q, req.Params.IfNoneMatch)
+	})
+}
+
+// reviewsAnswer is a page of reviews as ListReviews answers it: with its next page's link and its ETag, or 304 while
+// tag names it, which it says.
+func reviewsAnswer(page code.ReviewPage, q code.ReviewQuery, tag *IfNoneMatch) (ListReviewsResponseObject, bool, error) {
 	out := ListReviews200JSONResponse{}
 	out.Body.Reviews = mapAll(page.Reviews, review)
 	if page.Next != "" {
@@ -520,15 +586,15 @@ func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (Lis
 		link := `<?` + next.Encode() + `>; rel="next"`
 		out.Headers.Link = &link
 	}
-	tag, err := bodyTag("reviews", out.Body, out.Headers.Link)
+	etag, err := bodyTag("reviews", out.Body, out.Headers.Link)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if matches(req.Params.IfNoneMatch, tag) {
-		return ListReviews304Response{Headers: ListReviews304ResponseHeaders{ETag: tag}}, nil
+	if matches(tag, etag) {
+		return ListReviews304Response{Headers: ListReviews304ResponseHeaders{ETag: etag}}, true, nil
 	}
-	out.Headers.ETag = tag
-	return out, nil
+	out.Headers.ETag = etag
+	return out, false, nil
 }
 
 // SubmitReview submits the viewer's review of one of the repository's commits.
