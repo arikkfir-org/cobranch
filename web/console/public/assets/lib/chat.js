@@ -1,9 +1,10 @@
 import { api, apiPage } from "./api.js";
 import { orgPages } from "./assets.js";
+import { markCode } from "./codemarks.js";
 import { ask } from "./dialog.js";
 import { h } from "./dom.js";
 import { ago, shortSha, whenExactly } from "./format.js";
-import { avatar, icon } from "./icons.js";
+import { avatar, icon, machineAvatar } from "./icons.js";
 import { popover } from "./menu.js";
 import { agents, base, me } from "./state.js";
 
@@ -44,6 +45,10 @@ export function messageBody(html) {
   return [...new DOMParser().parseFromString(html, "text/html").body.childNodes].map(copy).flat(Infinity).filter(Boolean);
 }
 
+// taskStates are the tone and word of a task's state, on the row of the message that asked for it.
+const taskStates = { queued: ["neutral", "Queued"], running: ["info", "Working"], waiting: ["warning", "Waiting for an answer"],
+  succeeded: ["success", "Done"], failed: ["danger", "Failed"], cancelled: ["neutral", "Cancelled"] };
+
 // kinds and formats name an artifact's kind and the format its versions are written in, as its card shows them.
 const kinds = { document: "Document", diagram: "Diagram", report: "Report", page: "Page" };
 const formats = { "text/markdown": "Markdown", "image/svg+xml": "SVG", "text/html": "HTML" };
@@ -75,11 +80,13 @@ export const issueSubject = (org, number, identifier, can) => ({
 
 // privateSubject is the viewer's own conversation about an organization or one of its repositories, which every page of
 // it that names no other has: private to them, where a viewer who may ask the organization's agents (can's
-// agents.assign) brings one in by its tag.
+// agents.assign) brings one in by its tag. Nobody else reads it (alone), so a message there that asks no agent gets no
+// answer, which the conversation then says.
 export const privateSubject = (key, title, code, chat, can) => ({
-  key, title, code, chat, post: true, moderate: true, ask: can("agents.assign"),
+  key, title, code, chat, post: true, moderate: true, ask: can("agents.assign"), alone: true,
   scope: can("agents.assign") ? "Private to you · tag an agent to bring it in" : "Private to you", placeholder: "Message " + title,
-  none: can("agents.assign") ? "Ask a question, or @mention an agent to give it work here." : "Write a note or a question; only you read it.",
+  none: can("agents.assign") ? "Ask one of the organization's agents with Ask or @ to get an answer here; a message that asks none is a note only you read."
+    : "Write a note or a question; only you read it.",
 });
 
 // agentSubject is the viewer's conversation with one of the organization's agents, on the agent's page: private to
@@ -117,8 +124,42 @@ export async function conversation(s, signal) {
   // atBottom says whether the viewer reads the newest messages, which the list then keeps in view as more come.
   const atBottom = () => messages.scrollHeight - messages.scrollTop - messages.clientHeight < 24;
   const keepDown = (was) => { if (was) messages.scrollTop = messages.scrollHeight; };
-  let roster = null; // the organization's agents, read once Ask first opens them
-  const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => d.agents, (err) => { roster = null; throw err; }));
+  let roster = null; // the organization's agents, read once Ask first opens them or a status needs them
+  let rostered = null; // the same, once read
+  const agentsToAsk = () => roster || (roster = api("GET", "/orgs/" + org + "/agents").then((d) => (rostered = d.agents),
+    (err) => { roster = null; throw err; }));
+
+  // The tasks the conversation's messages asked for, by number: each task as last read, the badges on its asked rows
+  // that show its state, and the threads whose status follows it. A task that has yet to end is read again every few
+  // seconds while its row shows, until it ends or the conversation stops.
+  const asked = new Map();
+  const ended = (t) => t.state === "succeeded" || t.state === "failed" || t.state === "cancelled";
+  const readTask = (n) => api("GET", "/orgs/" + org + "/tasks/" + n, undefined, {}, signal).then((t) => {
+    const e = asked.get(n);
+    const changed = !e.task || e.task.version !== t.version || e.task.state !== t.state;
+    e.task = t;
+    if (!changed) return;
+    e.badges.forEach((b) => taskState(b, t));
+    e.threads.forEach(settle);
+  }, () => {});
+  const follow = (n, v) => {
+    let e = asked.get(n);
+    if (!e) {
+      asked.set(n, e = { task: null, badges: new Set(), threads: new Set() });
+      readTask(n);
+    }
+    e.threads.add(v);
+    return e;
+  };
+  (async () => {
+    while (!signal.aborted) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      for (const [n, e] of asked) {
+        e.badges.forEach((b) => { if (!b.isConnected) e.badges.delete(b); });
+        if (e.task && !ended(e.task) && e.badges.size && !document.hidden) readTask(n);
+      }
+    }
+  })();
 
   const artifacts = new Map(); // the artifacts the thread's cards name, by ID, read once each
 
@@ -186,6 +227,67 @@ export async function conversation(s, signal) {
     if (old) old.el.replaceWith(el);
     else v.list.append(el);
     v.messages.set(m.id, { m, el });
+    settle(v);
+  };
+  // byAgent says whether an agent posted m.
+  const byAgent = (m) => !!m.taskNumber || !!(m.author && agents.has(m.author.id));
+  // statusRow is a reply of Cobranch's own under a thread's messages (Figma "Pane · Status replies"), which says why
+  // nobody answers: drawn from how things stand, never stored, and gone once they change.
+  const statusRow = (at, ...body) => h("div", { class: "chat-message chat-message-status", role: "status" }, machineAvatar("Cobranch", 32),
+    h("div", { class: "chat-message-text-column" },
+      h("div", { class: "chat-message-header" }, h("strong", {}, "Cobranch"), at ? h("time", { datetime: at, title: whenExactly(at) }, ago(at)) : null),
+      h("p", { class: "chat-message-body" }, body)));
+  // ending is why the task a message asked for ended without its agent answering in the thread, or null.
+  const ending = (t) => {
+    const who = t.agent ? t.agent.displayName : "The agent";
+    // A person's cancel records "Cancelled" as its reason, which says nothing the sentence doesn't.
+    const why = t.reason && t.reason.toLowerCase() !== t.state ? ": " + t.reason.replace(/\.?$/, ".") : ".";
+    if (t.state === "failed") return who + " couldn't answer: task #" + t.number + " failed" + why;
+    if (t.state === "cancelled") return who + " won't answer: task #" + t.number + " was cancelled" + (t.cancelledBy ? " by " + t.cancelledBy.displayName : "") + why;
+    if (t.state === "succeeded") return who + " ended task #" + t.number + " without answering here.";
+    return null;
+  };
+  // nobody is why a message the viewer wrote in their private conversation, asking no agent, gets no answer: they may
+  // not ask one, the organization has none, or it asked none, with what to do; null while the organization's agents
+  // are being read.
+  const nobody = () => {
+    if (!s.ask) return ["Nobody will answer this: only you read this conversation, and asking an agent takes the Assign tasks permission."];
+    if (!rostered) return null;
+    if (!rostered.length) return ["Nobody will answer this: the organization has no agents yet. ",
+      orgPages.has("agents") ? h("a", { href: base + org + "/agents", "data-nav": "" }, "Create one") : "An admin creates one", " to ask it here."];
+    return ["Nobody will answer this: it asks no agent. Pick one with Ask, or type @, to give it a task in this thread."];
+  };
+  // statusOf is the status a thread's end shows, if any: why the task its last ask started ended unanswered, or, in a
+  // private conversation, why the viewer's last message gets no answer. A thread whose task still works shows its state
+  // on the asked row instead, and one an agent answered last shows nothing.
+  const statusOf = (v) => {
+    const ms = [...v.messages.values()].map((e) => e.m).filter((m) => !m.deletedAt);
+    const last = ms[ms.length - 1];
+    if (!last || byAgent(last)) return null;
+    const at = ms.findLastIndex((m) => m.askedTaskNumber);
+    if (at >= 0 && !ms.slice(at + 1).some(byAgent)) {
+      const e = asked.get(ms[at].askedTaskNumber), t = e && e.task;
+      if (!t || !ended(t)) return null;
+      const why = ending(t);
+      if (why) return statusRow(t.endedAt, why);
+    }
+    if (!s.alone || last.askedTaskNumber || !last.author || last.author.id !== me.id) return null;
+    if (s.ask && !rostered) agentsToAsk().then(() => settle(v), () => {});
+    const why = nobody();
+    return why ? statusRow(last.createdAt, why) : null;
+  };
+  // settle draws the status at a thread's end again, as its messages and the tasks they asked for now stand.
+  const settle = (v) => {
+    const row = statusOf(v);
+    v.status.replaceChildren(...(row ? [row] : []));
+  };
+  // taskState shows task t's state in badge, on the row of a message that asked for it.
+  const taskState = (badge, t) => {
+    const [tone, word] = taskStates[t.state] || ["neutral", t.state];
+    badge.className = "badge-quiet tone-" + tone;
+    badge.textContent = word;
+    badge.title = t.reason || "";
+    badge.parentElement.hidden = false;
   };
   // taskAt is the address of agent's task number, on its agent's page, or, for an agent since gone, the address that
   // finds its agent.
@@ -212,7 +314,7 @@ export async function conversation(s, signal) {
         e.preventDefault();
         save.disabled = true;
         api("PATCH", target, { body: text.value }, { "If-Match": `"${m.version}"` }).then(done).catch((err) => { save.disabled = false; fail(err); });
-      } }, text, h("div", { class: "app-pane-form-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => done(entry.pending) }, "Cancel"), save));
+      } }, markCode(text), h("div", { class: "app-pane-form-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => done(entry.pending) }, "Cancel"), save));
       content.replaceWith(form);
       text.focus();
     };
@@ -220,13 +322,30 @@ export async function conversation(s, signal) {
       "It shows as deleted to everyone in the conversation. This can't be undone.", "Delete",
       () => api("DELETE", target, undefined, { "If-Match": `"${m.version}"` }).then(() => api("GET", target)).then((gone) => message(v, gone)));
     const act = (glyph, label, onclick) => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label, onclick }, icon(glyph));
-    const actions = m.deletedAt ? [] : [mine && post ? act("pencil", "Edit", edit) : null, (mine && post) || moderate ? act("x", "Delete", remove) : null].filter(Boolean);
+    // Copy puts the message's Markdown on the clipboard, and says so for a moment.
+    const copy = (e) => {
+      const button = e.currentTarget;
+      navigator.clipboard.writeText(m.body).then(() => {
+        button.replaceChildren(icon("check"));
+        button.title = "Copied";
+        setTimeout(() => { button.replaceChildren(icon("copy")); button.title = "Copy"; }, 1500);
+      }, fail);
+    };
+    const actions = m.deletedAt ? [] : [act("copy", "Copy", copy), mine && post ? act("pencil", "Edit", edit) : null,
+      (mine && post) || moderate ? act("x", "Delete", remove) : null].filter(Boolean);
     const name = m.author ? m.author.displayName : "Someone since gone";
     const tag = !agent ? null : m.taskNumber ? h("a", { class: "tag tone-ai", href: taskAt(m.author, m.taskNumber), "data-nav": "",
       title: "An agent posted it, working task #" + m.taskNumber + "." }, icon("sparkles"), "Agent") : h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent");
-    // A message that asked an agent names it, and links the task it asked for.
+    // A message that asked an agent names it, links the task it asked for, and shows the task's state as it changes.
+    const state = h("span", { class: "badge-quiet tone-neutral" });
     const asked = m.askedTaskNumber ? h("p", { class: "chat-message-asked" }, icon("sparkles"), h("span", {}, "Asked " + (m.askedAgent ? m.askedAgent.displayName : "an agent since gone")),
-      "·", h("a", { href: taskAt(m.askedAgent, m.askedTaskNumber), "data-nav": "" }, "#" + m.askedTaskNumber)) : null;
+      "·", h("a", { href: taskAt(m.askedAgent, m.askedTaskNumber), "data-nav": "" }, "#" + m.askedTaskNumber),
+      h("span", { class: "chat-message-asked-state", hidden: true }, "·", state)) : null;
+    if (asked && !m.deletedAt) {
+      const e = follow(m.askedTaskNumber, v);
+      e.badges.add(state);
+      if (e.task) taskState(state, e.task);
+    }
     return h("div", { class: "chat-message", id: "message-" + m.id }, avatar(name, agent, 32),
       h("div", { class: "chat-message-text-column" },
         h("div", { class: "chat-message-header" }, h("strong", {}, name), tag,
@@ -263,6 +382,7 @@ export async function conversation(s, signal) {
     v.row.replaceWith(row);
     v.row = row;
     v.list.hidden = folded;
+    v.status.hidden = folded;
     v.foot.hidden = folded;
   };
   // foot is a thread's actions: replying, for a viewer who may post, and resolving or reopening it, for its starter
@@ -315,7 +435,7 @@ export async function conversation(s, signal) {
       if (send) send.disabled = true;
       submit(text, picker, () => { busy = false; if (send) send.disabled = false; }).then(() => { text.value = ""; grow(); if (picker) picker.clear(); }, fail);
     });
-    form.append(...[picker && picker.tag, text, picker ? picker.ask : send].filter(Boolean));
+    form.append(...[picker && picker.tag, markCode(text), picker ? picker.ask : send].filter(Boolean));
     return form;
   };
   // place draws a thread, or draws it again as it is now, with the messages it comes with: one of an older page at the
@@ -323,10 +443,11 @@ export async function conversation(s, signal) {
   const place = (t, older) => {
     let v = shown.get(t.id);
     if (!v) {
-      v = { t, list: h("div", { class: "app-thread-messages" }), messages: new Map(), reply: null, open: false, row: h("span", { hidden: true }) };
+      v = { t, list: h("div", { class: "app-thread-messages" }), status: h("div", { class: "app-thread-status" }), messages: new Map(), reply: null, open: false,
+        row: h("span", { hidden: true }) };
       v.head = head(t) || h("span", { hidden: true });
       v.foot = foot(v) || h("span", { hidden: true });
-      v.el = h("article", { class: "app-thread", id: "thread-" + t.id }, v.head, v.row, v.list, v.foot);
+      v.el = h("article", { class: "app-thread", id: "thread-" + t.id }, v.head, v.row, v.list, v.status, v.foot);
       shown.set(t.id, v);
       if (older) list.prepend(v.el);
       else list.append(v.el);
