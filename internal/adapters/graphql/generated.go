@@ -8781,7 +8781,7 @@ extend type Subscription {
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md, "Reviews" and "Diffs").
 
 extend type Repository {
-  "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
+  "The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
   branches: [Branch!]!
   "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
   branch(name: String!): Branch

@@ -5616,7 +5616,7 @@ type ServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
-	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.
@@ -39782,7 +39782,7 @@ type StrictServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
-	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// ListBranches The repository's live branches, main first and then the latest pushed first, by name among equals, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(ctx context.Context, request ListBranchesRequestObject) (ListBranchesResponseObject, error)
 	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.

@@ -73,10 +73,13 @@ func TestBranches(t *testing.T) {
 		name    string
 		viewer  func(*fixture) code.Viewer
 		fail    error
+		pushed  map[string]int // minutes ago each branch was last pushed
 		want    []string
 		wantErr error
 	}{
-		{name: "main first, then by name", viewer: func(f *fixture) code.Viewer { return f.max }, want: []string{"main", "feature/x", "stray"}},
+		{name: "main first, then by name among equals", viewer: func(f *fixture) code.Viewer { return f.max }, want: []string{"main", "feature/x", "stray"}},
+		{name: "main first, then the latest pushed first", viewer: func(f *fixture) code.Viewer { return f.max },
+			pushed: map[string]int{"main": 90, "feature/x": 30, "stray": 5}, want: []string{"main", "stray", "feature/x"}},
 		{name: "a viewer who doesn't read the repository finds none", viewer: func(f *fixture) code.Viewer { return f.nia }, wantErr: repos.ErrNotFound},
 		{name: "the store's failure", viewer: func(f *fixture) code.Viewer { return f.max }, fail: errors.New("down"), wantErr: errors.New("down")},
 	}
@@ -84,6 +87,9 @@ func TestBranches(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture()
 			f.store.Fail = tt.fail
+			for name, minutes := range tt.pushed {
+				f.store.UpdateBranch(f.repo, name, func(b *code.Branch) { b.UpdatedAt = now.Add(-time.Duration(minutes) * time.Minute) })
+			}
 			got, err := f.service.Branches(t.Context(), tt.viewer(f), f.repo)
 			if !sameError(err, tt.wantErr) {
 				t.Fatalf("got error %v, want %v", err, tt.wantErr)
