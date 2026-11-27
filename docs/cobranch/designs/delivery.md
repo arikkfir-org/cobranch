@@ -92,8 +92,10 @@ The Git server records each tip’s parsed file in the push’s transaction
   an environment keeps one address, and follows `main`'s file: changing it there moves every environment's at once.
 - **`namespaceLabels`** is optional, and only for a target with a `cluster`: the labels Cobranch writes on a namespace it
   makes for one of the target's environments, beside its own, so the namespace meets that cluster's conventions (its Pod
-  Security level, the labels its gateway or its policies select namespaces by). Keys under `cobranch.dev`, `kubernetes.io`
-  and `k8s.io`, and `app.kubernetes.io/managed-by`, are refused: they say whose a namespace is. A namespace that exists
+  Security level, the labels its gateway or its policies select namespaces by). Keys and values are literal: they take no
+  variables, and a `${…}` in one is refused. Keys under `cobranch.dev` and its subdomains, keys under exactly `kubernetes.io`
+  or `k8s.io` (their subdomains, such as `pod-security.kubernetes.io`, are open), and `app.kubernetes.io/managed-by`, are
+  refused: they say whose a namespace is. A namespace that exists
   already is used as it is, so a change to the labels reaches only the namespaces made after it.
 - **A root** is a directory of the commit: `helm` renders the chart there, `kustomize` builds the kustomization there,
   and neither reads every manifest under it, in path order. `targets` limits a root to some targets.
@@ -103,8 +105,8 @@ The Git server records each tip’s parsed file in the push’s transaction
 
 ### Variables
 
-Strings in `delivery` take `${…}`, except the keys of a chart's inline `values`: only its values are expanded, so a key
-that holds `${…}`, or `$${…}`, is an error. A root that sets `substitute: true` takes them in its plain manifests, its
+Strings in `delivery` take `${…}`, except a target's `namespaceLabels`, whose keys and values are literal, and the keys
+of a chart's inline `values`: only its values are expanded, so a key that holds `${…}`, or `$${…}`, is an error. A root that sets `substitute: true` takes them in its plain manifests, its
 values files and its kustomization's output too, never in a chart's templates, which have Helm's own. `$${…}` writes a
 literal `${…}`, and an unknown name, or one with no value, such as `${repository}` where `cobranch render` isn't told
 it, is an error.
@@ -113,7 +115,7 @@ it, is an error.
 | --- | --- | --- |
 | `${target}` | The target's name | `preview` |
 | `${branch}` | The branch's name | `feature/Login` |
-| `${branch.slug}` | The name lowercased, each run of other characters than letters and digits a `-`, trimmed, at most 40 characters | `feature-login` |
+| `${branch.slug}` | The name lowercased, each run of other characters than letters and digits a `-`, trimmed, at most 40 characters; a longer one is cut to end, within the 40, with `-` and 6 characters of a hash of the name, so two long names that start alike stay apart | `feature-login` |
 | `${commit}`, `${commit.short}` | The commit delivered, whole and its first 7 characters | `3b7d0c4…`, `3b7d0c4` |
 | `${namespace}` | The environment's namespace, rendered | `acme-api-feature-login` |
 | `${repository}`, `${organization}` | Their slugs | `api`, `acme` |

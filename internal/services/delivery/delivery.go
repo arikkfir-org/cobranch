@@ -5,6 +5,8 @@
 package delivery
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -107,12 +109,18 @@ const maxSlug = 40
 // nonAlphanumeric is a run of characters a slug replaces with one '-'.
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
+// slugHash is how many characters of the branch name's hash end a slug that was cut.
+const slugHash = 6
+
 // Slug is ${branch.slug}: branch lowercased, each run of characters other than letters and digits a '-', trimmed of
-// '-', and cut to maxSlug characters; "branch" if nothing is left.
+// '-', and cut to maxSlug characters; "branch" if nothing is left. A slug that was cut ends with '-' and the first
+// slugHash characters of the branch name's SHA-256, inside maxSlug: two long branches that start alike would
+// otherwise share a slug, and with it a namespace and a URL.
 func Slug(branch string) string {
 	s := strings.Trim(nonAlphanumeric.ReplaceAllString(strings.ToLower(branch), "-"), "-")
 	if len(s) > maxSlug {
-		s = strings.TrimRight(s[:maxSlug], "-")
+		sum := sha256.Sum256([]byte(branch))
+		s = strings.TrimRight(s[:maxSlug-slugHash-1], "-") + "-" + hex.EncodeToString(sum[:])[:slugHash]
 	}
 	if s == "" {
 		return "branch"

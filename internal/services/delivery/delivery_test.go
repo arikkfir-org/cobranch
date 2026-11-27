@@ -86,8 +86,11 @@ func TestSlug(t *testing.T) {
 		{"/leading/and/trailing/", "leading-and-trailing"},
 		{"日本語", "branch"},
 		{"", "branch"},
-		{strings.Repeat("a", 45), strings.Repeat("a", 40)},
-		{strings.Repeat("a", 39) + "/b", strings.Repeat("a", 39)},
+		{strings.Repeat("a", 40), strings.Repeat("a", 40)},
+		{strings.Repeat("a", 45), strings.Repeat("a", 33) + "-52789e"},
+		{strings.Repeat("a", 45) + "x", strings.Repeat("a", 33) + "-f032eb"},
+		{strings.Repeat("a", 39) + "/b", strings.Repeat("a", 33) + "-5b0492"},
+		{strings.Repeat("a", 32) + "/" + strings.Repeat("b", 20), strings.Repeat("a", 32) + "-ce811e"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.branch, func(t *testing.T) {
