@@ -95,10 +95,10 @@ func (s *Service) agentTalks(ctx context.Context, agentID uuid.UUID, subj Subjec
 		return fmt.Errorf("reading the agent's permissions: %w", err)
 	}
 	if !slices.Contains(held, r.view) || !slices.Contains(held, r.read) {
-		return &orgs.ValidationError{Field: "ask", Code: "ask.unreadable", Message: "the agent can't read this chat, where its task would talk"}
+		return &orgs.ValidationError{Field: "ask", Code: "ask.unreadable", Message: "the agent can't read this chat, where its task would talk: give it a role with " + r.read + " " + r.where + " in Settings · Agents"}
 	}
 	if !slices.Contains(held, r.post) {
-		return &orgs.ValidationError{Field: "ask", Code: "ask.readonly", Message: "the agent reads this chat but can't post there, so its task couldn't answer: " + r.post + " " + r.where}
+		return &orgs.ValidationError{Field: "ask", Code: "ask.readonly", Message: "the agent reads this chat but can't post there, so its task couldn't answer: give it a role with " + r.post + " " + r.where + " in Settings · Agents"}
 	}
 	return nil
 }

@@ -310,8 +310,28 @@ func (s *Service) grant(ctx context.Context, v Viewer, orgID uuid.UUID, known *r
 	return g, nil
 }
 
+// seeing is grants with Guest at the organization added unless one of them already reads it: every agent sees its
+// organization, as its members do, or it couldn't read the conversations it is asked in. Its creator holds org.read,
+// so Guest is always theirs to give.
+func seeing(ctx context.Context, known *roles, grants []Grant) ([]Grant, error) {
+	for _, g := range grants {
+		if g.RepoID != uuid.Nil {
+			continue
+		}
+		role, ok, err := known.find(ctx, g.RoleID, uuid.Nil)
+		if err != nil {
+			return nil, err
+		}
+		if ok && slices.Contains(role.Permissions, orgs.PermRead) {
+			return grants, nil
+		}
+	}
+	return append([]Grant{{RoleID: auth.RoleGuest, RoleName: "Guest"}}, grants...), nil
+}
+
 // CreateAgent makes an agent of the organization with in's first grants, each a role whose permissions v holds where
-// it applies; it takes agents.create, and no org.grants.manage. An agent makes no agents.
+// it applies, and Guest at the organization unless one of them reads it; it takes agents.create, and no
+// org.grants.manage. An agent makes no agents.
 func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in Input) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.CreateAgent", onOrg(orgID))
 	defer span.End()
@@ -334,6 +354,9 @@ func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in
 			return Agent{}, failed(span, "checking the agent's grants", err)
 		}
 		a.Grants = append(a.Grants, g)
+	}
+	if a.Grants, err = seeing(ctx, known, a.Grants); err != nil {
+		return Agent{}, failed(span, "checking the agent's grants", err)
 	}
 	if a.ID, err = uuid.NewV7(); err != nil {
 		return Agent{}, failed(span, "making the agent's ID", err)

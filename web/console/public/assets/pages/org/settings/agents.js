@@ -1,4 +1,4 @@
-import { agentPage, emptyState, mayEdit, newAgent, spendReport } from "../../../lib/agent.js";
+import { agentPage, emptyState, mayEdit, newAgent, readProviderKey, spendReport } from "../../../lib/agent.js";
 import { api } from "../../../lib/api.js";
 import { markCode } from "../../../lib/codemarks.js";
 import { ask, openDialog } from "../../../lib/dialog.js";
@@ -48,7 +48,7 @@ async function showAgents(org, main, can, editing, saved = false) {
     : h("div", { class: "card" }, emptyState("bot", "No agents yet", "An agent takes the tasks it is given. Make one with New agent."));
   main.replaceChildren(error.el, saved ? banner("success", null, "Saved.") : "",
     sectionHeader("Agents", "Each agent runs on one model with its own instructions, the secrets it may use, an optional cap, and the grants that say what it may touch.",
-      can("agents.create") ? h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org).catch(error.fail) }, icon("plus"), "New agent") : ""),
+      can("agents.create") ? h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org, can).catch(error.fail) }, icon("plus"), "New agent") : ""),
     table, open ? await editor(org, open, can, redraw) : "");
   if (!open) followLists([[path, list.tag]], () => error.el.isConnected, () => redraw(editing, saved));
 }
@@ -129,15 +129,6 @@ async function saveAgent(org, a, can, c, current, button, error) {
     button.disabled = false;
     throw err;
   }
-}
-
-// readProviderKey grants agent a Secret reader on the secret that holds provider's key, which its tasks need to run;
-// one it already reads stays as it is.
-async function readProviderKey(org, a, provider) {
-  const p = await api("GET", "/orgs/" + org.slug + "/model-providers/" + encodeURIComponent(provider));
-  if (!p.secretId) return;
-  await api("POST", "/orgs/" + org.slug + "/secrets/" + p.secretId + "/access", { principalId: a.id })
-    .catch((err) => { if (err.code !== "grant.exists") throw new Error("The model is picked, but the agent may not read the provider's key: " + err.message); });
 }
 
 // ownedSecrets are the secrets the viewer manages, the organization's and its repositories', which an agent's tasks may
