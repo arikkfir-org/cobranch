@@ -2,8 +2,10 @@ import { api, apiPage } from "./api.js";
 import { h } from "./dom.js";
 import { ago, fromNow, plural, shortSha, whenExactly } from "./format.js";
 import { icon } from "./icons.js";
+import { readTagged } from "./live.js";
 import { popover } from "./menu.js";
 import { render } from "./router.js";
+import { follows } from "./state.js";
 
 // An environment as the Figma file's Branch · Environment and Repository · Delivery screens draw it: its health and
 // how it stands as Badge/Quiet, its facts as Fact rows, its objects in a table, and its deliveries, resyncs left out.
@@ -174,11 +176,13 @@ function deliveryRow({ path, at, can, fail }, e, d, live) {
     h("span", { class: "delivery-aside" + (danger ? " tone-danger" : ""), title: whenExactly(d.endedAt || d.startedAt || d.queuedAt) }, aside), start);
 }
 
-// deliveriesList is e's deliveries of commits and teardowns, newest first, with a button that lists older ones.
+// deliveriesList is e's deliveries of commits and teardowns, newest first, with a button that lists older ones; the
+// page stops following what it shows once the viewer lists them, which a draw would drop.
 function deliveriesList(ctx, e, first, live) {
   const list = h("ul", { class: "environment-deliveries" }, first.data.deliveries.map((d) => deliveryRow(ctx, e, d, live)));
   let next = first.next;
   const older = h("button", { class: "btn btn-ghost btn-sm environment-older", type: "button", hidden: !next, onclick: async () => {
+    follows(null);
     older.disabled = true;
     try {
       const page = await apiPage(next);
@@ -225,13 +229,16 @@ function actions(ctx, e, list, page) {
 }
 
 // environmentCard is e's card: its target, and its branch on its own page; Open, Redeliver or Resume, and its menu;
-// its status; its facts; its objects; and its deliveries. head is its branch's head, when known, and live whether the
-// branch still is.
+// its status; its facts; its objects; and its deliveries, which it follows with ctx.follow(path, tag) as an apply
+// progresses. head is its branch's head, when known, and live whether the branch still is.
 export async function environmentCard(ctx, e, { page = false, head = "", live = true } = {}) {
-  const { path, at } = ctx;
+  const { path, at, follow } = ctx;
   const base = path + "/environments/" + e.id;
-  const [objects, first] = await Promise.all([api("GET", base + "/objects").then((d) => d.objects),
-    apiPage(base + "/deliveries?" + new URLSearchParams([["kind", "deliver"], ["kind", "teardown"]]))]);
+  const deliveries = base + "/deliveries?" + new URLSearchParams([["kind", "deliver"], ["kind", "teardown"]]);
+  const [held, first] = await Promise.all([readTagged(base + "/objects"), apiPage(deliveries)]);
+  follow(base + "/objects", held.tag);
+  follow(deliveries, first.tag);
+  const objects = held.data.objects;
   const list = first.data.deliveries;
   const title = h("h2", { class: "card-title" }, e.target.displayName, page ? [icon("git-branch"),
     h("a", { class: "environment-branch", href: at.branchPage(e.branch), "data-nav": "" }, e.branch)] : null);

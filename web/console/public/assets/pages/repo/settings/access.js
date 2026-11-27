@@ -4,11 +4,12 @@ import { h } from "../../../lib/dom.js";
 import { field, selectBox } from "../../../lib/forms.js";
 import { since } from "../../../lib/format.js";
 import { avatar, icon, machineAvatar } from "../../../lib/icons.js";
+import { readTagged } from "../../../lib/live.js";
 import { render } from "../../../lib/router.js";
 import { me } from "../../../lib/state.js";
 
 export const tab = { label: "Access", order: 10 };
-export default ({ org, repo, path, orgCan, fail }) => showAccess(org, repo, path, orgCan("org.grants.manage"), fail);
+export default ({ org, repo, path, orgCan, fail, follow }) => showAccess(org, repo, path, orgCan("org.grants.manage"), fail, follow);
 
 // sectionHeader is a section's title over the line on what it holds, with its action beside them.
 const sectionHeader = (title, description, action) => h("header", { class: "section-header" },
@@ -26,9 +27,11 @@ const grantsOf = (a) => a.grants || a.roles.map((role) => ({ role, through: "rep
 // showAccess lists every role that reaches the repository, a row each: who holds it, how (granted here, or a role at
 // the organization, which reaches every repository of it) and since when. A viewer who manages the organization's
 // grants grants roles here, and revokes those granted here, but their own; the organization's roles change on its
-// Members page.
-async function showAccess(org, repo, path, manage, fail) {
-  const access = (await api("GET", path + "/access")).access;
+// Members page. It follows them with follow(path, tag).
+async function showAccess(org, repo, path, manage, fail, follow) {
+  const read = await readTagged(path + "/access");
+  const access = read.data.access;
+  follow(path + "/access", read.tag);
   const through = (g) => g.through === "repository" ? "Direct" : org.name + " · " + (g.role.id === org.membershipRoleId ? "default role" : g.role.name);
   const revoke = (a, g) => h("button", { class: "btn btn-ghost btn-sm", type: "button",
     onclick: () => api("DELETE", path + "/access/" + a.principalId + "/roles/" + g.role.id).then(render).catch(fail) }, "Revoke");

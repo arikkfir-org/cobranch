@@ -17,6 +17,7 @@ import (
 type Secrets interface {
 	List(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) ([]secrets.Secret, error)
 	FollowList(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) (<-chan []secrets.Secret, error)
+	FollowAccess(ctx context.Context, v secrets.Viewer, orgID, id uuid.UUID) (<-chan []secrets.Principal, error)
 	Jobs(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID) ([]secrets.Principal, error)
 	Get(ctx context.Context, v secrets.Viewer, orgID, id uuid.UUID) (secrets.Secret, error)
 	Create(ctx context.Context, v secrets.Viewer, orgID, repoID uuid.UUID, in secrets.Input) (secrets.Secret, error)
@@ -124,7 +125,8 @@ func (a api) CreateSecret(ctx context.Context, req CreateSecretRequestObject) (C
 	return CreateSecret201JSONResponse{Body: secret(s), Headers: CreateSecret201ResponseHeaders{ETag: secretTag(s), Location: secretLocation(req.Org, s)}}, nil
 }
 
-// ListRepositorySecrets lists the repository's own secrets.
+// ListRepositorySecrets lists the repository's own secrets, or 304 while the caller holds them, after waiting for them
+// to change as wait asks.
 func (a api) ListRepositorySecrets(ctx context.Context, req ListRepositorySecretsRequestObject) (ListRepositorySecretsResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -134,11 +136,24 @@ func (a api) ListRepositorySecrets(ctx context.Context, req ListRepositorySecret
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.secrets.List(ctx, v, repo.OrgID, repo.ID)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, secretFail(err, "repository")
+		return nil, err
 	}
-	return ListRepositorySecrets200JSONResponse{Secrets: nonNil(mapAll(list, secret))}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]secrets.Secret, error) {
+		list, err := a.secrets.List(ctx, v, repo.OrgID, repo.ID)
+		return list, secretFail(err, "repository")
+	}, func(ctx context.Context) (<-chan []secrets.Secret, error) {
+		lists, err := a.secrets.FollowList(ctx, v, repo.OrgID, repo.ID)
+		return lists, secretFail(err, "repository")
+	}, func(list []secrets.Secret) (ListRepositorySecretsResponseObject, bool, error) {
+		out := ListRepositorySecrets200JSONResponse{Body: SecretList{Secrets: nonNil(mapAll(list, secret))}}
+		return listAnswer("secrets", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListRepositorySecretsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListRepositorySecretsResponseObject {
+				return ListRepositorySecrets304Response{Headers: ListRepositorySecrets304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // CreateRepositorySecret adds a secret to the repository's settings.
@@ -224,21 +239,28 @@ func (a api) DeleteSecret(ctx context.Context, req DeleteSecretRequestObject) (D
 	return DeleteSecret204Response{}, nil
 }
 
-// ListSecretAccess lists who holds Secret reader on the secret itself.
+// ListSecretAccess lists who holds Secret reader on the secret itself, or 304 while the caller holds them, after
+// waiting for them to change as wait asks.
 func (a api) ListSecretAccess(ctx context.Context, req ListSecretAccessRequestObject) (ListSecretAccessResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.secrets.Access(ctx, v, org.ID, req.Id)
-	if err != nil {
-		return nil, secretFail(err, "secret")
-	}
-	return ListSecretAccess200JSONResponse{Access: nonNil(mapAll(list, grantee))}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]secrets.Principal, error) {
+		list, err := a.secrets.Access(ctx, v, org.ID, req.Id)
+		return list, secretFail(err, "secret")
+	}, func(ctx context.Context) (<-chan []secrets.Principal, error) {
+		lists, err := a.secrets.FollowAccess(ctx, v, org.ID, req.Id)
+		return lists, secretFail(err, "secret")
+	}, func(list []secrets.Principal) (ListSecretAccessResponseObject, bool, error) {
+		out := ListSecretAccess200JSONResponse{}
+		out.Body.Access = nonNil(mapAll(list, grantee))
+		return listAnswer("access", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListSecretAccessResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListSecretAccessResponseObject {
+				return ListSecretAccess304Response{Headers: ListSecretAccess304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // GrantSecret lets one of the organization's principals receive the secret.

@@ -2,15 +2,21 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
+	"cobranch.dev/internal/services/issues/issuestest"
+	"cobranch.dev/internal/services/live/livetest"
 )
 
 // withIssues is a viewer's fixture with Acme's issues, Max a Developer of website: ACME-1, by Max, assigned to him and
@@ -331,4 +337,107 @@ func TestIssueWaitGone(t *testing.T) {
 		{name: "an issue there isn't", viewer: withIssues(olivia), method: "GET", path: fixed("/v1/orgs/acme/issues/9?wait=1"),
 			header: http.Header{"If-None-Match": {`"1-ACME"`}}, wantStatus: 404, wantCode: "issue.not_found"},
 	})
+}
+
+// TestBranchWaitsOnItsIssue checks that a branch's read waiting for a change answers once the branch is linked to
+// another issue or unlinked, which changes no branch: a branch's page shows the issue its branch works on.
+func TestBranchWaitsOnItsIssue(t *testing.T) {
+	t.Parallel()
+	const path = "/v1/orgs/acme/repos/website/branches/feature"
+	tests := []struct {
+		name   string
+		change func(ctx context.Context, t *testing.T, f *orgFixture)
+		want   string
+	}{
+		{name: "the branch unlinked", want: "", change: func(ctx context.Context, t *testing.T, f *orgFixture) {
+			if err := f.issues.Unlink(ctx, f.olivia.User, f.acme.ID, f.website.ID, "feature"); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "the branch linked to another issue", want: "ACME-3", change: func(ctx context.Context, t *testing.T, f *orgFixture) {
+			if _, err := f.issues.Link(ctx, f.olivia.User, f.acme.ID, f.website.ID, "feature", 3); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newOrgFixture(t)
+			viewer := withLinks(olivia)(f)
+			f.issues = issues.NewService(&lockedIssues{Store: f.issueStore}, markdown.New(nil, nil), auth.NewAuthorizer(f.store)).WithAgents(f.agents, f.agentStore)
+			f.issues.SetClock(func() time.Time { return now })
+			notifier := &livetest.Notifier{}
+			f.code.WithNotifier(notifier)
+			f.issues.WithNotifier(notifier)
+			rec := waitThrough(t, f, viewer, path, notifier, f.website.ID, func(ctx context.Context) { tt.change(ctx, t, f) })
+			got := ""
+			if issue := decode[Branch](t, rec.Body.Bytes()).Issue; issue != nil {
+				got = issue.Identifier
+			}
+			if rec.Code != http.StatusOK || got != tt.want {
+				t.Errorf("after the change = %d, issue %q; want 200, issue %q: %s", rec.Code, got, tt.want, rec.Body)
+			}
+		})
+	}
+}
+
+// lockedIssues is the issues' store a test links a branch in while a request follows the branch: the reads the
+// branch's follower makes of its link, and the link, take its lock.
+type lockedIssues struct {
+	*issuestest.Store
+	mu sync.Mutex
+}
+
+func (s *lockedIssues) Branch(ctx context.Context, orgID, repoID uuid.UUID, name string) (issues.Branch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, err := s.Store.Branch(ctx, orgID, repoID, name)
+	if err != nil {
+		return issues.Branch{}, fmt.Errorf("reading the branch: %w", err)
+	}
+	return b, nil
+}
+
+func (s *lockedIssues) ByID(ctx context.Context, issueID uuid.UUID) (issues.Issue, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	issue, err := s.Store.ByID(ctx, issueID)
+	if err != nil {
+		return issues.Issue{}, fmt.Errorf("reading the issue: %w", err)
+	}
+	return issue, nil
+}
+
+func (s *lockedIssues) Link(ctx context.Context, actor uuid.UUID, branch issues.Branch, issueID *uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.Store.Link(ctx, actor, branch, issueID); err != nil {
+		return fmt.Errorf("linking the branch: %w", err)
+	}
+	return nil
+}
+
+// waitThrough has viewer read path with the ETag of what it reads now and a wait, makes change once both the read's
+// followers watch id, wakes id, and answers the read's answer, or fails after a few seconds.
+func waitThrough(t *testing.T, f *orgFixture, viewer *auth.Authenticated, path string, notifier *livetest.Notifier, id uuid.UUID,
+	change func(ctx context.Context)) *httptest.ResponseRecorder {
+	t.Helper()
+	tag := http.Header{"If-None-Match": {f.callWith(viewer, "GET", path, "", nil).Header().Get("Etag")}}
+	answered := make(chan *httptest.ResponseRecorder, 1)
+	go func() { answered <- f.callWith(viewer, "GET", path+"?wait=15", "", tag) }()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	for notifier.Watching(id) < 2 && ctx.Err() == nil {
+		time.Sleep(10 * time.Millisecond)
+	}
+	change(ctx)
+	notifier.Wake(id)
+	select {
+	case rec := <-answered:
+		return rec
+	case <-time.After(10 * time.Second):
+		t.Fatal("no answer after the change")
+		return nil
+	}
 }

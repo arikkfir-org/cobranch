@@ -1484,13 +1484,18 @@ paths:
   /orgs/{org}/secrets/{id}/access:
     get:
       operationId: listSecretAccess
-      summary: Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+      summary: Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The principals.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1501,6 +1506,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Grantee"
+        "304":
+          description: Who holds Secret reader on it is still what If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -4779,17 +4791,29 @@ paths:
   /orgs/{org}/repos/{repo}:
     get:
       operationId: getRepository
-      summary: A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+      summary: A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404. With If-None-Match and wait, it waits up to wait seconds for the repository to change before it answers 304, so a client follows the repository by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The repository, with its current slug.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Repository"
+        "304":
+          description: The repository is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -4856,13 +4880,18 @@ paths:
   /orgs/{org}/repos/{repo}/access:
     get:
       operationId: listRepositoryAccess
-      summary: Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
+      summary: Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The principals holding roles on the repository, by display name.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -4873,6 +4902,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/RepositoryAccess"
+        "304":
+          description: Who holds roles on the repository is still what If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -4938,17 +4974,29 @@ paths:
   /orgs/{org}/repos/{repo}/secrets:
     get:
       operationId: listRepositorySecrets
-      summary: The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+      summary: The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The secrets.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecretList"
+        "304":
+          description: The secrets are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -4999,7 +5047,7 @@ paths:
   /orgs/{org}/repos/{repo}/artifacts:
     get:
       operationId: listArtifacts
-      summary: The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
+      summary: The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -5008,13 +5056,23 @@ paths:
           description: Only the artifacts of this kind.
           schema:
             $ref: "#/components/schemas/ArtifactKind"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The artifacts.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArtifactList"
+        "304":
+          description: The artifacts are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -6846,7 +6904,7 @@ paths:
   /orgs/{org}/repos/{repo}/environments:
     get:
       operationId: listEnvironments
-      summary: The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+      summary: The repository's environments, by target and then branch, each with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6855,9 +6913,14 @@ paths:
           description: Only the environments of this branch, by its short name.
           schema:
             type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The environments.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -6868,6 +6931,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Environment"
+        "304":
+          description: The environments are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -6877,12 +6947,13 @@ paths:
   /orgs/{org}/repos/{repo}/environments/{environment}:
     get:
       operationId: getEnvironment
-      summary: One of the repository's environments, with its newest delivery; takes repo.read.
+      summary: One of the repository's environments, with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the environment to change before it answers 304, so a client follows the environment by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/environmentId"
         - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The environment.
@@ -6894,10 +6965,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Environment"
         "304":
-          description: The environment is still the one If-None-Match names.
+          description: The environment is still the one If-None-Match names, after waiting wait seconds for a change.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -6907,14 +6980,19 @@ paths:
   /orgs/{org}/repos/{repo}/environments/{environment}/objects:
     get:
       operationId: listEnvironmentObjects
-      summary: What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+      summary: What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/environmentId"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The environment's objects.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -6925,6 +7003,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/EnvironmentObject"
+        "304":
+          description: The objects are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -6934,13 +7019,18 @@ paths:
   /orgs/{org}/repos/{repo}/targets:
     get:
       operationId: listDeliveryTargets
-      summary: The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+      summary: The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The targets; none without the file or a delivery key in it.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -6951,6 +7041,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/DeliveryTarget"
+        "304":
+          description: The targets are still those If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -6960,7 +7057,7 @@ paths:
   /orgs/{org}/repos/{repo}/environments/{environment}/deliveries:
     get:
       operationId: listDeliveries
-      summary: A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+      summary: A page of one of the repository's environments' deliveries, newest first; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6987,10 +7084,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The page's deliveries, newest first.
           headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -7005,6 +7106,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Delivery"
+        "304":
+          description: The page is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":

@@ -66,6 +66,44 @@ func readList[T, R any](ctx context.Context, waits time.Duration, read func(cont
 	return last, nil
 }
 
+// paired sends what as and bs send, the latest of each joined by join, once both have sent, then again each time either
+// sends, until either closes or ctx ends, and then closes its channel. A page that shows two things, each with its own
+// follower, waits on both: a branch and the issue it works on.
+func paired[A, B, T any](ctx context.Context, as <-chan A, bs <-chan B, join func(A, B) T) <-chan T {
+	out := make(chan T)
+	go func() {
+		defer close(out)
+		var a A
+		var b B
+		var hasA, hasB bool
+		for {
+			select {
+			case got, ok := <-as:
+				if !ok {
+					return
+				}
+				a, hasA = got, true
+			case got, ok := <-bs:
+				if !ok {
+					return
+				}
+				b, hasB = got, true
+			case <-ctx.Done():
+				return
+			}
+			if !hasA || !hasB {
+				continue
+			}
+			select {
+			case out <- join(a, b):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
+}
+
 // listAnswer is a list's body as a read answers it: ok with the body's ETag, or notModified while tag names it, which
 // it says.
 func listAnswer[R any](kind string, body any, tag *IfNoneMatch, ok, notModified func(etag string) R) (R, bool, error) {
