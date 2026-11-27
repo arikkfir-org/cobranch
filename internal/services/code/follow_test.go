@@ -214,16 +214,107 @@ func followRuns(ctx context.Context, t *testing.T, f *attentionFixture, v code.V
 	return func() string { return fmt.Sprint(len(sentNext(t, ch).Runs)) }, nil
 }
 
-func TestFollowRepository(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		// follow follows what the test checks of website as v, and answers a function that describes what the follower
-		// sends next.
-		follow        func(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error)
-		change        func(f *attentionFixture)
-		before, after string
-	}{
+// production is website's environment production of main, which it records the first time.
+func (f *attentionFixture) production() code.Environment {
+	for _, e := range f.store.EnvironmentList[f.website] {
+		return e
+	}
+	return f.store.AddEnvironment(f.website, code.Environment{Target: code.Principal{ID: uuid.New(), DisplayName: "production"}, Branch: "main",
+		Health: code.Progressing})
+}
+
+// followEnvironments follows website's environments as v, and answers a function that tells the targets and the
+// newest delivery's state of those it sends next.
+func followEnvironments(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error) {
+	ch, err := f.service.FollowEnvironments(ctx, v, f.website, "")
+	if err != nil {
+		return nil, fmt.Errorf("following the environments: %w", err)
+	}
+	return func() string {
+		out := []string{}
+		for _, e := range sentNext(t, ch) {
+			out = append(out, e.Target.DisplayName)
+		}
+		return fmt.Sprint(out)
+	}, nil
+}
+
+// followProduction follows website's environment production as v, and answers a function that tells the state of
+// the newest delivery of what it sends next.
+func followProduction(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error) {
+	ch, err := f.service.FollowEnvironment(ctx, v, f.website, f.production().ID)
+	if err != nil {
+		return nil, fmt.Errorf("following production: %w", err)
+	}
+	return func() string {
+		if e := sentNext(t, ch); e.Latest != nil {
+			return string(e.Latest.State)
+		}
+		return "none"
+	}, nil
+}
+
+// followObjects follows what production holds as v, and answers a function that tells the healths of what it sends
+// next.
+func followObjects(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error) {
+	ch, err := f.service.FollowEnvironmentObjects(ctx, v, f.website, f.production().ID)
+	if err != nil {
+		return nil, fmt.Errorf("following production's objects: %w", err)
+	}
+	return func() string {
+		out := []string{}
+		for _, o := range sentNext(t, ch) {
+			out = append(out, o.Name+" "+string(o.Health))
+		}
+		return fmt.Sprint(out)
+	}, nil
+}
+
+// followDeliveries follows production's deliveries as v, and answers a function that tells the states of the first
+// page it sends next.
+func followDeliveries(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error) {
+	ch, err := f.service.FollowDeliveries(ctx, v, f.website, f.production().ID, nil, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("following production's deliveries: %w", err)
+	}
+	return func() string {
+		out := []string{}
+		for _, d := range sentNext(t, ch).Deliveries {
+			out = append(out, string(d.State))
+		}
+		return fmt.Sprint(out)
+	}, nil
+}
+
+// followTargets follows the targets main declares as v, and answers a function that tells the names of those it sends
+// next.
+func followTargets(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error) {
+	ch, err := f.service.FollowDeliveryTargets(ctx, v, f.website)
+	if err != nil {
+		return nil, fmt.Errorf("following the targets: %w", err)
+	}
+	return func() string {
+		out := []string{}
+		for _, d := range sentNext(t, ch) {
+			out = append(out, d.Name)
+		}
+		return fmt.Sprint(out)
+	}, nil
+}
+
+// repositoryFollow is what a follower of website sends before and after a change elsewhere.
+type repositoryFollow struct {
+	name string
+	// follow follows what the test checks of website as v, and answers a function that describes what the follower
+	// sends next.
+	follow        func(ctx context.Context, t *testing.T, f *attentionFixture, v code.Viewer) (func() string, error)
+	change        func(f *attentionFixture)
+	before, after string
+}
+
+// repositoryFollows are the followers of website's pages, each with a change that its pages show.
+func repositoryFollows() []repositoryFollow {
+	return []repositoryFollow{
 		{name: "a branch opened elsewhere", follow: followBranches, change: func(f *attentionFixture) { f.pushTo("fix", "Fix") },
 			before: "[main]", after: "[main fix]"},
 		{name: "a push to the branch", follow: followMain, change: func(f *attentionFixture) { f.pushTo("main", "Second") },
@@ -244,8 +335,26 @@ func TestFollowRepository(t *testing.T) {
 		{name: "a run queued", follow: followRuns, change: func(f *attentionFixture) {
 			f.store.AddRun(f.website, code.Run{State: jobs.StateQueued, SHA: f.pushTo("main", "Second")})
 		}, before: "0", after: "1"},
+		{name: "an environment made", follow: followEnvironments, change: func(f *attentionFixture) { f.production() },
+			before: "[]", after: "[production]"},
+		{name: "a delivery to the environment", follow: followProduction, change: func(f *attentionFixture) {
+			f.store.AddDelivery(f.website, code.Delivery{EnvironmentID: f.production().ID, Kind: code.DeliverCommit, State: code.DeliveryApplying})
+		}, before: "none", after: "applying"},
+		{name: "an object's health read", follow: followObjects, change: func(f *attentionFixture) {
+			f.store.Objects[f.production().ID] = []code.EnvironmentObject{{Kind: "Deployment", Name: "web", Health: code.Healthy}}
+		}, before: "[]", after: "[web healthy]"},
+		{name: "a delivery queued", follow: followDeliveries, change: func(f *attentionFixture) {
+			f.store.AddDelivery(f.website, code.Delivery{EnvironmentID: f.production().ID, Kind: code.DeliverCommit, State: code.DeliveryQueued})
+		}, before: "[]", after: "[queued]"},
+		{name: "a target declared on main", follow: followTargets, change: func(f *attentionFixture) {
+			f.store.Targets[f.website] = []code.Target{{Name: "production", Branches: []string{"main"}, Namespace: "website"}}
+		}, before: "[]", after: "[production]"},
 	}
-	for _, tt := range tests {
+}
+
+func TestFollowRepository(t *testing.T) {
+	t.Parallel()
+	for _, tt := range repositoryFollows() {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())

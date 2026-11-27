@@ -12,19 +12,20 @@ import { render } from "./router.js";
 // header, and each row's Change and Delete. The values are never shown: the API keeps them sealed for those granted
 // them. A viewer who manages the organization's grants grants them, in Change, to its members, its API keys, its agents
 // and the jobs of repos. Without readers, as a repository's Secrets tab draws them, the table leaves out who may read
-// each, which Change still says; description replaces the header's line. read, when given, hears the ETag of the
-// secrets it lists, for a page that follows them once it shows the sections.
-export async function secretsSections(org, path, grants, fail, repos, actions, { readers = true, description, read: tagged } = {}) {
+// each, which Change still says; description replaces the header's line. follow, when given, hears the path and the
+// ETag of each list it read, the secrets and who reads each, for a page that follows them once it shows the sections.
+export async function secretsSections(org, path, grants, fail, repos, actions, { readers = true, description, follow } = {}) {
   const item = (s) => "/orgs/" + org.slug + "/secrets/" + s.id;
   const read = await readTagged(path);
   const list = read.data.secrets;
-  const [access, members, keys, agents, jobs] = await Promise.all([
-    Promise.all(list.map((s) => api("GET", item(s) + "/access").then((d) => d.access))),
+  const [readsOf, members, keys, agents, jobs] = await Promise.all([
+    Promise.all(list.map((s) => readTagged(item(s) + "/access"))),
     grants ? api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members) : [],
     grants ? api("GET", "/orgs/" + org.slug + "/api-keys").then((d) => d.apiKeys) : [],
     grants ? api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents) : [],
     grants ? Promise.all(repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/jobs").then((d) => d.jobs.map((j) => ({ ...j, repo: r }))))).then((all) => all.flat()) : [],
   ]);
+  const access = readsOf.map((r) => r.data.access);
   const ifMatch = (s) => ({ "If-Match": '"' + s.version + '"' });
   const kinds = { api_key: "API key", job: "Job", agent: "Agent" };
   const names = new Map([...members.map((m) => [m.userId, m.displayName]), ...agents.map((a) => [a.id, a.name + " (agent)"]), ...keys.map((k) => [k.id, k.name + " (API key)"])]);
@@ -52,7 +53,7 @@ export async function secretsSections(org, path, grants, fail, repos, actions, {
   const header = h("header", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Secrets"),
     h("p", { class: "section-header-description" }, description || ["Values jobs and agents read by ID, from ", h("code", {}, "/cobranch.yaml"), ". A value is sealed as it arrives, never shown again; change it to replace it."])),
   actions ? null : add);
-  if (tagged) tagged(read.tag);
+  if (follow) [[path, read.tag], ...list.map((s, i) => [item(s) + "/access", readsOf[i].tag])].forEach(([p, tag]) => follow(p, tag));
   return [
     header,
     ...(list.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-count" }, plural(list.length, "secret"))), table, none]

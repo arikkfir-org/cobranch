@@ -128,6 +128,78 @@ func (s *Service) FollowReviews(ctx context.Context, v Viewer, repoID uuid.UUID,
 	return page, failed(span, "following the reviews", err)
 }
 
+// FollowEnvironments sends the repository's live environments, those of branch alone when it is given, as
+// Environments lists them, at once, then again each time they change (one made or torn down, a delivery that moves,
+// its health, a pause), until ctx ends or a read fails, and then closes the channel. The Delivery page and a branch's
+// Environment tab follow them.
+func (s *Service) FollowEnvironments(ctx context.Context, v Viewer, repoID uuid.UUID, branch string) (<-chan []Environment, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.FollowEnvironments")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", branch))
+	list, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) ([]Environment, error) {
+		list, err := s.Environments(ctx, v, repoID, branch)
+		return list, gone(err)
+	}, repoID)
+	return list, failed(span, "following the environments", err)
+}
+
+// FollowEnvironment sends one of the repository's live environments, as Environment answers it, at once, then again
+// each time it changes, until ctx ends or a read fails (the environment torn down among them), and then closes the
+// channel. An environment's page follows it.
+func (s *Service) FollowEnvironment(ctx context.Context, v Viewer, repoID, id uuid.UUID) (<-chan Environment, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.FollowEnvironment")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.environment.id", id.String()))
+	e, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (Environment, error) {
+		e, err := s.Environment(ctx, v, repoID, id)
+		return e, gone(err)
+	}, repoID)
+	return e, failed(span, "following the environment", err)
+}
+
+// FollowEnvironmentObjects sends what one of the repository's environments holds, as EnvironmentObjects lists it, at
+// once, then again each time it changes (an apply, an object's health), until ctx ends or a read fails, and then
+// closes the channel. An environment's card follows them.
+func (s *Service) FollowEnvironmentObjects(ctx context.Context, v Viewer, repoID, environmentID uuid.UUID) (<-chan []EnvironmentObject, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.FollowEnvironmentObjects")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.environment.id", environmentID.String()))
+	list, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) ([]EnvironmentObject, error) {
+		list, err := s.EnvironmentObjects(ctx, v, repoID, environmentID)
+		return list, gone(err)
+	}, repoID)
+	return list, failed(span, "following the environment's objects", err)
+}
+
+// FollowDeliveryTargets sends the targets the repository's default branch declares, as DeliveryTargets lists them, at
+// once, then again each time they change (a push to it), until ctx ends or a read fails, and then closes the channel.
+// The Delivery page follows them.
+func (s *Service) FollowDeliveryTargets(ctx context.Context, v Viewer, repoID uuid.UUID) (<-chan []DeliveryTarget, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.FollowDeliveryTargets")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()))
+	list, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) ([]DeliveryTarget, error) {
+		list, err := s.DeliveryTargets(ctx, v, repoID)
+		return list, gone(err)
+	}, repoID)
+	return list, failed(span, "following the targets", err)
+}
+
+// FollowDeliveries sends the page of one of the repository's environments' deliveries that Deliveries lists for kinds,
+// before and limit, at once, then again each time it changes (one queued, started or ended), until ctx ends or a read
+// fails, and then closes the channel. An environment's card follows its first page.
+func (s *Service) FollowDeliveries(ctx context.Context, v Viewer, repoID, environmentID uuid.UUID, kinds []DeliveryKind, before int64,
+	limit int) (<-chan DeliveryPage, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.FollowDeliveries")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.environment.id", environmentID.String()))
+	page, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (DeliveryPage, error) {
+		page, err := s.Deliveries(ctx, v, repoID, environmentID, kinds, before, limit)
+		return page, gone(err)
+	}, repoID)
+	return page, failed(span, "following the deliveries", err)
+}
+
 // gone marks err live.ErrGone when it says that what a follower reads is gone or no longer the viewer's to read (a
 // branch deleted, its ref with it, the repository or the viewer's access to it), so that the follower stops without
 // reporting a failure.

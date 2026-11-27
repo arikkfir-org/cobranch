@@ -98,14 +98,17 @@ export async function followLists(lists, still, changed, options = {}) {
   if (await watchLists(lists, still, stop.signal, options) && still()) changed();
 }
 
-// writing reports whether the viewer is in the middle of something a draw would lose: a dialog or a menu open, or the
-// focus in one of the page's fields that takes text other than its filter.
+// typed are the kinds of the page's fields that take text, its filter aside.
+const typed = (el) => el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["search", "checkbox", "radio", "button", "submit", "reset", "hidden"].includes(el.type));
+
+// writing reports whether the viewer is in the middle of something a draw would lose: a dialog or a menu open, the
+// focus in one of the page's fields that takes text other than its filter, or such a field holding what the viewer
+// typed and hasn't saved, which differs from the value the page drew it with (its defaultValue).
 function writing() {
   if (document.querySelector("dialog[open], .app-popover")) return true;
   const el = document.activeElement;
-  if (!el || !el.closest("main.page")) return false;
-  return el.isContentEditable || el.tagName === "TEXTAREA" || el.tagName === "SELECT" ||
-    (el.tagName === "INPUT" && !["search", "checkbox", "radio", "button", "submit", "reset"].includes(el.type));
+  if (el && el.closest("main.page") && (el.isContentEditable || el.tagName === "SELECT" || typed(el))) return true;
+  return [...document.querySelectorAll("main.page input, main.page textarea")].some((f) => typed(f) && !f.disabled && f.value !== f.defaultValue);
 }
 
 // drawAgain draws a page again with draw once a list it follows changed, keeping what the viewer typed in its filter,

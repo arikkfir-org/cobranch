@@ -78,144 +78,171 @@ func deliveryLocation(org, repo string, number int64) string {
 	return "/v1/orgs/" + url.PathEscape(org) + "/repos/" + url.PathEscape(repo) + "/deliveries/" + strconv.FormatInt(number, 10)
 }
 
-// ListEnvironments lists the repository's environments, of one branch when the query names it.
+// ListEnvironments lists the repository's environments, of one branch when the query names it, or 304 while the caller
+// holds them, after waiting for them to change as wait asks.
 func (a api) ListEnvironments(ctx context.Context, req ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	branch := ""
-	if req.Params.Branch != nil {
-		branch = *req.Params.Branch
-	}
-	list, err := a.code.Environments(ctx, v, repo.ID, branch)
-	if err != nil {
-		return nil, fail(err, "repository")
-	}
-	out := ListEnvironments200JSONResponse{Environments: make([]Environment, 0, len(list))}
-	for _, e := range list {
-		out.Environments = append(out.Environments, environment(e))
-	}
-	return out, nil
+	branch := orEmpty(req.Params.Branch)
+	return readList(ctx, waits, func(ctx context.Context) ([]code.Environment, error) {
+		list, err := a.code.Environments(ctx, v, repo.ID, branch)
+		return list, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan []code.Environment, error) {
+		lists, err := a.code.FollowEnvironments(ctx, v, repo.ID, branch)
+		return lists, fail(err, "repository")
+	}, func(list []code.Environment) (ListEnvironmentsResponseObject, bool, error) {
+		out := ListEnvironments200JSONResponse{}
+		out.Body.Environments = mapAll(list, environment)
+		return listAnswer("environments", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListEnvironmentsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListEnvironmentsResponseObject {
+				return ListEnvironments304Response{Headers: ListEnvironments304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
-// GetEnvironment answers one of the repository's environments, or 304 while the caller holds how it reads.
+// GetEnvironment answers one of the repository's environments, or 304 while the caller holds how it reads, after
+// waiting for it to change as wait asks.
 func (a api) GetEnvironment(ctx context.Context, req GetEnvironmentRequestObject) (GetEnvironmentResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	e, err := a.code.Environment(ctx, v, repo.ID, req.Environment)
-	if err != nil {
-		return nil, fail(err, "environment")
-	}
-	body, tag, err := taggedEnvironment(e)
-	if err != nil {
-		return nil, err
-	}
-	if matches(req.Params.IfNoneMatch, tag) {
-		return GetEnvironment304Response{Headers: GetEnvironment304ResponseHeaders{ETag: tag}}, nil
-	}
-	return GetEnvironment200JSONResponse{Body: body, Headers: GetEnvironment200ResponseHeaders{ETag: tag}}, nil
+	return readList(ctx, waits, func(ctx context.Context) (code.Environment, error) {
+		e, err := a.code.Environment(ctx, v, repo.ID, req.Environment)
+		return e, fail(err, "environment")
+	}, func(ctx context.Context) (<-chan code.Environment, error) {
+		e, err := a.code.FollowEnvironment(ctx, v, repo.ID, req.Environment)
+		return e, fail(err, "environment")
+	}, func(e code.Environment) (GetEnvironmentResponseObject, bool, error) {
+		body, tag, err := taggedEnvironment(e)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches(req.Params.IfNoneMatch, tag) {
+			return GetEnvironment304Response{Headers: GetEnvironment304ResponseHeaders{ETag: tag}}, true, nil
+		}
+		return GetEnvironment200JSONResponse{Body: body, Headers: GetEnvironment200ResponseHeaders{ETag: tag}}, false, nil
+	})
 }
 
-// ListEnvironmentObjects lists what one of the repository's environments holds, in order.
+// ListEnvironmentObjects lists what one of the repository's environments holds, in order, or 304 while the caller
+// holds it, after waiting for it to change as wait asks.
 func (a api) ListEnvironmentObjects(ctx context.Context, req ListEnvironmentObjectsRequestObject) (ListEnvironmentObjectsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.code.EnvironmentObjects(ctx, v, repo.ID, req.Environment)
-	if err != nil {
-		return nil, fail(err, "environment")
-	}
-	out := ListEnvironmentObjects200JSONResponse{Objects: make([]EnvironmentObject, 0, len(list))}
-	for _, o := range list {
-		out.Objects = append(out.Objects, environmentObject(o))
-	}
-	return out, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]code.EnvironmentObject, error) {
+		list, err := a.code.EnvironmentObjects(ctx, v, repo.ID, req.Environment)
+		return list, fail(err, "environment")
+	}, func(ctx context.Context) (<-chan []code.EnvironmentObject, error) {
+		lists, err := a.code.FollowEnvironmentObjects(ctx, v, repo.ID, req.Environment)
+		return lists, fail(err, "environment")
+	}, func(list []code.EnvironmentObject) (ListEnvironmentObjectsResponseObject, bool, error) {
+		out := ListEnvironmentObjects200JSONResponse{}
+		out.Body.Objects = mapAll(list, environmentObject)
+		return listAnswer("objects", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListEnvironmentObjectsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListEnvironmentObjectsResponseObject {
+				return ListEnvironmentObjects304Response{Headers: ListEnvironmentObjects304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
-// ListDeliveryTargets lists the targets the repository's default branch declares.
+// ListDeliveryTargets lists the targets the repository's default branch declares, or 304 while the caller holds them,
+// after waiting for them to change as wait asks.
 func (a api) ListDeliveryTargets(ctx context.Context, req ListDeliveryTargetsRequestObject) (ListDeliveryTargetsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.code.DeliveryTargets(ctx, v, repo.ID)
-	if err != nil {
-		return nil, fail(err, "repository")
-	}
-	out := ListDeliveryTargets200JSONResponse{Targets: make([]DeliveryTarget, 0, len(list))}
-	for _, t := range list {
-		out.Targets = append(out.Targets, deliveryTarget(t))
-	}
-	return out, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]code.DeliveryTarget, error) {
+		list, err := a.code.DeliveryTargets(ctx, v, repo.ID)
+		return list, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan []code.DeliveryTarget, error) {
+		lists, err := a.code.FollowDeliveryTargets(ctx, v, repo.ID)
+		return lists, fail(err, "repository")
+	}, func(list []code.DeliveryTarget) (ListDeliveryTargetsResponseObject, bool, error) {
+		out := ListDeliveryTargets200JSONResponse{}
+		out.Body.Targets = mapAll(list, deliveryTarget)
+		return listAnswer("targets", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListDeliveryTargetsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListDeliveryTargetsResponseObject {
+				return ListDeliveryTargets304Response{Headers: ListDeliveryTargets304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // ListDeliveries lists a page of one of the repository's environments' deliveries, of the kinds the query names, and
-// links the next.
+// links the next, or answers 304 while the caller holds the page, after waiting for it to change as wait asks.
 func (a api) ListDeliveries(ctx context.Context, req ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error) {
-	v, err := viewer(ctx)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	before, limit, kinds, err := deliveriesQuery(req.Params)
 	if err != nil {
 		return nil, err
 	}
+	return readList(ctx, waits, func(ctx context.Context) (code.DeliveryPage, error) {
+		page, err := a.code.Deliveries(ctx, v, repo.ID, req.Environment, kinds, before, limit)
+		return page, fail(err, "environment")
+	}, func(ctx context.Context) (<-chan code.DeliveryPage, error) {
+		pages, err := a.code.FollowDeliveries(ctx, v, repo.ID, req.Environment, kinds, before, limit)
+		return pages, fail(err, "environment")
+	}, func(page code.DeliveryPage) (ListDeliveriesResponseObject, bool, error) {
+		out := ListDeliveries200JSONResponse{}
+		out.Body.Deliveries = mapAll(page.Deliveries, delivery)
+		if page.Next != 0 {
+			link := `<?` + deliveriesNext(page.Next, kinds, limit).Encode() + `>; rel="next"`
+			out.Headers.Link = &link
+		}
+		etag, err := bodyTag("deliveries", out.Body, out.Headers.Link)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches(req.Params.IfNoneMatch, etag) {
+			return ListDeliveries304Response{Headers: ListDeliveries304ResponseHeaders{ETag: etag}}, true, nil
+		}
+		out.Headers.ETag = etag
+		return out, false, nil
+	})
+}
+
+// deliveriesQuery is the page of deliveries p asks for: where it starts, how long it is and the kinds it holds.
+func deliveriesQuery(p ListDeliveriesParams) (int64, int, []code.DeliveryKind, error) {
 	before, limit := int64(0), 0
-	if p := req.Params; p.Cursor != nil {
+	if p.Cursor != nil {
+		var err error
 		if before, err = strconv.ParseInt(*p.Cursor, 10, 64); err != nil || before < 1 {
-			return nil, refuse(http.StatusBadRequest, "cursor.invalid", "Start from the cursor the previous page's Link names.")
+			return 0, 0, nil, refuse(http.StatusBadRequest, "cursor.invalid", "Start from the cursor the previous page's Link names.")
 		}
 	}
-	if p := req.Params; p.Limit != nil {
+	if p.Limit != nil {
 		limit = *p.Limit
 	}
 	var kinds []code.DeliveryKind
-	if p := req.Params; p.Kind != nil {
+	if p.Kind != nil {
 		for _, k := range *p.Kind {
 			kinds = append(kinds, code.DeliveryKind(k))
 		}
 	}
-	page, err := a.code.Deliveries(ctx, v, repo.ID, req.Environment, kinds, before, limit)
-	if err != nil {
-		return nil, fail(err, "environment")
+	return before, limit, kinds, nil
+}
+
+// deliveriesNext is the query of the page of deliveries of kinds, limit long, after the one that ends at next.
+func deliveriesNext(next int64, kinds []code.DeliveryKind, limit int) url.Values {
+	q := url.Values{"cursor": {strconv.FormatInt(next, 10)}}
+	for _, k := range kinds {
+		q.Add("kind", string(k))
 	}
-	out := ListDeliveries200JSONResponse{}
-	out.Body.Deliveries = make([]Delivery, 0, len(page.Deliveries))
-	for _, d := range page.Deliveries {
-		out.Body.Deliveries = append(out.Body.Deliveries, delivery(d))
+	if limit != 0 {
+		q.Set("limit", strconv.Itoa(limit))
 	}
-	if page.Next != 0 {
-		next := url.Values{"cursor": {strconv.FormatInt(page.Next, 10)}}
-		for _, k := range kinds {
-			next.Add("kind", string(k))
-		}
-		if limit != 0 {
-			next.Set("limit", strconv.Itoa(limit))
-		}
-		link := `<?` + next.Encode() + `>; rel="next"`
-		out.Headers.Link = &link
-	}
-	return out, nil
+	return q
 }
 
 // Redeliver queues a delivery of the head of one of the repository's environments' branch for the viewer, and names

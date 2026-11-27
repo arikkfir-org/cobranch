@@ -19,6 +19,7 @@ import (
 // Artifacts is what the API needs of the artifacts' service.
 type Artifacts interface {
 	List(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, kind artifacts.Kind) ([]artifacts.Artifact, error)
+	FollowList(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, kind artifacts.Kind) (<-chan []artifacts.Artifact, error)
 	ListOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) ([]artifacts.Artifact, error)
 	FollowOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) (<-chan []artifacts.Artifact, error)
 	Get(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Artifact, error)
@@ -159,7 +160,8 @@ func orNone[T ~string](s *T) T {
 	return *s
 }
 
-// ListArtifacts lists the repository's artifacts that the caller reads.
+// ListArtifacts lists the repository's artifacts that the caller reads, or 304 while the caller holds them, after
+// waiting for them to change as wait asks.
 func (a api) ListArtifacts(ctx context.Context, req ListArtifactsRequestObject) (ListArtifactsResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -169,11 +171,25 @@ func (a api) ListArtifacts(ctx context.Context, req ListArtifactsRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.artifacts.List(ctx, v, repo.OrgID, repo.ID, artifacts.Kind(orNone(req.Params.Kind)))
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, artifactFail(err, "repository")
+		return nil, err
 	}
-	return ListArtifacts200JSONResponse{Artifacts: nonNil(mapAll(list, artifact))}, nil
+	kind := artifacts.Kind(orNone(req.Params.Kind))
+	return readList(ctx, waits, func(ctx context.Context) ([]artifacts.Artifact, error) {
+		list, err := a.artifacts.List(ctx, v, repo.OrgID, repo.ID, kind)
+		return list, artifactFail(err, "repository")
+	}, func(ctx context.Context) (<-chan []artifacts.Artifact, error) {
+		lists, err := a.artifacts.FollowList(ctx, v, repo.OrgID, repo.ID, kind)
+		return lists, artifactFail(err, "repository")
+	}, func(list []artifacts.Artifact) (ListArtifactsResponseObject, bool, error) {
+		out := ListArtifacts200JSONResponse{Body: ArtifactList{Artifacts: nonNil(mapAll(list, artifact))}}
+		return listAnswer("artifacts", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListArtifactsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListArtifactsResponseObject {
+				return ListArtifacts304Response{Headers: ListArtifacts304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // ListOrganizationArtifacts lists the organization's artifacts that the caller may list or read, or, with

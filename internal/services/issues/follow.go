@@ -64,6 +64,18 @@ func (s *Service) FollowBranches(ctx context.Context, v Viewer, orgID uuid.UUID,
 	return branches, wrap("following the issue's branches", err)
 }
 
+// FollowBranchLink sends the issue a repository's branch works on, as OfBranch answers it, at once, then again each
+// time it changes (the branch linked to an issue, or unlinked), until ctx ends or a read fails, and then closes the
+// channel. It follows the repository, which a link names (migration 00076): a branch's page follows it beside the
+// branch, and the issue's own title and state show at the page's next ask.
+func (s *Service) FollowBranchLink(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, name string) (<-chan *Link, error) {
+	link, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (*Link, error) {
+		link, err := s.OfBranch(ctx, v, orgID, repoID, name)
+		return link, gone(err)
+	}, repoID)
+	return link, wrap("following the branch's issue", err)
+}
+
 // gone marks err live.ErrGone when it says that what a follower reads is gone or no longer the viewer's to read (the
 // issue deleted, the organization or the viewer's access to it), so that the follower stops without reporting a
 // failure.

@@ -86,3 +86,27 @@ func TestFollowOrganization(t *testing.T) {
 		})
 	}
 }
+
+func TestFollowList(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFixture(t)
+	notifier := &livetest.Notifier{}
+	f.service.WithNotifier(notifier)
+	if _, err := f.service.FollowList(ctx, f.nia, f.acme, f.website, ""); !errors.Is(err, artifacts.ErrNotFound) {
+		t.Errorf("an outsider follows them: %v; want %v", err, artifacts.ErrNotFound)
+	}
+	lists, err := f.service.FollowList(ctx, f.olivia, f.acme, f.website, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := followed(t, lists)
+	f.store.Now = f.store.Now.Add(time.Second)
+	if _, _, err := f.service.Create(ctx, f.olivia, f.acme, f.website, input("Notes")); err != nil {
+		t.Fatal(err)
+	}
+	notifier.Wake(f.acme)
+	want := slices.Sorted(slices.Values(append(slices.Clone(before), "Notes")))
+	checkChanged(t, lists, before, want)
+}

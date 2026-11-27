@@ -61,10 +61,12 @@ async function repositoryBranch(ctx, name) {
   const tab = b.base || tabShown() !== "changes" ? tabShown() : "";
   // The base's requirements, which b's checks stand against: b's own are those of merges into it.
   const base = b.base && checking.includes(b.status) ? await api("GET", ctx.path + "/branches/" + encodeURIComponent(b.base)).catch(() => null) : null;
-  // b's environments, which its header opens when exactly one of them has an address, and its Environment tab draws.
-  const envs = api("GET", ctx.path + "/environments?" + new URLSearchParams({ branch: b.name })).then((d) => d.environments);
-  return [branchHeader(ctx, b, envs), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements, tab) : null, branchTabBar(ctx, b, tab),
-    ...await tabContent(ctx, b, tab, envs)].filter(Boolean);
+  // b's environments, which its header opens when exactly one of them has an address, and its Environment tab draws
+  // and follows.
+  const envs = { path: ctx.path + "/environments?" + new URLSearchParams({ branch: b.name }) };
+  envs.read = readTagged(envs.path);
+  return [branchHeader(ctx, b, envs.read.then((r) => r.data.environments)), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements, tab) : null,
+    branchTabBar(ctx, b, tab), ...await tabContent(ctx, b, tab, envs)].filter(Boolean);
 }
 
 // tabContent is what b's tab shows: its overview, its changes with its chat's threads on their lines and the reviews of
@@ -79,7 +81,11 @@ async function tabContent(ctx, b, tab, envs) {
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
   if (tab === "jobs") return branchJobs(path, at, b, can, fail, ctx.follow);
-  if (tab === "environment") return environmentsOf(ctx, b, await envs);
+  if (tab === "environment") {
+    const { data, tag } = await envs.read;
+    ctx.follow(envs.path, tag);
+    return environmentsOf(ctx, b, data.environments);
+  }
   if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
   return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,
     b.commit ? commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)) : null];

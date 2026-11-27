@@ -213,7 +213,7 @@ func TestOrganizationPagesNotify(t *testing.T) {
 	const org, repo = "notify_changes('org_id')", "notify_changes('org_id', 'repo_id')"
 	for table, want := range map[string]string{"repositories": org, "branches": repo, "annotations": repo, "pushes": repo, "reviews": repo,
 		"issues": org, "branch_issues": "notify_branch_issue_changes()", "agent_tasks": org, "task_spend": org, "job_runs": repo, "deliveries": repo, "artifacts": org,
-		"packs": repo, "organization_limits": org} {
+		"packs": repo, "organization_limits": org, "environments": repo} {
 		def := defs[table]
 		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, want) {
 			t.Errorf("table %s's trigger notify_changes = %q; want one after every change, %s", table, def, want)
@@ -242,6 +242,29 @@ func TestBranchIssuesNotify(t *testing.T) {
 			hearNotified(t, f, step.sql, []any{branch, f.acme.ID}, f.acme.ID, f.website.ID)
 		})
 	}
+}
+
+// TestEnvironmentObjectsNotify checks that a change to an object an environment holds, which carries neither, names
+// the environment's organization and repository: an object's health moves without its environment's while a rollout
+// runs.
+func TestEnvironmentObjectsNotify(t *testing.T) {
+	t.Parallel()
+	f := newRepoFixture(t)
+	target, env := uuid.New(), uuid.New()
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO principals (id, kind, display_name, org_id) VALUES ($1, 'target', 'production', $2)", []any{target, f.acme.ID}},
+		{"INSERT INTO delivery_targets (principal_id, org_id, repo_id, name) VALUES ($1, $2, $3, 'production')", []any{target, f.acme.ID, f.website.ID}},
+		{"INSERT INTO environments (id, org_id, repo_id, target_id, branch, namespace) VALUES ($1, $2, $3, $4, 'main', 'website')", []any{env, f.acme.ID, f.website.ID, target}},
+		{`INSERT INTO environment_objects (environment_id, position, api_group, version, kind, namespace, name, uid)
+			VALUES ($1, 0, 'apps', 'v1', 'Deployment', 'website', 'web', 'u1')`, []any{env}},
+	} {
+		_, err := f.pool.Exec(context.Background(), q.sql, q.args...)
+		must(t, err)
+	}
+	hearNotified(t, f, "UPDATE environment_objects SET health = 'healthy', ready = '1/1' WHERE environment_id = $1", []any{env}, f.acme.ID, f.website.ID)
 }
 
 // hearNotified listens on channel cobranch_changes, runs the change sql makes with args, and checks that the channel then
