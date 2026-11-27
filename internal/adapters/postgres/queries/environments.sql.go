@@ -245,7 +245,7 @@ func (q *Queries) EndDelivery(ctx context.Context, state string, reason string, 
 }
 
 const environmentByID = `-- name: EnvironmentByID :one
-SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, t.name AS target
+SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, e.namespace_labels, t.name AS target
 FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
 WHERE e.repo_id = $1 AND e.id = $2 AND e.deleted_at IS NULL
 `
@@ -274,13 +274,14 @@ func (q *Queries) EnvironmentByID(ctx context.Context, repoID uuid.UUID, iD uuid
 		&i.Environment.CreatedAt,
 		&i.Environment.DeletedAt,
 		&i.Environment.Version,
+		&i.Environment.NamespaceLabels,
 		&i.Target,
 	)
 	return i, err
 }
 
 const environmentForUpdate = `-- name: EnvironmentForUpdate :one
-SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, t.name AS target
+SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, e.namespace_labels, t.name AS target
 FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
 WHERE e.repo_id = $1 AND e.id = $2 AND e.deleted_at IS NULL
 FOR UPDATE OF e
@@ -311,13 +312,14 @@ func (q *Queries) EnvironmentForUpdate(ctx context.Context, repoID uuid.UUID, iD
 		&i.Environment.CreatedAt,
 		&i.Environment.DeletedAt,
 		&i.Environment.Version,
+		&i.Environment.NamespaceLabels,
 		&i.Target,
 	)
 	return i, err
 }
 
 const environmentsOf = `-- name: EnvironmentsOf :many
-SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, t.name AS target
+SELECT e.id, e.org_id, e.repo_id, e.target_id, e.branch, e.cluster, e.namespace, e.revision, e.synced_at, e.sync, e.health, e.paused, e.created_at, e.deleted_at, e.version, e.namespace_labels, t.name AS target
 FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
 WHERE e.repo_id = $1 AND e.deleted_at IS NULL AND ($2::text = '' OR e.branch = $2::text)
 ORDER BY t.name, e.branch
@@ -355,6 +357,7 @@ func (q *Queries) EnvironmentsOf(ctx context.Context, repoID uuid.UUID, branch s
 			&i.Environment.CreatedAt,
 			&i.Environment.DeletedAt,
 			&i.Environment.Version,
+			&i.Environment.NamespaceLabels,
 			&i.Target,
 		); err != nil {
 			return nil, err
@@ -445,19 +448,20 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 }
 
 const insertEnvironment = `-- name: InsertEnvironment :one
-INSERT INTO environments (id, org_id, repo_id, target_id, branch, cluster, namespace)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, org_id, repo_id, target_id, branch, cluster, namespace, revision, synced_at, sync, health, paused, created_at, deleted_at, version
+INSERT INTO environments (id, org_id, repo_id, target_id, branch, cluster, namespace, namespace_labels)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, org_id, repo_id, target_id, branch, cluster, namespace, revision, synced_at, sync, health, paused, created_at, deleted_at, version, namespace_labels
 `
 
 type InsertEnvironmentParams struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	RepoID    uuid.UUID
-	TargetID  uuid.UUID
-	Branch    string
-	Cluster   *uuid.UUID
-	Namespace string
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	RepoID          uuid.UUID
+	TargetID        uuid.UUID
+	Branch          string
+	Cluster         *uuid.UUID
+	Namespace       string
+	NamespaceLabels []byte
 }
 
 func (q *Queries) InsertEnvironment(ctx context.Context, arg InsertEnvironmentParams) (Environment, error) {
@@ -469,6 +473,7 @@ func (q *Queries) InsertEnvironment(ctx context.Context, arg InsertEnvironmentPa
 		arg.Branch,
 		arg.Cluster,
 		arg.Namespace,
+		arg.NamespaceLabels,
 	)
 	var i Environment
 	err := row.Scan(
@@ -487,6 +492,7 @@ func (q *Queries) InsertEnvironment(ctx context.Context, arg InsertEnvironmentPa
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.Version,
+		&i.NamespaceLabels,
 	)
 	return i, err
 }
@@ -661,7 +667,7 @@ func (q *Queries) LiveBranchHeads(ctx context.Context, repoID uuid.UUID) ([]Live
 }
 
 const liveEnvironment = `-- name: LiveEnvironment :one
-SELECT id, org_id, repo_id, target_id, branch, cluster, namespace, revision, synced_at, sync, health, paused, created_at, deleted_at, version FROM environments WHERE target_id = $1 AND branch = $2 AND deleted_at IS NULL
+SELECT id, org_id, repo_id, target_id, branch, cluster, namespace, revision, synced_at, sync, health, paused, created_at, deleted_at, version, namespace_labels FROM environments WHERE target_id = $1 AND branch = $2 AND deleted_at IS NULL
 `
 
 // LiveEnvironment finds a target's live environment of a branch.
@@ -684,6 +690,7 @@ func (q *Queries) LiveEnvironment(ctx context.Context, targetID uuid.UUID, branc
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.Version,
+		&i.NamespaceLabels,
 	)
 	return i, err
 }
@@ -759,6 +766,16 @@ UPDATE environments SET paused = $1 WHERE id = $2
 // SetEnvironmentPaused pauses or resumes an environment.
 func (q *Queries) SetEnvironmentPaused(ctx context.Context, paused bool, iD uuid.UUID) error {
 	_, err := q.db.Exec(ctx, setEnvironmentPaused, paused, iD)
+	return err
+}
+
+const setNamespaceLabels = `-- name: SetNamespaceLabels :exec
+UPDATE environments SET namespace_labels = $1 WHERE id = $2 AND namespace_labels <> $1
+`
+
+// SetNamespaceLabels keeps an environment's target's namespace labels as the default branch now sets them.
+func (q *Queries) SetNamespaceLabels(ctx context.Context, namespaceLabels []byte, iD uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setNamespaceLabels, namespaceLabels, iD)
 	return err
 }
 

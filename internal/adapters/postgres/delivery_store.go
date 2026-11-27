@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -152,9 +153,13 @@ func (s *DeliveryStore) TakeApply(ctx context.Context, deliveryID uuid.UUID, lea
 		if err != nil {
 			return err
 		}
+		var labels map[string]string
+		if err := json.Unmarshal(row.NamespaceLabels, &labels); err != nil {
+			return fmt.Errorf("reading environment %s's namespace labels: %w", row.EnvironmentID, err)
+		}
 		a = deliverer.Apply{ID: row.ID, OrgID: row.OrgID, RepoID: row.RepoID, EnvironmentID: row.EnvironmentID, TargetID: row.TargetID,
-			Number: row.Number, Kind: kind, Target: row.Target, SHA: row.Sha, Namespace: row.Namespace, Cluster: row.Cluster,
-			Revision: derefString(row.Revision), Health: code.Health(row.EnvironmentHealth), Manifests: manifests, Rendered: rendered,
+			Number: row.Number, Kind: kind, Target: row.Target, SHA: row.Sha, Namespace: row.Namespace, NamespaceLabels: labels,
+			Cluster: row.Cluster, Revision: derefString(row.Revision), Health: code.Health(row.EnvironmentHealth), Manifests: manifests, Rendered: rendered,
 			Inventory: inventory}
 		taken = true
 		if kind != code.DeliverCommit {

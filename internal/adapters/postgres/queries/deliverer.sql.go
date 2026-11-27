@@ -687,7 +687,7 @@ WHERE d.id = $2 AND e.id = d.environment_id AND t.principal_id = e.target_id
     OR (d.state = 'queued' AND d.kind = 'resync')
     OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now()))
 RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.cluster,
-    e.namespace, e.revision, e.health AS environment_health, e.target_id, t.name AS target
+    e.namespace, e.namespace_labels, e.revision, e.health AS environment_health, e.target_id, t.name AS target
 `
 
 type TakeDeliveryApplyRow struct {
@@ -700,6 +700,7 @@ type TakeDeliveryApplyRow struct {
 	Sha               string
 	Cluster           *uuid.UUID
 	Namespace         string
+	NamespaceLabels   []byte
 	Revision          *string
 	EnvironmentHealth string
 	TargetID          uuid.UUID
@@ -707,8 +708,8 @@ type TakeDeliveryApplyRow struct {
 }
 
 // TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, a queued resync,
-// which renders nothing, or one whose apply another controller left. It answers what the apply needs; no row when it
-// is none of those.
+// which renders nothing, or one whose apply another controller left. It answers what the apply needs, its
+// environment's namespace labels included; no row when it is none of those.
 func (q *Queries) TakeDeliveryApply(ctx context.Context, leaseUntil time.Time, iD uuid.UUID) (TakeDeliveryApplyRow, error) {
 	row := q.db.QueryRow(ctx, takeDeliveryApply, leaseUntil, iD)
 	var i TakeDeliveryApplyRow
@@ -722,6 +723,7 @@ func (q *Queries) TakeDeliveryApply(ctx context.Context, leaseUntil time.Time, i
 		&i.Sha,
 		&i.Cluster,
 		&i.Namespace,
+		&i.NamespaceLabels,
 		&i.Revision,
 		&i.EnvironmentHealth,
 		&i.TargetID,

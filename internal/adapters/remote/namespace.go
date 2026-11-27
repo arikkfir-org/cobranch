@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -15,8 +16,8 @@ import (
 	"cobranch.dev/internal/services/deliverer"
 )
 
-// Prepare makes env's namespace when it is missing, labelled as the installation's and the environment's, or uses the
-// one that is there, unless another environment's label says it is that one's (deliverer.Target). A kubeconfig that
+// Prepare makes env's namespace when it is missing, labelled as the installation's and the environment's and with its
+// target's labels, or uses the one that is there as it is, unless another environment's label says it is that one's (deliverer.Target). A kubeconfig that
 // may not make a missing namespace fails the delivery, saying so.
 func (t *Target) Prepare(ctx context.Context, env deliverer.Environment) (err error) {
 	ctx, span := tracer.Start(ctx, "remote.Target.Prepare", envAttrs(env))
@@ -34,10 +35,8 @@ func (t *Target) Prepare(ctx context.Context, env deliverer.Environment) (err er
 		return fmt.Errorf("reading namespace %s: %w", env.Namespace, err)
 	}
 	// Missing, or the kubeconfig may not read namespaces: making it tells which.
-	_, err = namespaces.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Namespace, Labels: map[string]string{
-		cluster.ManagedByLabel: "cobranch", cluster.InstallationLabel: t.installation, cluster.OrganizationLabel: env.OrgID.String(),
-		cluster.EnvironmentLabel: env.ID.String(),
-	}}}, metav1.CreateOptions{FieldManager: cluster.FieldManager})
+	_, err = namespaces.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: env.Namespace, Labels: t.labels(env)}},
+		metav1.CreateOptions{FieldManager: cluster.FieldManager})
 	switch {
 	case err == nil, apierrors.IsAlreadyExists(err):
 		return nil
@@ -45,6 +44,18 @@ func (t *Target) Prepare(ctx context.Context, env deliverer.Environment) (err er
 		return fmt.Errorf("%w: namespace %s is missing, and the kubeconfig may not make it", deliverer.ErrRefused, env.Namespace)
 	}
 	return fmt.Errorf("creating namespace %s: %w", env.Namespace, err)
+}
+
+// labels are the labels of the namespace Prepare makes for env: its target's, then Cobranch's own, which say whose it
+// is and which no target's replace.
+func (t *Target) labels(env deliverer.Environment) map[string]string {
+	labels := maps.Clone(env.NamespaceLabels)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	maps.Copy(labels, map[string]string{cluster.ManagedByLabel: "cobranch", cluster.InstallationLabel: t.installation,
+		cluster.OrganizationLabel: env.OrgID.String(), cluster.EnvironmentLabel: env.ID.String()})
+	return labels
 }
 
 // Release deletes env's namespace if Cobranch made it, and answers whether it is gone, or was never Cobranch's

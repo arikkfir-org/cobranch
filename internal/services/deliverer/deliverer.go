@@ -77,6 +77,8 @@ type Apply struct {
 	Number                                     int64
 	Kind                                       code.DeliveryKind
 	Target, SHA, Namespace                     string
+	// NamespaceLabels are the labels the environment's target sets on a namespace Cobranch makes for it.
+	NamespaceLabels map[string]string
 	// Cluster is the secret holding the kubeconfig of the environment's cluster; nil for this installation's own.
 	Cluster *uuid.UUID
 	// Revision is the environment's commit before it, empty before its first, and Health its health then.
@@ -93,7 +95,7 @@ type Apply struct {
 // environment is the environment a applies to.
 func (a Apply) environment() Environment {
 	return Environment{ID: a.EnvironmentID, OrgID: a.OrgID, RepoID: a.RepoID, TargetID: a.TargetID, Target: a.Target,
-		Cluster: a.Cluster, Namespace: a.Namespace}
+		Cluster: a.Cluster, Namespace: a.Namespace, NamespaceLabels: a.NamespaceLabels}
 }
 
 // Teardown is a teardown the controller holds while it deletes: its environment, what that holds, and when it started
@@ -125,6 +127,9 @@ type Environment struct {
 	// Cluster is the secret holding the kubeconfig of its cluster; nil for this installation's own.
 	Cluster   *uuid.UUID
 	Namespace string
+	// NamespaceLabels are the labels its target sets on its namespace when Cobranch makes it; set only where an apply
+	// prepares the namespace.
+	NamespaceLabels map[string]string
 }
 
 // Standing is where a delivery stands, and its repository.
