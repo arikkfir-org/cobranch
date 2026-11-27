@@ -224,3 +224,35 @@ func TestTaskCommit(t *testing.T) {
 		})
 	}
 }
+
+// addChecker gives website the agent checker, which its main /cobranch.yaml declares.
+func addChecker(f *orgFixture) {
+	f.agentStore.AddAgent(agents.Agent{ID: checkerID, OrgID: f.acme.ID, RepoID: f.website.ID, RepoSlug: "website", Name: "checker",
+		Permissions: []string{"repo.read"}, Line: 4})
+}
+
+var checkerID = uuid.MustParse("00000000-0000-7000-8000-00000000c4ec")
+
+func checkerPath(*orgFixture) string { return "/v1/orgs/acme/agents/" + checkerID.String() }
+
+func TestRepositoryAgents(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "listed to a reader of its repository", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/agents"), before: addChecker, wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, body []byte) {
+				list := decode[struct{ Agents []Agent }](t, body).Agents
+				i := slices.IndexFunc(list, func(a Agent) bool { return a.Id == checkerID })
+				if i < 0 || list[i].RepositoryId == nil || *list[i].RepositoryId != f.website.ID || *list[i].RepositorySlug != "website" ||
+					!slices.Equal(*list[i].Permissions, []string{"repo.read"}) || *list[i].Line != 4 || list[i].RetiredAt != nil {
+					t.Errorf("agents = %s", body)
+				}
+			}},
+		{name: "hidden from one who doesn't read it", viewer: maxim, method: "GET", path: checkerPath, before: addChecker, wantStatus: 404, wantCode: "agent.not_found"},
+		{name: "not renamed", viewer: olivia, method: "PATCH", path: checkerPath, before: addChecker, header: matchHeader("*"), body: `{"name":"checked"}`,
+			wantStatus: 409, wantCode: "agent.declared"},
+		{name: "not given an image", viewer: olivia, method: "PUT", path: func(f *orgFixture) string { return checkerPath(f) + "/image" }, before: addChecker,
+			header: matchHeader("*"), body: `{"image":"python:3.14.0"}`, wantStatus: 409, wantCode: "agent.declared"},
+		{name: "not deleted", viewer: olivia, method: "DELETE", path: checkerPath, before: addChecker, header: matchHeader("*"), wantStatus: 409, wantCode: "agent.declared"},
+		{name: "assigned nowhere", viewer: olivia, method: "POST", path: fixed("/v1/orgs/acme/tasks"), before: addChecker,
+			body: `{"agentId":"` + checkerID.String() + `","title":"Check"}`, wantStatus: 400, wantCode: "agent.elsewhere"},
+	})
+}

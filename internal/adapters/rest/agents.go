@@ -74,6 +74,14 @@ func agent(a agents.Agent) Agent {
 	out.Cap = optionalUSD(a.Cap)
 	out.Secrets = make(map[string]uuid.UUID, len(a.Secrets))
 	maps.Copy(out.Secrets, a.Secrets)
+	if a.Declared() {
+		permissions, line := append([]string{}, a.Permissions...), a.Line
+		out.RepositoryId, out.RepositorySlug, out.Permissions, out.Line = &a.RepoID, &a.RepoSlug, &permissions, &line
+		if a.RetiredAt != nil {
+			at := a.RetiredAt.UTC()
+			out.RetiredAt = &at
+		}
+	}
 	return out
 }
 

@@ -1398,7 +1398,7 @@ type Actor struct {
 	Kind string `json:"kind"`
 }
 
-// Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
+// Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds: the organization's own, or one its repository's main /cobranch.yaml declares, which the API changes nothing of.
 type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
 	BuiltIn bool `json:"builtIn"`
@@ -1423,12 +1423,27 @@ type Agent struct {
 	// Instructions The standing instructions, in Markdown, that every task of it starts from.
 	Instructions string `json:"instructions"`
 
+	// Line The line of a repository's agent's name in its main /cobranch.yaml; absent for the organization's own.
+	Line *int `json:"line,omitempty"`
+
 	// Model The model it runs on, as its provider names it; absent while it runs on none.
 	Model *string `json:"model,omitempty"`
 	Name  string  `json:"name"`
 
+	// Permissions What a repository's agent declares it may do on its repository, sorted; absent for the organization's own, whose grants say.
+	Permissions *[]string `json:"permissions,omitempty"`
+
 	// Provider The model provider it runs on, one the organization added; absent while it runs on none.
 	Provider *string `json:"provider,omitempty"`
+
+	// RepositoryId The repository whose main /cobranch.yaml declares it; absent for the organization's own.
+	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
+
+	// RepositorySlug That repository's slug; absent for the organization's own.
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+
+	// RetiredAt When its repository's main /cobranch.yaml stopped declaring it; it then takes no task. Absent while declared, and for the organization's own.
+	RetiredAt *time.Time `json:"retiredAt,omitempty"`
 
 	// Secrets The secrets its tasks receive, by the environment variable each goes in.
 	Secrets   map[string]openapi_types.UUID `json:"secrets"`
@@ -5472,19 +5487,19 @@ type ServerInterface interface {
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(w http.ResponseWriter, r *http.Request, org Org, params ListOrganizationActivityParams)
-	// ListAgents The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
+	// ListAgents The organization's agents by name, each with its grants, its own and those its repositories' main /cobranch.yaml declares, of the repositories the viewer reads; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org, params ListAgentsParams)
 	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
 	// (POST /orgs/{org}/agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request, org Org)
-	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
+	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in, and a repository's, which its main /cobranch.yaml retires, 409 agent.declared. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/agents/{agent})
 	DeleteAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params DeleteAgentParams)
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params GetAgentParams)
-	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). A repository's agent changes only in its main /cobranch.yaml: 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams)
 	// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
@@ -5514,13 +5529,13 @@ type ServerInterface interface {
 	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
 	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
 	ListAgentConversationUpdates(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params ListAgentConversationUpdatesParams)
-	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid, and a repository's agent, which names its image in its main /cobranch.yaml, 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/image)
 	SetAgentImage(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentImageParams)
-	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid, and a repository's agent, which names its model in its main /cobranch.yaml, 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams)
-	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. A repository's agent, which names its secrets in its main /cobranch.yaml, answers 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/secrets)
 	SetAgentSecrets(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentSecretsParams)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
@@ -6012,7 +6027,7 @@ type ServerInterface interface {
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
-	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
+	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks. A repository's agent works in its repository alone (400 agent.elsewhere), and a retired one takes none (400 agent.retired).
 	// (POST /orgs/{org}/tasks)
 	AssignTask(w http.ResponseWriter, r *http.Request, org Org)
 	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.
@@ -40847,19 +40862,19 @@ type StrictServerInterface interface {
 	// ListOrganizationActivity A page of what happened in the organization's repositories that the viewer reads, newest first: pushes, merges into main, reviews, deliveries that ended (but those that applied a render again) and repositories created; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/activity)
 	ListOrganizationActivity(ctx context.Context, request ListOrganizationActivityRequestObject) (ListOrganizationActivityResponseObject, error)
-	// ListAgents The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
+	// ListAgents The organization's agents by name, each with its grants, its own and those its repositories' main /cobranch.yaml declares, of the repositories the viewer reads; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
 	// (GET /orgs/{org}/agents)
 	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
 	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
 	// (POST /orgs/{org}/agents)
 	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
-	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
+	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in, and a repository's, which its main /cobranch.yaml retires, 409 agent.declared. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/agents/{agent})
 	DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error)
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
-	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). A repository's agent changes only in its main /cobranch.yaml: 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
 	// ListAgentConversationThreads A page of the viewer's own conversation with the agent, which only they read: its threads newest first, each with its messages in the order they were posted; takes org.read. Its after is where the conversation's updates stood when the page was read: listAgentConversationUpdates after it answers every change the page may lack.
@@ -40889,13 +40904,13 @@ type StrictServerInterface interface {
 	// ListAgentConversationUpdates The changes to the viewer's conversation with the agent after a cursor, in order, each with its thread and message as they are now; takes org.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the conversation by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the conversation as it is.
 	// (GET /orgs/{org}/agents/{agent}/conversation/updates)
 	ListAgentConversationUpdates(ctx context.Context, request ListAgentConversationUpdatesRequestObject) (ListAgentConversationUpdatesResponseObject, error)
-	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentImage Names the container image an agent's tasks run in, or the installation's with an empty one; takes org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid, and a repository's agent, which names its image in its main /cobranch.yaml, 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/image)
 	SetAgentImage(ctx context.Context, request SetAgentImageRequestObject) (SetAgentImageResponseObject, error)
-	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid, and a repository's agent, which names its model in its main /cobranch.yaml, 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/model)
 	SetAgentModel(ctx context.Context, request SetAgentModelRequestObject) (SetAgentModelResponseObject, error)
-	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. A repository's agent, which names its secrets in its main /cobranch.yaml, answers 409 agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/agents/{agent}/secrets)
 	SetAgentSecrets(ctx context.Context, request SetAgentSecretsRequestObject) (SetAgentSecretsResponseObject, error)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
@@ -41387,7 +41402,7 @@ type StrictServerInterface interface {
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
-	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
+	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks. A repository's agent works in its repository alone (400 agent.elsewhere), and a retired one takes none (400 agent.retired).
 	// (POST /orgs/{org}/tasks)
 	AssignTask(ctx context.Context, request AssignTaskRequestObject) (AssignTaskResponseObject, error)
 	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.

@@ -36,7 +36,9 @@ questions](#open-questions).
 ## `/cobranch.yaml`
 
 Jobs live beside the merge requirements, in the same file. Its three top-level keys are read in different places:
-`repository` and `branches` only from `main`, `jobs` from wherever the event happened.
+`repository` and `branches` only from `main`, `jobs` from wherever the event happened. Two more came later: `delivery`
+([delivery](delivery.md)) and `agents`, read only from `main`, which declares the repository's own agents
+([repository agents](repo-agents.md#repository-agents)).
 
 ```yaml
 # /cobranch.yaml

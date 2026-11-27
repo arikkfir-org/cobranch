@@ -88,22 +88,27 @@ type ComplexityRoot struct {
 	}
 
 	Agent struct {
-		BuiltIn      func(childComplexity int) int
-		Cap          func(childComplexity int) int
-		Conversation func(childComplexity int, first int, after *string) int
-		CreatedAt    func(childComplexity int) int
-		CreatedBy    func(childComplexity int) int
-		Description  func(childComplexity int) int
-		Grants       func(childComplexity int) int
-		ID           func(childComplexity int) int
-		Image        func(childComplexity int) int
-		Instructions func(childComplexity int) int
-		Model        func(childComplexity int) int
-		Name         func(childComplexity int) int
-		Provider     func(childComplexity int) int
-		Secrets      func(childComplexity int) int
-		UpdatedAt    func(childComplexity int) int
-		Version      func(childComplexity int) int
+		BuiltIn        func(childComplexity int) int
+		Cap            func(childComplexity int) int
+		Conversation   func(childComplexity int, first int, after *string) int
+		CreatedAt      func(childComplexity int) int
+		CreatedBy      func(childComplexity int) int
+		Description    func(childComplexity int) int
+		Grants         func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Image          func(childComplexity int) int
+		Instructions   func(childComplexity int) int
+		Line           func(childComplexity int) int
+		Model          func(childComplexity int) int
+		Name           func(childComplexity int) int
+		Permissions    func(childComplexity int) int
+		Provider       func(childComplexity int) int
+		RepositoryID   func(childComplexity int) int
+		RepositorySlug func(childComplexity int) int
+		RetiredAt      func(childComplexity int) int
+		Secrets        func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		Version        func(childComplexity int) int
 	}
 
 	AgentGrant struct {
@@ -1790,6 +1795,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Instructions(childComplexity), true
+	case "Agent.line":
+		if e.ComplexityRoot.Agent.Line == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.Line(childComplexity), true
 	case "Agent.model":
 		if e.ComplexityRoot.Agent.Model == nil {
 			break
@@ -1802,12 +1813,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Name(childComplexity), true
+	case "Agent.permissions":
+		if e.ComplexityRoot.Agent.Permissions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.Permissions(childComplexity), true
 	case "Agent.provider":
 		if e.ComplexityRoot.Agent.Provider == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Agent.Provider(childComplexity), true
+	case "Agent.repositoryId":
+		if e.ComplexityRoot.Agent.RepositoryID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.RepositoryID(childComplexity), true
+	case "Agent.repositorySlug":
+		if e.ComplexityRoot.Agent.RepositorySlug == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.RepositorySlug(childComplexity), true
+	case "Agent.retiredAt":
+		if e.ComplexityRoot.Agent.RetiredAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Agent.RetiredAt(childComplexity), true
 	case "Agent.secrets":
 		if e.ComplexityRoot.Agent.Secrets == nil {
 			break
@@ -8145,6 +8180,16 @@ type Agent {
   cap: String
   "The secrets its tasks receive, by the environment variables they go in."
   secrets: [AgentSecret!]!
+  "The repository whose main /cobranch.yaml declares it, which the API changes nothing of; null for the organization's own."
+  repositoryId: ID
+  "That repository's slug; null for the organization's own."
+  repositorySlug: String
+  "What a repository's agent declares it may do on its repository, sorted; null for the organization's own, whose grants say."
+  permissions: [String!]
+  "The line of a repository's agent's name in its main /cobranch.yaml; null for the organization's own."
+  line: Int
+  "When its repository's main /cobranch.yaml stopped declaring it; it then takes no task. Null while declared, and for the organization's own."
+  retiredAt: Time
 }
 
 "A role an agent holds, at its organization or, with a repository, on that repository."
@@ -8360,15 +8405,15 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). A repository's agent changes only in its main /cobranch.yaml (CONFLICT, agent.declared). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
-  "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in), and so is a repository's, which its main /cobranch.yaml retires (CONFLICT, agent.declared); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
-  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid), and a repository's agent, which names its model in its main /cobranch.yaml (CONFLICT, agent.declared); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
-  "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
+  "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. A repository's agent names its secrets in its main /cobranch.yaml (CONFLICT, agent.declared). With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
   setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
-  "Names the container image an agent's tasks run in, such as ghcr.io/acme/tools:1.4, or the installation's with an empty one; takes org.principals.manage, and a person. The image needs sh and git, and is pulled with the installation's image pull secrets. One that isn't a reference is refused (BAD_USER_INPUT, agent.image_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Names the container image an agent's tasks run in, such as ghcr.io/acme/tools:1.4, or the installation's with an empty one; takes org.principals.manage, and a person. The image needs sh and git, and is pulled with the installation's image pull secrets. One that isn't a reference is refused (BAD_USER_INPUT, agent.image_invalid), and so is a repository's agent, which names its image in its main /cobranch.yaml (CONFLICT, agent.declared); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentImage(organizationId: ID!, id: ID!, image: String!, expectedVersion: Int): Agent!
   "Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, or names another secret for the one it has, and answers it; takes org.manage. A provider the installation doesn't know is refused (NOT_FOUND, model_provider.not_found), and a secret that isn't the organization's own (BAD_USER_INPUT, model_provider.secret_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
@@ -8380,7 +8425,7 @@ extend type Mutation {
   removeModel(organizationId: ID!, provider: String!, model: String!, expectedVersion: Int): Boolean!
   "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
   recordTaskSpend(input: TaskUsageInput!): TaskSpend!
-  "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
+  "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks. A repository's agent works in its repository alone (BAD_USER_INPUT, agent.elsewhere), and a retired one takes none (BAD_USER_INPUT, agent.retired)."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   cancelTask(organizationId: ID!, number: Int!, expectedVersion: Int): Task!
@@ -11071,6 +11116,16 @@ func (ec *executionContext) childFields_Agent(ctx context.Context, field graphql
 		return ec.fieldContext_Agent_cap(ctx, field)
 	case "secrets":
 		return ec.fieldContext_Agent_secrets(ctx, field)
+	case "repositoryId":
+		return ec.fieldContext_Agent_repositoryId(ctx, field)
+	case "repositorySlug":
+		return ec.fieldContext_Agent_repositorySlug(ctx, field)
+	case "permissions":
+		return ec.fieldContext_Agent_permissions(ctx, field)
+	case "line":
+		return ec.fieldContext_Agent_line(ctx, field)
+	case "retiredAt":
+		return ec.fieldContext_Agent_retiredAt(ctx, field)
 	case "conversation":
 		return ec.fieldContext_Agent_conversation(ctx, field)
 	}
@@ -18282,6 +18337,121 @@ func (ec *executionContext) fieldContext_Agent_secrets(_ context.Context, field 
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Agent_repositoryId(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_repositoryId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RepositoryID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_repositoryId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Agent_repositorySlug(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_repositorySlug(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RepositorySlug, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_repositorySlug(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_permissions(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_permissions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Permissions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_permissions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
+}
+
+func (ec *executionContext) _Agent_line(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_line(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Line, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_line(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Agent_retiredAt(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_retiredAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RetiredAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_retiredAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Agent", field, false, false, "Time")
 }
 
 func (ec *executionContext) _Agent_conversation(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
@@ -46265,6 +46435,31 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 		case "secrets":
 			out.Values[i] = ec._Agent_secrets(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "repositoryId":
+			out.Values[i] = ec._Agent_repositoryId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "repositorySlug":
+			out.Values[i] = ec._Agent_repositorySlug(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "permissions":
+			out.Values[i] = ec._Agent_permissions(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "line":
+			out.Values[i] = ec._Agent_line(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "retiredAt":
+			out.Values[i] = ec._Agent_retiredAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "conversation":

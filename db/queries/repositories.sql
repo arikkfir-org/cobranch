@@ -25,7 +25,8 @@ WHERE id = @id;
 SELECT * FROM repositories WHERE org_id = @org_id AND id = ANY (@ids::uuid[]) ORDER BY slug;
 
 -- RepositoryPermissions lists the permissions the principal holds at the repository: those of the roles its grants
--- there give, and those of its roles at the repository's organization, each kept to the repository's own, which
+-- there give, those of its roles at the repository's organization, and, for an agent the repository's main
+-- /cobranch.yaml declares, those it declares there until it is retired, each kept to the repository's own, which
 -- repo_permissions lists.
 -- name: RepositoryPermissions :many
 SELECT DISTINCT p.permission::text AS permission FROM (
@@ -34,11 +35,15 @@ SELECT DISTINCT p.permission::text AS permission FROM (
     UNION ALL
     SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN repositories rp ON rp.org_id = g.scope_id
     WHERE g.principal_id = @principal_id AND g.scope = 'organization' AND rp.id = @repo_id::uuid
+    UNION ALL
+    SELECT unnest(a.permissions) FROM agents a
+    WHERE a.principal_id = @principal_id AND a.repo_id = @repo_id::uuid AND a.retired_at IS NULL
 ) p WHERE p.permission = ANY (@repo_permissions::text[])
 ORDER BY 1;
 
 -- RepositoriesWith lists the IDs of the organization's repositories where the principal holds the permission,
--- through a grant on the repository or a role at the organization: every one of them when a role there holds it.
+-- through a grant on the repository, a role at the organization, or what a repository's agent declares there: every
+-- one of them when a role at the organization holds it.
 -- name: RepositoriesWith :many
 SELECT rp.id FROM repositories rp WHERE rp.org_id = @org_id AND (
     EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
@@ -46,7 +51,10 @@ SELECT rp.id FROM repositories rp WHERE rp.org_id = @org_id AND (
               AND @permission::text = ANY (r.permissions))
     OR EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
                WHERE g.principal_id = @principal_id AND g.scope = 'repository' AND g.scope_id = rp.id
-                 AND @permission::text = ANY (r.permissions)))
+                 AND @permission::text = ANY (r.permissions))
+    OR EXISTS (SELECT 1 FROM agents a
+               WHERE a.principal_id = @principal_id AND a.repo_id = rp.id AND a.retired_at IS NULL
+                 AND @permission::text = ANY (a.permissions)))
 ORDER BY rp.slug;
 
 -- SharedRepositories lists the IDs of the organization's repositories that a user besides their creator and the
@@ -75,9 +83,12 @@ ORDER BY p.display_name, g.principal_id, g.scope DESC, r.name;
 -- name: RepositoryRoles :many
 SELECT * FROM roles WHERE (scope = 'repository' AND built_in) OR org_id = @org_id::uuid ORDER BY built_in DESC, id;
 
--- Grantee finds a principal that may hold grants in the organization: one of its members, or one of its API keys.
+-- Grantee finds a principal that may hold grants in the organization: one of its members, or one of its API keys,
+-- and whether it is a repository's agent.
 -- name: Grantee :one
-SELECT p.id, p.kind, p.display_name FROM principals p
+SELECT p.id, p.kind, p.display_name,
+    EXISTS (SELECT 1 FROM agents a WHERE a.principal_id = p.id AND a.repo_id IS NOT NULL) AS declared
+FROM principals p
 WHERE p.id = @principal_id AND (p.org_id = @org_id::uuid
     OR EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = @org_id::uuid AND m.user_id = p.id));
 

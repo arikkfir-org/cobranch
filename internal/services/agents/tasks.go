@@ -107,7 +107,8 @@ func (s *Service) Task(ctx context.Context, v Viewer, orgID uuid.UUID, number in
 
 // Prepare checks that v may assign the task to the agent and answers the task to record, Queued, without its number:
 // v holds agents.assign at the agent's organization and repo.read on the repository the task names, the branch is
-// one of that repository's live branches and the thread is on that branch. Assign records what it answers; a slice
+// one of that repository's live branches and the thread is on that branch. A repository's agent works in its
+// repository alone, and a retired one takes no task: ErrRetired. Assign records what it answers; a slice
 // that assigns tasks in a transaction of its own records it there. An agent assigns no tasks.
 func (s *Service) Prepare(ctx context.Context, v Viewer, orgID, agentID uuid.UUID, in TaskInput) (Task, error) {
 	if err := person(v, "assigns no tasks"); err != nil {
@@ -126,6 +127,12 @@ func (s *Service) Prepare(ctx context.Context, v Viewer, orgID, agentID uuid.UUI
 	}
 	if err != nil {
 		return Task{}, fmt.Errorf("finding the agent: %w", err)
+	}
+	switch {
+	case agent.RetiredAt != nil:
+		return Task{}, ErrRetired
+	case agent.Declared() && in.RepoID != agent.RepoID:
+		return Task{}, invalid("repositoryId", "agent.elsewhere", "a repository's agent works in its repository alone")
 	}
 	t := Task{OrgID: orgID, Agent: Principal{ID: agent.ID, DisplayName: agent.Name}, Kind: KindAssigned,
 		AssignedBy: &Principal{ID: v.ID, DisplayName: v.DisplayName}, Title: in.Title, Instructions: in.Instructions, State: TaskQueued, Version: 1}

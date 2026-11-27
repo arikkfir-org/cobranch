@@ -7,6 +7,7 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -24,17 +25,18 @@ func (q *Queries) ActiveThreadTask(ctx context.Context, threadID *uuid.UUID) (in
 }
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, c.display_name AS creator_name
-FROM agents a LEFT JOIN principals c ON c.id = a.created_by
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, a.repo_id, a.permissions, a.line, a.retired_at, c.display_name AS creator_name, rp.slug AS repo_slug
+FROM agents a LEFT JOIN principals c ON c.id = a.created_by LEFT JOIN repositories rp ON rp.id = a.repo_id
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
 
 type AgentRow struct {
 	Agent       Agent
 	CreatorName *string
+	RepoSlug    *string
 }
 
-// Agent finds one of an organization's agents, with the display name of its creator.
+// Agent finds one of an organization's agents, with the display name of its creator and the slug of its repository.
 func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (AgentRow, error) {
 	row := q.db.QueryRow(ctx, agent, iD, orgID)
 	var i AgentRow
@@ -55,7 +57,12 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.Purpose,
 		&i.Agent.Cap,
 		&i.Agent.Image,
+		&i.Agent.RepoID,
+		&i.Agent.Permissions,
+		&i.Agent.Line,
+		&i.Agent.RetiredAt,
 		&i.CreatorName,
+		&i.RepoSlug,
 	)
 	return i, err
 }
@@ -104,17 +111,19 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, c.display_name AS creator_name
-FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, a.image, a.repo_id, a.permissions, a.line, a.retired_at, c.display_name AS creator_name, rp.slug AS repo_slug
+FROM agents a LEFT JOIN principals c ON c.id = a.created_by LEFT JOIN repositories rp ON rp.id = a.repo_id
+WHERE a.org_id = $1 ORDER BY lower(a.name), a.repo_id NULLS FIRST, a.principal_id
 `
 
 type AgentsRow struct {
 	Agent       Agent
 	CreatorName *string
+	RepoSlug    *string
 }
 
-// Agents lists an organization's agents by name, with the display names of their creators.
+// Agents lists an organization's agents by name, its own and its repositories', with the display names of their
+// creators and the slugs of their repositories.
 func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, error) {
 	rows, err := q.db.Query(ctx, agents, orgID)
 	if err != nil {
@@ -141,8 +150,45 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.Purpose,
 			&i.Agent.Cap,
 			&i.Agent.Image,
+			&i.Agent.RepoID,
+			&i.Agent.Permissions,
+			&i.Agent.Line,
+			&i.Agent.RetiredAt,
 			&i.CreatorName,
+			&i.RepoSlug,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelAgentTasks = `-- name: CancelAgentTasks :many
+UPDATE agent_tasks SET state = 'cancelled', ended_at = now(), reason = $1
+WHERE agent_id = ANY ($2::uuid[]) AND state IN ('queued', 'running', 'waiting')
+RETURNING id, number
+`
+
+type CancelAgentTasksRow struct {
+	ID     uuid.UUID
+	Number int64
+}
+
+// CancelAgentTasks cancels the active tasks of the agents ids names, for reason, by nobody, and answers them.
+func (q *Queries) CancelAgentTasks(ctx context.Context, reason string, ids []uuid.UUID) ([]CancelAgentTasksRow, error) {
+	rows, err := q.db.Query(ctx, cancelAgentTasks, reason, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CancelAgentTasksRow
+	for rows.Next() {
+		var i CancelAgentTasksRow
+		if err := rows.Scan(&i.ID, &i.Number); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -207,6 +253,23 @@ func (q *Queries) CancelTask(ctx context.Context, arg CancelTaskParams) (AgentTa
 	return i, err
 }
 
+const defaultModel = `-- name: DefaultModel :one
+SELECT provider, model FROM models WHERE org_id = $1 AND is_default
+`
+
+type DefaultModelRow struct {
+	Provider string
+	Model    string
+}
+
+// DefaultModel finds the organization's default model.
+func (q *Queries) DefaultModel(ctx context.Context, orgID uuid.UUID) (DefaultModelRow, error) {
+	row := q.db.QueryRow(ctx, defaultModel, orgID)
+	var i DefaultModelRow
+	err := row.Scan(&i.Provider, &i.Model)
+	return i, err
+}
+
 const deleteAgentPrincipal = `-- name: DeleteAgentPrincipal :execrows
 DELETE FROM principals WHERE id = $1 AND kind = 'agent' AND org_id = $2::uuid
 `
@@ -218,6 +281,18 @@ func (q *Queries) DeleteAgentPrincipal(ctx context.Context, iD uuid.UUID, orgID 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const hasModel = `-- name: HasModel :one
+SELECT EXISTS (SELECT 1 FROM models WHERE org_id = $1 AND provider = $2 AND model = $3)
+`
+
+// HasModel reports whether the organization has the model of the provider.
+func (q *Queries) HasModel(ctx context.Context, orgID uuid.UUID, provider string, model string) (bool, error) {
+	row := q.db.QueryRow(ctx, hasModel, orgID, provider, model)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertAgent = `-- name: InsertAgent :exec
@@ -268,6 +343,49 @@ func (q *Queries) InsertAgentPrincipal(ctx context.Context, arg InsertAgentPrinc
 		arg.ID,
 		arg.Name,
 		arg.OrgID,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertRepositoryAgent = `-- name: InsertRepositoryAgent :exec
+INSERT INTO agents (principal_id, org_id, repo_id, name, description, instructions, image, provider, model, permissions, secrets,
+    line, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+    $10::text[], $11, $12, $13)
+`
+
+type InsertRepositoryAgentParams struct {
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	RepoID       *uuid.UUID
+	Name         string
+	Description  string
+	Instructions string
+	Image        string
+	Provider     *string
+	Model        *string
+	Permissions  []string
+	Secrets      []byte
+	Line         int32
+	CreatedBy    *uuid.UUID
+}
+
+// InsertRepositoryAgent records an agent a repository's main /cobranch.yaml declares, on a model or on none.
+func (q *Queries) InsertRepositoryAgent(ctx context.Context, arg InsertRepositoryAgentParams) error {
+	_, err := q.db.Exec(ctx, insertRepositoryAgent,
+		arg.ID,
+		arg.OrgID,
+		arg.RepoID,
+		arg.Name,
+		arg.Description,
+		arg.Instructions,
+		arg.Image,
+		arg.Provider,
+		arg.Model,
+		arg.Permissions,
+		arg.Secrets,
+		arg.Line,
 		arg.CreatedBy,
 	)
 	return err
@@ -354,6 +472,37 @@ func (q *Queries) RenameAgentPrincipal(ctx context.Context, name string, iD uuid
 	return err
 }
 
+const repositoryAgents = `-- name: RepositoryAgents :many
+SELECT principal_id, name, retired_at FROM agents WHERE repo_id = $1 ORDER BY name
+`
+
+type RepositoryAgentsRow struct {
+	PrincipalID uuid.UUID
+	Name        string
+	RetiredAt   *time.Time
+}
+
+// RepositoryAgents lists the agents a repository's main /cobranch.yaml declares or declared, the retired ones too.
+func (q *Queries) RepositoryAgents(ctx context.Context, repoID *uuid.UUID) ([]RepositoryAgentsRow, error) {
+	rows, err := q.db.Query(ctx, repositoryAgents, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RepositoryAgentsRow
+	for rows.Next() {
+		var i RepositoryAgentsRow
+		if err := rows.Scan(&i.PrincipalID, &i.Name, &i.RetiredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const repositorySlug = `-- name: RepositorySlug :one
 SELECT slug FROM repositories WHERE id = $1 AND org_id = $2
 `
@@ -364,6 +513,34 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 	var slug string
 	err := row.Scan(&slug)
 	return slug, err
+}
+
+const retireRepositoryAgents = `-- name: RetireRepositoryAgents :many
+UPDATE agents SET retired_at = now(), updated_at = now()
+WHERE repo_id = $1 AND retired_at IS NULL AND NOT (name = ANY ($2::text[]))
+RETURNING principal_id
+`
+
+// RetireRepositoryAgents retires those of a repository's agents its main /cobranch.yaml no longer declares, and
+// answers their IDs.
+func (q *Queries) RetireRepositoryAgents(ctx context.Context, repoID *uuid.UUID, declared []string) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, retireRepositoryAgents, repoID, declared)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var principal_id uuid.UUID
+		if err := rows.Scan(&principal_id); err != nil {
+			return nil, err
+		}
+		items = append(items, principal_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const task = `-- name: Task :one
@@ -583,7 +760,7 @@ UPDATE agents SET name = coalesce($1, name), description = coalesce($2, descript
     instructions = coalesce($3, instructions),
     cap = CASE WHEN $4::boolean THEN $5::bigint ELSE cap END, updated_at = now()
 WHERE principal_id = $6 AND org_id = $7 AND ($8::bigint < 0 OR version = $8::bigint)
-RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose, cap, image
+RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose, cap, image, repo_id, permissions, line, retired_at
 `
 
 type UpdateAgentParams struct {
@@ -628,6 +805,52 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Purpose,
 		&i.Cap,
 		&i.Image,
+		&i.RepoID,
+		&i.Permissions,
+		&i.Line,
+		&i.RetiredAt,
 	)
 	return i, err
+}
+
+const updateRepositoryAgent = `-- name: UpdateRepositoryAgent :execrows
+UPDATE agents SET description = $1, instructions = $2, image = $3, provider = $4,
+    model = $5, permissions = $6::text[], secrets = $7, line = $8, retired_at = NULL, updated_at = now()
+WHERE principal_id = $9 AND repo_id = $10
+    AND (description, instructions, image, provider, model, permissions, secrets, line, retired_at IS NULL)
+        IS DISTINCT FROM ($1, $2, $3, $4, $5, $6::text[], $7, $8, true)
+`
+
+type UpdateRepositoryAgentParams struct {
+	Description  string
+	Instructions string
+	Image        string
+	Provider     *string
+	Model        *string
+	Permissions  []string
+	Secrets      []byte
+	Line         int32
+	ID           uuid.UUID
+	RepoID       *uuid.UUID
+}
+
+// UpdateRepositoryAgent records what a repository's main /cobranch.yaml now says of one of its agents, bringing it back
+// when retired, and answers whether anything changed: a row unchanged keeps its version.
+func (q *Queries) UpdateRepositoryAgent(ctx context.Context, arg UpdateRepositoryAgentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateRepositoryAgent,
+		arg.Description,
+		arg.Instructions,
+		arg.Image,
+		arg.Provider,
+		arg.Model,
+		arg.Permissions,
+		arg.Secrets,
+		arg.Line,
+		arg.ID,
+		arg.RepoID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

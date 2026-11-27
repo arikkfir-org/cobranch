@@ -40,7 +40,7 @@
   <h2>The pre-receive hook is this same binary, calling home</h2>
   <div class="fig"><svg class="dg" id="d2"></svg></div>
   <ul class="know">
-    <li><b>One transaction decides.</b> <code>git.Record</code> locks the repository's live branches, refuses a push whose refs moved meanwhile (<code>StaleError</code>), lists the pack, inserts the push and its commits, and notifies. A refused push changes nothing.</li>
+    <li><b>One transaction decides.</b> <code>git.Record</code> locks the repository's live branches, refuses a push whose refs moved meanwhile (<code>StaleError</code>), lists the pack, inserts the push and its commits, records each tip's <code>/cobranch.yaml</code> and, when the push moves the default branch, the repository's agents it declares (refusing an agent beyond the ceiling or on a model the organization lacks), and notifies. A refused push changes nothing.</li>
     <li><b>The pack is uploaded before it is listed.</b> A push that fails leaves files no row lists; <a href="maintenance.html">maintenance</a> deletes them.</li>
     <li><b>Branch facts are counted here, in the hook's call:</b> merge requirements from <code>/cobranch.yaml</code>, the AI reviewer's settings, and each live branch's standing against the default branch (<code>facts.go</code>). A file that does not parse at the default branch's new tip refuses the push.</li>
     <li><b>Quota is weighed twice:</b> before the upload, to avoid storing what won't fit, and again inside the transaction, which alone is sure.</li>

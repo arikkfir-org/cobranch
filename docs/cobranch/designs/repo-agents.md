@@ -4,7 +4,7 @@
 > page](https://claude.ai/artifact/QcnH4XmDH8BLcGxGkD5U11), linked with Cobranch's other designs; this file is generated
 > from it, with its diagrams, as of 2026-11-27, and synced again once Cobranch's shape settles.
 
-**Status**: Proposed 2026-11-27 · [ENG-293](https://linear.app/arikkfir/issue/ENG-293) · Builds on
+**Status**: Agreed 2026-11-27 · slice 1 shipped · [ENG-293](https://linear.app/arikkfir/issue/ENG-293) · Builds on
 [agents](agents.md#agents) and [the agent’s pod](agents.md#the-agents-pod) · Adds a key to [jobs’
 `/cobranch.yaml`](jobs.md#cobranchyaml) · No new chart value
 
@@ -87,17 +87,20 @@ under its name, it comes back.
   declares it and updated each time main's file is recorded. Its commits carry its own email, as an organization agent's
   do.
 - **Its permissions are what it declares, within main's ceiling**, on its own repository alone:
-  `repository.jobs.ceiling`, Automation by default, which now caps everything main's file declares. Without
-  `permissions`: read the repository and post messages.
-- **Its model is one of the organization's.** `model` names a provider the organization added and one of its models; a
-  task of an agent whose model the organization no longer has fails as it starts, as an organization agent's without a
-  model does today. The organization's spend caps and quotas count its tasks.
+  `repository.jobs.ceiling`, Automation by default, which now caps everything main's file declares. A push into main
+  whose file lists a permission beyond it is refused, naming the line. Without `permissions`: read the repository and
+  post messages. It declares no artifact or secret permission: those come from grants, as anyone's.
+- **Its model is one of the organization's.** `model` names a provider the organization added and one of its models, as
+  `provider/model`, or a push into main that names another is refused, naming the line; without `model`, the
+  organization's default model. A task of an agent whose model the organization no longer has fails as it starts, as an
+  organization agent's without a model does today. The organization's spend caps and quotas count its tasks.
 - **Its secrets work as a job's**: an environment variable from a secret's ID, received only once someone with
   `org.grants.manage` grants the agent Secret reader on the repository or on that secret.
 - **Who starts its tasks:** a member with `agents.assign`, in its repository alone (its issues and branch chats), and
   runs of the repository's jobs. Each task does no more than both the agent and whoever started it may, as today.
-- **Retired, not deleted.** An agent main's file no longer declares takes no new task, and its running tasks are
-  cancelled; its principal keeps its tasks, commits and audit trail. Declared again under the same name, it comes back.
+- **Retired, not deleted.** An agent main's file no longer declares takes no new task, holds nothing on its repository,
+  and its running tasks are cancelled; its principal keeps its tasks, commits and audit trail. Declared again under the
+  same name, it comes back. The API changes no repository agent: its file does.
 - **The Console lists them** on the repository's Agents page and in Settings › Agents under their repository, read-only,
   each with a link to its lines of main's file.
 
@@ -142,7 +145,7 @@ timeout is the task’s.
 
 | Table | Change |
 | --- | --- |
-| `agents` | `image text NOT NULL DEFAULT ''` (slice 1); `repo_id uuid` referencing `repositories`, `retired_at timestamptz`, and a unique name per repository beside the one per organization (slice 2) |
+| `agents` | `image text NOT NULL DEFAULT ''` (slice 1); `repo_id uuid` referencing `repositories`, the `permissions text[]` it declares, the `line` of its name in main's file, `retired_at timestamptz`, and a unique name per repository beside the one per organization (slice 2, migration 00075) |
 | `task_kinds` | Kind `job` (slice 3) |
 | `agent_tasks` | `run_id uuid` referencing `job_runs` (slice 3) |
 | `job_runs` | Nothing: an agent job's run has no pod, and keeps its task through `agent_tasks.run_id` |

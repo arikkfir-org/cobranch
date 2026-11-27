@@ -82,6 +82,14 @@ func agent(a agents.Agent) *Agent {
 	for _, name := range slices.Sorted(maps.Keys(a.Secrets)) {
 		out.Secrets = append(out.Secrets, &AgentSecret{Name: name, SecretID: a.Secrets[name].String()})
 	}
+	if a.Declared() {
+		line := a.Line
+		out.RepositoryID, out.RepositorySlug, out.Permissions, out.Line = idOf(a.RepoID), &a.RepoSlug, append([]string{}, a.Permissions...), &line
+		if a.RetiredAt != nil {
+			at := a.RetiredAt.UTC()
+			out.RetiredAt = &at
+		}
+	}
 	return out
 }
 

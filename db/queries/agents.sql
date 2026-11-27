@@ -7,16 +7,17 @@ INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id,
 INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, purpose, created_by)
 VALUES (@id, @org_id, @name, @description, @instructions, @built_in, sqlc.narg(purpose), sqlc.narg(created_by));
 
--- Agents lists an organization's agents by name, with the display names of their creators.
+-- Agents lists an organization's agents by name, its own and its repositories', with the display names of their
+-- creators and the slugs of their repositories.
 -- name: Agents :many
-SELECT sqlc.embed(a), c.display_name AS creator_name
-FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-WHERE a.org_id = @org_id ORDER BY lower(a.name), a.principal_id;
+SELECT sqlc.embed(a), c.display_name AS creator_name, rp.slug AS repo_slug
+FROM agents a LEFT JOIN principals c ON c.id = a.created_by LEFT JOIN repositories rp ON rp.id = a.repo_id
+WHERE a.org_id = @org_id ORDER BY lower(a.name), a.repo_id NULLS FIRST, a.principal_id;
 
--- Agent finds one of an organization's agents, with the display name of its creator.
+-- Agent finds one of an organization's agents, with the display name of its creator and the slug of its repository.
 -- name: Agent :one
-SELECT sqlc.embed(a), c.display_name AS creator_name
-FROM agents a LEFT JOIN principals c ON c.id = a.created_by
+SELECT sqlc.embed(a), c.display_name AS creator_name, rp.slug AS repo_slug
+FROM agents a LEFT JOIN principals c ON c.id = a.created_by LEFT JOIN repositories rp ON rp.id = a.repo_id
 WHERE a.principal_id = @id AND a.org_id = @org_id;
 
 -- AgentGrants lists the roles the agents ids name hold at their organization and on its repositories, those at the
@@ -126,3 +127,44 @@ UPDATE agent_tasks SET state = 'cancelled', cancelled_by = @cancelled_by, ended_
 WHERE org_id = @org_id AND number = @number AND state IN ('queued', 'running', 'waiting')
     AND (@version::bigint < 0 OR version = @version::bigint)
 RETURNING *;
+
+-- RepositoryAgents lists the agents a repository's main /cobranch.yaml declares or declared, the retired ones too.
+-- name: RepositoryAgents :many
+SELECT principal_id, name, retired_at FROM agents WHERE repo_id = @repo_id ORDER BY name;
+
+-- InsertRepositoryAgent records an agent a repository's main /cobranch.yaml declares, on a model or on none.
+-- name: InsertRepositoryAgent :exec
+INSERT INTO agents (principal_id, org_id, repo_id, name, description, instructions, image, provider, model, permissions, secrets,
+    line, created_by)
+VALUES (@id, @org_id, @repo_id, @name, @description, @instructions, @image, sqlc.narg(provider), sqlc.narg(model),
+    @permissions::text[], @secrets, @line, sqlc.narg(created_by));
+
+-- UpdateRepositoryAgent records what a repository's main /cobranch.yaml now says of one of its agents, bringing it back
+-- when retired, and answers whether anything changed: a row unchanged keeps its version.
+-- name: UpdateRepositoryAgent :execrows
+UPDATE agents SET description = @description, instructions = @instructions, image = @image, provider = sqlc.narg(provider),
+    model = sqlc.narg(model), permissions = @permissions::text[], secrets = @secrets, line = @line, retired_at = NULL, updated_at = now()
+WHERE principal_id = @id AND repo_id = @repo_id
+    AND (description, instructions, image, provider, model, permissions, secrets, line, retired_at IS NULL)
+        IS DISTINCT FROM (@description, @instructions, @image, sqlc.narg(provider), sqlc.narg(model), @permissions::text[], @secrets, @line, true);
+
+-- RetireRepositoryAgents retires those of a repository's agents its main /cobranch.yaml no longer declares, and
+-- answers their IDs.
+-- name: RetireRepositoryAgents :many
+UPDATE agents SET retired_at = now(), updated_at = now()
+WHERE repo_id = @repo_id AND retired_at IS NULL AND NOT (name = ANY (@declared::text[]))
+RETURNING principal_id;
+
+-- CancelAgentTasks cancels the active tasks of the agents ids names, for reason, by nobody, and answers them.
+-- name: CancelAgentTasks :many
+UPDATE agent_tasks SET state = 'cancelled', ended_at = now(), reason = @reason
+WHERE agent_id = ANY (@ids::uuid[]) AND state IN ('queued', 'running', 'waiting')
+RETURNING id, number;
+
+-- HasModel reports whether the organization has the model of the provider.
+-- name: HasModel :one
+SELECT EXISTS (SELECT 1 FROM models WHERE org_id = @org_id AND provider = @provider AND model = @model);
+
+-- DefaultModel finds the organization's default model.
+-- name: DefaultModel :one
+SELECT provider, model FROM models WHERE org_id = @org_id AND is_default;

@@ -149,3 +149,33 @@ func TestTaskCommit(t *testing.T) {
 		})
 	}
 }
+
+func TestRepositoryAgents(t *testing.T) {
+	f := newOrgFixture()
+	checker := f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, RepoID: f.website.ID, RepoSlug: "website", Name: "checker",
+		Permissions: []string{"repo.read"}, Line: 4})
+	of := func(document string) string {
+		return strings.NewReplacer("ACME", f.acme.ID.String(), "CHECKER", checker.ID.String()).Replace(document)
+	}
+	tests := []struct {
+		name     string
+		viewer   *auth.Authenticated
+		document string
+		want     string
+	}{
+		{name: "a reader of its repository", viewer: &f.olivia, document: `{ organization(slug: "acme") { agent(id: "CHECKER") { name repositorySlug permissions line retiredAt } } }`,
+			want: `"agent":{"name":"checker","repositorySlug":"website","permissions":["repo.read"],"line":4,"retiredAt":null}`},
+		{name: "one who doesn't read it", viewer: &f.max, document: `{ organization(slug: "acme") { agent(id: "CHECKER") { name } } }`, want: `"agent":null`},
+		{name: "an organization's agent", viewer: &f.olivia, document: `{ organization(slug: "acme") { agent(id: "` + f.scout.ID.String() + `") { repositoryId permissions line } } }`,
+			want: `"agent":{"repositoryId":null,"permissions":null,"line":null}`},
+		{name: "changed", viewer: &f.olivia, document: `mutation { setAgentImage(organizationId: "ACME", id: "CHECKER", image: "python:3.14.0") { name } }`,
+			want: `"reason":"agent.declared"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if body := f.query(tt.viewer, of(tt.document)); !strings.Contains(body, tt.want) {
+				t.Errorf("body = %s, want %s", body, tt.want)
+			}
+		})
+	}
+}

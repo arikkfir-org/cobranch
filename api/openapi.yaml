@@ -2550,7 +2550,7 @@ paths:
   /orgs/{org}/agents:
     get:
       operationId: listAgents
-      summary: The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
+      summary: The organization's agents by name, each with its grants, its own and those its repositories' main /cobranch.yaml declares, of the repositories the viewer reads; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/ifNoneMatch"
@@ -2655,8 +2655,9 @@ paths:
       operationId: updateAgent
       summary: >-
         Changes an agent's name, description, standing instructions or cap; takes being its creator, or
-        org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The
-        change names the agent's ETag in If-Match; without it, the answer is 428.
+        org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). A
+        repository's agent changes only in its main /cobranch.yaml: 409 agent.declared. The change names the agent's
+        ETag in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -2697,8 +2698,9 @@ paths:
       operationId: deleteAgent
       summary: >-
         Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it
-        holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in
-        If-Match; without it, the answer is 428.
+        holds where they apply. A built-in agent answers 409 agent.built_in, and a repository's, which its main
+        /cobranch.yaml retires, 409 agent.declared. The deletion names the agent's ETag in If-Match; without it, the
+        answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -2726,7 +2728,8 @@ paths:
       summary: >-
         Puts an agent on a model of a provider the organization added, or on none with neither named; takes
         org.principals.manage, and a person. A provider the organization hasn't added answers 400
-        agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+        agent.provider_invalid, and a repository's agent, which names its model in its main /cobranch.yaml, 409
+        agent.declared. The change names the agent's ETag in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -2766,8 +2769,9 @@ paths:
       operationId: setAgentImage
       summary: >-
         Names the container image an agent's tasks run in, or the installation's with an empty one; takes
-        org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid. The
-        change names the agent's ETag in If-Match; without it, the answer is 428.
+        org.principals.manage, and a person. An image that isn't a reference answers 400 agent.image_invalid, and a
+        repository's agent, which names its image in its main /cobranch.yaml, 409 agent.declared. The change names the
+        agent's ETag in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -2808,8 +2812,9 @@ paths:
       summary: >-
         Names the secrets an agent's tasks receive, each an environment variable from one of the organization's
         secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task
-        receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without
-        it, the answer is 428.
+        receives only those its agent holds secrets.read on. A repository's agent, which names its secrets in its main
+        /cobranch.yaml, answers 409 agent.declared. The change names the agent's ETag in If-Match; without it, the
+        answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"
@@ -3654,7 +3659,8 @@ paths:
       summary: >-
         Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is
         capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the
-        repository it names. An agent assigns no tasks.
+        repository it names. An agent assigns no tasks. A repository's agent works in its repository alone (400
+        agent.elsewhere), and a retired one takes none (400 agent.retired).
       parameters:
         - $ref: "#/components/parameters/org"
       requestBody:
@@ -11080,7 +11086,9 @@ components:
           description: The request's ID, which the response's X-Request-Id header names too.
     Agent:
       type: object
-      description: One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
+      description: >-
+        One of an organization's agents, a principal it owns that takes tasks, with the roles it holds: the
+        organization's own, or one its repository's main /cobranch.yaml declares, which the API changes nothing of.
       required: [id, name, description, instructions, builtIn, secrets, createdAt, updatedAt, version, grants]
       properties:
         id:
@@ -11132,6 +11140,25 @@ components:
           description: The roles it holds, those at the organization first.
           items:
             $ref: "#/components/schemas/AgentGrant"
+        repositoryId:
+          type: string
+          format: uuid
+          description: The repository whose main /cobranch.yaml declares it; absent for the organization's own.
+        repositorySlug:
+          type: string
+          description: That repository's slug; absent for the organization's own.
+        permissions:
+          type: array
+          description: What a repository's agent declares it may do on its repository, sorted; absent for the organization's own, whose grants say.
+          items:
+            type: string
+        line:
+          type: integer
+          description: The line of a repository's agent's name in its main /cobranch.yaml; absent for the organization's own.
+        retiredAt:
+          type: string
+          format: date-time
+          description: When its repository's main /cobranch.yaml stopped declaring it; it then takes no task. Absent while declared, and for the organization's own.
     AgentGrant:
       type: object
       description: A role an agent holds, at its organization or, with a repository, on that repository.

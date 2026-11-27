@@ -112,6 +112,8 @@ type Principal struct {
 	ID          uuid.UUID
 	Kind        auth.Kind
 	DisplayName string
+	// Declared says whether it is a repository's agent, whose permissions its main's /cobranch.yaml declares.
+	Declared bool
 }
 
 // Access is a principal's grants on a repository: the roles it holds there, and every role that reaches it.

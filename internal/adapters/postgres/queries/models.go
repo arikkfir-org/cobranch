@@ -28,6 +28,10 @@ type Agent struct {
 	Purpose      *string
 	Cap          *int64
 	Image        string
+	RepoID       *uuid.UUID
+	Permissions  []string
+	Line         int32
+	RetiredAt    *time.Time
 }
 
 type AgentTask struct {

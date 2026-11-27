@@ -214,13 +214,14 @@ func wrap(what string, err error) error {
 		return nil
 	case errors.As(err, &verr), errors.Is(err, orgs.ErrNotFound), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrNameTaken),
 		errors.Is(err, ErrBuiltIn), errors.Is(err, ErrEnded), errors.Is(err, ErrChanged), errors.Is(err, ErrProviderInUse),
-		errors.Is(err, ErrModelInUse):
+		errors.Is(err, ErrModelInUse), errors.Is(err, ErrDeclared):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)
 }
 
-// Agents lists the organization's agents by name, each with its grants; it takes org.read.
+// Agents lists the organization's agents by name, each with its grants: its own, and those of the repositories v
+// reads; it takes org.read.
 func (s *Service) Agents(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Agents", onOrg(orgID))
 	defer span.End()
@@ -228,10 +229,18 @@ func (s *Service) Agents(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Agen
 		return nil, failed(span, "listing the agents", err)
 	}
 	list, err := s.store.Agents(ctx, orgID)
-	return list, failed(span, "listing the agents", err)
+	if err != nil || !slices.ContainsFunc(list, Agent.Declared) {
+		return list, failed(span, "listing the agents", err)
+	}
+	readable, err := s.authz.Repositories(ctx, v.ID, orgID, repos.PermRead)
+	if err != nil {
+		return nil, failed(span, "listing the repositories the viewer reads", err)
+	}
+	return slices.DeleteFunc(list, func(a Agent) bool { return a.Declared() && !slices.Contains(readable, a.RepoID) }), nil
 }
 
-// Agent finds one of the organization's agents with its grants; it takes org.read.
+// Agent finds one of the organization's agents with its grants; it takes org.read, and repo.read on the repository
+// that declares it.
 func (s *Service) Agent(ctx context.Context, v Viewer, orgID, id uuid.UUID) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Agent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
@@ -239,7 +248,29 @@ func (s *Service) Agent(ctx context.Context, v Viewer, orgID, id uuid.UUID) (Age
 		return Agent{}, failed(span, "finding the agent", err)
 	}
 	a, err := s.store.Agent(ctx, orgID, id)
-	return a, failed(span, "finding the agent", err)
+	if err == nil && a.Declared() {
+		var reads bool
+		if reads, err = s.reads(ctx, v, a.RepoID); err == nil && !reads {
+			err = orgs.ErrNotFound
+		}
+	}
+	if err != nil {
+		return Agent{}, failed(span, "finding the agent", err)
+	}
+	return a, nil
+}
+
+// organizations finds one of the organization's own agents, which its settings pages define: ErrDeclared for one a
+// repository declares, which the API changes nothing of.
+func (s *Service) organizations(ctx context.Context, orgID, id uuid.UUID) (Agent, error) {
+	a, err := s.store.Agent(ctx, orgID, id)
+	switch {
+	case err != nil:
+		return Agent{}, fmt.Errorf("finding the agent: %w", err)
+	case a.Declared():
+		return Agent{}, ErrDeclared
+	}
+	return a, nil
 }
 
 // roles holds the roles an organization grants at each scope, read once each.
@@ -388,7 +419,7 @@ func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 	if err != nil {
 		return Agent{}, failed(span, "changing the agent", err)
 	}
-	a, err := s.store.Agent(ctx, orgID, id)
+	a, err := s.organizations(ctx, orgID, id)
 	if err != nil {
 		return Agent{}, failed(span, "finding the agent", err)
 	}
@@ -408,7 +439,8 @@ func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 
 // DeleteAgent deletes one of the organization's agents with its grants and tasks, from version, or from any version
 // for AnyVersion; it takes org.principals.manage and every permission of the roles the agent holds where they apply,
-// as removing a member does. A built-in agent is never deleted: ErrBuiltIn.
+// as removing a member does. A built-in agent is never deleted: ErrBuiltIn; nor a repository's, which main's
+// /cobranch.yaml retires: ErrDeclared.
 func (s *Service) DeleteAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID, version int64) error {
 	ctx, span := tracer.Start(ctx, "agents.Service.DeleteAgent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
@@ -416,7 +448,7 @@ func (s *Service) DeleteAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 	if err != nil {
 		return failed(span, "deleting the agent", err)
 	}
-	a, err := s.store.Agent(ctx, orgID, id)
+	a, err := s.organizations(ctx, orgID, id)
 	if err != nil {
 		return failed(span, "finding the agent", err)
 	}

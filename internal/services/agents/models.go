@@ -210,7 +210,7 @@ func (s *Service) RemoveModelProvider(ctx context.Context, v Viewer, orgID uuid.
 
 // SetModel puts one of the organization's agents on a model of a provider the organization added, or on none with
 // both empty, at version or at any version for AnyVersion, and answers it. It takes org.principals.manage, and a
-// person: an agent picks no model.
+// person: an agent picks no model. A repository's agent names its model in main's /cobranch.yaml: ErrDeclared.
 func (s *Service) SetModel(ctx context.Context, v Viewer, orgID, id uuid.UUID, provider, model string, version int64) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.SetModel", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
@@ -224,13 +224,17 @@ func (s *Service) SetModel(ctx context.Context, v Viewer, orgID, id uuid.UUID, p
 	if err != nil {
 		return Agent{}, failed(span, "picking the agent's model", err)
 	}
+	if _, err := s.organizations(ctx, orgID, id); err != nil {
+		return Agent{}, failed(span, "picking the agent's model", err)
+	}
 	a, err := s.store.SetModel(ctx, v.ID, orgID, id, version, provider, model)
 	return a, failed(span, "picking the agent's model", err)
 }
 
 // SetImage names the container image the tasks of one of the organization's agents run in, or the installation's
 // with an empty one, at version or at any version for AnyVersion, and answers the agent. It takes
-// org.principals.manage, and a person, as picking its model does: the image is what its tasks may run.
+// org.principals.manage, and a person, as picking its model does: the image is what its tasks may run. A repository's
+// agent names its image in main's /cobranch.yaml: ErrDeclared.
 func (s *Service) SetImage(ctx context.Context, v Viewer, orgID, id uuid.UUID, image string, version int64) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.SetImage", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
@@ -244,13 +248,17 @@ func (s *Service) SetImage(ctx context.Context, v Viewer, orgID, id uuid.UUID, i
 	if err != nil {
 		return Agent{}, failed(span, "naming the agent's image", err)
 	}
+	if _, err := s.organizations(ctx, orgID, id); err != nil {
+		return Agent{}, failed(span, "naming the agent's image", err)
+	}
 	a, err := s.store.SetImage(ctx, v.ID, orgID, id, version, image)
 	return a, failed(span, "naming the agent's image", err)
 }
 
 // SetSecrets names the secrets the tasks of one of the organization's agents receive, each an environment variable
 // from one of the organization's secrets, at version or at any version for AnyVersion, and answers the agent. It
-// takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on.
+// takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. A
+// repository's agent names its secrets in main's /cobranch.yaml: ErrDeclared.
 func (s *Service) SetSecrets(ctx context.Context, v Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.SetSecrets", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
@@ -261,6 +269,9 @@ func (s *Service) SetSecrets(ctx context.Context, v Viewer, orgID, id uuid.UUID,
 		return Agent{}, failed(span, "naming the agent's secrets", err)
 	}
 	if err := ValidateSecrets(named); err != nil {
+		return Agent{}, failed(span, "naming the agent's secrets", err)
+	}
+	if _, err := s.organizations(ctx, orgID, id); err != nil {
 		return Agent{}, failed(span, "naming the agent's secrets", err)
 	}
 	for name, secretID := range named {

@@ -93,6 +93,16 @@ type Agent struct {
 	Cap *string `json:"cap,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
 	Secrets []*AgentSecret `json:"secrets"`
+	// The repository whose main /cobranch.yaml declares it, which the API changes nothing of; null for the organization's own.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// That repository's slug; null for the organization's own.
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+	// What a repository's agent declares it may do on its repository, sorted; null for the organization's own, whose grants say.
+	Permissions []string `json:"permissions,omitempty"`
+	// The line of a repository's agent's name in its main /cobranch.yaml; null for the organization's own.
+	Line *int `json:"line,omitempty"`
+	// When its repository's main /cobranch.yaml stopped declaring it; it then takes no task. Null while declared, and for the organization's own.
+	RetiredAt *time.Time `json:"retiredAt,omitempty"`
 	// A page of the viewer's own conversation with the agent, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
 	Conversation *ChatPage `json:"conversation"`
 	// The ID of the agent's organization, which its conversation reads.
