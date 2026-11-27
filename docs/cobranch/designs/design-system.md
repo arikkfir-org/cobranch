@@ -408,6 +408,7 @@ Researcher waits for a task.
 | [Settings · API keys](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-8694) | The organization's keys with their roles and secrets, made, rotated and revoked |
 | [Settings · API keys · New key](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9086) | Making a key, in a dialog, and its secret shown once |
 | [Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9367) | The organization's own secrets, which its repositories' jobs share |
+| [Settings · Secrets · Add secret · Long value](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=254-39928) | Adding a secret whose value is long (a kubeconfig): the value scrolls inside its field, which stops at 320px, and the dialog keeps its actions in reach |
 | [Settings · Usage](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9789) | What the organization uses against the installation's limits, and each repository's Git data |
 | [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
 | [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
