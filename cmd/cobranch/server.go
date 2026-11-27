@@ -49,8 +49,8 @@ type api struct {
 	// handler serves the API for a server built as version, over the domain's services, to pages from the origin
 	// pages.
 	handler func(version, pages string, s services) http.Handler
-	// follows is whether the API follows chats, people's organizations and organizations' settings live, which takes
-	// a connection of its own for each, listening for their changes.
+	// follows is whether the API follows chats, people's organizations and the Console's live pages, which takes a
+	// connection of its own for each, listening for their changes.
 	follows bool
 	// logs is whether the API reads runs' logs, which takes the object store and, where runs execute pods, the cluster.
 	logs bool
@@ -166,9 +166,9 @@ func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Po
 			return services{}, nil, err
 		}
 	}
-	chatHub, orgHub, settingsHub := hubs(ctx, a, pool)
+	chatHub, orgHub, changeHub := hubs(ctx, a, pool)
 	agentStore := postgres.NewAgentStore(pool)
-	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...).WithNotifier(settingsHub)
+	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...).WithNotifier(changeHub)
 	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas).WithNotifier(orgHub),
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: codeService,
 		issues:    issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
@@ -179,14 +179,14 @@ func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Po
 		overview:  overview.NewService(postgres.NewOverviewStore(pool), authorizer), administration: administration}, closeLogs, nil
 }
 
-// hubs are the hubs of the chats' followers, of the followers of people's organizations and of the followers of
-// organizations' settings when a follows them, each listening on a connection outside pool until ctx ends; nil
+// hubs are the hubs of the chats' followers, of the followers of people's organizations and of the followers of the
+// Console's live pages when a follows them, each listening on a connection outside pool until ctx ends; nil
 // otherwise, which no one follows through.
 func hubs(ctx context.Context, a api, pool *pgxpool.Pool) (chats.Notifier, orgs.Notifier, live.Notifier) {
 	if !a.follows {
 		return nil, nil, nil
 	}
-	return postgres.ListenChats(ctx, pool), postgres.ListenOrganizations(ctx, pool), postgres.ListenSettings(ctx, pool)
+	return postgres.ListenChats(ctx, pool), postgres.ListenOrganizations(ctx, pool), postgres.ListenChanges(ctx, pool)
 }
 
 // objects reads repositories' trees and files from the Git server's internal port, or nil, which answers that no Git

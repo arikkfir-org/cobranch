@@ -46,10 +46,10 @@ func ListenOrganizations(ctx context.Context, pool *pgxpool.Pool) *Hub {
 	return listenHub(ctx, pool, "organizations", (*queries.Queries).ListenOrganizations)
 }
 
-// ListenSettings returns the hub of the followers of organizations' settings, listening outside pool until ctx ends:
-// a change wakes those who watch the organization it names.
-func ListenSettings(ctx context.Context, pool *pgxpool.Pool) *Hub {
-	return listenHub(ctx, pool, "settings", (*queries.Queries).ListenSettings)
+// ListenChanges returns the hub of the followers of the Console's live pages, listening outside pool until ctx ends: a
+// change wakes those who watch what it names, such as its organization.
+func ListenChanges(ctx context.Context, pool *pgxpool.Pool) *Hub {
+	return listenHub(ctx, pool, "changes", (*queries.Queries).ListenChanges)
 }
 
 // listenHub returns a hub that start's notifications wake, listening outside pool until ctx ends.

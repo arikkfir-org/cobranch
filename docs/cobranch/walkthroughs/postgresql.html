@@ -86,7 +86,7 @@
     <tr><td class="p">cobranch_pushes</td><td>The push's transaction in the <a href="git-server.html">git-server</a></td><td>Every push-worker, on a connection outside its pool</td><td>The push's ID; one wake however many arrive</td></tr>
     <tr><td class="p">cobranch_chats</td><td>Any transaction that changes a chat</td><td>Every REST and GraphQL server's chats <code>Hub</code></td><td>The chat's subject, whose watchers wake</td></tr>
     <tr><td class="p">cobranch_organizations</td><td>Triggers on <code>memberships</code>, <code>grants</code>, <code>organizations</code> and <code>roles</code> (migration 00065)</td><td>Every REST and GraphQL server's organizations <code>Hub</code></td><td>The principal or the organization, whose list's followers wake</td></tr>
-    <tr><td class="p">cobranch_settings</td><td>Triggers on <code>model_providers</code>, <code>models</code>, <code>agents</code> and <code>secrets</code> (migration 00066)</td><td>Every REST and GraphQL server's settings <code>Hub</code></td><td>The organization, whose Settings · Models followers wake</td></tr>
+    <tr><td class="p">cobranch_changes</td><td>Triggers <code>notify_changes</code> on <code>model_providers</code>, <code>models</code>, <code>agents</code> and <code>secrets</code> (migration 00066)</td><td>Every REST and GraphQL server's changes <code>Hub</code></td><td>What the row belongs to (its organization), whose live pages' followers wake</td></tr>
   </table></div>
   <p class="cap">A notification is only a hint. Every listener also polls or re-reads from a cursor, and a reconnect wakes everyone, since some may have been missed.</p>
 </section>

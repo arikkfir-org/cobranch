@@ -11,7 +11,7 @@ import (
 	"cobranch.dev/internal/services/secrets"
 )
 
-func TestSettingsHub(t *testing.T) {
+func TestChangesHub(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name string
@@ -48,14 +48,14 @@ func TestSettingsHub(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			hearSettingsChange(t, tt.change)
+			hearChangeOf(t, tt.change)
 		})
 	}
 }
 
-// hearSettingsChange connects anthropic to Acme with a secret of its own and adds a-model, watches Acme and another
+// hearChangeOf connects anthropic to Acme with a secret of its own and adds a-model, watches Acme and another
 // organization on a hub of the fixture's database, makes change, and checks that it wakes Acme's watcher alone.
-func hearSettingsChange(t *testing.T, change func(ctx context.Context, t *testing.T, f *agentFixture, key uuid.UUID)) {
+func hearChangeOf(t *testing.T, change func(ctx context.Context, t *testing.T, f *agentFixture, key uuid.UUID)) {
 	t.Helper()
 	f := newAgentFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -67,7 +67,7 @@ func hearSettingsChange(t *testing.T, change func(ctx context.Context, t *testin
 	if _, _, err := f.a.PutModel(ctx, f.olivia, f.acme.ID, "anthropic", "a-model", agents.ModelInput{}, agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
-	hub := ListenSettings(ctx, f.pool)
+	hub := ListenChanges(ctx, f.pool)
 	acme, stopAcme := hub.Watch(f.acme.ID)
 	defer stopAcme()
 	other, stopOther := hub.Watch(uuid.New())

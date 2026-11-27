@@ -107,8 +107,3 @@ SELECT count(*) FROM agents WHERE org_id = @org_id AND provider = @provider AND 
 -- name: StartOnDefaultModel :exec
 UPDATE agents a SET provider = m.provider, model = m.model
 FROM models m WHERE a.principal_id = @id AND m.org_id = a.org_id AND m.is_default;
-
--- ListenSettings has the connection hear the notifications that migration 00066's triggers send when a row an
--- organization's settings pages show changes, naming the organization.
--- name: ListenSettings :exec
-LISTEN cobranch_settings;

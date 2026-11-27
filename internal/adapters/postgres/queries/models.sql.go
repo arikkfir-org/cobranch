@@ -90,17 +90,6 @@ func (q *Queries) InsertModelProvider(ctx context.Context, arg InsertModelProvid
 	return result.RowsAffected(), nil
 }
 
-const listenSettings = `-- name: ListenSettings :exec
-LISTEN cobranch_settings
-`
-
-// ListenSettings has the connection hear the notifications that migration 00066's triggers send when a row an
-// organization's settings pages show changes, naming the organization.
-func (q *Queries) ListenSettings(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, listenSettings)
-	return err
-}
-
 const lockModel = `-- name: LockModel :one
 SELECT version FROM models WHERE org_id = $1 AND provider = $2 AND model = $3 FOR UPDATE
 `

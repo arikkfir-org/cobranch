@@ -173,7 +173,7 @@ sequenceDiagram
     Tab->>REST: GET /orgs/{org}/model-providers and /models
     REST-->>Tab: 200, each list and its ETag
     Tab->>REST: each again, ?wait=15, If-None-Match: its ETag
-    REST->>PG: LISTEN cobranch_settings (one connection per server)
+    REST->>PG: LISTEN cobranch_changes (one connection per server)
     Note over PG: elsewhere: a provider connected or removed, a model added, repriced or removed, an agent put on a model, a secret renamed or deleted
     PG-->>REST: NOTIFY naming the organization
     REST->>PG: read the list again
@@ -186,8 +186,10 @@ another tab, by another member or through the API stayed missing until a reload
 ([ENG-282](https://linear.app/arikkfir/issue/ENG-282)).
 
 - **The database says what changed.** Triggers on `model_providers`, `models`, `agents` and `secrets` notify channel
-  `cobranch_settings` with the row's organization as their transaction commits: every path that changes them, the
-  API, agents' own changes, a secret's deletion that leaves a provider broken, is caught alike.
+  `cobranch_changes` with the row's organization as their transaction commits: every path that changes them, the
+  API, agents' own changes, a secret's deletion that leaves a provider broken, is caught alike. The channel is the
+  Console's live pages' one: a page that follows other rows adds their tables, each naming the IDs its followers
+  watch (`notify_changes('org_id')` here).
 - **Each server listens once**, as for chats and people's organizations
   ([live organization lists](sign-in-and-organizations.md#live-organization-lists)), and wakes the requests that follow
   the organization; a follower also reads once a minute, for a notification lost while the listener reconnected.
@@ -562,7 +564,7 @@ land.
 | Agents are principals of kind `agent`, owned by the organization, with a row in `agents` | The principals design | Agreed |
 | An agent's creator gives its first grants, each within their own permissions, without `org.grants.manage` | Members create agents; nobody grants more than they hold | Proposed |
 | Providers are organization settings naming an organization secret; `org.manage` adds them | The architecture's providers as secrets | Proposed |
-| Settings · Models follows its lists live: database triggers notify `cobranch_settings` with the organization, REST waits on each list's ETag | The same mechanism as the organization switcher's, for every way a provider, model, agent or secret changes ([ENG-282](https://linear.app/arikkfir/issue/ENG-282)) | Proposed |
+| Settings · Models follows its lists live: database triggers notify `cobranch_changes` with the organization, REST waits on each list's ETag, on one channel every live page shares | The same mechanism as the organization switcher's, for every way a provider, model, agent or secret changes ([ENG-282](https://linear.app/arikkfir/issue/ENG-282)) | Proposed |
 | `org.principals.manage` picks an agent's model and secrets; Cobranch doesn't validate model names | An admin picks the model; new models work at once | Agreed |
 | A task's permissions are the agent's intersected with the assigner's, checked at every call | The assigner cap; revocation applies at once | Agreed |
 | A task receives the agent's secrets whoever assigned it | The principals design | Agreed |
