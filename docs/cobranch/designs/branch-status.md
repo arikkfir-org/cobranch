@@ -136,6 +136,9 @@ The order is the [product design’s](product.md#branches). Reviews join Blocked
   from a branch created at an old commit of `main` with nothing of its own; both are in `main`. So a branch is Merged
   only when a merge was recorded for its head; the other is Empty. A new commit on a Merged branch makes it a request
   again.
+- **A merge keeps the tip it was made onto.** The merge recorded holds `main`'s tip before the push that made it, so a
+  Merged branch's Files changed still shows what it merged ([diffs](reviews.md#diffs)), where the merge base with
+  `main`'s tip, now its own head, would show nothing.
 
 ### Graph facts
 

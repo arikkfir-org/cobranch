@@ -283,8 +283,8 @@ func (b *InsertSettingsFileBatchResults) Close() error {
 }
 
 const recordMerge = `-- name: RecordMerge :batchexec
-UPDATE branches SET merged_head = $1::text, merged_by = $2, merged_at = $3::timestamptz
-WHERE repo_id = $4 AND (id = $5::uuid OR ($5::uuid IS NULL AND name = $6 AND deleted_at IS NULL))
+UPDATE branches SET merged_head = $1::text, merged_base = $2::text, merged_by = $3, merged_at = $4::timestamptz
+WHERE repo_id = $5 AND (id = $6::uuid OR ($6::uuid IS NULL AND name = $7 AND deleted_at IS NULL))
 `
 
 type RecordMergeBatchResults struct {
@@ -295,6 +295,7 @@ type RecordMergeBatchResults struct {
 
 type RecordMergeParams struct {
 	Head     string
+	Base     string
 	MergedBy *uuid.UUID
 	MergedAt time.Time
 	RepoID   uuid.UUID
@@ -302,14 +303,15 @@ type RecordMergeParams struct {
 	Name     string
 }
 
-// RecordMerge records a merge of a branch into its base, at the head merged, for the pusher, at when Cobranch
-// recorded the push: the branch the push's transaction found by its ID, deleted since or not, or, for a push recorded
-// before pushes kept their branches' IDs, the live branch of its name.
+// RecordMerge records a merge of a branch into its base, at the head merged, onto the base's tip before the push,
+// for the pusher, at when Cobranch recorded the push: the branch the push's transaction found by its ID, deleted since
+// or not, or, for a push recorded before pushes kept their branches' IDs, the live branch of its name.
 func (q *Queries) RecordMerge(ctx context.Context, arg []RecordMergeParams) *RecordMergeBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
 		vals := []interface{}{
 			a.Head,
+			a.Base,
 			a.MergedBy,
 			a.MergedAt,
 			a.RepoID,

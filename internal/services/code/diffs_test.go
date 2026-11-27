@@ -1,6 +1,7 @@
 package code_test
 
 import (
+	"slices"
 	"testing"
 
 	"cobranch.dev/internal/services/code"
@@ -56,6 +57,40 @@ func TestBranchDiff(t *testing.T) {
 			}
 			if got.Base != sha(5) || got.BaseTip != sha(5) || got.Head != sha(6) || len(got.Files) != 2 {
 				t.Errorf("got %+v, want the change from 5 to 6", got)
+			}
+		})
+	}
+}
+
+// A merged branch's change runs from the tip its merge was made onto, as main now holds its head; one pushed again
+// since, or whose merge was recorded without that tip, compares with main's tip.
+func TestBranchDiffOfAMergedBranch(t *testing.T) {
+	tests := []struct {
+		name  string
+		merge code.Merge
+		want  code.DiffRequest
+	}{
+		{name: "at the head merged, from the tip it was merged onto", merge: code.Merge{Head: sha(6), Base: sha(4)},
+			want: code.DiffRequest{Base: sha(4), Head: sha(6), MergeBase: true}},
+		{name: "pushed again since, from main's tip", merge: code.Merge{Head: sha(5), Base: sha(4)},
+			want: code.DiffRequest{Base: "main", Head: sha(6), MergeBase: true}},
+		{name: "merged without the tip recorded, from main's tip", merge: code.Merge{Head: sha(6)},
+			want: code.DiffRequest{Base: "main", Head: sha(6), MergeBase: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := withDiffs(newFixture())
+			f.store.UpdateBranch(f.repo, "feature/x", func(b *code.Branch) { m := tt.merge; b.Merge = &m })
+			if _, err := f.service.BranchDiff(t.Context(), f.max, f.repo, "feature/x"); err != nil {
+				t.Fatal(err)
+			}
+			counts := tt.want
+			counts.CountsOnly = true
+			if _, err := f.service.BranchDiffCounts(t.Context(), f.max, f.repo, "feature/x"); err != nil {
+				t.Fatal(err)
+			}
+			if want := []code.DiffRequest{tt.want, counts}; !slices.Equal(f.objects.Diffs, want) {
+				t.Errorf("asked Git for %v, want %v", f.objects.Diffs, want)
 			}
 		})
 	}

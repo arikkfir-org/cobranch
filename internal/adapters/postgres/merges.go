@@ -171,7 +171,8 @@ func recordBypasses(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 }
 
 // recordMerges records, in the push worker's transaction, the merges the claimed push made into the default branch:
-// each branch it merged, deleted since or not, keeps the head merged, its pusher and when the push was recorded.
+// each branch it merged, deleted since or not, keeps the head merged, the default branch's tip it was merged onto, its
+// pusher and when the push was recorded.
 func recordMerges(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	var heads []headJSON
 	if err := json.Unmarshal(claimed.Merged, &heads); err != nil {
@@ -180,9 +181,19 @@ func recordMerges(ctx context.Context, q *queries.Queries, claimed queries.Claim
 	if len(heads) == 0 {
 		return nil
 	}
+	var updates []refUpdateJSON
+	if err := json.Unmarshal(claimed.RefUpdates, &updates); err != nil {
+		return fmt.Errorf("reading the push's ref updates: %w", err)
+	}
+	base := ""
+	for _, u := range updates {
+		if u.Name == "refs/heads/"+git.DefaultBranch {
+			base = u.Old
+		}
+	}
 	rows := make([]queries.RecordMergeParams, 0, len(heads))
 	for _, h := range heads {
-		rows = append(rows, queries.RecordMergeParams{Head: h.SHA, MergedBy: claimed.PusherID, MergedAt: claimed.CommittedAt,
+		rows = append(rows, queries.RecordMergeParams{Head: h.SHA, Base: base, MergedBy: claimed.PusherID, MergedAt: claimed.CommittedAt,
 			RepoID: claimed.RepoID, ID: h.ID, Name: h.Branch})
 	}
 	var failed error

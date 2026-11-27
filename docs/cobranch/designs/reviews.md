@@ -269,8 +269,10 @@ Reviewing needs the change, which [code browsing](code-browsing.md) left for lat
 [Code browsing](code-browsing.md) built the internal call and left diffs for later; a review needs them, so this slice
 adds them to it.
 
-- **A branch's diff** is from the merge base of `main` and its head, so commits `main` gained since don't show; **a
-  commit's** is against its first parent, or the empty tree for a root commit.
+- **A branch's diff** is from the merge base of `main` and its head, so commits `main` gained since don't show; a
+  Merged branch's, from the merge base of its head and the tip of `main` its merge was made onto
+  ([Merged](branch-status.md#branch-status)), as `main`'s tip now holds its head; **a commit's** is against its first parent,
+  or the empty tree for a root commit.
 - **Built by the Git server** on code browsing's internal call, in a throwaway repository of one snapshot: `git diff`
   with renames found, each file's status, its old and new paths, the objects of its content before and after, and its
   hunks.

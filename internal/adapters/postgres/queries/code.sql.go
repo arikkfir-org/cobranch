@@ -91,7 +91,7 @@ func (q *Queries) CountFirstParents(ctx context.Context, grep string, repoID uui
 
 const deletedBranch = `-- name: DeletedBranch :one
 SELECT b.id, b.name, b.head, b.created_at, b.deleted_at, b.deleted_by, d.display_name AS deleted_by_name,
-    b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at
 FROM branches b
 LEFT JOIN principals d ON d.id = b.deleted_by
 LEFT JOIN principals m ON m.id = b.merged_by
@@ -110,6 +110,7 @@ type DeletedBranchRow struct {
 	DeletedBy     *uuid.UUID
 	DeletedByName *string
 	MergedHead    *string
+	MergedBase    *string
 	MergedBy      *uuid.UUID
 	MergedByName  *string
 	MergedAt      *time.Time
@@ -129,6 +130,7 @@ func (q *Queries) DeletedBranch(ctx context.Context, repoID uuid.UUID, name stri
 		&i.DeletedBy,
 		&i.DeletedByName,
 		&i.MergedHead,
+		&i.MergedBase,
 		&i.MergedBy,
 		&i.MergedByName,
 		&i.MergedAt,
@@ -221,7 +223,7 @@ func (q *Queries) FirstParents(ctx context.Context, arg FirstParentsParams) ([]F
 
 const liveBranch = `-- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -251,6 +253,7 @@ type LiveBranchRow struct {
 	RequiredApprovals   *int32
 	RequiredAi          *bool
 	MergedHead          *string
+	MergedBase          *string
 	MergedBy            *uuid.UUID
 	MergedByName        *string
 	MergedAt            *time.Time
@@ -280,6 +283,7 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 		&i.RequiredApprovals,
 		&i.RequiredAi,
 		&i.MergedHead,
+		&i.MergedBase,
 		&i.MergedBy,
 		&i.MergedByName,
 		&i.MergedAt,
@@ -294,7 +298,7 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 
 const liveBranches = `-- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -325,6 +329,7 @@ type LiveBranchesRow struct {
 	RequiredApprovals   *int32
 	RequiredAi          *bool
 	MergedHead          *string
+	MergedBase          *string
 	MergedBy            *uuid.UUID
 	MergedByName        *string
 	MergedAt            *time.Time
@@ -364,6 +369,7 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 			&i.RequiredApprovals,
 			&i.RequiredAi,
 			&i.MergedHead,
+			&i.MergedBase,
 			&i.MergedBy,
 			&i.MergedByName,
 			&i.MergedAt,
@@ -385,7 +391,7 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 
 const openBranchesIn = `-- name: OpenBranchesIn :many
 SELECT b.repo_id, rp.slug AS repo_slug, b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -421,6 +427,7 @@ type OpenBranchesInRow struct {
 	RequiredApprovals   *int32
 	RequiredAi          *bool
 	MergedHead          *string
+	MergedBase          *string
 	MergedBy            *uuid.UUID
 	MergedByName        *string
 	MergedAt            *time.Time
@@ -461,6 +468,7 @@ func (q *Queries) OpenBranchesIn(ctx context.Context, repoIds []uuid.UUID, lim i
 			&i.RequiredApprovals,
 			&i.RequiredAi,
 			&i.MergedHead,
+			&i.MergedBase,
 			&i.MergedBy,
 			&i.MergedByName,
 			&i.MergedAt,

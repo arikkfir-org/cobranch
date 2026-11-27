@@ -92,10 +92,12 @@ type Branch struct {
 	ManualJobs []string
 }
 
-// Merge is a merge of a branch into its base that a push made: the head it brought in, who pushed it, nil once they
-// are gone, and when Cobranch recorded the push.
+// Merge is a merge of a branch into its base that a push made: the head it brought in, the base's tip it was made
+// onto ("" for a merge recorded without it), who pushed it, nil once they are gone, and when Cobranch recorded the
+// push.
 type Merge struct {
 	Head string
+	Base string
 	By   *Principal
 	At   time.Time
 }

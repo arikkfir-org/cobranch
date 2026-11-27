@@ -93,7 +93,7 @@ func (s *CodeStore) OpenBranches(ctx context.Context, repoIDs []uuid.UUID, limit
 func liveRow(r queries.OpenBranchesInRow) queries.LiveBranchesRow {
 	return queries.LiveBranchesRow{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Base: r.Base, Ahead: r.Ahead,
 		Behind: r.Behind, Merges: r.Merges, Status: r.Status, Checks: r.Checks, RequiredAnnotations: r.RequiredAnnotations,
-		LinearHistory: r.LinearHistory, RequiredApprovals: r.RequiredApprovals, RequiredAi: r.RequiredAi, MergedHead: r.MergedHead,
+		LinearHistory: r.LinearHistory, RequiredApprovals: r.RequiredApprovals, RequiredAi: r.RequiredAi, MergedHead: r.MergedHead, MergedBase: r.MergedBase,
 		MergedBy: r.MergedBy, MergedByName: r.MergedByName, MergedAt: r.MergedAt, SettingsError: r.SettingsError, ManualJobs: r.ManualJobs,
 		ReviewTask: r.ReviewTask, ReviewState: r.ReviewState, ReviewReason: r.ReviewReason}
 }
@@ -133,7 +133,7 @@ func (s *CodeStore) DeletedBranch(ctx context.Context, repoID uuid.UUID, name st
 		b.DeletedBy = &code.Principal{ID: *r.DeletedBy, DisplayName: *r.DeletedByName}
 	}
 	if r.MergedHead != nil && r.MergedAt != nil {
-		b.Merge = &code.Merge{Head: *r.MergedHead, At: *r.MergedAt}
+		b.Merge = &code.Merge{Head: *r.MergedHead, Base: derefString(r.MergedBase), At: *r.MergedAt}
 		if r.MergedBy != nil && r.MergedByName != nil {
 			b.Merge.By = &code.Principal{ID: *r.MergedBy, DisplayName: *r.MergedByName}
 		}
@@ -160,7 +160,7 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 		}
 	}
 	if r.MergedHead != nil && r.MergedAt != nil {
-		b.Merge = &code.Merge{Head: *r.MergedHead, At: *r.MergedAt}
+		b.Merge = &code.Merge{Head: *r.MergedHead, Base: derefString(r.MergedBase), At: *r.MergedAt}
 		if r.MergedBy != nil && r.MergedByName != nil {
 			b.Merge.By = &code.Principal{ID: *r.MergedBy, DisplayName: *r.MergedByName}
 		}
