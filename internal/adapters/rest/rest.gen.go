@@ -4748,6 +4748,24 @@ type ListRepositoriesParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetRepositoryParams defines parameters for GetRepository.
+type GetRepositoryParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListRepositoryAccessParams defines parameters for ListRepositoryAccess.
+type ListRepositoryAccessParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
 type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
@@ -4757,6 +4775,12 @@ type GrantRepositoryRoleJSONBody struct {
 type ListArtifactsParams struct {
 	// Kind Only the artifacts of this kind.
 	Kind *ArtifactKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetBlameParams defines parameters for GetBlame.
@@ -5015,10 +5039,19 @@ type GetDeliveryParams struct {
 type ListEnvironmentsParams struct {
 	// Branch Only the environments of this branch, by its short name.
 	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetEnvironmentParams defines parameters for GetEnvironment.
 type GetEnvironmentParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -5033,6 +5066,21 @@ type ListDeliveriesParams struct {
 
 	// Limit How many deliveries the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListEnvironmentObjectsParams defines parameters for ListEnvironmentObjects.
+type ListEnvironmentObjectsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetPathsParams defines parameters for GetPaths.
@@ -5101,6 +5149,24 @@ type GetRunParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListRepositorySecretsParams defines parameters for ListRepositorySecrets.
+type ListRepositorySecretsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListDeliveryTargetsParams defines parameters for ListDeliveryTargets.
+type ListDeliveryTargetsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetTreeParams defines parameters for GetTree.
 type GetTreeParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -5159,6 +5225,15 @@ type GetSecretParams struct {
 type ReplaceSecretParams struct {
 	// IfMatch The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
 	IfMatch *IfMatchSecret `json:"If-Match,omitempty"`
+}
+
+// ListSecretAccessParams defines parameters for ListSecretAccess.
+type ListSecretAccessParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *WaitForChange `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GrantSecretJSONBody defines parameters for GrantSecret.
@@ -5802,22 +5877,22 @@ type ServerInterface interface {
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
-	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404. With If-None-Match and wait, it waits up to wait seconds for the repository to change before it answers 304, so a client follows the repository by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo})
-	GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRepositoryParams)
 	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
+	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/access)
-	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryAccessParams)
 	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
 	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
 	GrantRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID)
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
-	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
+	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListArtifactsParams)
 	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
@@ -5955,18 +6030,18 @@ type ServerInterface interface {
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
-	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments)
 	ListEnvironments(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListEnvironmentsParams)
-	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the environment to change before it answers 304, so a client follows the environment by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
 	GetEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params GetEnvironmentParams)
-	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
 	ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams)
-	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/objects)
-	ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListEnvironmentObjectsParams)
 	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
 	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
 	PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
@@ -6018,18 +6093,18 @@ type ServerInterface interface {
 	// GetRunSteps One of the repository's runs' steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its containers'): as the controller kept them once it ended, from its pod while it runs; takes repo.read. A run that never started a pod, such as a webhook's, has none.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/steps)
 	GetRunSteps(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
-	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/secrets)
-	ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositorySecretsParams)
 	// CreateRepositorySecret Adds a secret to the repository's settings, sealed with the installation's secrets key; takes secrets.manage on the repository. Without a secrets key, the answer is 409.
 	// (POST /orgs/{org}/repos/{repo}/secrets)
 	CreateRepositorySecret(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/targets)
-	ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListDeliveryTargetsParams)
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeParams)
@@ -6063,9 +6138,9 @@ type ServerInterface interface {
 	// ReplaceSecret Renames a secret and, when the body gives one, replaces its value; takes secrets.manage on it. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/secrets/{id})
 	ReplaceSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params ReplaceSecretParams)
-	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/secrets/{id}/access)
-	ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id, params ListSecretAccessParams)
 	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
 	// (POST /orgs/{org}/secrets/{id}/access)
 	GrantSecret(w http.ResponseWriter, r *http.Request, org Org, id Id)
@@ -11879,8 +11954,45 @@ func (siw *ServerInterfaceWrapper) GetRepository(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRepositoryParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRepository(w, r, org, repo)
+		siw.Handler.GetRepository(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11949,8 +12061,45 @@ func (siw *ServerInterfaceWrapper) ListRepositoryAccess(w http.ResponseWriter, r
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryAccessParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRepositoryAccess(w, r, org, repo)
+		siw.Handler.ListRepositoryAccess(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12095,6 +12244,40 @@ func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
 		}
 		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -15184,6 +15367,40 @@ func (siw *ServerInterfaceWrapper) ListEnvironments(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListEnvironments(w, r, org, repo, params)
 	}))
@@ -15230,6 +15447,19 @@ func (siw *ServerInterfaceWrapper) GetEnvironment(w http.ResponseWriter, r *http
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetEnvironmentParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
 
 	headers := r.Header
 
@@ -15338,6 +15568,40 @@ func (siw *ServerInterfaceWrapper) ListDeliveries(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDeliveries(w, r, org, repo, environment, params)
 	}))
@@ -15382,8 +15646,45 @@ func (siw *ServerInterfaceWrapper) ListEnvironmentObjects(w http.ResponseWriter,
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEnvironmentObjectsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListEnvironmentObjects(w, r, org, repo, environment)
+		siw.Handler.ListEnvironmentObjects(w, r, org, repo, environment, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16396,8 +16697,45 @@ func (siw *ServerInterfaceWrapper) ListRepositorySecrets(w http.ResponseWriter, 
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositorySecretsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRepositorySecrets(w, r, org, repo)
+		siw.Handler.ListRepositorySecrets(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16501,8 +16839,45 @@ func (siw *ServerInterfaceWrapper) ListDeliveryTargets(w http.ResponseWriter, r 
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDeliveryTargetsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListDeliveryTargets(w, r, org, repo)
+		siw.Handler.ListDeliveryTargets(w, r, org, repo, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17131,8 +17506,45 @@ func (siw *ServerInterfaceWrapper) ListSecretAccess(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSecretAccessParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSecretAccess(w, r, org, id)
+		siw.Handler.ListSecretAccess(w, r, org, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30365,31 +30777,68 @@ func (response CreateRepositorydefaultApplicationProblemPlusJSONResponse) VisitC
 }
 
 type GetRepositoryRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params GetRepositoryParams
 }
 
 type GetRepositoryResponseObject interface {
 	VisitGetRepositoryResponse(w http.ResponseWriter) error
 }
 
-type GetRepository200JSONResponse Repository
+type GetRepository200ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepository200JSONResponse struct {
+	Body    Repository
+	Headers GetRepository200ResponseHeaders
+}
 
 func (response GetRepository200JSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetRepository401ApplicationProblemPlusJSONResponse struct {
+type GetRepository304ResponseHeaders struct {
+	ETag string
+}
+
+type GetRepository304Response struct {
+	Headers GetRepository304ResponseHeaders
+}
+
+func (response GetRepository304Response) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetRepository400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response GetRepository400ApplicationProblemPlusJSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepository401ApplicationProblemPlusJSONResponse Problem
 
 func (response GetRepository401ApplicationProblemPlusJSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
 
@@ -30548,33 +30997,70 @@ func (response UpdateRepositorydefaultApplicationProblemPlusJSONResponse) VisitU
 }
 
 type ListRepositoryAccessRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListRepositoryAccessParams
 }
 
 type ListRepositoryAccessResponseObject interface {
 	VisitListRepositoryAccessResponse(w http.ResponseWriter) error
 }
 
+type ListRepositoryAccess200ResponseHeaders struct {
+	ETag string
+}
+
 type ListRepositoryAccess200JSONResponse struct {
-	Access []RepositoryAccess `json:"access"`
+	Body struct {
+		Access []RepositoryAccess `json:"access"`
+	}
+	Headers ListRepositoryAccess200ResponseHeaders
 }
 
 func (response ListRepositoryAccess200JSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListRepositoryAccess401ApplicationProblemPlusJSONResponse struct {
+type ListRepositoryAccess304ResponseHeaders struct {
+	ETag string
+}
+
+type ListRepositoryAccess304Response struct {
+	Headers ListRepositoryAccess304ResponseHeaders
+}
+
+func (response ListRepositoryAccess304Response) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListRepositoryAccess400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListRepositoryAccess400ApplicationProblemPlusJSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryAccess401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRepositoryAccess401ApplicationProblemPlusJSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
 
@@ -30831,18 +31317,40 @@ type ListArtifactsResponseObject interface {
 	VisitListArtifactsResponse(w http.ResponseWriter) error
 }
 
-type ListArtifacts200JSONResponse ArtifactList
+type ListArtifacts200ResponseHeaders struct {
+	ETag string
+}
+
+type ListArtifacts200JSONResponse struct {
+	Body    ArtifactList
+	Headers ListArtifacts200ResponseHeaders
+}
 
 func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListArtifacts304ResponseHeaders struct {
+	ETag string
+}
+
+type ListArtifacts304Response struct {
+	Headers ListArtifacts304ResponseHeaders
+}
+
+func (response ListArtifacts304Response) VisitListArtifactsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListArtifacts400ApplicationProblemPlusJSONResponse struct {
@@ -36142,25 +36650,61 @@ type ListEnvironmentsResponseObject interface {
 	VisitListEnvironmentsResponse(w http.ResponseWriter) error
 }
 
+type ListEnvironments200ResponseHeaders struct {
+	ETag string
+}
+
 type ListEnvironments200JSONResponse struct {
-	Environments []Environment `json:"environments"`
+	Body struct {
+		Environments []Environment `json:"environments"`
+	}
+	Headers ListEnvironments200ResponseHeaders
 }
 
 func (response ListEnvironments200JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListEnvironments401ApplicationProblemPlusJSONResponse struct {
+type ListEnvironments304ResponseHeaders struct {
+	ETag string
+}
+
+type ListEnvironments304Response struct {
+	Headers ListEnvironments304ResponseHeaders
+}
+
+func (response ListEnvironments304Response) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListEnvironments400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListEnvironments400ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListEnvironments401ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
 
@@ -36252,9 +36796,23 @@ func (response GetEnvironment304Response) VisitGetEnvironmentResponse(w http.Res
 	return nil
 }
 
-type GetEnvironment401ApplicationProblemPlusJSONResponse struct {
+type GetEnvironment400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response GetEnvironment400ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironment401ApplicationProblemPlusJSONResponse Problem
 
 func (response GetEnvironment401ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
 
@@ -36311,6 +36869,7 @@ type ListDeliveriesResponseObject interface {
 }
 
 type ListDeliveries200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -36328,12 +36887,27 @@ func (response ListDeliveries200JSONResponse) VisitListDeliveriesResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListDeliveries304ResponseHeaders struct {
+	ETag string
+}
+
+type ListDeliveries304Response struct {
+	Headers ListDeliveries304ResponseHeaders
+}
+
+func (response ListDeliveries304Response) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListDeliveries400ApplicationProblemPlusJSONResponse struct {
@@ -36401,31 +36975,68 @@ type ListEnvironmentObjectsRequestObject struct {
 	Org         Org           `json:"org"`
 	Repo        Repo          `json:"repo"`
 	Environment EnvironmentId `json:"environment"`
+	Params      ListEnvironmentObjectsParams
 }
 
 type ListEnvironmentObjectsResponseObject interface {
 	VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error
 }
 
+type ListEnvironmentObjects200ResponseHeaders struct {
+	ETag string
+}
+
 type ListEnvironmentObjects200JSONResponse struct {
-	Objects []EnvironmentObject `json:"objects"`
+	Body struct {
+		Objects []EnvironmentObject `json:"objects"`
+	}
+	Headers ListEnvironmentObjects200ResponseHeaders
 }
 
 func (response ListEnvironmentObjects200JSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListEnvironmentObjects401ApplicationProblemPlusJSONResponse struct {
+type ListEnvironmentObjects304ResponseHeaders struct {
+	ETag string
+}
+
+type ListEnvironmentObjects304Response struct {
+	Headers ListEnvironmentObjects304ResponseHeaders
+}
+
+func (response ListEnvironmentObjects304Response) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListEnvironmentObjects400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListEnvironmentObjects400ApplicationProblemPlusJSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentObjects401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListEnvironmentObjects401ApplicationProblemPlusJSONResponse) VisitListEnvironmentObjectsResponse(w http.ResponseWriter) error {
 
@@ -38175,31 +38786,68 @@ func (response GetRunStepsdefaultApplicationProblemPlusJSONResponse) VisitGetRun
 }
 
 type ListRepositorySecretsRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListRepositorySecretsParams
 }
 
 type ListRepositorySecretsResponseObject interface {
 	VisitListRepositorySecretsResponse(w http.ResponseWriter) error
 }
 
-type ListRepositorySecrets200JSONResponse SecretList
+type ListRepositorySecrets200ResponseHeaders struct {
+	ETag string
+}
+
+type ListRepositorySecrets200JSONResponse struct {
+	Body    SecretList
+	Headers ListRepositorySecrets200ResponseHeaders
+}
 
 func (response ListRepositorySecrets200JSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListRepositorySecrets401ApplicationProblemPlusJSONResponse struct {
+type ListRepositorySecrets304ResponseHeaders struct {
+	ETag string
+}
+
+type ListRepositorySecrets304Response struct {
+	Headers ListRepositorySecrets304ResponseHeaders
+}
+
+func (response ListRepositorySecrets304Response) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListRepositorySecrets400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListRepositorySecrets400ApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositorySecrets401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRepositorySecrets401ApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
 
@@ -38454,33 +39102,70 @@ func (response ListTagsdefaultApplicationProblemPlusJSONResponse) VisitListTagsR
 }
 
 type ListDeliveryTargetsRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListDeliveryTargetsParams
 }
 
 type ListDeliveryTargetsResponseObject interface {
 	VisitListDeliveryTargetsResponse(w http.ResponseWriter) error
 }
 
+type ListDeliveryTargets200ResponseHeaders struct {
+	ETag string
+}
+
 type ListDeliveryTargets200JSONResponse struct {
-	Targets []DeliveryTarget `json:"targets"`
+	Body struct {
+		Targets []DeliveryTarget `json:"targets"`
+	}
+	Headers ListDeliveryTargets200ResponseHeaders
 }
 
 func (response ListDeliveryTargets200JSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListDeliveryTargets401ApplicationProblemPlusJSONResponse struct {
+type ListDeliveryTargets304ResponseHeaders struct {
+	ETag string
+}
+
+type ListDeliveryTargets304Response struct {
+	Headers ListDeliveryTargets304ResponseHeaders
+}
+
+func (response ListDeliveryTargets304Response) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListDeliveryTargets400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListDeliveryTargets400ApplicationProblemPlusJSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveryTargets401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListDeliveryTargets401ApplicationProblemPlusJSONResponse) VisitListDeliveryTargetsResponse(w http.ResponseWriter) error {
 
@@ -39799,33 +40484,70 @@ func (response ReplaceSecretdefaultApplicationProblemPlusJSONResponse) VisitRepl
 }
 
 type ListSecretAccessRequestObject struct {
-	Org Org `json:"org"`
-	Id  Id  `json:"id"`
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params ListSecretAccessParams
 }
 
 type ListSecretAccessResponseObject interface {
 	VisitListSecretAccessResponse(w http.ResponseWriter) error
 }
 
+type ListSecretAccess200ResponseHeaders struct {
+	ETag string
+}
+
 type ListSecretAccess200JSONResponse struct {
-	Access []Grantee `json:"access"`
+	Body struct {
+		Access []Grantee `json:"access"`
+	}
+	Headers ListSecretAccess200ResponseHeaders
 }
 
 func (response ListSecretAccess200JSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListSecretAccess401ApplicationProblemPlusJSONResponse struct {
+type ListSecretAccess304ResponseHeaders struct {
+	ETag string
+}
+
+type ListSecretAccess304Response struct {
+	Headers ListSecretAccess304ResponseHeaders
+}
+
+func (response ListSecretAccess304Response) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListSecretAccess400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListSecretAccess400ApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccess401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListSecretAccess401ApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
 
@@ -41644,13 +42366,13 @@ type StrictServerInterface interface {
 	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
-	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404. With If-None-Match and wait, it waits up to wait seconds for the repository to change before it answers 304, so a client follows the repository by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo})
 	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
 	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
-	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission.
+	// ListRepositoryAccess Who holds roles on the repository, with each role, how it reaches the repository and since when; takes repo.read. A role at the organization reaches every repository of it, and counts here when it gives a repository permission. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(ctx context.Context, request ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error)
 	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
@@ -41659,7 +42381,7 @@ type StrictServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
-	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
+	// ListArtifacts The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
 	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
@@ -41797,16 +42519,16 @@ type StrictServerInterface interface {
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(ctx context.Context, request StartDeliveryRequestObject) (StartDeliveryResponseObject, error)
-	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments)
 	ListEnvironments(ctx context.Context, request ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error)
-	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the environment to change before it answers 304, so a client follows the environment by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
 	GetEnvironment(ctx context.Context, request GetEnvironmentRequestObject) (GetEnvironmentResponseObject, error)
-	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for the page to change before it answers 304, so a client follows the page by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
 	ListDeliveries(ctx context.Context, request ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error)
-	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read.
+	// ListEnvironmentObjects What one of the repository's environments holds, in the order its last apply applied it, each with its health as last read; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/objects)
 	ListEnvironmentObjects(ctx context.Context, request ListEnvironmentObjectsRequestObject) (ListEnvironmentObjectsResponseObject, error)
 	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
@@ -41860,7 +42582,7 @@ type StrictServerInterface interface {
 	// GetRunSteps One of the repository's runs' steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its containers'): as the controller kept them once it ended, from its pod while it runs; takes repo.read. A run that never started a pod, such as a webhook's, has none.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/steps)
 	GetRunSteps(ctx context.Context, request GetRunStepsRequestObject) (GetRunStepsResponseObject, error)
-	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/secrets)
 	ListRepositorySecrets(ctx context.Context, request ListRepositorySecretsRequestObject) (ListRepositorySecretsResponseObject, error)
 	// CreateRepositorySecret Adds a secret to the repository's settings, sealed with the installation's secrets key; takes secrets.manage on the repository. Without a secrets key, the answer is 409.
@@ -41869,7 +42591,7 @@ type StrictServerInterface interface {
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
-	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read.
+	// ListDeliveryTargets The targets the repository's default branch's /cobranch.yaml declares, in its order; takes repo.read. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/repos/{repo}/targets)
 	ListDeliveryTargets(ctx context.Context, request ListDeliveryTargetsRequestObject) (ListDeliveryTargetsResponseObject, error)
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
@@ -41905,7 +42627,7 @@ type StrictServerInterface interface {
 	// ReplaceSecret Renames a secret and, when the body gives one, replaces its value; takes secrets.manage on it. The change names the ETag it was made from in If-Match; without it, the answer is 428.
 	// (PUT /orgs/{org}/secrets/{id})
 	ReplaceSecret(ctx context.Context, request ReplaceSecretRequestObject) (ReplaceSecretResponseObject, error)
-	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage. With If-None-Match and wait, it waits up to wait seconds for them to change before it answers 304, so a client follows them by asking again with the answer's ETag.
 	// (GET /orgs/{org}/secrets/{id}/access)
 	ListSecretAccess(ctx context.Context, request ListSecretAccessRequestObject) (ListSecretAccessResponseObject, error)
 	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
@@ -45409,11 +46131,12 @@ func (sh *strictHandler) CreateRepository(w http.ResponseWriter, r *http.Request
 }
 
 // GetRepository operation middleware
-func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRepositoryParams) {
 	var request GetRepositoryRequestObject
 
 	request.Org = org
 	request.Repo = repo
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRepository(ctx, request.(GetRepositoryRequestObject))
@@ -45470,11 +46193,12 @@ func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request
 }
 
 // ListRepositoryAccess operation middleware
-func (sh *strictHandler) ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+func (sh *strictHandler) ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositoryAccessParams) {
 	var request ListRepositoryAccessRequestObject
 
 	request.Org = org
 	request.Repo = repo
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListRepositoryAccess(ctx, request.(ListRepositoryAccessRequestObject))
@@ -47075,12 +47799,13 @@ func (sh *strictHandler) ListDeliveries(w http.ResponseWriter, r *http.Request, 
 }
 
 // ListEnvironmentObjects operation middleware
-func (sh *strictHandler) ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+func (sh *strictHandler) ListEnvironmentObjects(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListEnvironmentObjectsParams) {
 	var request ListEnvironmentObjectsRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.Environment = environment
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListEnvironmentObjects(ctx, request.(ListEnvironmentObjectsRequestObject))
@@ -47586,11 +48311,12 @@ func (sh *strictHandler) GetRunSteps(w http.ResponseWriter, r *http.Request, org
 }
 
 // ListRepositorySecrets operation middleware
-func (sh *strictHandler) ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+func (sh *strictHandler) ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRepositorySecretsParams) {
 	var request ListRepositorySecretsRequestObject
 
 	request.Org = org
 	request.Repo = repo
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListRepositorySecrets(ctx, request.(ListRepositorySecretsRequestObject))
@@ -47674,11 +48400,12 @@ func (sh *strictHandler) ListTags(w http.ResponseWriter, r *http.Request, org Or
 }
 
 // ListDeliveryTargets operation middleware
-func (sh *strictHandler) ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+func (sh *strictHandler) ListDeliveryTargets(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListDeliveryTargetsParams) {
 	var request ListDeliveryTargetsRequestObject
 
 	request.Org = org
 	request.Repo = repo
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListDeliveryTargets(ctx, request.(ListDeliveryTargetsRequestObject))
@@ -48029,11 +48756,12 @@ func (sh *strictHandler) ReplaceSecret(w http.ResponseWriter, r *http.Request, o
 }
 
 // ListSecretAccess operation middleware
-func (sh *strictHandler) ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+func (sh *strictHandler) ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id, params ListSecretAccessParams) {
 	var request ListSecretAccessRequestObject
 
 	request.Org = org
 	request.Id = id
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListSecretAccess(ctx, request.(ListSecretAccessRequestObject))

@@ -144,6 +144,23 @@ func (s *Service) FollowList(ctx context.Context, v Viewer, orgID, repoID uuid.U
 	return lists, wrap("following the secrets", err)
 }
 
+// FollowAccess sends who holds a grant on the secret, as Access lists them, at once, then again each time they change
+// (a grant made or revoked), until ctx ends or a read fails (the secret deleted among them), and then closes the
+// channel. Settings · Secrets follows each secret's this way, so a grant on one alone shows.
+func (s *Service) FollowAccess(ctx context.Context, v Viewer, orgID, id uuid.UUID) (_ <-chan []Principal, err error) {
+	ctx, span := tracer.Start(ctx, "secrets.Service.FollowAccess", trace.WithAttributes(orgAttr(orgID), secretAttr(id)))
+	defer span.End()
+	defer func() { record(span, err) }()
+	lists, err := live.Follow(ctx, s.changes, live.Poll, func(ctx context.Context) ([]Principal, error) {
+		list, err := s.Access(ctx, v, orgID, id)
+		if errors.Is(err, ErrNotFound) {
+			return nil, fmt.Errorf("%w: %w", live.ErrGone, err)
+		}
+		return list, err
+	}, orgID)
+	return lists, wrap("following who receives the secret", err)
+}
+
 // Jobs lists the repository's jobs, the principals its secrets are granted to, by name: each job that has queued a
 // run, which made it a principal. It takes repo.read on the repository.
 func (s *Service) Jobs(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) (_ []Principal, err error) {

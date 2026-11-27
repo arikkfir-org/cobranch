@@ -2,6 +2,8 @@ package repos
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -28,4 +30,43 @@ func (s *Service) FollowList(ctx context.Context, v Viewer, orgID uuid.UUID) (<-
 func (s *Service) FollowUsage(ctx context.Context, v Viewer, orgID uuid.UUID) (<-chan Usage, error) {
 	usage, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (Usage, error) { return s.Usage(ctx, v, orgID) }, orgID)
 	return usage, wrap("following the organization's usage", err)
+}
+
+// Shown is a repository as Get answers it: the repository, and what the viewer holds there.
+type Shown struct {
+	Repository Repository
+	Held       []string
+}
+
+// FollowRepository sends the organization's repository slug names, with what v holds there, as Get answers them, at
+// once, then again each time they change (it renamed or described anew, a grant that changes what v holds), until ctx
+// ends or a read fails (the repository deleted, or v's access to it taken, among them), and then closes the channel.
+// The repository's General settings follow it.
+func (s *Service) FollowRepository(ctx context.Context, v Viewer, orgID uuid.UUID, slug string) (<-chan Shown, error) {
+	shown, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) (Shown, error) {
+		repo, held, err := s.Get(ctx, v, orgID, slug)
+		return Shown{Repository: repo, Held: held}, gone(err)
+	}, orgID)
+	return shown, wrap("following the repository", err)
+}
+
+// FollowAccess sends who holds roles on the repository, as Access lists them, at once, then again each time they
+// change (a role granted or revoked on the repository, or at the organization), until ctx ends or a read fails, and
+// then closes the channel. The repository's Access settings follow it. orgID is the repository's organization, whose
+// grants name it.
+func (s *Service) FollowAccess(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) (<-chan []Access, error) {
+	list, err := live.Follow(ctx, s.notifier, live.Poll, func(ctx context.Context) ([]Access, error) {
+		list, err := s.Access(ctx, v, repoID)
+		return list, gone(err)
+	}, orgID)
+	return list, wrap("following the repository's access", err)
+}
+
+// gone marks ErrNotFound live.ErrGone, so that a follower of a repository deleted, or no longer v's to read, stops
+// without reporting a failure.
+func gone(err error) error {
+	if errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("%w: %w", live.ErrGone, err)
+	}
+	return err
 }

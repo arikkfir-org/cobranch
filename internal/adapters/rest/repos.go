@@ -17,10 +17,12 @@ type Repositories interface {
 	Usage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (repos.Usage, error)
 	FollowUsage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (<-chan repos.Usage, error)
 	Get(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (repos.Repository, []string, error)
+	FollowRepository(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (<-chan repos.Shown, error)
 	Locate(ctx context.Context, v repos.Viewer, orgSlug, slug string) (repos.Repository, []string, error)
 	ByID(ctx context.Context, v repos.Viewer, repoID uuid.UUID) (repos.Repository, []string, error)
 	Update(ctx context.Context, v repos.Viewer, repoID uuid.UUID, in repos.Input) (repos.Repository, error)
 	Access(ctx context.Context, v repos.Viewer, repoID uuid.UUID) ([]repos.Access, error)
+	FollowAccess(ctx context.Context, v repos.Viewer, orgID, repoID uuid.UUID) (<-chan []repos.Access, error)
 	Roles(ctx context.Context, v repos.Viewer, repoID uuid.UUID) ([]orgs.Role, error)
 	Grant(ctx context.Context, v repos.Viewer, repoID, principalID, roleID uuid.UUID) error
 	Revoke(ctx context.Context, v repos.Viewer, repoID, principalID, roleID uuid.UUID) error
@@ -131,17 +133,27 @@ func (a api) CreateRepository(ctx context.Context, req CreateRepositoryRequestOb
 	return CreateRepository201JSONResponse(repository(repo, held)), nil
 }
 
-// GetRepository answers the repository the slugs name.
+// GetRepository answers the repository the slugs name, or 304 while the caller holds it, after waiting for it to change
+// as wait asks.
 func (a api) GetRepository(ctx context.Context, req GetRepositoryRequestObject) (GetRepositoryResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	repo, held, err := a.repo(ctx, v, req.Org, req.Repo)
-	if err != nil {
-		return nil, err
-	}
-	return GetRepository200JSONResponse(repository(repo, held)), nil
+	return readList(ctx, waits, func(ctx context.Context) (repos.Shown, error) {
+		repo, held, err := a.repos.Get(ctx, v, org.ID, req.Repo)
+		return repos.Shown{Repository: repo, Held: held}, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan repos.Shown, error) {
+		shown, err := a.repos.FollowRepository(ctx, v, org.ID, req.Repo)
+		return shown, fail(err, "repository")
+	}, func(shown repos.Shown) (GetRepositoryResponseObject, bool, error) {
+		out := GetRepository200JSONResponse{Body: repository(shown.Repository, shown.Held)}
+		return listAnswer("repository", out.Body, req.Params.IfNoneMatch,
+			func(etag string) GetRepositoryResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) GetRepositoryResponseObject {
+				return GetRepository304Response{Headers: GetRepository304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // UpdateRepository changes what the body names and keeps the rest.
@@ -189,7 +201,8 @@ func (a api) ListRepositoryRoles(ctx context.Context, req ListRepositoryRolesReq
 	return ListRepositoryRoles200JSONResponse{Roles: mapAll(roles, role)}, nil
 }
 
-// ListRepositoryAccess lists who holds grants on the repository.
+// ListRepositoryAccess lists who holds grants on the repository, or 304 while the caller holds them, after waiting
+// for them to change as wait asks.
 func (a api) ListRepositoryAccess(ctx context.Context, req ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -199,11 +212,25 @@ func (a api) ListRepositoryAccess(ctx context.Context, req ListRepositoryAccessR
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.repos.Access(ctx, v, repo.ID)
+	waits, err := listWait(req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
-		return nil, fail(err, "repository")
+		return nil, err
 	}
-	return ListRepositoryAccess200JSONResponse{Access: mapAll(list, access)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]repos.Access, error) {
+		list, err := a.repos.Access(ctx, v, repo.ID)
+		return list, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan []repos.Access, error) {
+		lists, err := a.repos.FollowAccess(ctx, v, repo.OrgID, repo.ID)
+		return lists, fail(err, "repository")
+	}, func(list []repos.Access) (ListRepositoryAccessResponseObject, bool, error) {
+		out := ListRepositoryAccess200JSONResponse{}
+		out.Body.Access = mapAll(list, access)
+		return listAnswer("access", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListRepositoryAccessResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListRepositoryAccessResponseObject {
+				return ListRepositoryAccess304Response{Headers: ListRepositoryAccess304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // GrantRepositoryRole gives a principal a role on the repository.
