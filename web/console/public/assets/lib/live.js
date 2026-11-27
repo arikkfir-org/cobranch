@@ -67,6 +67,11 @@ export async function followLists(lists, still, changed) {
     }
     return false;
   };
-  const followed = lists.map((list) => follow(list).then((change) => { if (change) stop.abort(); return change; }));
-  if ((await Promise.all(followed)).some(Boolean) && still()) changed();
+  let told = false;
+  await Promise.all(lists.map((list) => follow(list).then((change) => {
+    if (!change || told) return;
+    told = true;
+    stop.abort();
+    if (still()) changed();
+  })));
 }
