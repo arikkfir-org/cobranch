@@ -70,6 +70,7 @@ amber, red and violet in 11 steps each (50 to 950); and black at 6, 10, 12, 40, 
 | `bg/canvas` | gray/0 | gray/950 | Page background |
 | `bg/surface` | gray/0 | gray/900 | Cards, panels, inputs |
 | `bg/sunken` | gray/50 | gray/1000 | Code chips, wells |
+| `bg/code` | gray/100 | gray/800 | Inline code in written text: chat messages, comments, reviews, rendered Markdown, and as it is typed |
 | `bg/hover` | gray/100 | gray/850 | Hovered rows and ghost buttons |
 | `bg/selected` | gray/150 | gray/800 | Selected nav item or row |
 | `bg/inverse` | gray/900 | gray/50 | Merged badge, tooltips, the mark |
@@ -270,7 +271,8 @@ plan.
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
 | Annotation row | Status (as Badge/Annotation) | Name, description, duration; creator avatar nested | `.annotation-row` in a `.list` |
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
-| Chat message | Author: Person, Agent | Name, time, body, code reference | `.chat-message` (`lib/shell.css`) |
+| Chat message | Author: Person, Agent | Name, time, body, code reference; on hover Copy, Edit and Delete; Cobranch's own status reply is a Machine avatar and a muted body | `.chat-message`, `.chat-message-status` (`lib/shell.css`) |
+| Pattern/Inline code | None | Text in backticks within written text, in Code/Medium on `bg/code`, never in a file's contents; a Markdown text box marks it as it is typed, its backticks kept | `.inline-code`, `code` in a `.chat-message-body` or rendered Markdown; `markCode` (`lib/codemarks.js`) around a textarea |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
 | Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
 | Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
