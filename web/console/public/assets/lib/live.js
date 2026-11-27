@@ -48,8 +48,9 @@ export async function keepingFilter(draw) {
 // watchLists asks the API again about the lists it is given, each a path and the ETag of what was read, while still
 // answers true and until signal aborts, and answers true once one of them changes, abandoning the others' reads. A
 // list read without an ETag isn't asked about, and a list the viewer may no longer read stops being asked about; it
-// answers false once none is left to ask about.
-export async function watchLists(lists, still, signal) {
+// answers false once none is left to ask about. With gone, a list that is no longer there (404) changed too: a page
+// of one thing, such as an issue, shows that it was deleted.
+export async function watchLists(lists, still, signal, { gone = false } = {}) {
   const stop = new AbortController();
   const abort = () => stop.abort();
   signal.addEventListener("abort", abort, { once: true });
@@ -62,7 +63,9 @@ export async function watchLists(lists, still, signal) {
         if (await readTagged(path, tag, 15, stop.signal)) return true;
         delay = 1000;
       } catch (err) {
-        if (stop.signal.aborted || [401, 403, 404].includes(err.status)) return false;
+        if (stop.signal.aborted) return false;
+        if (err.status === 404) return gone;
+        if ([401, 403].includes(err.status)) return false;
         delay = await pause(delay);
       }
     }
@@ -84,12 +87,15 @@ export async function watchLists(lists, still, signal) {
 
 // followLists follows the lists a page shows, each a path and the ETag of what the page read, while still answers
 // true, and calls changed once one of them changes, and then stops: a page draws itself again then, reading them
-// again and following them anew. A list the viewer may no longer read stops it too, without changed, and so does the
-// Console drawing another page, or the page following anew, which abandon the reads in flight.
-export async function followLists(lists, still, changed) {
+// again and following them anew. A list the viewer may no longer read stops it too, without changed unless options
+// say a list gone is a change (watchLists), and so does the Console drawing another page, or the page following anew,
+// which abandon the reads in flight. It starts a task later, once the draw that called it has put its elements in the
+// page, so that a part of a page may follow what it read before the page that awaits it shows it.
+export async function followLists(lists, still, changed, options = {}) {
   const stop = new AbortController();
   follows(stop);
-  if (await watchLists(lists, still, stop.signal) && still()) changed();
+  await new Promise((resolve) => setTimeout(resolve));
+  if (await watchLists(lists, still, stop.signal, options) && still()) changed();
 }
 
 // drawAgain draws a page again with draw once a list it follows changed, keeping what the viewer typed in its filter;

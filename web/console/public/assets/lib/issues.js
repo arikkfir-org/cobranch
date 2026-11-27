@@ -3,6 +3,7 @@ import { h } from "./dom.js";
 import { failure } from "./forms.js";
 import { since, whenExactly } from "./format.js";
 import { avatar, icon } from "./icons.js";
+import { followLists, readTagged } from "./live.js";
 import { popover } from "./menu.js";
 import { go } from "./router.js";
 import { base, me } from "./state.js";
@@ -77,6 +78,7 @@ const menuAlign = (button, wide) => (button.getBoundingClientRect().left + wide 
 // titles, descriptions and identifiers, and by the repository, the assignee and a label the query names. The text
 // filters as it is typed; the others reload the page. tabs holds the list's tabs (listTabLinks), which it counts and
 // keeps the filters in. A repository's list, at <repository>/issues, filters by it alone and leaves out its column.
+// The list follows its first page and counts, and loads them again once they change, dropping the pages More added.
 export async function issueList({ org, can, tabs, repository }) {
   const list = { org, repository, where: "/" + org.slug + (repository ? "/" + repository.slug : "") + "/issues",
     names: ["repository", "assignee", "label", "q"].filter((n) => !(repository && n === "repository")) };
@@ -102,16 +104,18 @@ export async function issueList({ org, can, tabs, repository }) {
     } });
   // load reads the list's first page for the query the address names now, or the page at from, which more adds
   // under those shown, and redraws the counts and the tabs' links to keep the filters. The tabs count every issue
-  // of theirs, and the count beside the filters what the filters match of them.
+  // of theirs, and the count beside the filters what the filters match of them. A first page it reads, it follows,
+  // with the tabs' counts.
   async function load(from, adding) {
     const params = paramsOf(list);
     const filtered = list.names.some((n) => params.get(n));
+    const first = listQuery(list, params);
+    const everyIssue = listQuery(list, new URLSearchParams(), "1");
     more.disabled = true;
     try {
-      const [page, all] = await Promise.all([apiPage(from || listQuery(list, params)),
-        filtered && !adding ? api("GET", listQuery(list, new URLSearchParams(), "1")).then((d) => d.counts) : null]);
+      const [page, all] = await Promise.all([apiPage(from || first), filtered && !adding ? readTagged(everyIssue) : null]);
       const { issues, counts } = page.data;
-      if (!adding) totals = all || counts;
+      if (!adding) totals = all ? all.data.counts : counts;
       if (!adding) tbody.replaceChildren();
       tbody.append(...issues.map((i) => issueRow(list, i, choices.agentIds)));
       next = page.next;
@@ -129,6 +133,7 @@ export async function issueList({ org, can, tabs, repository }) {
         const n = tab.querySelector(".tab-count");
         if (n) { n.textContent = String(of(totals, s)); n.hidden = false; }
       }
+      if (!adding) followLists([[first, page.tag], ...(all ? [[everyIssue, all.tag]] : [])], () => tbody.isConnected, () => load(null, false));
     } catch (err) {
       error.fail(err);
     } finally {
