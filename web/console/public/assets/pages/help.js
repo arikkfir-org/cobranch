@@ -203,11 +203,15 @@ function figures() {
     card.classList.add("specimens-card");
     return card;
   };
-  return section("Figures", "Counters and charts of what an organization did. A Stat is a counter on the surface: its label with an icon, its value, and a Badge/Quiet that says more, in a tone only when it asks for attention. A Chart/Bars is a card of a value by day, a bar a day in Info, AI or Accent, its total in the header; pointing at a bar or focusing it turns it fg/default and says its day and value.",
-    [["Stat", ".stat .stat-label .stat-value"], ["Chart/Bars", ".chart-bars .chart-bars-plot .chart-bars-bar .chart-bars-axis .chart-bars-tooltip .tone-ai .tone-accent"]],
+  const today = fortnight.map((d, i) => ({ ...d, value: i === fortnight.length - 1 ? 7 : 0 }));
+  const single = bars("Tasks per day", "ai", "7 in 14 days", today, (d) => d.value, (d) => d.value + " tasks");
+  single.classList.add("specimens-card");
+  return section("Figures", "Counters and charts of what an organization did. A Stat is a counter on the surface: its label with an icon, its value, and a Badge/Quiet that says more, in a tone only when it asks for attention. A Chart/Bars is a card of a value by day, a bar a day in Info, AI or Accent, its total in the header; pointing at a bar or focusing it turns it fg/default and says its day and value. While at most one day has a value, it shows a counter of it over its day instead of a lone bar.",
+    [["Stat", ".stat .stat-label .stat-value"], ["Chart/Bars", ".chart-bars .chart-bars-plot .chart-bars-bar .chart-bars-axis .chart-bars-tooltip .chart-bars-counter .chart-bars-counter-value .tone-ai .tone-accent"]],
     h("div", { class: "specimens-fields" }, stat("Open issues", "circle-dot", "24", "+3 this month", "neutral"), stat("Branches ready", "git-branch", "3", "2 blocked", "warning"),
       stat("Agents working", "bot", "2 of 3", "5 tasks queued", "ai")),
-    h("div", { class: "specimens-row" }, chart("Tasks per day", "ai"), chart("Spend per day", "accent"), chart("Job minutes per day", "info")));
+    h("div", { class: "specimens-row" }, chart("Tasks per day", "ai"), chart("Spend per day", "accent"), chart("Job minutes per day", "info")),
+    h("div", { class: "specimens-row" }, single));
 }
 
 function patterns() {
