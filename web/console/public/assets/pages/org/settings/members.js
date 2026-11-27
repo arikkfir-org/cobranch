@@ -4,6 +4,7 @@ import { h } from "../../../lib/dom.js";
 import { failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, when } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
+import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
 import { roleSelect } from "../../../lib/organization.js";
 import { base, me, roles } from "../../../lib/state.js";
@@ -19,18 +20,18 @@ const joined = (at) => "Joined " + new Date(at).toLocaleDateString(undefined, { 
 
 // showMembers lists the organization's members, and, for a viewer with org.members.manage, the people it invited, who
 // show among them until they accept, and the requests to join above them; with org.grants.manage each member's roles
-// change from their row.
+// change from their row. It follows those lists while it shows, and draws itself again once one changes, here or
+// elsewhere.
 async function showMembers(org, main, can, actions) {
   const manage = can("org.members.manage");
   const grants = can("org.grants.manage");
   const error = failure();
   const refresh = () => showMembers(org, main, can, actions);
   const act = (call) => call.then(refresh).catch(error.fail);
-  const [members, invitations, requests] = await Promise.all([
-    api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
-    manage ? api("GET", "/orgs/" + org.slug + "/invitations").then((d) => d.invitations) : [],
-    manage ? api("GET", "/orgs/" + org.slug + "/join-requests").then((d) => d.joinRequests) : [],
-  ]);
+  const lists = ["/orgs/" + org.slug + "/members", ...(manage ? ["/orgs/" + org.slug + "/invitations", "/orgs/" + org.slug + "/join-requests"] : [])];
+  const read = await Promise.all(lists.map((path) => readTagged(path)));
+  const members = read[0].data.members;
+  const [invitations, requests] = manage ? [read[1].data.invitations, read[2].data.joinRequests] : [[], []];
   recount("members", members.length);
   actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => invite(org, refresh) }, icon("plus"), "Invite people") : "");
   const membership = roles.find((r) => r.id === org.membershipRoleId);
@@ -93,6 +94,7 @@ async function showMembers(org, main, can, actions) {
   main.replaceChildren(error.el, ...requests.map(requestBanner),
     h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), counted),
     list, none);
+  followLists(lists.map((path, i) => [path, read[i].tag]), () => error.el.isConnected, () => keepingFilter(refresh).catch(error.fail));
 }
 
 // invite asks for an email and a role, and invites them: the invitee accepts it once they sign in with that email,

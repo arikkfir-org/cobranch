@@ -99,14 +99,13 @@ func (a api) ListModelProviders(ctx context.Context, req ListModelProvidersReque
 // modelProviders is list as ListModelProviders answers it: 304 while it is the one tag names, which it says.
 func (a api) modelProviders(list []agents.ModelProvider, tag *IfNoneMatch) (ListModelProvidersResponseObject, bool, error) {
 	body := ModelProviderList{ModelProviders: mapAll(list, modelProvider), Available: nonNil(a.agents.ProviderNames())}
-	etag, err := bodyTag("model_providers", body, nil)
-	if err != nil {
-		return nil, false, err
-	}
-	if matches(tag, etag) {
-		return ListModelProviders304Response{Headers: ListModelProviders304ResponseHeaders{ETag: etag}}, true, nil
-	}
-	return ListModelProviders200JSONResponse{Body: body, Headers: ListModelProviders200ResponseHeaders{ETag: etag}}, false, nil
+	return listAnswer("model_providers", body, tag,
+		func(etag string) ListModelProvidersResponseObject {
+			return ListModelProviders200JSONResponse{Body: body, Headers: ListModelProviders200ResponseHeaders{ETag: etag}}
+		},
+		func(etag string) ListModelProvidersResponseObject {
+			return ListModelProviders304Response{Headers: ListModelProviders304ResponseHeaders{ETag: etag}}
+		})
 }
 
 // GetModelProvider answers a provider the organization added.

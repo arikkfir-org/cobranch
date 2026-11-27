@@ -30,6 +30,7 @@ type Organizations interface {
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64, settings orgs.Settings) (orgs.Organization, error)
 	Delete(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, version int64) error
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
+	FollowRoles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (<-chan []orgs.Role, error)
 	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)
 	CreateRole(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
 	UpdateRole(ctx context.Context, v orgs.Viewer, orgID, roleID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
@@ -37,8 +38,10 @@ type Organizations interface {
 	GrantRole(ctx context.Context, v orgs.Viewer, orgID, userID, roleID uuid.UUID) error
 	RevokeRole(ctx context.Context, v orgs.Viewer, orgID, userID, roleID uuid.UUID) error
 	Members(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Member, error)
+	FollowMembers(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (<-chan []orgs.Member, error)
 	Invite(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, email string, roleID uuid.UUID) (orgs.Invitation, error)
 	Invitations(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Invitation, error)
+	FollowInvitations(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (<-chan []orgs.Invitation, error)
 	CancelInvitation(ctx context.Context, v orgs.Viewer, orgID, id uuid.UUID) error
 	MyInvitations(ctx context.Context, v orgs.Viewer) ([]orgs.Invitation, error)
 	AcceptInvitation(ctx context.Context, v orgs.Viewer, id uuid.UUID) (orgs.Organization, error)
@@ -46,11 +49,13 @@ type Organizations interface {
 	RequestToJoin(ctx context.Context, v orgs.Viewer, slug, note string) (orgs.JoinRequest, error)
 	MyJoinRequests(ctx context.Context, v orgs.Viewer) ([]orgs.JoinRequest, error)
 	JoinRequests(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.JoinRequest, error)
+	FollowJoinRequests(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (<-chan []orgs.JoinRequest, error)
 	ApproveJoinRequest(ctx context.Context, v orgs.Viewer, orgID, id, roleID uuid.UUID) error
 	DeclineJoinRequest(ctx context.Context, v orgs.Viewer, orgID, id uuid.UUID) error
 	Leave(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) error
 	RemoveMember(ctx context.Context, v orgs.Viewer, orgID, userID uuid.UUID) error
 	APIKeys(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.APIKey, error)
+	FollowAPIKeys(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) (<-chan []orgs.APIKey, error)
 	CreateAPIKey(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.APIKeyInput) (orgs.APIKey, string, error)
 	RotateAPIKey(ctx context.Context, v orgs.Viewer, orgID, keyID uuid.UUID, expiry orgs.Expiry) (orgs.APIKey, string, error)
 	RevokeSecret(ctx context.Context, v orgs.Viewer, orgID, keyID, secretID uuid.UUID) error
@@ -250,15 +255,11 @@ func myOrganizations(list []orgs.Membership, tag *IfNoneMatch) (ListMyOrganizati
 	for _, m := range list {
 		out.Body.Organizations = append(out.Body.Organizations, organization(m.Organization, m.Permissions))
 	}
-	etag, err := bodyTag("organizations", out.Body, nil)
-	if err != nil {
-		return nil, false, err
-	}
-	if matches(tag, etag) {
-		return ListMyOrganizations304Response{Headers: ListMyOrganizations304ResponseHeaders{ETag: etag}}, true, nil
-	}
-	out.Headers.ETag = etag
-	return out, false, nil
+	return listAnswer("organizations", out.Body, tag,
+		func(etag string) ListMyOrganizationsResponseObject { out.Headers.ETag = etag; return out },
+		func(etag string) ListMyOrganizationsResponseObject {
+			return ListMyOrganizations304Response{Headers: ListMyOrganizations304ResponseHeaders{ETag: etag}}
+		})
 }
 
 // CreateOrganization makes an organization with the viewer its first Owner.
@@ -412,25 +413,32 @@ func (a api) ListPermissions(ctx context.Context, req ListPermissionsRequestObje
 	})}, nil
 }
 
-// ListRoles lists the roles the organization grants.
+// ListRoles lists the roles the organization grants, each with how many hold it; with If-None-Match and wait, it waits
+// up to wait seconds for the list to change before it answers 304.
 func (a api) ListRoles(ctx context.Context, req ListRolesRequestObject) (ListRolesResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	roles, err := a.orgs.Roles(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListRoles200JSONResponse{Roles: mapAll(roles, func(r orgs.Role) Role {
-		out := role(r)
-		out.Holders = &r.Holders
-		return out
-	})}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.Role, error) {
+		list, err := a.orgs.Roles(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.Role, error) {
+		lists, err := a.orgs.FollowRoles(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.Role) (ListRolesResponseObject, bool, error) {
+		out := ListRoles200JSONResponse{}
+		out.Body.Roles = mapAll(list, func(r orgs.Role) Role {
+			shown := role(r)
+			shown.Holders = &r.Holders
+			return shown
+		})
+		return listAnswer("roles", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListRolesResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListRolesResponseObject {
+				return ListRoles304Response{Headers: ListRoles304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // CreateRole defines a custom role.
@@ -537,27 +545,34 @@ func (a api) RevokeRole(ctx context.Context, req RevokeRoleRequestObject) (Revok
 	return RevokeRole204Response{}, nil
 }
 
-// ListMembers lists the organization's members.
+// ListMembers lists the organization's members with their roles; with If-None-Match and wait, it waits up to wait
+// seconds for the list to change before it answers 304.
 func (a api) ListMembers(ctx context.Context, req ListMembersRequestObject) (ListMembersResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	members, err := a.orgs.Members(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListMembers200JSONResponse{Members: mapAll(members, func(m orgs.Member) Member {
-		out := Member{UserId: m.UserID, DisplayName: m.DisplayName, JoinedAt: m.JoinedAt, Roles: mapAll(m.Roles, role)}
-		if m.Email != "" {
-			out.Email = &m.Email
-		}
-		return out
-	})}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.Member, error) {
+		list, err := a.orgs.Members(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.Member, error) {
+		lists, err := a.orgs.FollowMembers(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.Member) (ListMembersResponseObject, bool, error) {
+		out := ListMembers200JSONResponse{}
+		out.Body.Members = mapAll(list, func(m orgs.Member) Member {
+			shown := Member{UserId: m.UserID, DisplayName: m.DisplayName, JoinedAt: m.JoinedAt, Roles: mapAll(m.Roles, role)}
+			if m.Email != "" {
+				shown.Email = &m.Email
+			}
+			return shown
+		})
+		return listAnswer("members", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListMembersResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListMembersResponseObject {
+				return ListMembers304Response{Headers: ListMembers304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // RemoveMember drops a member.
@@ -592,21 +607,28 @@ func (a api) LeaveOrganization(ctx context.Context, req LeaveOrganizationRequest
 	return LeaveOrganization204Response{}, nil
 }
 
-// ListInvitations lists the organization's invitations that wait.
+// ListInvitations lists the organization's pending invitations; with If-None-Match and wait, it waits up to wait
+// seconds for the list to change before it answers 304.
 func (a api) ListInvitations(ctx context.Context, req ListInvitationsRequestObject) (ListInvitationsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.orgs.Invitations(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListInvitations200JSONResponse{Invitations: mapAll(list, invitation)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.Invitation, error) {
+		list, err := a.orgs.Invitations(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.Invitation, error) {
+		lists, err := a.orgs.FollowInvitations(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.Invitation) (ListInvitationsResponseObject, bool, error) {
+		out := ListInvitations200JSONResponse{}
+		out.Body.Invitations = mapAll(list, invitation)
+		return listAnswer("invitations", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListInvitationsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListInvitationsResponseObject {
+				return ListInvitations304Response{Headers: ListInvitations304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // Invite invites an email to the organization.
@@ -722,21 +744,28 @@ func (a api) RequestToJoin(ctx context.Context, req RequestToJoinRequestObject) 
 	return RequestToJoin201JSONResponse(joinRequest(r)), nil
 }
 
-// ListJoinRequests lists the requests waiting at the organization.
+// ListJoinRequests lists the organization's pending requests to join; with If-None-Match and wait, it waits up to wait
+// seconds for the list to change before it answers 304.
 func (a api) ListJoinRequests(ctx context.Context, req ListJoinRequestsRequestObject) (ListJoinRequestsResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	list, err := a.orgs.JoinRequests(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListJoinRequests200JSONResponse{JoinRequests: mapAll(list, joinRequest)}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.JoinRequest, error) {
+		list, err := a.orgs.JoinRequests(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.JoinRequest, error) {
+		lists, err := a.orgs.FollowJoinRequests(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.JoinRequest) (ListJoinRequestsResponseObject, bool, error) {
+		out := ListJoinRequests200JSONResponse{}
+		out.Body.JoinRequests = mapAll(list, joinRequest)
+		return listAnswer("join_requests", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListJoinRequestsResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListJoinRequestsResponseObject {
+				return ListJoinRequests304Response{Headers: ListJoinRequests304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // ApproveJoinRequest makes the requester a member.

@@ -29,6 +29,22 @@ export async function pause(delay) {
   return Math.min(delay * 2, 60000);
 }
 
+// keepingFilter draws the page again with draw, keeping what the viewer typed in its filter, and the filter's focus: a
+// page that follows its lists draws itself again once one changes, which may be while the viewer filters it.
+export async function keepingFilter(draw) {
+  const old = document.querySelector('input[type="search"]');
+  const query = old ? old.value : "";
+  const focused = !!old && document.activeElement === old;
+  await draw();
+  const filter = document.querySelector('input[type="search"]');
+  if (!filter) return;
+  if (query) {
+    filter.value = query;
+    filter.dispatchEvent(new Event("input"));
+  }
+  if (focused) filter.focus();
+}
+
 // followLists follows the lists a page shows, each a path and the ETag of what the page read, while still answers
 // true, and calls changed once one of them changes, and then stops: a page draws itself again then, reading them
 // again and following them anew. A list the viewer may no longer read stops it too, without changed, and so does the
@@ -51,6 +67,11 @@ export async function followLists(lists, still, changed) {
     }
     return false;
   };
-  const followed = lists.map((list) => follow(list).then((change) => { if (change) stop.abort(); return change; }));
-  if ((await Promise.all(followed)).some(Boolean) && still()) changed();
+  let told = false;
+  await Promise.all(lists.map((list) => follow(list).then((change) => {
+    if (!change || told) return;
+    told = true;
+    stop.abort();
+    if (still()) changed();
+  })));
 }

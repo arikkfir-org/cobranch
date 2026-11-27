@@ -42,21 +42,28 @@ func expiry(expiresAt *time.Time, neverExpires *bool) orgs.Expiry {
 	return e
 }
 
-// ListAPIKeys lists the organization's API keys.
+// ListAPIKeys lists the organization's API keys; with If-None-Match and wait, it waits up to wait seconds for the list
+// to change before it answers 304.
 func (a api) ListAPIKeys(ctx context.Context, req ListAPIKeysRequestObject) (ListAPIKeysResponseObject, error) {
-	v, err := viewer(ctx)
+	v, org, waits, err := a.orgList(ctx, req.Org, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
-	org, err := a.org(ctx, v, req.Org)
-	if err != nil {
-		return nil, err
-	}
-	keys, err := a.orgs.APIKeys(ctx, v, org.ID)
-	if err != nil {
-		return nil, fail(err, "organization")
-	}
-	return ListAPIKeys200JSONResponse{ApiKeys: nonNil(mapAll(keys, apiKey))}, nil
+	return readList(ctx, waits, func(ctx context.Context) ([]orgs.APIKey, error) {
+		list, err := a.orgs.APIKeys(ctx, v, org.ID)
+		return list, fail(err, "organization")
+	}, func(ctx context.Context) (<-chan []orgs.APIKey, error) {
+		lists, err := a.orgs.FollowAPIKeys(ctx, v, org.ID)
+		return lists, fail(err, "organization")
+	}, func(list []orgs.APIKey) (ListAPIKeysResponseObject, bool, error) {
+		out := ListAPIKeys200JSONResponse{}
+		out.Body.ApiKeys = nonNil(mapAll(list, apiKey))
+		return listAnswer("api_keys", out.Body, req.Params.IfNoneMatch,
+			func(etag string) ListAPIKeysResponseObject { out.Headers.ETag = etag; return out },
+			func(etag string) ListAPIKeysResponseObject {
+				return ListAPIKeys304Response{Headers: ListAPIKeys304ResponseHeaders{ETag: etag}}
+			})
+	})
 }
 
 // CreateAPIKey makes an API key and shows its first secret once.

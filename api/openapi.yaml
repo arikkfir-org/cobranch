@@ -926,12 +926,17 @@ paths:
   /orgs/{org}/members:
     get:
       operationId: listMembers
-      summary: The organization's members with the roles they hold there; takes org.read.
+      summary: The organization's members with the roles they hold there; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The members.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -942,6 +947,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Member"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -1025,12 +1037,17 @@ paths:
   /orgs/{org}/roles:
     get:
       operationId: listRoles
-      summary: The roles the organization grants, the built-in ones first, then its own; takes org.read.
+      summary: The roles the organization grants, the built-in ones first, then its own; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The roles.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1041,6 +1058,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Role"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -1131,12 +1155,17 @@ paths:
   /orgs/{org}/api-keys:
     get:
       operationId: listAPIKeys
-      summary: The organization's API keys, with their roles and secrets, by name; takes org.read.
+      summary: The organization's API keys, with their roles and secrets, by name; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The keys.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1147,6 +1176,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/ApiKey"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -1254,16 +1290,28 @@ paths:
   /orgs/{org}/secrets:
     get:
       operationId: listSecrets
-      summary: The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+      summary: The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The secrets.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecretList"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -1908,12 +1956,17 @@ paths:
   /orgs/{org}/invitations:
     get:
       operationId: listInvitations
-      summary: The organization's invitations that wait, oldest first; takes org.members.manage.
+      summary: The organization's invitations that wait, oldest first; takes org.members.manage. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The invitations.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1924,6 +1977,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Invitation"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -1991,12 +2051,17 @@ paths:
   /orgs/{org}/join-requests:
     get:
       operationId: listJoinRequests
-      summary: The requests to join the organization that wait, oldest first; takes org.members.manage.
+      summary: The requests to join the organization that wait, oldest first; takes org.members.manage. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The requests.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -2007,6 +2072,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/JoinRequest"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -2435,12 +2507,17 @@ paths:
   /orgs/{org}/agents:
     get:
       operationId: listAgents
-      summary: The organization's agents by name, each with its grants; takes org.read.
+      summary: The organization's agents by name, each with its grants; takes org.read. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the list by asking again with the answer's ETag.
       parameters:
         - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+        - $ref: "#/components/parameters/waitForChange"
       responses:
         "200":
           description: The agents.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -2451,6 +2528,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Agent"
+        "304":
+          description: The list is still the one If-None-Match names, after waiting wait seconds for a change.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":

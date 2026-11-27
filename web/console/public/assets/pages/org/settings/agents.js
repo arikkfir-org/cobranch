@@ -5,6 +5,7 @@ import { ask, openDialog } from "../../../lib/dialog.js";
 import { h } from "../../../lib/dom.js";
 import { banner, checkbox, failure, field, input, selectBox, textarea } from "../../../lib/forms.js";
 import { avatar, icon } from "../../../lib/icons.js";
+import { followLists, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
 import { go } from "../../../lib/router.js";
 
@@ -23,9 +24,12 @@ const sectionHeader = (title, description, action) => h("header", { class: "sect
 
 // showAgents lists the organization's agents (Settings · Agents): the model each runs on, its cap, the secrets its tasks
 // receive, its grants and its tasks this month, each with a menu; the agent editing names, when the viewer may change it,
-// opens in its editor under them. saved says the last save worked.
+// opens in its editor under them. saved says the last save worked. Without an editor open, whose changes a draw would
+// lose, it follows the agents while they show, and draws itself again once they change, here or elsewhere.
 async function showAgents(org, main, can, editing, saved = false) {
-  const [agents, report] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents), spendReport(org).catch(() => null)]);
+  const path = "/orgs/" + org.slug + "/agents";
+  const [list, report] = await Promise.all([readTagged(path), spendReport(org).catch(() => null)]);
+  const agents = list.data.agents;
   const monthly = new Map((report ? report.agents : []).map((s) => [s.agent.id, s.tasks]));
   const error = failure();
   const redraw = (id, ok) => showAgents(org, main, can, id, ok).catch(error.fail);
@@ -46,6 +50,7 @@ async function showAgents(org, main, can, editing, saved = false) {
     sectionHeader("Agents", "Each agent runs on one model with its own instructions, the secrets it may use, an optional cap, and the grants that say what it may touch.",
       can("agents.create") ? h("button", { class: "btn btn-primary", type: "button", onclick: () => newAgent(org).catch(error.fail) }, icon("plus"), "New agent") : ""),
     table, open ? await editor(org, open, can, redraw) : "");
+  if (!open) followLists([[path, list.tag]], () => error.el.isConnected, () => redraw(editing, saved));
 }
 
 // rowMenu is an agent's menu: edit it and open its page, and delete it for a viewer who manages the organization's

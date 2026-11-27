@@ -2,12 +2,15 @@ package postgres
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/secrets"
 )
 
@@ -90,5 +93,133 @@ func hearChangeOf(t *testing.T, change func(ctx context.Context, t *testing.T, f
 	case <-other:
 		t.Error("a change of Acme's woke another organization's watcher")
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// settingsChange changes what Acme's Settings show through the stores, and answers what it should wake: Acme, and a
+// repository it names.
+type settingsChange struct {
+	name   string
+	change func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID
+}
+
+// settingsChanges are a change to each table that Settings' lists show.
+func settingsChanges() []settingsChange {
+	return []settingsChange{
+		{name: "someone invited", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			inv := orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, Email: "nia@example.com", RoleID: auth.RoleGuest, InvitedBy: f.olivia,
+				State: orgs.StatePending, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+			must(t, f.s.Invite(ctx, f.olivia, inv))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "someone asks to join", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			req := orgs.JoinRequest{ID: uuid.New(), OrgID: f.acme.ID, UserID: f.nia, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+			must(t, f.s.Request(ctx, f.nia, req))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "a member leaves", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			must(t, f.s.Leave(ctx, f.max, f.acme.ID, f.max, now))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "a role granted", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			must(t, f.s.GrantRole(ctx, f.olivia, f.acme.ID, f.max, auth.RoleOwner))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "a custom role created", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			release := orgs.Role{ID: uuid.New(), Name: "Release manager", Permissions: []string{"org.read"}, OrgID: f.acme.ID}
+			must(t, f.s.CreateRole(ctx, f.olivia, release))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "an API key made", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			token := auth.NewSecret(auth.PrefixAPIKey)
+			key := orgs.APIKey{ID: uuid.New(), OrgID: f.acme.ID, Name: "Release", CreatedBy: f.olivia, CreatedAt: now, Roles: []orgs.Role{{ID: auth.RoleMember}}}
+			must(t, f.s.CreateAPIKey(ctx, f.olivia, key, orgs.Secret{ID: uuid.New(), Hint: auth.Hint(token), CreatedAt: now}, auth.Hash(token)))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "an API key used", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			auths := NewAuthStore(f.pool)
+			cred, _, err := auths.Credential(ctx, f.hash)
+			must(t, err)
+			must(t, auths.TouchCredential(ctx, cred.ID, cred.Kind, now.Add(time.Minute)))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "an API key deleted", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			must(t, f.s.DeleteAPIKey(ctx, f.olivia, f.acme.ID, f.key.ID))
+			return []uuid.UUID{f.acme.ID}
+		}},
+		{name: "access to a repository granted", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			must(t, f.r.Grant(ctx, f.olivia, f.website, f.max, auth.RoleDeveloper))
+			return []uuid.UUID{f.acme.ID, f.website.ID}
+		}},
+		{name: "access to a secret granted", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			must(t, NewSecretStore(f.pool).Grant(ctx, f.olivia, f.npm, f.max))
+			return []uuid.UUID{f.acme.ID}
+		}},
+	}
+}
+
+func TestSettingsChangesHub(t *testing.T) {
+	t.Parallel()
+	for _, tt := range settingsChanges() {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			hearSettingsChange(t, tt.change)
+		})
+	}
+}
+
+// settingsFixture is repoFixture with Acme's API key Deploy, its secret's hash, and Acme's own secret npm.
+type settingsFixture struct {
+	*repoFixture
+	key  orgs.APIKey
+	hash []byte
+	npm  secrets.Secret
+}
+
+// hearSettingsChange makes Acme's API key Deploy and secret npm, watches Acme, its repository website and another
+// organization on a hub of the fixture's database, makes change, and checks that it wakes the watchers of what it
+// names and no other.
+func hearSettingsChange(t *testing.T, change func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID) {
+	t.Helper()
+	f := &settingsFixture{repoFixture: newRepoFixture(t)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.key, f.hash = deployKey(t, f.orgFixture)
+	var err error
+	if f.npm, err = NewSecretStore(f.pool).Create(ctx, f.olivia, secrets.Secret{ID: uuid.New(), OrgID: f.acme.ID, Name: "npm"}, []byte("sealed")); err != nil {
+		t.Fatal(err)
+	}
+	hub := ListenChanges(ctx, f.pool)
+	watched := map[uuid.UUID]<-chan struct{}{}
+	for _, id := range []uuid.UUID{f.acme.ID, f.website.ID, uuid.New()} {
+		wake, stop := hub.Watch(id)
+		defer stop()
+		watched[id] = wake
+	}
+	// Every watcher wakes once the hub starts to listen.
+	for _, wake := range watched {
+		select {
+		case <-wake:
+		case <-time.After(10 * time.Second):
+			t.Fatal("no wake once the hub listened")
+		}
+	}
+	woken := change(ctx, t, f)
+	for _, id := range woken {
+		select {
+		case <-watched[id]:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("the change didn't wake the watcher of %s", id)
+		}
+	}
+	for id, wake := range watched {
+		if slices.Contains(woken, id) {
+			continue
+		}
+		select {
+		case <-wake:
+			t.Errorf("the change woke the watcher of %s, which it doesn't name", id)
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
 }
