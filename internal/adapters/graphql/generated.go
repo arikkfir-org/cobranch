@@ -1204,6 +1204,7 @@ type ComplexityRoot struct {
 		ChatUpdates         func(childComplexity int, repositoryID string, branch string, after string) int
 		ConversationUpdates func(childComplexity int, subject ConversationSubject, after string) int
 		IssueChatUpdates    func(childComplexity int, organizationID string, number int, after string) int
+		Organizations       func(childComplexity int) int
 	}
 
 	Tag struct {
@@ -1536,6 +1537,7 @@ type SubscriptionResolver interface {
 	ChatUpdates(ctx context.Context, repositoryID string, branch string, after string) (<-chan *ChatUpdate, error)
 	IssueChatUpdates(ctx context.Context, organizationID string, number int, after string) (<-chan *ChatUpdate, error)
 	ConversationUpdates(ctx context.Context, subject ConversationSubject, after string) (<-chan *ChatUpdate, error)
+	Organizations(ctx context.Context) (<-chan []*Organization, error)
 }
 type TaskResolver interface {
 	Transcript(ctx context.Context, obj *Task, after *int, first *int) ([]*TranscriptEntry, error)
@@ -7326,6 +7328,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.IssueChatUpdates(childComplexity, args["organizationId"].(string), args["number"].(int), args["after"].(string)), true
+	case "Subscription.organizations":
+		if e.ComplexityRoot.Subscription.Organizations == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Subscription.Organizations(childComplexity), true
 
 	case "Tag.name":
 		if e.ComplexityRoot.Tag.Name == nil {
@@ -10537,6 +10545,11 @@ extend type User {
   invitations: [Invitation!]!
   "The viewer's pending requests to join organizations."
   joinRequests: [JoinRequest!]!
+}
+
+extend type Subscription {
+  "The organizations the viewer belongs to, at once and then again each time the list changes: one created, joined, left, renamed or deleted elsewhere, or a role granted or revoked. Over WebSocket (graphql-transport-ws)."
+  organizations: [Organization!]!
 }
 
 extend type Mutation {
@@ -40447,6 +40460,38 @@ func (ec *executionContext) fieldContext_Subscription_conversationUpdates(ctx co
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_organizations(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Subscription_organizations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Subscription().Organizations(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Organization) graphql.Marshaler {
+			return ec.marshalNOrganization2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Subscription_organizations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Organization(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Tag_name(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53253,6 +53298,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_issueChatUpdates(ctx, fields[0])
 	case "conversationUpdates":
 		return ec._Subscription_conversationUpdates(ctx, fields[0])
+	case "organizations":
+		return ec._Subscription_organizations(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}

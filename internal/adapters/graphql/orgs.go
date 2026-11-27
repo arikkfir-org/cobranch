@@ -22,7 +22,8 @@ import (
 type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
-	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	Memberships(ctx context.Context, v orgs.Viewer) ([]orgs.Membership, error)
+	FollowMemberships(ctx context.Context, v orgs.Viewer) (<-chan []orgs.Membership, error)
 	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
@@ -161,6 +162,11 @@ func organization(o orgs.Organization) *Organization {
 		Version: int(o.Version)}
 }
 
+// membership is the organization of m as the API shows it; its viewerPermissions field reads the viewer's own.
+func membership(m orgs.Membership) *Organization {
+	return organization(m.Organization)
+}
+
 // organizationVersion is the version of an organization a mutation expects, orgs.AnyVersion without one.
 func organizationVersion(ctx context.Context, expectedVersion *int) (int64, error) {
 	if expectedVersion == nil {
@@ -297,4 +303,21 @@ func resolveOrg[T any](ctx context.Context, obj *Organization, read func(context
 		return zero, fail(ctx, err, "organization", what)
 	}
 	return out, nil
+}
+
+// followOrganizations sends each list of the viewer's organizations that lists sends, as the API shows it, until
+// lists closes or ctx ends.
+func followOrganizations(ctx context.Context, lists <-chan []orgs.Membership) <-chan []*Organization {
+	out := make(chan []*Organization)
+	go func() {
+		defer close(out)
+		for list := range lists {
+			select {
+			case out <- mapAll(list, membership):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
 }

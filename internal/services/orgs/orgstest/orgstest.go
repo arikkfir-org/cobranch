@@ -6,6 +6,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -912,4 +913,51 @@ func (s *Store) Purge(_ context.Context, orgID uuid.UUID) (bool, error) {
 	maps.DeleteFunc(s.Keys, func(_ uuid.UUID, k orgs.APIKey) bool { return k.OrgID == orgID })
 	maps.DeleteFunc(s.Repos, func(_ uuid.UUID, org uuid.UUID) bool { return org == orgID })
 	return true, nil
+}
+
+// Notifier is an orgs.Notifier that the test wakes.
+type Notifier struct {
+	mu       sync.Mutex
+	watchers map[uuid.UUID][]chan struct{}
+}
+
+var _ orgs.Notifier = (*Notifier)(nil)
+
+// Watch returns a channel that Wake wakes for any of ids.
+func (n *Notifier) Watch(ids ...uuid.UUID) (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.watchers == nil {
+		n.watchers = map[uuid.UUID][]chan struct{}{}
+	}
+	for _, id := range ids {
+		n.watchers[id] = append(n.watchers[id], ch)
+	}
+	return ch, func() {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		for _, id := range ids {
+			n.watchers[id] = slices.DeleteFunc(n.watchers[id], func(c chan struct{}) bool { return c == ch })
+		}
+	}
+}
+
+// Wake wakes those who watch id.
+func (n *Notifier) Wake(id uuid.UUID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for _, ch := range n.watchers[id] {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// Watching counts those who watch id.
+func (n *Notifier) Watching(id uuid.UUID) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return len(n.watchers[id])
 }

@@ -2,8 +2,9 @@ import { api } from "../lib/api.js";
 import { h } from "../lib/dom.js";
 import { when } from "../lib/format.js";
 import { showCard, signOut } from "../lib/layout.js";
+import { readOrganizations } from "../lib/orgs.js";
 import { go } from "../lib/router.js";
-import { base, me, orgs, setOrgs } from "../lib/state.js";
+import { base, me, orgs } from "../lib/state.js";
 
 // The welcome page: a user who belongs nowhere creates, asks to join, or accepts an invitation. It is also /new.
 export async function showWelcome() {
@@ -48,6 +49,6 @@ async function createOrganization(fail) {
 
 // reloadTo reloads the viewer's organizations and opens org.
 async function reloadTo(org) {
-  setOrgs((await api("GET", "/me/organizations")).organizations);
+  await readOrganizations();
   go("/" + org.slug);
 }

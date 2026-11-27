@@ -485,6 +485,15 @@ func (r *queryResolver) Roles(ctx context.Context, scope RoleScope) ([]*Role, er
 	return mapAll(roles, role), nil
 }
 
+// Organizations is the resolver for the organizations field.
+func (r *subscriptionResolver) Organizations(ctx context.Context) (<-chan []*Organization, error) {
+	lists, err := resolveUser(ctx, r.Orgs.FollowMemberships, "following the viewer's organizations")
+	if err != nil {
+		return nil, err
+	}
+	return followOrganizations(ctx, lists), nil
+}
+
 // Sessions is the resolver for the sessions field.
 func (r *userResolver) Sessions(ctx context.Context, obj *User) ([]*Session, error) {
 	v, err := viewer(ctx)
@@ -521,11 +530,11 @@ func (r *userResolver) Permissions(ctx context.Context, obj *User) ([]string, er
 
 // Organizations is the resolver for the organizations field.
 func (r *userResolver) Organizations(ctx context.Context, obj *User) ([]*Organization, error) {
-	all, err := resolveUser(ctx, r.Orgs.Organizations, "listing the viewer's organizations")
+	all, err := resolveUser(ctx, r.Orgs.Memberships, "listing the viewer's organizations")
 	if err != nil {
 		return nil, err
 	}
-	return mapAll(all, organization), nil
+	return mapAll(all, membership), nil
 }
 
 // Invitations is the resolver for the invitations field.

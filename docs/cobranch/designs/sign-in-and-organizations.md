@@ -243,6 +243,46 @@ There is no undo: a Deleting organization has lost its members and grants alread
   and deletes each with no organization pinned. The cascades bypass row security anyway, as PostgreSQL's referential
   actions do.
 
+### Live organization lists
+
+**Every open Console tab lists the viewer's organizations as they are now**
+
+```mermaid
+sequenceDiagram
+    participant Tab as Console tab
+    participant REST as REST server
+    participant PG as PostgreSQL
+    Tab->>REST: GET /me/organizations
+    REST-->>Tab: 200, the list and its ETag
+    Tab->>REST: GET /me/organizations?wait=15, If-None-Match: the ETag
+    REST->>PG: LISTEN cobranch_organizations (one connection per server)
+    Note over PG: elsewhere: an organization created, joined, left, renamed or deleted, a role granted or revoked
+    PG-->>REST: NOTIFY naming the principal or the organization
+    REST->>PG: read the viewer's list again
+    REST-->>Tab: 200, the new list and its ETag (or 304 after 15 s without a change)
+    Tab->>REST: ask again with the new ETag
+```
+
+The Console used to read the viewer's organizations once, as the tab opened, so an organization created in another
+tab, through the API or by accepting an invitation stayed out of the organization switcher until a reload
+([ENG-277](https://linear.app/arikkfir/issue/ENG-277)).
+
+- **The database says what changed.** Triggers on `memberships`, `grants`, `organizations` and `roles` notify channel
+  `cobranch_organizations` as their transaction commits, naming the principal of a membership or a grant, or the
+  organization of an organization's row or a custom role's. A trigger, rather than each store's code, catches every
+  path that changes them: the API, the Back-office, seeds, invitations, join requests, deletion and its purge.
+- **Each server listens once**, as for chats: one connection per REST or GraphQL server, waking the requests that watch
+  the viewer or one of the viewer's organizations. A follower also reads once a minute, for a notification lost while
+  the listener reconnected.
+- **REST waits on the list's ETag.** `GET /me/organizations` carries a strong ETag of what it answers, the viewer's
+  permissions at each organization included; with `If-None-Match` and `wait` (at most 15 seconds, as the chats' updates)
+  it answers once the list differs, or 304. GraphQL's subscription `organizations` sends the list, then each change.
+- **The Console follows while it shows.** A tab out of sight stops asking, and its first ask on showing again answers at
+  once with what changed meanwhile. A page that changes the list itself (creating, renaming, deleting) reads it again at
+  once.
+- **A member who may no longer read an organization** (every role revoked) no longer sees it in the list, as anywhere
+  else, rather than failing the whole read.
+
 ## Roles and grants
 
 **Nobody grants or revokes more than they hold**
@@ -440,6 +480,7 @@ Cobranch’s own pull request previews sign in as seeded users.
 | The purge waits for teardowns at most a day | A cluster that never answers doesn't keep an organization's data | Proposed |
 | Maintenance deletes the run logs of repositories that are gone, not only those past retention | Its logs go with the organization, not 30 days later | Proposed |
 | No grace period and no undo | The design's Danger zone says it can't be undone; a backup restores one | Proposed |
+| The viewer's organizations follow changes live: database triggers notify, servers wait on the list's ETag (REST) or send it again (GraphQL) | One mechanism for every way the list changes, with nothing a store must remember to call; the same wake as chats ([ENG-277](https://linear.app/arikkfir/issue/ENG-277)) | Proposed |
 
 ## Settled questions
 

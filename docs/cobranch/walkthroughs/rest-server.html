@@ -53,7 +53,7 @@
     <tr><td class="p">Authentication</td><td>Bearer token, else the session cookie; a cookie mutation must be JSON from the Console's origin</td><td><code>server/auth.go</code></td></tr>
     <tr><td class="p">Authorization</td><td>Never in the handler: the service's first act, through <code>auth.Authorizer</code>. What the viewer may not see answers 404</td><td><code>services/*</code></td></tr>
     <tr><td class="p">Timing</td><td><code>Server-Timing</code> names each Git read, which the Console counts per page view and posts to <code>/v1/page-views</code></td><td><code>server/timing.go</code>, <code>rest/pageviews.go</code></td></tr>
-    <tr><td class="p">Live updates</td><td>A long poll on a chat's updates, woken by <code>LISTEN cobranch_chats</code></td><td><code>rest/chats.go</code>, <code>postgres/listen.go</code></td></tr>
+    <tr><td class="p">Live updates</td><td>A long poll on a chat's updates, woken by <code>LISTEN cobranch_chats</code>, and on the viewer's organizations' ETag, woken by <code>LISTEN cobranch_organizations</code></td><td><code>rest/chats.go</code>, <code>rest/orgs.go</code>, <code>postgres/listen.go</code></td></tr>
     <tr><td class="p">Run logs</td><td>Live from the pod while a run runs, from the object store once it ended</td><td><code>rest/runlogs.go</code>, <code>code/runlogs.go</code></td></tr>
   </table></div>
 </section>

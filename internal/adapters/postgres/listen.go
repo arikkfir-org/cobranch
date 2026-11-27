@@ -26,57 +26,72 @@ func ListenPushes(ctx context.Context, pool *pgxpool.Pool) <-chan struct{} {
 	return wake
 }
 
-// ChatHub tells a server's followers of chats when the chat they follow may have changed (chats.Notifier): a
-// connection of its own listens for the notification each change's transaction sends, naming the chat's subject, and
-// wakes those who watch that subject. After losing its connection it takes another, waking every watcher then, since
-// they may have missed some.
-type ChatHub struct {
+// Hub tells a server's followers when what they follow may have changed (chats.Notifier, orgs.Notifier): a connection
+// of its own listens for the notifications each change's transaction sends, naming an ID (a chat's subject; a principal
+// or an organization), and wakes those who watch that ID. After losing its connection it takes another, waking every
+// watcher then, since they may have missed some.
+type Hub struct {
 	mu       sync.Mutex
 	watchers map[uuid.UUID]map[chan struct{}]struct{}
 }
 
 // ListenChats returns the hub of the chats' followers, listening outside pool until ctx ends.
-func ListenChats(ctx context.Context, pool *pgxpool.Pool) *ChatHub {
-	h := &ChatHub{watchers: map[uuid.UUID]map[chan struct{}]struct{}{}}
-	go listen(ctx, pool.Config().ConnConfig, "chats", (*queries.Queries).ListenChats, h.wakeAll, h.wake)
+func ListenChats(ctx context.Context, pool *pgxpool.Pool) *Hub {
+	return listenHub(ctx, pool, "chats", (*queries.Queries).ListenChats)
+}
+
+// ListenOrganizations returns the hub of the followers of people's organizations, listening outside pool until ctx
+// ends: a change wakes those who watch the principal or the organization it names.
+func ListenOrganizations(ctx context.Context, pool *pgxpool.Pool) *Hub {
+	return listenHub(ctx, pool, "organizations", (*queries.Queries).ListenOrganizations)
+}
+
+// listenHub returns a hub that start's notifications wake, listening outside pool until ctx ends.
+func listenHub(ctx context.Context, pool *pgxpool.Pool, what string, start func(*queries.Queries, context.Context) error) *Hub {
+	h := &Hub{watchers: map[uuid.UUID]map[chan struct{}]struct{}{}}
+	go listen(ctx, pool.Config().ConnConfig, what, start, h.wakeAll, h.wake)
 	return h
 }
 
-// Watch returns a channel that receives soon after a change to the chat of the subject commits, and a function that
-// stops it. Changes that come while the channel is full make one receive.
-func (h *ChatHub) Watch(subjectID uuid.UUID) (<-chan struct{}, func()) {
+// Watch returns a channel that receives soon after a change that names one of ids commits, and a function that stops
+// it. Changes that come while the channel is full make one receive.
+func (h *Hub) Watch(ids ...uuid.UUID) (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.watchers[subjectID] == nil {
-		h.watchers[subjectID] = map[chan struct{}]struct{}{}
+	for _, id := range ids {
+		if h.watchers[id] == nil {
+			h.watchers[id] = map[chan struct{}]struct{}{}
+		}
+		h.watchers[id][ch] = struct{}{}
 	}
-	h.watchers[subjectID][ch] = struct{}{}
 	return ch, func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
-		delete(h.watchers[subjectID], ch)
-		if len(h.watchers[subjectID]) == 0 {
-			delete(h.watchers, subjectID)
+		for _, id := range ids {
+			delete(h.watchers[id], ch)
+			if len(h.watchers[id]) == 0 {
+				delete(h.watchers, id)
+			}
 		}
 	}
 }
 
-// wake wakes those who watch the subject a notification names.
-func (h *ChatHub) wake(n *pgconn.Notification) {
-	subjectID, err := uuid.Parse(n.Payload)
+// wake wakes those who watch the ID a notification names.
+func (h *Hub) wake(n *pgconn.Notification) {
+	id, err := uuid.Parse(n.Payload)
 	if err != nil {
-		return // no subject of ours
+		return // no ID of ours
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.watchers[subjectID] {
+	for ch := range h.watchers[id] {
 		notify(ch)
 	}
 }
 
 // wakeAll wakes every watcher.
-func (h *ChatHub) wakeAll() {
+func (h *Hub) wakeAll() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, chs := range h.watchers {

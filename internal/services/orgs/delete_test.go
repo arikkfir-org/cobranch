@@ -26,10 +26,10 @@ func deleted(ctx context.Context, t *testing.T, f *fixture, key orgs.APIKey) {
 	if _, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.AnyVersion, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember}); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Update() of a deleted organization error = %v, want not found", err)
 	}
-	if list, err := f.service.Organizations(ctx, f.max); err != nil || len(list) != 1 || list[0].ID != f.globex.ID {
+	if list, err := f.service.Memberships(ctx, f.max); err != nil || len(list) != 1 || list[0].ID != f.globex.ID {
 		t.Errorf("Max's organizations = %+v, %v, want Globex alone", list, err)
 	}
-	if list, err := f.service.Organizations(ctx, f.olivia); err != nil || len(list) != 0 {
+	if list, err := f.service.Memberships(ctx, f.olivia); err != nil || len(list) != 0 {
 		t.Errorf("Olivia's organizations = %+v, %v, want none", list, err)
 	}
 	for _, g := range f.store.Grants {

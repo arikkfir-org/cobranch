@@ -529,19 +529,23 @@ type Notifier struct {
 
 var _ chats.Notifier = (*Notifier)(nil)
 
-// Watch returns a channel that Wake wakes for the subject.
-func (n *Notifier) Watch(subjectID uuid.UUID) (<-chan struct{}, func()) {
+// Watch returns a channel that Wake wakes for any of the subjects.
+func (n *Notifier) Watch(subjectIDs ...uuid.UUID) (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.watchers == nil {
 		n.watchers = map[uuid.UUID][]chan struct{}{}
 	}
-	n.watchers[subjectID] = append(n.watchers[subjectID], ch)
+	for _, id := range subjectIDs {
+		n.watchers[id] = append(n.watchers[id], ch)
+	}
 	return ch, func() {
 		n.mu.Lock()
 		defer n.mu.Unlock()
-		n.watchers[subjectID] = slices.DeleteFunc(n.watchers[subjectID], func(c chan struct{}) bool { return c == ch })
+		for _, id := range subjectIDs {
+			n.watchers[id] = slices.DeleteFunc(n.watchers[id], func(c chan struct{}) bool { return c == ch })
+		}
 	}
 }
 

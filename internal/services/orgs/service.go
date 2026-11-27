@@ -130,10 +130,11 @@ type Limits interface {
 
 // Service runs organizations: every operation checks its viewer's permissions through the authorizer first.
 type Service struct {
-	store  Store
-	authz  *auth.Authorizer
-	limits Limits
-	now    func() time.Time
+	store    Store
+	authz    *auth.Authorizer
+	limits   Limits
+	notifier Notifier
+	now      func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz.
@@ -215,15 +216,6 @@ func (s *Service) Created(ctx context.Context, v Viewer) (limits.Quota, error) {
 		limit = l.OrganizationsPerUser
 	}
 	return limits.Quota{Used: created, Limit: limit}, nil
-}
-
-// Organizations lists the organizations v belongs to.
-func (s *Service) Organizations(ctx context.Context, v Viewer) ([]Organization, error) {
-	orgs, err := s.store.OrganizationsOf(ctx, v.ID)
-	if err != nil {
-		return nil, fmt.Errorf("listing the organizations: %w", err)
-	}
-	return orgs, nil
 }
 
 // Get finds the organization slug names, by its current slug or an old one, for a viewer with org.read there;

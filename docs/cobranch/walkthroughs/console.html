@@ -107,7 +107,7 @@
 <script>
 seq("d1",[["Browser","act"],["Caddy (console)","sys"],["index.html shell","sys"],["console.js","adp"],["rest-server","adp","rest-server"]],[
  [0,1,"GET any path"],[1,0,"index.html with config and file names written in",1],[2,1,"preload every module, stylesheet and Latin font under /assets/@release/"],[2,4,"GET /v1/me, at the same time"],
- [2,3,"import console.js; start(loaded, root, again)"],[3,3,"load(files): link stylesheets in order, import every page"],[3,4,"GET /me/organizations, /permissions"],[3,3,"router.show('load'): draw the page for the path"]]);
+ [2,3,"import console.js; start(loaded, root, again)"],[3,3,"load(files): link stylesheets in order, import every page"],[3,4,"GET /me/organizations, /permissions; then follow the organizations' ETag"],[3,3,"router.show('load'): draw the page for the path"]]);
 flow("d2",[[["p","act","location.pathname\nunder the Console's root"]],[["r","adp","router.render"]],
  [["s","sys","not signed in\n→ sign-in"],["w","sys","empty, or reserved\n→ welcome, or the last organization"],["c","sys","a Console page\n→ pages/<name>.js"],["o","adp","anything else → showOrganization\npages/org/<page>.js for an org page,\notherwise pages/repo/<page>.js"]]],
  [["p","r"],["r","s"],["r","w"],["r","c"],["r","o"]],{w:330,gap:110});

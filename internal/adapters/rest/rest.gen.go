@@ -4178,6 +4178,15 @@ type ThreadID = openapi_types.UUID
 // UserID defines model for user.
 type UserID = openapi_types.UUID
 
+// ListMyOrganizationsParams defines parameters for ListMyOrganizations.
+type ListMyOrganizationsParams struct {
+	// Wait How many seconds to wait for the list to change while it is still the one If-None-Match names; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetMyPreferencesParams defines parameters for GetMyPreferences.
 type GetMyPreferencesParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
@@ -5262,9 +5271,9 @@ type ServerInterface interface {
 	// ListMyJoinRequests The user's requests to join organizations that still wait, oldest first.
 	// (GET /me/join-requests)
 	ListMyJoinRequests(w http.ResponseWriter, r *http.Request)
-	// ListMyOrganizations The organizations the user belongs to, by name.
+	// ListMyOrganizations The organizations the user belongs to, by name, each with the permissions the user holds there. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the user's organizations (one created, joined, left, renamed or deleted elsewhere, or a role granted or revoked) by asking again with the answer's ETag.
 	// (GET /me/organizations)
-	ListMyOrganizations(w http.ResponseWriter, r *http.Request)
+	ListMyOrganizations(w http.ResponseWriter, r *http.Request, params ListMyOrganizationsParams)
 	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
 	// (GET /me/preferences)
 	GetMyPreferences(w http.ResponseWriter, r *http.Request, params GetMyPreferencesParams)
@@ -6053,8 +6062,48 @@ func (siw *ServerInterfaceWrapper) ListMyJoinRequests(w http.ResponseWriter, r *
 // ListMyOrganizations operation middleware
 func (siw *ServerInterfaceWrapper) ListMyOrganizations(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyOrganizationsParams
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListMyOrganizations(w, r)
+		siw.Handler.ListMyOrganizations(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17639,31 +17688,68 @@ func (response ListMyJoinRequestsdefaultApplicationProblemPlusJSONResponse) Visi
 }
 
 type ListMyOrganizationsRequestObject struct {
+	Params ListMyOrganizationsParams
 }
 
 type ListMyOrganizationsResponseObject interface {
 	VisitListMyOrganizationsResponse(w http.ResponseWriter) error
 }
 
+type ListMyOrganizations200ResponseHeaders struct {
+	ETag string
+}
+
 type ListMyOrganizations200JSONResponse struct {
-	Organizations []Organization `json:"organizations"`
+	Body struct {
+		Organizations []Organization `json:"organizations"`
+	}
+	Headers ListMyOrganizations200ResponseHeaders
 }
 
 func (response ListMyOrganizations200JSONResponse) VisitListMyOrganizationsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type ListMyOrganizations401ApplicationProblemPlusJSONResponse struct {
+type ListMyOrganizations304ResponseHeaders struct {
+	ETag string
+}
+
+type ListMyOrganizations304Response struct {
+	Headers ListMyOrganizations304ResponseHeaders
+}
+
+func (response ListMyOrganizations304Response) VisitListMyOrganizationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListMyOrganizations400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListMyOrganizations400ApplicationProblemPlusJSONResponse) VisitListMyOrganizationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyOrganizations401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListMyOrganizations401ApplicationProblemPlusJSONResponse) VisitListMyOrganizationsResponse(w http.ResponseWriter) error {
 
@@ -39351,7 +39437,7 @@ type StrictServerInterface interface {
 	// ListMyJoinRequests The user's requests to join organizations that still wait, oldest first.
 	// (GET /me/join-requests)
 	ListMyJoinRequests(ctx context.Context, request ListMyJoinRequestsRequestObject) (ListMyJoinRequestsResponseObject, error)
-	// ListMyOrganizations The organizations the user belongs to, by name.
+	// ListMyOrganizations The organizations the user belongs to, by name, each with the permissions the user holds there. With If-None-Match and wait, it waits up to wait seconds for the list to change before it answers 304, so a client follows the user's organizations (one created, joined, left, renamed or deleted elsewhere, or a role granted or revoked) by asking again with the answer's ETag.
 	// (GET /me/organizations)
 	ListMyOrganizations(ctx context.Context, request ListMyOrganizationsRequestObject) (ListMyOrganizationsResponseObject, error)
 	// GetMyPreferences How Cobranch looks to the viewer, kept with them so it follows them to every browser: the defaults, at version 0, until they first change one. Only a person has preferences; any other credential answers 403.
@@ -40227,8 +40313,10 @@ func (sh *strictHandler) ListMyJoinRequests(w http.ResponseWriter, r *http.Reque
 }
 
 // ListMyOrganizations operation middleware
-func (sh *strictHandler) ListMyOrganizations(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListMyOrganizations(w http.ResponseWriter, r *http.Request, params ListMyOrganizationsParams) {
 	var request ListMyOrganizationsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListMyOrganizations(ctx, request.(ListMyOrganizationsRequestObject))
