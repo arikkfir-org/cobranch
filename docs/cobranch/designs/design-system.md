@@ -24,7 +24,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
 | Components | 58 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 70 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Screens | 73 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -340,7 +340,7 @@ only cue.
 
 ## Screens
 
-Seventy screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Seventy-three screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -395,11 +395,14 @@ Researcher waits for a task.
 | [Agent](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=64-2654) | Working on, Queue and History of its tasks, its settings, and your private chat with it |
 | [Agent · Task](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=81-4443) | One task: its transcript of turns and tool calls, what it came from, and its spend against the cap |
 | [Agent · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-5663) | An agent with no tasks yet |
+| [Agent · Repository](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=263-40209) | An agent a repository's main `/cobranch.yaml` declares: where, Open /cobranch.yaml instead of Edit, and its repository, image and permissions |
+| [Agent · Retired](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=263-40706) | A repository's agent its file no longer declares: Retired, no Assign a task, its History alone and no model |
 | [Repository · Settings](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-16990) | Settings as tabs General, Access and Secrets; the repository's name, URL name and description, and its visibility, which its grants decide |
 | [Repository · Settings · Access](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=215-30550) | Every role that reaches the repository, a row each: who, the role, Direct or the organization's role it comes through, since when; Revoke on the direct ones |
 | [Repository · Settings · Access · Grant role](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=224-34472) | Granting a member, API key or agent one of the repository's roles, in a dialog |
 | [Repository · Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=215-30983) | The repository's own secrets, which its jobs read beside the organization's |
 | [Repository · Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-16506) | The organization's issues about the repository, under tabs Open, Closed and All, filtered by assignee and label |
+| [Repository · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=263-39603) | The agents the repository's main `/cobranch.yaml` declares: model, image, secrets, permissions and tasks, and those retired |
 | [Repository · Artifacts](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-3941) | What agents generated for the repository: documents, diagrams, reports and pages |
 | [Artifact](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=75-4455) | The document, About, Access and Versions; Share, Download and Edit |
 | [Settings · General](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-7859) | Settings as tabs; the organization's name, slug and issue key, who joins with what role, its identity providers, and the Danger zone that deletes it |
@@ -412,7 +415,7 @@ Researcher waits for a task.
 | [Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9367) | The organization's own secrets, which its repositories' jobs share |
 | [Settings · Secrets · Add secret · Long value](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=254-39928) | Adding a secret whose value is long (a kubeconfig): the value scrolls inside its field, which stops at 320px, and the dialog keeps its actions in reach |
 | [Settings · Usage](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9789) | What the organization uses against the installation's limits, and each repository's Git data |
-| [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings |
+| [Settings · Agents](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=95-6091) | The organization's agents and their settings, then its repositories' agents, read-only |
 | [Settings · Models](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=71-3605) | Providers (a secret and the models it serves) and models with their prices, the agents on each and the default; no cap, which is each agent's |
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |

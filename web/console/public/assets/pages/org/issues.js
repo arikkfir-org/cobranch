@@ -96,9 +96,18 @@ async function showNewIssue(org, main, can) {
   const title = input({ name: "title", required: true, maxlength: 200, placeholder: "Show pushes before the worker finishes" });
   const description = textarea({ name: "description", rows: 4, maxlength: 65536 });
   const assign = can("agents.assign");
-  const assignee = h("select", { name: "assigneeId" }, h("option", { value: "" }, "Nobody yet"),
-    members.map((m) => h("option", { value: m.userId }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
-    assign ? agents.filter((a) => !a.retiredAt).map((a) => h("option", { value: a.id }, a.name + (a.repositorySlug ? " · " + a.repositorySlug + "'s agent" : " · agent"))) : null);
+  // offer lists who may take the issue: its members, and the agents that work in the repository it is about, drawn
+  // again when that changes, keeping the choice while it is still offered.
+  const assignee = h("select", { name: "assigneeId" });
+  const offer = () => {
+    const chosen = assignee.value;
+    assignee.replaceChildren(h("option", { value: "" }, "Nobody yet"),
+      ...members.map((m) => h("option", { value: m.userId }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
+      ...(assign ? agents.filter((a) => worksIn(a, repository.value || undefined)).map((a) => h("option", { value: a.id }, a.name + (a.repositorySlug ? " · " + a.repositorySlug + "'s agent" : " · agent"))) : []));
+    assignee.value = [...assignee.options].some((o) => o.value === chosen) ? chosen : "";
+  };
+  offer();
+  repository.addEventListener("change", offer);
   const named = input({ name: "labels", placeholder: labels.slice(0, 2).map((l) => l.name).join(", ") || "bug, docs", autocomplete: "off" });
   const create = h("button", { class: "btn btn-primary", type: "submit" }, "Create issue");
   main.replaceChildren(error.el, h("form", { class: "card new-issue", onsubmit: async (e) => {
@@ -178,7 +187,7 @@ async function showIssue(org, main, can, identifier, notice) {
       : h("p", { class: "page-header-description" }, write ? "No description yet. Edit adds one." : "No description."),
     branchesCard(org, issue, branches), issueActivity(issue, events)),
     h("aside", { class: "issue-side" }, h("section", { class: "card" }, h("div", { class: "facts" }, issueFacts(page))),
-      write && can("agents.assign") && choices.agents.length ? assignToAgent(page) : null)));
+      write && can("agents.assign") && choices.agents.some((a) => worksIn(a, issue.repository?.id)) ? assignToAgent(page) : null)));
   const still = () => error.el.isConnected;
   followLists([[path, read.tag], [path + "/activity", activity.tag], [path + "/branches", linked.tag]], still,
     () => drawAgain(() => showIssue(org, main, can, issue.identifier), still), { gone: true });
