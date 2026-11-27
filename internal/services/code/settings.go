@@ -13,6 +13,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
 )
@@ -34,27 +35,30 @@ func (e *SettingsError) Error() string {
 }
 
 // Settings are what a SettingsFile says: of the repository, read from the default branch's only; the branches' merge
-// requirements, read from the default branch's only; the jobs, read from the file at the tip an event happened on; and
-// the delivery, whose targets are read from the default branch's and roots from the tip being delivered. The JSON a
-// store keeps of them leaves the merge requirements out, which it keeps on their own.
+// requirements, read from the default branch's only; the jobs, read from the file at the tip an event happened on; the
+// delivery, whose targets are read from the default branch's and roots from the tip being delivered; and the
+// repository's agents, read from the default branch's only. The JSON a store keeps of them leaves the merge
+// requirements out, which it keeps on their own.
 type Settings struct {
 	Repository jobs.RepositorySettings `json:"repository"`
 	Branches   []git.Requirements      `json:"-"`
 	// Jobs are by name.
 	Jobs     []jobs.Job       `json:"jobs"`
 	Delivery DeliverySettings `json:"delivery"`
+	// Agents are by name.
+	Agents []agents.Declared `json:"agents"`
 }
 
 // SettingsKeys are the top-level keys a SettingsFile may have, each read by ParseSettings. A key that configures
 // something new joins them.
-var SettingsKeys = []string{"repository", "branches", "jobs", "delivery"}
+var SettingsKeys = []string{"repository", "branches", "jobs", "delivery", "agents"}
 
 // ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its top-level keys are
 // SettingsKeys, and every key under them is checked, so a misspelt key, requirement or trigger refuses the file rather
-// than requiring or running nothing. An empty file says nothing: the repository's defaults, no requirements, no jobs
-// and no delivery.
+// than requiring or running nothing. An empty file says nothing: the repository's defaults, no requirements, no jobs,
+// no delivery and no agents.
 func ParseSettings(content []byte) (Settings, error) {
-	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}}
+	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}, Agents: []agents.Declared{}}
 	var doc yaml.Node
 	dec := yaml.NewDecoder(bytes.NewReader(content))
 	if err := dec.Decode(&doc); errors.Is(err, io.EOF) {
@@ -83,6 +87,9 @@ func ParseSettings(content []byte) (Settings, error) {
 		return Settings{}, err
 	}
 	if out.Delivery, err = parseDelivery(valueOf(root, "delivery")); err != nil {
+		return Settings{}, err
+	}
+	if out.Agents, err = parseAgents(valueOf(root, "agents")); err != nil {
 		return Settings{}, err
 	}
 	return out, nil

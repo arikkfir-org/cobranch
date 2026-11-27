@@ -392,6 +392,10 @@ func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, 
 		return Repository{}, orgs.Role{}, &orgs.ValidationError{Field: "roleId", Code: "role.invalid",
 			Message: "a " + string(p.Kind) + " holds no role but Secret reader"}
 	}
+	if !revoking && p.Declared && roleID != auth.RoleSecretReader {
+		return Repository{}, orgs.Role{}, &orgs.ValidationError{Field: "roleId", Code: "role.invalid",
+			Message: "a repository's agent holds no role but Secret reader: its main's /cobranch.yaml declares the rest"}
+	}
 	return repo, roles[i], nil
 }
 

@@ -34,7 +34,7 @@ type fixture struct {
 	olivia, max, gwen, rita, nia repos.Viewer
 	website, secret              repos.Repository
 	deploy                       orgs.APIKey
-	build, preview               uuid.UUID
+	build, preview, checker      uuid.UUID
 	releaseManager, membersRole  orgs.Role
 }
 
@@ -67,6 +67,8 @@ func newFixture(t *testing.T) *fixture {
 	f.build, f.preview = uuid.New(), uuid.New()
 	s.Jobs[f.build] = repostest.Job{OrgID: f.acme.ID, Name: "build"}
 	s.Jobs[f.preview] = repostest.Job{OrgID: f.acme.ID, Name: "preview", Kind: auth.KindTarget}
+	f.checker = uuid.New()
+	s.Jobs[f.checker] = repostest.Job{OrgID: f.acme.ID, Name: "checker", Kind: auth.KindAgent, Declared: true}
 	for _, r := range []*repos.Repository{&f.website, &f.secret} {
 		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", ObjectFormat: repos.ObjectFormatSHA1, CreatedBy: f.olivia.ID, CreatedAt: now}
 	}
@@ -473,6 +475,12 @@ func TestGrant(t *testing.T) {
 		}, wantEvents: []string{"repo.role_granted"}},
 		{name: "a delivery target and any other role", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.preview, auth.RoleMaintainer))
+		}, wantCode: "role.invalid"},
+		{name: "an Owner grants a repository's agent Secret reader", run: func(ctx context.Context, f *fixture) error {
+			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.checker, auth.RoleSecretReader))
+		}, wantEvents: []string{"repo.role_granted"}},
+		{name: "a repository's agent and any other role", run: func(ctx context.Context, f *fixture) error {
+			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.checker, auth.RoleDeveloper))
 		}, wantCode: "role.invalid"},
 		{name: "a role held already", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.max.ID, auth.RoleDeveloper))

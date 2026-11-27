@@ -146,6 +146,16 @@ type Agent {
   cap: String
   "The secrets its tasks receive, by the environment variables they go in."
   secrets: [AgentSecret!]!
+  "The repository whose main /cobranch.yaml declares it, which the API changes nothing of; null for the organization's own."
+  repositoryId: ID
+  "That repository's slug; null for the organization's own."
+  repositorySlug: String
+  "What a repository's agent declares it may do on its repository, sorted; null for the organization's own, whose grants say."
+  permissions: [String!]
+  "The line of a repository's agent's name in its main /cobranch.yaml; null for the organization's own."
+  line: Int
+  "When its repository's main /cobranch.yaml stopped declaring it; it then takes no task. Null while declared, and for the organization's own."
+  retiredAt: Time
 }
 
 "A role an agent holds, at its organization or, with a repository, on that repository."
@@ -361,15 +371,15 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). A repository's agent changes only in its main /cobranch.yaml (CONFLICT, agent.declared). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
-  "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in), and so is a repository's, which its main /cobranch.yaml retires (CONFLICT, agent.declared); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
-  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Puts an agent on one of the organization's models, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid), and so is a model it hasn't (BAD_USER_INPUT, agent.model_invalid), and a repository's agent, which names its model in its main /cobranch.yaml (CONFLICT, agent.declared); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
-  "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
+  "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. A repository's agent names its secrets in its main /cobranch.yaml (CONFLICT, agent.declared). With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
   setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
-  "Names the container image an agent's tasks run in, such as ghcr.io/acme/tools:1.4, or the installation's with an empty one; takes org.principals.manage, and a person. The image needs sh and git, and is pulled with the installation's image pull secrets. One that isn't a reference is refused (BAD_USER_INPUT, agent.image_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  "Names the container image an agent's tasks run in, such as ghcr.io/acme/tools:1.4, or the installation's with an empty one; takes org.principals.manage, and a person. The image needs sh and git, and is pulled with the installation's image pull secrets. One that isn't a reference is refused (BAD_USER_INPUT, agent.image_invalid), and so is a repository's agent, which names its image in its main /cobranch.yaml (CONFLICT, agent.declared); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
   setAgentImage(organizationId: ID!, id: ID!, image: String!, expectedVersion: Int): Agent!
   "Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, or names another secret for the one it has, and answers it; takes org.manage. A provider the installation doesn't know is refused (NOT_FOUND, model_provider.not_found), and a secret that isn't the organization's own (BAD_USER_INPUT, model_provider.secret_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
@@ -381,7 +391,7 @@ extend type Mutation {
   removeModel(organizationId: ID!, provider: String!, model: String!, expectedVersion: Int): Boolean!
   "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
   recordTaskSpend(input: TaskUsageInput!): TaskSpend!
-  "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
+  "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks. A repository's agent works in its repository alone (BAD_USER_INPUT, agent.elsewhere), and a retired one takes none (BAD_USER_INPUT, agent.retired)."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   cancelTask(organizationId: ID!, number: Int!, expectedVersion: Int): Task!

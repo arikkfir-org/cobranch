@@ -83,10 +83,15 @@ type Grant struct {
 	RepoSlug string
 }
 
-// Agent is one of an organization's agents, by the principal of kind agent it is.
+// Agent is one of an organization's agents, by the principal of kind agent it is: the organization's own, which its
+// settings pages define, or one of its repositories', which the repository's main /cobranch.yaml declares.
 type Agent struct {
-	ID          uuid.UUID
-	OrgID       uuid.UUID
+	ID    uuid.UUID
+	OrgID uuid.UUID
+	// RepoID is the repository whose main /cobranch.yaml declares it, and RepoSlug its slug; uuid.Nil and empty for an
+	// organization's agent.
+	RepoID      uuid.UUID
+	RepoSlug    string
 	Name        string
 	Description string
 	// Instructions are the standing instructions, in Markdown, that every task of it starts from.
@@ -114,6 +119,20 @@ type Agent struct {
 	Secrets map[string]uuid.UUID
 	// Cap is the most one of its tasks may spend; 0 for none.
 	Cap USD
+	// Permissions are what a repository's agent declares it may do on its repository, sorted; nil for an
+	// organization's agent, whose grants say what it may do.
+	Permissions []string
+	// Line is the line of a repository's agent's name in main's /cobranch.yaml; 0 for an organization's agent.
+	Line int
+	// RetiredAt is when main's /cobranch.yaml stopped declaring a repository's agent, which then takes no task; nil
+	// while it declares it, and for an organization's agent.
+	RetiredAt *time.Time
+}
+
+// Declared reports whether a's repository's main /cobranch.yaml declares it, rather than its organization's settings
+// pages: the API changes nothing of it.
+func (a Agent) Declared() bool {
+	return a.RepoID != uuid.Nil
 }
 
 // Input is what a new agent holds: its name, description, instructions and first grants.

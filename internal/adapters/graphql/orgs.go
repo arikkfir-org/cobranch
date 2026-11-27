@@ -92,6 +92,7 @@ var conflicts = map[error]string{
 	code.ErrReviewerSuspended: "reviewer.suspended",
 	agents.ErrNameTaken:       "agent.name_taken",
 	agents.ErrBuiltIn:         "agent.built_in",
+	agents.ErrDeclared:        "agent.declared",
 	agents.ErrEnded:           "task.ended",
 	agents.ErrTransition:      "task.transition_invalid",
 	agents.ErrProviderInUse:   "model_provider.in_use",

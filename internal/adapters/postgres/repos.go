@@ -270,7 +270,7 @@ func (s *RepoStore) Principal(ctx context.Context, orgID, principalID uuid.UUID)
 	if err != nil {
 		return repos.Principal{}, wrapRepo("finding the principal", err)
 	}
-	return repos.Principal{ID: row.ID, Kind: auth.Kind(row.Kind), DisplayName: row.DisplayName}, nil
+	return repos.Principal{ID: row.ID, Kind: auth.Kind(row.Kind), DisplayName: row.DisplayName, Declared: row.Declared}, nil
 }
 
 // Grant gives the principal the role on the repository. It holds the organization's lock, as every grant does, so

@@ -110,6 +110,9 @@ func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 	if err := recordSettings(ctx, q, orgID, push); err != nil {
 		return err
 	}
+	if err := syncAgents(ctx, q, orgID, push); err != nil {
+		return err
+	}
 	if err := recordFacts(ctx, q, orgID, push); err != nil {
 		return err
 	}

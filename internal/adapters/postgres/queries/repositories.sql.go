@@ -54,7 +54,9 @@ func (q *Queries) DeleteRepositoryGrantsAt(ctx context.Context, principalID uuid
 }
 
 const grantee = `-- name: Grantee :one
-SELECT p.id, p.kind, p.display_name FROM principals p
+SELECT p.id, p.kind, p.display_name,
+    EXISTS (SELECT 1 FROM agents a WHERE a.principal_id = p.id AND a.repo_id IS NOT NULL) AS declared
+FROM principals p
 WHERE p.id = $1 AND (p.org_id = $2::uuid
     OR EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = $2::uuid AND m.user_id = p.id))
 `
@@ -63,13 +65,20 @@ type GranteeRow struct {
 	ID          uuid.UUID
 	Kind        string
 	DisplayName string
+	Declared    bool
 }
 
-// Grantee finds a principal that may hold grants in the organization: one of its members, or one of its API keys.
+// Grantee finds a principal that may hold grants in the organization: one of its members, or one of its API keys,
+// and whether it is a repository's agent.
 func (q *Queries) Grantee(ctx context.Context, principalID uuid.UUID, orgID uuid.UUID) (GranteeRow, error) {
 	row := q.db.QueryRow(ctx, grantee, principalID, orgID)
 	var i GranteeRow
-	err := row.Scan(&i.ID, &i.Kind, &i.DisplayName)
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.DisplayName,
+		&i.Declared,
+	)
 	return i, err
 }
 
@@ -144,12 +153,16 @@ SELECT rp.id FROM repositories rp WHERE rp.org_id = $1 AND (
               AND $3::text = ANY (r.permissions))
     OR EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
                WHERE g.principal_id = $2 AND g.scope = 'repository' AND g.scope_id = rp.id
-                 AND $3::text = ANY (r.permissions)))
+                 AND $3::text = ANY (r.permissions))
+    OR EXISTS (SELECT 1 FROM agents a
+               WHERE a.principal_id = $2 AND a.repo_id = rp.id AND a.retired_at IS NULL
+                 AND $3::text = ANY (a.permissions)))
 ORDER BY rp.slug
 `
 
 // RepositoriesWith lists the IDs of the organization's repositories where the principal holds the permission,
-// through a grant on the repository or a role at the organization: every one of them when a role there holds it.
+// through a grant on the repository, a role at the organization, or what a repository's agent declares there: every
+// one of them when a role at the organization holds it.
 func (q *Queries) RepositoriesWith(ctx context.Context, orgID uuid.UUID, principalID uuid.UUID, permission string) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, repositoriesWith, orgID, principalID, permission)
 	if err != nil {
@@ -304,12 +317,16 @@ SELECT DISTINCT p.permission::text AS permission FROM (
     UNION ALL
     SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN repositories rp ON rp.org_id = g.scope_id
     WHERE g.principal_id = $1 AND g.scope = 'organization' AND rp.id = $2::uuid
+    UNION ALL
+    SELECT unnest(a.permissions) FROM agents a
+    WHERE a.principal_id = $1 AND a.repo_id = $2::uuid AND a.retired_at IS NULL
 ) p WHERE p.permission = ANY ($3::text[])
 ORDER BY 1
 `
 
 // RepositoryPermissions lists the permissions the principal holds at the repository: those of the roles its grants
-// there give, and those of its roles at the repository's organization, each kept to the repository's own, which
+// there give, those of its roles at the repository's organization, and, for an agent the repository's main
+// /cobranch.yaml declares, those it declares there until it is retired, each kept to the repository's own, which
 // repo_permissions lists.
 func (q *Queries) RepositoryPermissions(ctx context.Context, principalID uuid.UUID, repoID uuid.UUID, repoPermissions []string) ([]string, error) {
 	rows, err := q.db.Query(ctx, repositoryPermissions, principalID, repoID, repoPermissions)

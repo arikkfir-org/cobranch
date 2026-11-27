@@ -28,7 +28,7 @@ type Store struct {
 	GitData map[uuid.UUID]int64
 	// RepoSummaries sum up the repositories; one missing sums up as none.
 	RepoSummaries map[uuid.UUID]repos.Summary
-	// Jobs are the job principals, and the delivery targets, by ID, each with its organization.
+	// Jobs are the job principals, the delivery targets and repositories' agents, by ID, each with its organization.
 	Jobs   map[uuid.UUID]Job
 	Events []string
 	Fail   error
@@ -36,9 +36,10 @@ type Store struct {
 
 // Job is a job principal of an organization, or with Kind auth.KindTarget a delivery target.
 type Job struct {
-	OrgID uuid.UUID
-	Name  string
-	Kind  auth.Kind
+	OrgID    uuid.UUID
+	Name     string
+	Kind     auth.Kind
+	Declared bool
 }
 
 var _ repos.Store = (*Store)(nil)
@@ -238,7 +239,7 @@ func (s *Store) Principal(_ context.Context, orgID, principalID uuid.UUID) (repo
 	}
 	if j, ok := s.Jobs[principalID]; ok && j.OrgID == orgID {
 		kind := cmp.Or(j.Kind, auth.KindJob)
-		return repos.Principal{ID: principalID, Kind: kind, DisplayName: j.Name}, nil
+		return repos.Principal{ID: principalID, Kind: kind, DisplayName: j.Name, Declared: j.Declared}, nil
 	}
 	return repos.Principal{}, repos.ErrNotFound
 }
