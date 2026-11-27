@@ -4,7 +4,7 @@
 -- for its head.
 -- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -20,7 +20,7 @@ ORDER BY b.name;
 
 -- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -38,7 +38,7 @@ WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
 -- slug: what may need someone across an organization.
 -- name: OpenBranchesIn :many
 SELECT b.repo_id, rp.slug AS repo_slug, b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -59,7 +59,7 @@ LIMIT @lim;
 -- principals who merged and deleted it; none while a branch of that name is live.
 -- name: DeletedBranch :one
 SELECT b.id, b.name, b.head, b.created_at, b.deleted_at, b.deleted_by, d.display_name AS deleted_by_name,
-    b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    b.merged_head, b.merged_base, b.merged_by, m.display_name AS merged_by_name, b.merged_at
 FROM branches b
 LEFT JOIN principals d ON d.id = b.deleted_by
 LEFT JOIN principals m ON m.id = b.merged_by

@@ -4938,7 +4938,8 @@ paths:
       operationId: getBranchDiff
       summary: >-
         The branch's change as a request to merge into its base: from the merge base of its base's tip and its head
-        to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers
+        to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before
+        its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers
         400 branch.default. It reads the Git server: an installation without one answers 503.
       parameters:
         - $ref: "#/components/parameters/org"
@@ -10659,7 +10660,9 @@ components:
             when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
         baseTip:
           type: string
-          description: A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+          description: >-
+            A branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned
+            from; absent for a commit.
         head:
           type: string
           description: The commit it runs to.
@@ -10689,7 +10692,9 @@ components:
             history with its base, so the diff runs from the empty tree.
         baseTip:
           type: string
-          description: The branch's base's tip, which its merge base is reckoned from.
+          description: >-
+            The branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is
+            reckoned from.
         head:
           type: string
           description: The commit it runs to.

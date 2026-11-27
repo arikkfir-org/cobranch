@@ -88,6 +88,28 @@ func TestCodeStoreBranches(t *testing.T) {
 	}
 }
 
+// TestCodeStoreMergedBranch checks that a merge keeps the default branch's tip it was made onto: a push that moves main
+// from d to stray's e, bringing it in, leaves stray Merged at e, made onto d.
+func TestCodeStoreMergedBranch(t *testing.T) {
+	t.Parallel()
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	p := pushOf(f.website.ID, f.olivia, "", []git.RefUpdate{{Name: "refs/heads/main", Old: f.shaD, New: f.shaE}})
+	p.Brought = []git.Brought{{Branch: git.DefaultBranch, Heads: []git.Head{{Branch: "stray", SHA: f.shaE}}}}
+	if err := f.g.Record(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	f.process(t)
+	got, err := f.c.Branch(ctx, f.website.ID, "stray")
+	if err != nil || got.Merge == nil || got.Merge.Head != f.shaE || got.Merge.Base != f.shaD || got.Merge.By == nil ||
+		got.Merge.By.ID != f.olivia {
+		t.Errorf("Branch(stray) = %+v, %v, want it merged at e onto d by Olivia", got.Merge, err)
+	}
+	if feature, err := f.c.Branch(ctx, f.website.ID, "feature"); err != nil || feature.Merge != nil {
+		t.Errorf("Branch(feature) = %+v, %v, want it never merged", feature.Merge, err)
+	}
+}
+
 // TestCodeStoreOpenBranches checks that the branches that may need someone are those that stand Blocked, Ready or
 // Processing, never main, with their repository and head commit.
 func TestCodeStoreOpenBranches(t *testing.T) {

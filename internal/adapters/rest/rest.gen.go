@@ -2196,7 +2196,7 @@ type Diff struct {
 	// Base The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
 	Base *string `json:"base,omitempty"`
 
-	// BaseTip A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+	// BaseTip A branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned from; absent for a commit.
 	BaseTip *string `json:"baseTip,omitempty"`
 
 	// Deletions The lines it removes, in every file it changes, those it left out included.
@@ -2220,7 +2220,7 @@ type DiffCounts struct {
 	// Base The commit it runs from: a branch's merge base with its base's tip. Absent when the branch shares no history with its base, so the diff runs from the empty tree.
 	Base *string `json:"base,omitempty"`
 
-	// BaseTip The branch's base's tip, which its merge base is reckoned from.
+	// BaseTip The branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned from.
 	BaseTip *string `json:"baseTip,omitempty"`
 
 	// Deletions The lines it removes.
@@ -5652,7 +5652,7 @@ type ServerInterface interface {
 	// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates)
 	ListChatUpdates(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatUpdatesParams)
-	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffParams)
 	// GetBranchDiffCounts How much the branch's diff changes, without its files: the files and lines it adds and removes, counted in full, which the Console shows on the branch's Files changed tab; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
@@ -39818,7 +39818,7 @@ type StrictServerInterface interface {
 	// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates)
 	ListChatUpdates(ctx context.Context, request ListChatUpdatesRequestObject) (ListChatUpdatesResponseObject, error)
-	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(ctx context.Context, request GetBranchDiffRequestObject) (GetBranchDiffResponseObject, error)
 	// GetBranchDiffCounts How much the branch's diff changes, without its files: the files and lines it adds and removes, counted in full, which the Console shows on the branch's Files changed tab; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.

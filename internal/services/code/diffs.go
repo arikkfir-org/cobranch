@@ -127,7 +127,8 @@ type DiffRequest struct {
 }
 
 // BranchDiff is a branch's change: from the merge base of its base's tip and its head to its head, so what its base
-// gained since doesn't show; it takes repo.read. The default branch has no base, and so no diff.
+// gained since doesn't show; a merged branch's, from the tip its merge was made onto, so it still shows what it merged.
+// It takes repo.read. The default branch has no base, and so no diff.
 func (s *Service) BranchDiff(ctx context.Context, v Viewer, repoID uuid.UUID, branch string) (Diff, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.BranchDiff")
 	defer span.End()
@@ -163,7 +164,8 @@ func (s *Service) BranchDiffCounts(ctx context.Context, v Viewer, repoID uuid.UU
 }
 
 // branchDiffRequest is the diff of a branch the viewer reads: from the merge base of its base's tip and its head to its
-// head. The default branch has no base, and answers branch.default.
+// head. A branch that is Merged compares with the tip its merge was made onto instead, as its base's tip now holds its
+// head and would show no change. The default branch has no base, and answers branch.default.
 func (s *Service) branchDiffRequest(ctx context.Context, v Viewer, repoID uuid.UUID, branch string) (DiffRequest, error) {
 	if err := s.read(ctx, v, repoID); err != nil {
 		return DiffRequest{}, err
@@ -176,7 +178,11 @@ func (s *Service) branchDiffRequest(ctx context.Context, v Viewer, repoID uuid.U
 		return DiffRequest{}, &orgs.ValidationError{Field: "branch", Code: "branch.default",
 			Message: "the default branch merges into nothing, so it has no diff"}
 	}
-	return DiffRequest{Base: b.Base, Head: b.Head, MergeBase: true}, nil
+	base := b.Base
+	if b.Merge != nil && b.Merge.Head == b.Head && b.Merge.Base != "" {
+		base = b.Merge.Base
+	}
+	return DiffRequest{Base: base, Head: b.Head, MergeBase: true}, nil
 }
 
 // CommitDiff is a commit's change against its first parent, or against the empty tree when it has none; it takes

@@ -552,7 +552,7 @@ type Diff struct {
 	// Base The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
 	Base *string `json:"base,omitempty"`
 
-	// BaseTip A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+	// BaseTip A branch's base's tip, or a Merged branch's base's tip before its merge, which its merge base is reckoned from; absent for a commit.
 	BaseTip *string `json:"baseTip,omitempty"`
 
 	// Deletions The lines it removes, in every file it changes, those it left out included.
@@ -1606,7 +1606,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
 	ListChatUpdates(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
 	GetBranchDiff(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2351,7 +2351,7 @@ func (c *Client) ListChatUpdates(ctx context.Context, org Org, repo Repo, branch
 	return c.Client.Do(req)
 }
 
-// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 //
 // Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
 func (c *Client) GetBranchDiff(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5612,7 +5612,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
 	ListChatUpdatesWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListChatUpdatesResponse, error)
 
-	// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9766,7 +9766,7 @@ func (c *ClientWithResponses) ListChatUpdatesWithResponse(ctx context.Context, o
 	return ParseListChatUpdatesResponse(rsp)
 }
 
-// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show, or, for a Merged branch, from its base's tip before its merge, so it still shows what it merged; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 //
 // Returns a wrapper object for the known response body format(s).
 //
