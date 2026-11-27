@@ -129,6 +129,9 @@ func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery
 			return nil, err
 		}
 		run.CausedBy = actorOf(r.CausedByID, r.CausedByName, r.CausedByKind)
+		if r.TaskNumber != nil {
+			run.Task = *r.TaskNumber
+		}
 		out = append(out, run)
 	}
 	return out, nil

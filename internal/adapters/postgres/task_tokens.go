@@ -39,7 +39,8 @@ func (s *AuthStore) TaskToken(ctx context.Context, tokenHash []byte) (auth.Crede
 	if err != nil {
 		return auth.Credential{}, auth.User{}, err
 	}
-	grant := auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner, Private: row.Private, ThreadID: orNil(row.ThreadID)}
+	grant := auth.TaskGrant{ID: row.TaskID, OrgID: row.OrgID, AssignerID: assigner, Private: row.Private, ThreadID: orNil(row.ThreadID),
+		Job: row.OfJob}
 	if row.RunRepoID != nil {
 		grant.Run.RepoID = *row.RunRepoID
 		if err := json.Unmarshal(row.RunPermissions, &grant.Run.Permissions); err != nil {

@@ -76,18 +76,22 @@ func TestDispatchAgentRuns(t *testing.T) {
 	}
 }
 
+// agentRunAt is a run of an agent's job, started ten minutes before now, whose task #12 runs, as change makes it.
+func agentRunAt(change func(*runner.AgentRun)) runner.AgentRun {
+	r := runner.AgentRun{Running: runner.Running{ID: id("aaaa"), OrgID: id("0001"), RepoID: id("0002"), Number: 7,
+		StartedAt: now.Add(-10 * time.Minute)}, Task: 12, State: agents.TaskRunning}
+	change(&r)
+	return r
+}
+
 func TestFollowAgentRuns(t *testing.T) {
-	run := func(change func(*runner.AgentRun)) runner.AgentRun {
-		r := runner.AgentRun{Running: runner.Running{ID: id("aaaa"), OrgID: id("0001"), RepoID: id("0002"), Number: 7,
-			StartedAt: now.Add(-10 * time.Minute)}, Task: 12, State: agents.TaskRunning}
-		change(&r)
-		return r
-	}
+	run := agentRunAt
 	tests := []struct {
-		name    string
-		runs    []runner.AgentRun
-		orphans int64
-		want    []string
+		name      string
+		runs      []runner.AgentRun
+		taskEnded bool
+		orphans   int64
+		want      []string
 	}{
 		{name: "a task that works", runs: []runner.AgentRun{run(func(*runner.AgentRun) {})}},
 		{name: "a task that waits to start", runs: []runner.AgentRun{run(func(r *runner.AgentRun) { r.State = agents.TaskQueued })}},
@@ -120,14 +124,15 @@ func TestFollowAgentRuns(t *testing.T) {
 		{name: "past the job's own timeout", runs: []runner.AgentRun{run(func(r *runner.AgentRun) {
 			r.StartedAt, r.Timeout = now.Add(-11*time.Minute), 10*time.Minute
 		})}, want: []string{"cancelled aaaa's task: The job's run timed out after 10m0s.", "failed: timed out after 10m0s"}},
+		{name: "past the timeout, as its task ended meanwhile, left to the next pass", runs: []runner.AgentRun{run(func(r *runner.AgentRun) {
+			r.StartedAt = now.Add(-61 * time.Minute)
+		})}, taskEnded: true},
 		{name: "the tasks of runs that ended", orphans: 2, want: []string{"cancelled 2 orphan tasks"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &store{agentRuns: tt.runs, orphans: tt.orphans, tokens: map[uuid.UUID]time.Time{}}
-			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, authz{}, settings)
-			svc.SetClock(func() time.Time { return now })
-			if err := svc.Follow(context.Background()); err != nil {
+			s := &store{agentRuns: tt.runs, taskEnded: tt.taskEnded, orphans: tt.orphans, tokens: map[uuid.UUID]time.Time{}}
+			if err := followAt(s); err != nil {
 				t.Fatal(err)
 			}
 			if !slices.Equal(s.events, tt.want) {
@@ -135,4 +140,11 @@ func TestFollowAgentRuns(t *testing.T) {
 			}
 		})
 	}
+}
+
+// followAt follows s's runs once, at now.
+func followAt(s *store) error {
+	svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, authz{}, settings)
+	svc.SetClock(func() time.Time { return now })
+	return svc.Follow(context.Background()) //nolint:wrapcheck // a test's own helper
 }

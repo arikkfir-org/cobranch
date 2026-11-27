@@ -107,7 +107,8 @@ func (s *Service) followTasks(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// followTask ends r as its task ended, or once it outlived its timeout, and leaves it running otherwise.
+// followTask ends r as its task ended, or once it outlived its timeout, and leaves it running otherwise. A task that
+// ended since AgentRuns read it ends its run on the next pass, as it ended, rather than as timed out.
 func (s *Service) followTask(ctx context.Context, r AgentRun) error {
 	state, reason := taskOutcome(r)
 	if state == "" {
@@ -116,8 +117,12 @@ func (s *Service) followTask(ctx context.Context, r AgentRun) error {
 			return nil
 		}
 		why := "timed out after " + timeout.String()
-		if err := s.store.CancelTask(ctx, r.ID, "The job's run "+why+"."); err != nil {
+		cancelled, err := s.store.CancelTask(ctx, r.ID, "The job's run "+why+".")
+		switch {
+		case err != nil:
 			return fmt.Errorf("cancelling run %s's task: %w", r.ID, err)
+		case !cancelled:
+			return nil
 		}
 		state, reason = jobs.StateFailed, why
 	}

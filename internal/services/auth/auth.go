@@ -230,6 +230,8 @@ type TaskGrant struct {
 	// ThreadID alone, the thread it talks in; uuid.Nil for a task that talks in none yet.
 	Private  bool
 	ThreadID uuid.UUID
+	// Job is whether the task is a job's run's, which may do nothing once its run ended.
+	Job bool
 	// Run is what the job's run the task is may do while it runs, which caps the task in place of the job's own grants;
 	// zero for a task of no run, and once the run ended.
 	Run RunGrant

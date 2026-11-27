@@ -109,9 +109,11 @@ func (s *RunStore) AgentRuns(ctx context.Context) ([]runner.AgentRun, error) {
 	return out, nil
 }
 
-// CancelTask cancels the run's task unless it ended, as the run's job, for reason (runner.Store).
-func (s *RunStore) CancelTask(ctx context.Context, runID uuid.UUID, reason string) error {
-	return s.db.Everywhere(controllerQueues).Transact(ctx, "cancelling the run's task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+// CancelTask cancels the run's task unless it ended, as the run's job, for reason, and answers whether it did
+// (runner.Store).
+func (s *RunStore) CancelTask(ctx context.Context, runID uuid.UUID, reason string) (bool, error) {
+	cancelled := false
+	err := s.db.Everywhere(controllerQueues).Transact(ctx, "cancelling the run's task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.CancelRunTask(ctx, reason, runID)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -119,8 +121,10 @@ func (s *RunStore) CancelTask(ctx context.Context, runID uuid.UUID, reason strin
 		case err != nil:
 			return fmt.Errorf("cancelling run %s's task: %w", runID, err)
 		}
+		cancelled = true
 		return orgEvent(ctx, q, &row.OrgID, row.JobID, "task.cancelled", row.ID, map[string]any{"number": row.Number})
 	})
+	return cancelled, err //nolint:wrapcheck // Transact names what it was doing
 }
 
 // CancelOrphanTasks cancels the jobs' tasks whose runs ended without them, or are gone, as each one's job, and answers

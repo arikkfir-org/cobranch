@@ -252,7 +252,7 @@ func TestAuthorizerUnderAJobsTaskToken(t *testing.T) {
 	token := func(run auth.RunGrant) context.Context {
 		return auth.WithViewer(context.Background(), auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: agent, Kind: auth.KindAgent}},
 			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent,
-				Task: auth.TaskGrant{ID: uuid.New(), OrgID: org, AssignerID: job, Run: run}}})
+				Task: auth.TaskGrant{ID: uuid.New(), OrgID: org, AssignerID: job, Job: true, Run: run}}})
 	}
 	running := auth.RunGrant{RepoID: repo, Permissions: []string{"annotations.write", "repo.push", "repo.read"}}
 	tests := []struct {
@@ -270,8 +270,8 @@ func TestAuthorizerUnderAJobsTaskToken(t *testing.T) {
 			wantHeld: []string{"org.read", "secrets.read"}, permission: "annotations.write", wantRepos: []uuid.UUID{repo}},
 		{name: "another repository, where the job holds its grants alone", ctx: token(running), scope: auth.ScopeRepository, scopeID: other,
 			wantHeld: []string{"secrets.read"}, permission: "repo.push"},
-		{name: "a run that ended leaves the job's grants", ctx: token(auth.RunGrant{}), scope: auth.ScopeRepository, scopeID: repo,
-			wantHeld: []string{"secrets.read"}, permission: "repo.read"},
+		{name: "a run that ended leaves it nothing, not even the job's grants", ctx: token(auth.RunGrant{}), scope: auth.ScopeRepository,
+			scopeID: repo, permission: "secrets.read"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

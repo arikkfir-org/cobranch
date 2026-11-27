@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/runner"
@@ -116,8 +117,22 @@ func TestRunStoreRunsAnAgentsTask(t *testing.T) {
 		runs[0].State != agents.TaskQueued {
 		t.Errorf("AgentRuns() = %+v, %v, want the run with its queued task", runs, err)
 	}
-	if err := f.r.CancelTask(ctx, run.ID, "The job's run timed out after 1h0m0s."); err != nil {
-		t.Fatal(err)
+	f.checkCancelTask(t, run, task)
+}
+
+// checkCancelTask checks that the run's task, assigned and listed with the run, cancels once, and that it is then no
+// orphan.
+func (f *runFixture) checkCancelTask(t *testing.T, run runner.Run, task agents.Task) {
+	t.Helper()
+	ctx := context.Background()
+	if runs, err := f.c.Runs(ctx, f.website.ID, code.RunsQuery{Limit: 10}); err != nil || len(runs) != 1 || runs[0].Task != task.Number {
+		t.Errorf("Runs() = %+v, %v, want the run with its task's number", runs, err)
+	}
+	if cancelled, err := f.r.CancelTask(ctx, run.ID, "The job's run timed out after 1h0m0s."); !cancelled || err != nil {
+		t.Fatalf("CancelTask() = %t, %v, want true", cancelled, err)
+	}
+	if cancelled, err := f.r.CancelTask(ctx, run.ID, "Again."); cancelled || err != nil {
+		t.Errorf("CancelTask() of a task that ended = %t, %v, want false", cancelled, err)
 	}
 	if runs, err := f.r.AgentRuns(ctx); err != nil || len(runs) != 1 || runs[0].State != agents.TaskCancelled ||
 		runs[0].Reason != "The job's run timed out after 1h0m0s." {
@@ -139,7 +154,7 @@ func (f *runFixture) checkRunGrant(t *testing.T, task agents.Task, run runner.Ru
 	cred, _, err := f.auths.TaskToken(ctx, auth.Hash(secret))
 	want := auth.RunGrant{RepoID: f.website.ID, Permissions: []string{"annotations.write", "repo.push", "repo.read"}}
 	if err != nil || cred.Task.Run.RepoID != want.RepoID || !slices.Equal(cred.Task.Run.Permissions, want.Permissions) ||
-		cred.Task.AssignerID != run.JobID {
+		cred.Task.AssignerID != run.JobID || !cred.Task.Job {
 		t.Errorf("TaskToken() = %+v, %v, want the run's grant %+v", cred.Task, err, want)
 	}
 }

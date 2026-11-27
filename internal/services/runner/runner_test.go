@@ -38,6 +38,8 @@ type store struct {
 	// agents are the agents jobs name, by name, and agentRuns the runs of agents that run.
 	agents    map[string]runner.JobAgent
 	agentRuns []runner.AgentRun
+	// taskEnded is a run's task that ended after AgentRuns read it, which CancelTask then finds ended.
+	taskEnded bool
 	// orphans are how many tasks of ended runs CancelOrphanTasks cancels.
 	orphans int64
 }
@@ -156,9 +158,12 @@ func (s *store) StartTask(_ context.Context, run runner.Run, t runner.RunTask) (
 
 func (s *store) AgentRuns(context.Context) ([]runner.AgentRun, error) { return s.agentRuns, s.fail }
 
-func (s *store) CancelTask(_ context.Context, runID uuid.UUID, reason string) error {
+func (s *store) CancelTask(_ context.Context, runID uuid.UUID, reason string) (bool, error) {
+	if s.taskEnded {
+		return false, nil
+	}
 	s.events = append(s.events, fmt.Sprintf("cancelled %s's task: %s", runID.String()[:4], reason))
-	return nil
+	return true, nil
 }
 
 func (s *store) CancelOrphanTasks(context.Context) (int64, error) {

@@ -89,8 +89,8 @@ type Store interface {
 	StartTask(ctx context.Context, run Run, t RunTask) (bool, error)
 	// AgentRuns lists the runs of jobs that name agents that run, each with where its task stands.
 	AgentRuns(ctx context.Context) ([]AgentRun, error)
-	// CancelTask cancels the run's task, unless it ended, as the run's job, saying why.
-	CancelTask(ctx context.Context, runID uuid.UUID, reason string) error
+	// CancelTask cancels the run's task, unless it ended, as the run's job, saying why, and answers whether it did.
+	CancelTask(ctx context.Context, runID uuid.UUID, reason string) (bool, error)
 	// CancelOrphanTasks cancels the tasks whose runs ended without them, which a member cancelled or a newer run
 	// superseded, each as its run's job, and answers how many.
 	CancelOrphanTasks(ctx context.Context) (int64, error)
