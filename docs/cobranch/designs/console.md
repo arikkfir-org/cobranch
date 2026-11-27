@@ -279,7 +279,7 @@ makes every page live, a group of pages a slice. The organization switcher was f
 | Settings · Secrets | The organization's secrets | `secrets` |
 | Settings · Usage | Repositories and Git data against the limits | `repositories`, `packs`, `organization_limits` |
 | Overview | Its figures over the period | `memberships`, `repositories`, `agents`, `branches`, `pushes`, `issues`, `agent_tasks`, `task_spend`, `job_runs` |
-| Activity | Branches that need the viewer, repositories, agents and their tasks at work, what happened | `branches`, `annotations`, `reviews`, `pushes`, `repositories`, `agents`, `agent_tasks`, `events`, `deliveries` |
+| Activity | Branches that need the viewer, repositories, agents and their tasks at work, what happened | `branches`, `annotations`, `reviews`, `pushes`, `repositories`, `agents`, `agent_tasks`, `deliveries` |
 | Repositories, and the sidebar's | Repositories, each with its branches, main's status and last push | `repositories`, `branches`, `annotations`, `pushes`, `grants` |
 | Agents, an agent's page, Agents · Activity, and the sidebar's agents | Agents, and their tasks | `agents`, `agent_tasks`, `task_spend`, `grants` |
 | Artifacts, and the sidebar's | Artifacts the viewer may list or read | `artifacts`, `grants` |
