@@ -4,7 +4,7 @@
 > page](https://claude.ai/artifact/QcnH4XmDH8BLcGxGkD5U11), linked with Cobranch's other designs; this file is generated
 > from it, with its diagrams, as of 2026-11-27, and synced again once Cobranch's shape settles.
 
-**Status**: Agreed 2026-11-27 · slice 1 shipped · [ENG-293](https://linear.app/arikkfir/issue/ENG-293) · Builds on
+**Status**: Agreed 2026-11-27 · slices 1 and 2 shipped · [ENG-293](https://linear.app/arikkfir/issue/ENG-293), [ENG-295](https://linear.app/arikkfir/issue/ENG-295) · Builds on
 [agents](agents.md#agents) and [the agent’s pod](agents.md#the-agents-pod) · Adds a key to [jobs’
 `/cobranch.yaml`](jobs.md#cobranchyaml) · No new chart value
 
