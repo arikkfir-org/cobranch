@@ -354,6 +354,10 @@ func TestDeleteBranchAPI(t *testing.T) {
 			wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "a weak tag", viewer: olivia, method: "DELETE", path: fixed(feature), header: http.Header{"If-Match": {`W/"` + shaOf("d") + `"`}},
 			wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "the ETag its read answered", viewer: olivia, method: "DELETE", path: fixed(feature), wantStatus: 204,
+			headerFor: func(f *orgFixture) http.Header {
+				return http.Header{"If-Match": {f.call(&f.olivia, "GET", feature, "").Header().Get("Etag")}}
+			}, check: deleted("feature", shaOf("d"), false)},
 		{name: "no If-Match", viewer: olivia, method: "DELETE", path: fixed(feature), wantStatus: 428, wantCode: "precondition.required"},
 		{name: "main is never deleted", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme/repos/website/branches/main"), header: at(shaOf("c")),
 			wantStatus: 409, wantCode: code.DeleteDefault},
@@ -397,5 +401,43 @@ func TestDeletedBranchAPI(t *testing.T) {
 			wantStatus: 404, wantCode: "branch.not_found"},
 		{name: "a Member who doesn't read it finds no repository", viewer: withOld(maxim), method: "GET", path: fixed(old),
 			wantStatus: 404, wantCode: "repository.not_found"},
+	})
+}
+
+// repositoryLists are what website's Branches tab, a branch's page with its head's annotations and reviews, main's
+// Commits and the Jobs tab read, which a read may wait on.
+var repositoryLists = []string{"/v1/orgs/acme/repos/website/branches", "/v1/orgs/acme/repos/website/branches/feature",
+	"/v1/orgs/acme/repos/website/commits/" + shaOf("d") + "/annotations", "/v1/orgs/acme/repos/website/commits/" + shaOf("d") + "/reviews",
+	"/v1/orgs/acme/repos/website/commits?branch=main", "/v1/orgs/acme/repos/website/runs"}
+
+func TestRepositoryListsTagged(t *testing.T) {
+	for _, list := range repositoryLists {
+		t.Run(list, func(t *testing.T) {
+			stale := http.Header{"If-None-Match": {`"stale"`}}
+			wait := "&wait="
+			if !strings.Contains(list, "?") {
+				wait = "?wait="
+			}
+			runOrgCases(t, []orgCase{
+				{name: "tagged", viewer: withRuns(olivia), method: "GET", path: fixed(list), wantStatus: 200, wantTag: `"`},
+				{name: "still the list the caller holds", viewer: withRuns(olivia), method: "GET", path: fixed(list), wantStatus: 304, wantTag: `"`,
+					headerFor: held(olivia, fixed(list))},
+				{name: "a wait that sees no change", viewer: withRuns(olivia), method: "GET", path: fixed(list + wait + "1"), wantStatus: 304,
+					wantTag: `"`, headerFor: held(olivia, fixed(list))},
+				{name: "another list", viewer: withRuns(olivia), method: "GET", path: fixed(list + wait + "15"), header: stale, wantStatus: 200, wantTag: `"`},
+				{name: "a wait without a tag answers at once", viewer: withRuns(olivia), method: "GET", path: fixed(list + wait + "15"), wantStatus: 200},
+				{name: "a wait past 15 seconds", viewer: withRuns(olivia), method: "GET", path: fixed(list + wait + "16"), header: stale,
+					wantStatus: 400, wantCode: "wait.invalid"},
+				{name: "a wait by a Member who doesn't read it", viewer: withRuns(maxim), method: "GET", path: fixed(list + wait + "1"), header: stale,
+					wantStatus: 404, wantCode: "repository.not_found"},
+			})
+		})
+	}
+}
+
+func TestRepositoryWaitGone(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "a branch that doesn't live", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/gone?wait=1"),
+			header: http.Header{"If-None-Match": {`"` + shaOf("d") + `-x"`}}, wantStatus: 404, wantCode: "branch.not_found"},
 	})
 }

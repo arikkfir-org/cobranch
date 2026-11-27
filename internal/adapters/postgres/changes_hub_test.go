@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/secrets"
@@ -172,6 +173,12 @@ func pageChanges() []settingsChange {
 			_, err := f.pool.Exec(ctx, "INSERT INTO packs (repo_id, org_id, name, upload, size, objects) VALUES ($1, $2, 'pack-1', $3, 10, 1)",
 				f.website.ID, f.acme.ID, uuid.New())
 			must(t, err)
+			return []uuid.UUID{f.acme.ID, f.website.ID}
+		}},
+		{name: "an issue created", change: func(ctx context.Context, t *testing.T, f *settingsFixture) []uuid.UUID {
+			_, err := NewIssueStore(f.pool).Create(ctx, f.olivia, issues.Issue{ID: v7(), OrgID: f.acme.ID, Title: "Safari", State: issues.StateTodo,
+				CreatedBy: &issues.Principal{ID: f.olivia}, CreatedAt: now, UpdatedAt: now, Version: 1})
+			must(t, err)
 			return []uuid.UUID{f.acme.ID}
 		}},
 	}
@@ -188,7 +195,8 @@ func TestOrganizationPagesChangesHub(t *testing.T) {
 }
 
 // TestOrganizationPagesNotify checks that each table whose rows the organization's live pages show notifies its
-// organization when a row changes, as the tables Settings · Models shows do.
+// organization when a row changes, as the tables Settings · Models shows do, and each whose rows a repository's pages
+// show its repository too.
 func TestOrganizationPagesNotify(t *testing.T) {
 	t.Parallel()
 	f := newOrgFixture(t)
@@ -202,11 +210,62 @@ func TestOrganizationPagesNotify(t *testing.T) {
 		defs[table] = def
 	}
 	must(t, rows.Err())
-	for _, table := range []string{"repositories", "branches", "annotations", "pushes", "reviews", "issues", "agent_tasks", "task_spend",
-		"job_runs", "deliveries", "artifacts", "packs", "organization_limits"} {
+	const org, repo = "notify_changes('org_id')", "notify_changes('org_id', 'repo_id')"
+	for table, want := range map[string]string{"repositories": org, "branches": repo, "annotations": repo, "pushes": repo, "reviews": repo,
+		"issues": org, "branch_issues": "notify_branch_issue_changes()", "agent_tasks": org, "task_spend": org, "job_runs": repo, "deliveries": repo, "artifacts": org,
+		"packs": repo, "organization_limits": org} {
 		def := defs[table]
-		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, "notify_changes('org_id')") {
-			t.Errorf("table %s's trigger notify_changes = %q; want one after every change naming org_id", table, def)
+		if !strings.Contains(def, "AFTER INSERT OR DELETE OR UPDATE") || !strings.Contains(def, want) {
+			t.Errorf("table %s's trigger notify_changes = %q; want one after every change, %s", table, def, want)
+		}
+	}
+}
+
+// TestBranchIssuesNotify checks that linking a branch to an issue, or unlinking it, names the branch's repository as
+// well as its organization, since a branch's page shows the issue its branch works on.
+func TestBranchIssuesNotify(t *testing.T) {
+	t.Parallel()
+	f := newRepoFixture(t)
+	branch := uuid.New()
+	_, err := f.pool.Exec(context.Background(), `INSERT INTO branches (id, org_id, repo_id, name, head, created_at, updated_at)
+		VALUES ($1, $2, $3, 'fix', $4, now(), now())`, branch, f.acme.ID, f.website.ID, strings.Repeat("a", 40))
+	must(t, err)
+	// The steps share the branch: the link the first makes, the second removes.
+	for _, step := range []struct {
+		name string
+		sql  string
+	}{
+		{"a branch linked", "INSERT INTO branch_issues (branch_id, org_id, linked_by) VALUES ($1, $2, 'hand')"},
+		{"a branch unlinked", "DELETE FROM branch_issues WHERE branch_id = $1 AND org_id = $2"},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			hearNotified(t, f, step.sql, []any{branch, f.acme.ID}, f.acme.ID, f.website.ID)
+		})
+	}
+}
+
+// hearNotified listens on channel cobranch_changes, runs the change sql makes with args, and checks that the channel then
+// names each of want, or fails after a few seconds.
+func hearNotified(t *testing.T, f *repoFixture, sql string, args []any, want ...uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := f.pool.Acquire(ctx)
+	must(t, err)
+	defer conn.Release()
+	_, err = conn.Exec(ctx, "LISTEN cobranch_changes")
+	must(t, err)
+	_, err = f.pool.Exec(ctx, sql, args...)
+	must(t, err)
+	heard := map[string]bool{}
+	waiting, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	for _, id := range want {
+		for !heard[id.String()] {
+			n, err := conn.Conn().WaitForNotification(waiting)
+			if err != nil {
+				t.Fatalf("heard %v, then %v; want %v", heard, err, want)
+			}
+			heard[n.Payload] = true
 		}
 	}
 }

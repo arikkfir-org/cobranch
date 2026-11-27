@@ -5,6 +5,7 @@ import { h } from "./dom.js";
 import { fromNow, plural, shortSha, size, subject, whenExactly } from "./format.js";
 import { failure, field, input, textarea } from "./forms.js";
 import { authorAvatar, icon, principalAvatar } from "./icons.js";
+import { readTagged } from "./live.js";
 import { rendered } from "./markdown.js";
 import { popover } from "./menu.js";
 import { go } from "./router.js";
@@ -14,21 +15,23 @@ import { base, config } from "./state.js";
 // and the path, a directory's latest commit, its entries beside the commits that last changed them, and its README;
 // or a file's card, with its lines, its rendered Markdown, its image, or why it isn't shown. Its URL's parts after
 // tree/ or blob/ are a ref, then a path: the longest branch or tag name they start with, or else their first part, a
-// commit's full name. A repository nothing was pushed to says so, with the command that clones it.
-export async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
-  const { branches, tags } = await refs(path);
+// commit's full name. A repository nothing was pushed to says so, with the command that clones it. On a branch, it
+// follows the branches with follow(path, tag), so that a push to it shows.
+export async function repositoryFiles(org, repo, path, at, isFile, rest, can, follow) {
+  const { branches, tags, tag } = await refs(path);
   if (!branches.length) return [noFiles(org, repo)];
   const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
   const toolbar = h("div", { class: "files-toolbar" }, refPicker(branches, tags, ref, (r) => (isFile ? at.blob(r, file) : at.tree(r, file))),
     filePath(repo, at, ref, file), goToFile(path, at, ref, isFile ? file.split("/").slice(0, -1).join("/") : file));
   const onBranch = branches.some((b) => b.name === ref) ? ref : null;
+  if (onBranch) follow(path + "/branches", tag);
   const shown = isFile ? await repositoryFile(repo, path, at, ref, file, onBranch, can) : await repositoryTree(repo, path, at, ref, file);
   return [toolbar, ...shown];
 }
 
-// refs reads the repository's branches and tags.
-const refs = (path) => Promise.all([api("GET", path + "/branches"), api("GET", path + "/tags")])
-  .then(([b, t]) => ({ branches: b.branches, tags: t.tags }));
+// refs reads the repository's branches, with their ETag, and its tags.
+const refs = (path) => Promise.all([readTagged(path + "/branches"), api("GET", path + "/tags")])
+  .then(([b, t]) => ({ branches: b.data.branches, tag: b.tag, tags: t.tags }));
 
 // filesBranch is the branch whose files the parts of a directory's or a file's URL show, or null for a tag's or a
 // commit's: the conversation pane shows its chat (lib/pane.js).

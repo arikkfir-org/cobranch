@@ -15,6 +15,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/live"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -85,6 +86,7 @@ type Service struct {
 	authz    *auth.Authorizer
 	agents   Agents
 	tasks    Tasks
+	notifier live.Notifier
 	now      func() time.Time
 }
 

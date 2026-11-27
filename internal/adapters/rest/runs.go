@@ -53,13 +53,10 @@ func runTag(r code.Run) string {
 	return `"` + strconv.FormatInt(r.Version, 10) + `"`
 }
 
-// ListRuns lists a page of the repository's runs, and links the next.
+// ListRuns lists a page of the repository's runs, and links the next, or 304 while the caller holds that page, after
+// waiting for it to change as wait asks.
 func (a api) ListRuns(ctx context.Context, req ListRunsRequestObject) (ListRunsResponseObject, error) {
-	v, err := viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	v, repo, waits, err := a.codeList(ctx, req.Org, req.Repo, req.Params.Wait, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -67,25 +64,37 @@ func (a api) ListRuns(ctx context.Context, req ListRunsRequestObject) (ListRunsR
 	if err != nil {
 		return nil, err
 	}
-	page, err := a.code.Runs(ctx, v, repo.ID, q)
-	if err != nil {
-		return nil, fail(err, "repository")
-	}
-	out := ListRuns200JSONResponse{}
-	out.Body.Runs = make([]Run, 0, len(page.Runs))
-	out.Body.Total = page.Total
-	for _, r := range page.Runs {
-		shown, err := run(r)
-		if err != nil {
-			return nil, err
+	return readList(ctx, waits, func(ctx context.Context) (code.RunPage, error) {
+		page, err := a.code.Runs(ctx, v, repo.ID, q)
+		return page, fail(err, "repository")
+	}, func(ctx context.Context) (<-chan code.RunPage, error) {
+		pages, err := a.code.FollowRuns(ctx, v, repo.ID, q)
+		return pages, fail(err, "repository")
+	}, func(page code.RunPage) (ListRunsResponseObject, bool, error) {
+		out := ListRuns200JSONResponse{}
+		out.Body.Runs = make([]Run, 0, len(page.Runs))
+		out.Body.Total = page.Total
+		for _, r := range page.Runs {
+			shown, err := run(r)
+			if err != nil {
+				return nil, false, err
+			}
+			out.Body.Runs = append(out.Body.Runs, shown)
 		}
-		out.Body.Runs = append(out.Body.Runs, shown)
-	}
-	if page.Next != 0 {
-		link := `<?` + runsNext(req.Params, page.Next).Encode() + `>; rel="next"`
-		out.Headers.Link = &link
-	}
-	return out, nil
+		if page.Next != 0 {
+			link := `<?` + runsNext(req.Params, page.Next).Encode() + `>; rel="next"`
+			out.Headers.Link = &link
+		}
+		etag, err := bodyTag("runs", out.Body, out.Headers.Link)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches(req.Params.IfNoneMatch, etag) {
+			return ListRuns304Response{Headers: ListRuns304ResponseHeaders{ETag: etag}}, true, nil
+		}
+		out.Headers.ETag = etag
+		return out, false, nil
+	})
 }
 
 // runsQuery is the page of runs p asks for: its filters, where it starts and how long it is.
