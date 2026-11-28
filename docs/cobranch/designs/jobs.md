@@ -376,7 +376,7 @@ A grant can name one secret and reach only it, as a cloud’s IAM policy set on 
 - **A job is granted once it is a principal,** from its first queued run: the repository's Secrets tab lists its jobs,
   and a run that names a secret its job may not read fails, naming it, until someone grants it.
 - **Checked at the start of every run.** The controller opens each secret the job names, if the job holds `secrets.read`
-  on it, and writes them into the run's Secret; otherwise the run fails, naming the secret, before anything runs.
+  on it, and writes them into the run's Secret; otherwise the run fails, naming the secret, before anything runs. The failure names it by its name and where it lives (the organization, or which repository), what the job takes it as, and where a grant reaches it, for every reader of the repository, though only those holding `secrets.manage` list the secrets; one that is gone is named by its ID.
 
 ## The chart
 

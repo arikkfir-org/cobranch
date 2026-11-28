@@ -263,7 +263,7 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   a replica claims a queued task `FOR UPDATE SKIP LOCKED` under a lease kept in `agent_task_pods`, prepares the
   organization's namespace, opens the provider's key and the agent's secrets through the same call runs use, issues the
   task a token, creates its pod, `task-<id>-1`, labelled `cobranch.dev/task` and never `cobranch.dev/run`, then the
-  pod's Secret, and marks the task Running. A task that can't start fails, naming why; one the quota refuses waits for
+  pod's Secret, and marks the task Running. A task that can't start fails, naming why (a secret its agent may not read by its name and where it lives, and what the agent does with it); one the quota refuses waits for
   room, as a run does.
 - **One pod per task, for as long as the task lives.** A task can take hours and many turns of conversation; its pod
   keeps its workspace meanwhile. Two tasks never share a pod, so one assigner's work never leaks into another's.

@@ -307,7 +307,7 @@ completions) and when its cluster created it, which the Console shows as its Rea
 
 - **A target is a principal,** one per name in a repository, so the audit log reads "target `production` of `acme/api`".
 - **It holds no role**, only Secret reader on the secret its `cluster` names, granted by a principal with
-  `org.grants.manage`. A delivery whose target may not read its secret fails before rendering, naming the secret.
+  `org.grants.manage`. A delivery whose target may not read its secret fails before rendering, naming the secret by its name and where it lives (the organization, or which repository), for every reader of the repository: a failure is how whoever must grant the secret finds it. A secret that is gone is named by the ID `cluster` gives.
 - **Its token** `cbd_…` reads its repository, to check the commit out, and uploads its delivery's manifests, once: the
   render pod can't set annotations, read another repository or call any other API.
 
