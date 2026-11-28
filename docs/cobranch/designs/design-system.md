@@ -211,13 +211,16 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 - An icon never stands alone for a state: it sits beside a word, or carries a tooltip when space is short (icon
   buttons).
+- In progress moves: `loader-circle` spins wherever it shows, one turn a second, every spinner on a page in step, and
+  stands still for whoever asks their system for reduced motion (its description in the file; `.icon-spin` in
+  `components.css`). No other icon moves.
 - One icon, one meaning across the product. The fixed ones:
 
 | Meaning | Icon |
 | --- | --- |
 | Branch, merge, commit | `git-branch`, `git-merge`, `git-commit-horizontal` |
 | Repository | `folder-git-2` |
-| Processing, in progress | `loader-circle` |
+| Processing, in progress | `loader-circle`, spinning |
 | Success, ready | `circle-check` |
 | Failed | `circle-x` |
 | Blocked | `octagon-alert` |

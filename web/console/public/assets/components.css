@@ -20,6 +20,11 @@
 .icon { display: inline-flex; flex: none; color: var(--tone-fg, currentColor); vertical-align: -3px; }
 .icon svg { width: var(--size-icon-sm); height: var(--size-icon-sm); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .icon svg * { vector-effect: non-scaling-stroke; }
+/* icon/loader-circle spins, a turn a second, while it shows (icon() sets its phase); it stands still for whoever asks
+   for less motion. */
+.icon-spin svg { animation: icon-spin 1s linear var(--spin-phase, 0s) infinite; }
+@keyframes icon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .icon-spin svg { animation: none; } }
 
 /* Button: Secondary unless a style says otherwise (Primary, Ghost, Danger); Medium unless Small. One Primary per view.
    Secondary is .btn alone, so .btn-secondary, which says so, changes nothing. */
