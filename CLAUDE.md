@@ -100,7 +100,9 @@
   (`web/console/tools/`): never edit it by hand, and a pull request that changes it names the Figma change it carries.
   Each Figma component maps to one class of the Console's component stylesheet, named after it (`Badge/Quiet` is
   `.badge-quiet`); a page composes those classes and writes no component CSS of its own. A page group is done when
-  the Console matches its Figma screen at 1440 wide, light and dark, shown side by side in the pull request. When
+  the Console matches its Figma screen at 1440 wide, light and dark, shown side by side in the pull request,
+  each screenshot opening at full size when clicked (https://docs.dev.kfirs.com/CONTRIBUTING.md, "Images at full
+  size"). When
   the code needs what the file lacks (a state, an empty or error screen), the file gets it first; a forced divergence
   is said in the pull request and corrected in the file in the same unit of work.
 - Cobranch's pages are in `docs/cobranch/`, published to the docs site under `cobranch/`: snapshots of the designs in
