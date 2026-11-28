@@ -25,9 +25,19 @@ function took(a) {
   return parts.map(([n, unit], i) => (i && unit !== "h" ? String(n).padStart(2, "0") : n) + unit).join(" ");
 }
 
-// commitAnnotations is the card of a commit's annotations (Annotation row): each its status, name and summary, the
-// principal that set it, how long its run took and a link to its details, and Delete for a viewer who may.
-export function commitAnnotations(path, c, can, fail) {
+// annotationName is an annotation's name in its row, linking to its page: the Console's, which pageOf answers for a job's
+// or a target's annotation, else its link, else none.
+function annotationName(a, pageOf) {
+  const page = pageOf(a);
+  if (page) return h("a", { class: "row-title", href: page, "data-nav": "" }, a.name);
+  if (a.link) return h("a", { class: "row-title", href: a.link, target: "_blank", rel: "noopener noreferrer" }, a.name);
+  return h("code", { class: "row-title" }, a.name);
+}
+
+// commitAnnotations is the card of a commit's annotations (Annotation row, Details off): each its status, its name,
+// linking to its page (annotationName), its summary, the principal that set it and how long its run took, and Delete
+// for a viewer who may.
+export function commitAnnotations(path, c, can, fail, pageOf = () => null) {
   const deletable = (a) => can("annotations.delete_any") || (can("annotations.write") && a.principal && a.principal.id === me.id);
   // It deletes the version it shows: one changed meanwhile is refused, saying so.
   const remove = (a) => api("DELETE", path + "/commits/" + c.sha + "/annotations/" + encodeURIComponent(a.name), undefined, { "If-Match": `"${a.version}"` })
@@ -35,10 +45,9 @@ export function commitAnnotations(path, c, can, fail) {
   const row = (a) => {
     const s = annotationStatuses[a.status];
     return h("li", { class: "annotation-row" }, h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)),
-      h("code", { class: "row-title" }, a.name), h("span", { class: "row-description", title: a.summary || null }, a.summary || ""),
+      annotationName(a, pageOf), h("span", { class: "row-description", title: a.summary || null }, a.summary || ""),
       a.principal ? principalAvatar(a.principal) : null,
       h("span", { class: "row-aside", title: (a.principal ? a.principal.displayName : "A principal since gone") + " · started " + whenExactly(a.startedAt) }, took(a)),
-      a.link ? h("a", { href: a.link, target: "_blank", rel: "noopener noreferrer" }, "Details") : null,
       deletable(a) ? h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Delete " + a.name, title: "Delete " + a.name,
         onclick: () => confirm("Delete annotation " + a.name + " of " + c.sha.slice(0, 7) + "?") && remove(a) }, icon("trash-2")) : null);
   };

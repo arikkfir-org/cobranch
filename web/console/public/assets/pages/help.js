@@ -218,9 +218,9 @@ function patterns() {
   const toned = (el, tone) => { el.classList.add("tone-" + tone); return el; };
   const text = (title, meta, cls = "row-title") => h("div", { class: "row-text" }, h("span", { class: cls }, title), h("span", { class: "row-meta" }, meta));
   const ghost = (glyph, label) => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label }, icon(glyph));
-  const annotation = (s) => h("li", { class: "annotation-row" }, h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)), h("span", { class: "row-title" }, "ci/test"),
+  const annotation = (s) => h("li", { class: "annotation-row" }, h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)), h("a", { class: "row-title", href: "#" }, "ci/test"),
     h("span", { class: "row-description" }, "412 tests passed"), h("span", { class: "avatar avatar-machine", role: "img", "aria-label": "A job" }, icon("cog")),
-    h("span", { class: "row-aside" }, "1m 12s"), h("a", { href: "#" }, "Details"));
+    h("span", { class: "row-aside" }, "1m 12s"));
   return section("Patterns", "Rows that recur across screens, composed from the components above. Lists are rows on bg/surface inside a border/default card with radius/lg; each row is divided by border/subtle.",
     [["Commit row", ".commit-row"], ["Annotation row", ".annotation-row"], ["Branch row", ".branch-row"], ["Repository row", ".repository-row"], ["Issue row", ".issue-row"], ["Member row", ".member-row"], ["the list", ".list .row-text .row-title .row-meta"],
       ["Section header", ".section-header .section-header-title .section-header-description"], ["Filters", ".filters .filters-count"], ["Card/Row", ".card-row .card-row-text .card-row-title .card-row-meta .card-row-actions .card-row-label"],

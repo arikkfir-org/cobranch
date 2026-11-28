@@ -203,13 +203,14 @@ function manualRow(path, at, b, job, can, fail) {
 export const noRuns = (glyph, title, text, action = null) => h("section", { class: "card empty-centred" }, h("div", { class: "empty" },
   h("div", { class: "empty-icon" }, icon(glyph)), h("h2", { class: "empty-title" }, title), h("p", { class: "empty-description" }, text), action));
 
-// runRow is a run's row in the Jobs table: its job and number, linking to its page; its branch, or tag; its commit;
-// its status; when it started, or was queued while it waits; how long it ran; and who caused it.
+// runRow is a run's row in the Jobs table: its job and number, linking to its page; its branch, linking to its page,
+// or tag; its commit; its status; when it started, or was queued while it waits; how long it ran; and who caused it.
 const runRow = (at, r) => {
   const ref = r.ref.replace(/^refs\/(heads|tags)\//, "");
   return h("tr", {},
     h("td", { class: "cell-mono" }, h("a", { href: at.run(r.number), "data-nav": "" }, r.job.displayName + " #" + r.number)),
-    h("td", { class: "cell-mono", title: r.ref.startsWith("refs/tags/") ? "Tag " + ref : ref }, ref),
+    h("td", { class: "cell-mono", title: r.ref.startsWith("refs/tags/") ? "Tag " + ref : ref },
+      r.ref.startsWith("refs/heads/") ? h("a", { href: at.branchPage(ref), "data-nav": "" }, ref) : ref),
     h("td", { class: "cell-mono" }, h("a", { href: at.commit(r.sha), "data-nav": "", title: r.sha }, shortSha(r.sha))),
     h("td", {}, runStatus(r)),
     h("td", { class: "cell-muted", title: whenExactly(r.startedAt || r.queuedAt) }, since(r.startedAt || r.queuedAt)),

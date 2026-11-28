@@ -547,11 +547,9 @@ a.row-title { text-decoration: none; }
 a.row-title:hover { text-decoration: underline; }
 /* Commit row: author, message over who and when, its annotations as icons, the short SHA and a copy button. */
 .commit-row .row-icons { display: inline-flex; gap: var(--space-4); }
-/* Annotation row: status icon, name, what it found, who made it, how long it took and a link to its details, or, for a
-   job's run, its name links to the run instead (Details off). */
+/* Annotation row: status icon, name, linking to its page, what it found, who made it and how long it took. */
 .annotation-row .row-title { flex: none; }
 .annotation-row .row-description { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-muted); font: var(--text-body-small); text-overflow: ellipsis; white-space: nowrap; }
-.annotation-row a:not(.row-title) { color: var(--color-fg-link); font: var(--text-body-small); text-decoration: none; }
 /* Branch row: the branch's name in mono over its base and freshness, its status, author and chat. */
 .branch-row .row-title { font: var(--text-code-medium); }
 .branch-row .icon, .repository-row > .icon, .issue-row .row-branch .icon { color: var(--color-fg-muted); }

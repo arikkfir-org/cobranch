@@ -64,8 +64,11 @@ export async function issueChoices(org) {
 export const labelTones = { gray: "neutral", blue: "info", green: "success", yellow: "warning", red: "danger" };
 // labelTag is a label as a Tag in its colour's tone.
 export const labelTag = (l) => h("span", { class: "tag tone-" + labelTones[l.color], title: l.description || l.name }, l.name);
-// person is a principal as a Person cell or fact shows them: their avatar, an agent's its own, and their name.
-const person = (p, agentIds) => h("span", { class: "cell-person" }, avatar(p.displayName, agentIds.has(p.id)), p.displayName);
+// person is a principal as a Person cell or fact shows them: their avatar, an agent's its own, and their name, an
+// agent's linking to its page in org.
+const person = (p, agentIds, org) => agentIds.has(p.id)
+  ? h("a", { class: "cell-person", href: base + org.slug + "/agents/" + p.id, "data-nav": "" }, avatar(p.displayName, true), p.displayName)
+  : h("span", { class: "cell-person" }, avatar(p.displayName, false), p.displayName);
 // item is a Menu item that checks one choice of several (radio) or toggles one (checkbox), and runs pick; its word
 // may be a node, such as a label's Tag.
 export const item = (word, checked, pick, lead, role = "menuitemradio") => h("button", { class: "menu-item", type: "button", role, "aria-checked": String(checked), onclick: pick },
@@ -225,12 +228,14 @@ function asked(params, { members, agents, repositories, labels }) {
 const nothing = () => h("span", { class: "cell-unassigned" }, "–");
 
 // issueRow is an issue's row in list's table: its state, key, title and labels, its repository unless the list is
-// a repository's, its assignee, the live branch linked to it last, and when it last changed.
+// a repository's, its assignee, the live branch linked to it last, and when it last changed; each of them that has a
+// page links to it.
 const issueRow = (list, i, agentIds) => h("tr", {},
   h("td", {}, h("span", { class: "cell-issue" }, stateIcon(i.state), h("code", {}, i.identifier),
     h("a", { href: base + issuePath(list.org, i).slice(1), "data-nav": "" }, i.title), i.labels.map(labelTag))),
-  list.repository ? null : i.repository ? h("td", { class: "cell-mono col-repository" }, i.repository.slug) : h("td", { class: "col-repository" }, nothing()),
-  h("td", {}, i.assignee ? person(i.assignee, agentIds) : h("span", { class: "cell-unassigned" }, "Unassigned")),
+  list.repository ? null : i.repository ? h("td", { class: "cell-mono col-repository" }, h("a", { href: base + list.org.slug + "/" + i.repository.slug, "data-nav": "" }, i.repository.slug))
+    : h("td", { class: "col-repository" }, nothing()),
+  h("td", {}, i.assignee ? person(i.assignee, agentIds, list.org) : h("span", { class: "cell-unassigned" }, "Unassigned")),
   i.branch ? h("td", { class: "cell-mono col-branch" }, h("a", { href: branchHref(list.org, i.branch.repository.slug, i.branch.name), "data-nav": "" }, i.branch.name))
     : h("td", { class: "col-branch" }, nothing()),
   h("td", { class: "cell-muted col-updated", title: whenExactly(i.updatedAt) }, since(i.updatedAt)));
