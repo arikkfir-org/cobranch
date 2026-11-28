@@ -74,10 +74,19 @@ const iconPaths = {
   "unlink": '<path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><line x1="8" x2="8" y1="2" y2="5"/><line x1="2" x2="5" y1="8" y2="8"/><line x1="16" x2="16" y1="19" y2="22"/><line x1="19" x2="22" y1="16" y2="16"/>',
   "menu": '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
 };
-// icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone.
+// spinning are the icons that turn while they show, as icon/loader-circle says: in progress is a state that moves.
+const spinning = new Set(["loader-circle"]);
+// spinMillis is one turn of a spinning icon, as .icon-spin in components.css takes it.
+const spinMillis = 1000;
+
+// icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone. A spinning
+// icon starts at the turn the clock is at, so every spinner on a page turns together, and a live page that redraws
+// one doesn't make it jump back.
 export function icon(name, label) {
-  const el = h("span", { class: "icon", role: label ? "img" : null, "aria-label": label || null, "aria-hidden": label ? null : "true", title: label || null });
+  const spin = spinning.has(name);
+  const el = h("span", { class: spin ? "icon icon-spin" : "icon", role: label ? "img" : null, "aria-label": label || null, "aria-hidden": label ? null : "true", title: label || null });
   el.innerHTML = '<svg viewBox="0 0 24 24">' + iconPaths[name] + "</svg>";
+  if (spin) el.style.setProperty("--spin-phase", -(Date.now() % spinMillis) + "ms");
   return el;
 }
 // badgeOf is a value as a badge, as one of the tables above draws it.
