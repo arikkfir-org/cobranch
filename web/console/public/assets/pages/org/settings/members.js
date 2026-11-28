@@ -4,9 +4,9 @@ import { h } from "../../../lib/dom.js";
 import { failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, when } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
-import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
+import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
-import { roleSelect, rolesMenu } from "../../../lib/organization.js";
+import { changeRoles, roleSelect, rolesMenu } from "../../../lib/organization.js";
 import { base, me, roles } from "../../../lib/state.js";
 import { recount } from "../../../lib/tabs.js";
 
@@ -21,13 +21,21 @@ const joined = (at) => "Joined " + new Date(at).toLocaleDateString(undefined, { 
 // showMembers lists the organization's members, and, for a viewer with org.members.manage, the people it invited, who
 // show among them until they accept, and the requests to join above them; with org.grants.manage each member's roles
 // change from their row. It follows those lists while it shows, and draws itself again once one changes, here or
-// elsewhere.
-async function showMembers(org, main, can, actions) {
+// elsewhere; failed is what went wrong when the change that drew it failed.
+async function showMembers(org, main, can, actions, failed = null) {
   const manage = can("org.members.manage");
   const grants = can("org.grants.manage");
   const error = failure();
+  if (failed) error.fail(failed);
   const refresh = () => showMembers(org, main, can, actions);
-  const act = (call) => call.then(refresh).catch(error.fail);
+  // act makes a change, then draws the page again with what was saved and what failed, if anything, and answers once
+  // it has; the page doesn't follow its lists meanwhile, as a draw then would replace the banner the failure shows on.
+  let saving = false;
+  const still = () => error.el.isConnected && !saving;
+  const act = (call) => {
+    saving = true;
+    return call.then(() => null, (err) => err).then((err) => showMembers(org, main, can, actions, err)).catch(error.fail);
+  };
   const lists = ["/orgs/" + org.slug + "/members", ...(manage ? ["/orgs/" + org.slug + "/invitations", "/orgs/" + org.slug + "/join-requests"] : [])];
   const read = await Promise.all(lists.map((path) => readTagged(path)));
   const members = read[0].data.members;
@@ -41,7 +49,8 @@ async function showMembers(org, main, can, actions) {
   const rolesButton = (m) => {
     if (!grants) return h("span", { class: "row-aside" }, m.roles.map((r) => r.name).join(", ") || "No role");
     const path = "/orgs/" + org.slug + "/members/" + m.userId + "/roles";
-    return rolesMenu(m.roles, "The roles " + m.displayName + " holds", (r, held) => act(held ? api("DELETE", path + "/" + r.id) : api("POST", path, { roleId: r.id })));
+    return rolesMenu(m.roles, "The roles " + m.displayName + " holds", (granted, revoked) =>
+      act(changeRoles(granted, revoked, (r) => api("POST", path, { roleId: r.id }), (r) => api("DELETE", path + "/" + r.id))));
   };
   // more is a row's menu of what else the viewer may do with it, or nothing when there is none.
   const more = (label, items) => {
@@ -85,7 +94,7 @@ async function showMembers(org, main, can, actions) {
   main.replaceChildren(error.el, ...requests.map(requestBanner),
     h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), counted),
     list, none);
-  followLists(lists.map((path, i) => [path, read[i].tag]), () => error.el.isConnected, () => keepingFilter(refresh).catch(error.fail));
+  followLists(lists.map((path, i) => [path, read[i].tag]), still, () => drawAgain(refresh, still));
 }
 
 // invite asks for an email and a role, and invites them: the invitee accepts it once they sign in with that email,

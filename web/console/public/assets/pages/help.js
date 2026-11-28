@@ -6,6 +6,7 @@ import { bars, day, stat } from "../lib/figures.js";
 import { markCode } from "../lib/codemarks.js";
 import { copyField, textarea } from "../lib/forms.js";
 import { icon } from "../lib/icons.js";
+import { checkButton } from "../lib/menu.js";
 import { reviewStates } from "../lib/reviews.js";
 import { base } from "../lib/state.js";
 import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
@@ -136,13 +137,16 @@ function tabs() {
 
 function menus() {
   const item = (glyph, label, extra = {}, ...after) => h("button", { class: "menu-item", type: "button", role: "menuitem", ...extra }, icon(glyph), label, ...after);
-  return section("Menus", "Menus hold secondary actions behind a button or a right click. Items are 32px, icon then label then an optional shortcut. Destructive items come last, after a divider, in danger colour.",
+  // several is a check button over three roles whose save only pauses, so the specimen shows its saving state.
+  const several = checkButton({ choices: ["Owner", "Member", "Release manager"].map((name, i) => ({ id: name, name, checked: i === 1 })), empty: "No role",
+    save: () => new Promise((resolve) => setTimeout(resolve, 1500)), "aria-label": "Roles: change them" });
+  return section("Menus", "Menus hold secondary actions behind a button or a right click. Items are 32px, icon then label then an optional shortcut. Destructive items come last, after a divider, in danger colour. A value of several choices (roles, labels) is a check button: its menu stays open through the picks and saves them once it closes, Escape closes it without saving, and the button spins until the save ends.",
     [["Menu", ".menu"], ["Menu item", ".menu-item .menu-shortcut"], ["Tone=Danger", ".menu-item-danger"], ["Divider", ".menu-divider"]],
     h("div", { class: "specimens-row" },
       h("div", { class: "menu specimens-menu", role: "menu" }, item("pencil", "Rename branch"), item("link", "Copy link", {}, h("span", { class: "menu-shortcut" }, "⌘L")), item("copy", "Copy SHA"),
         h("hr", { class: "menu-divider" }), Object.assign(item("trash-2", "Delete branch"), { className: "menu-item menu-item-danger" })),
       h("div", { class: "menu specimens-menu", role: "menu" }, item("user", "Owner", { role: "menuitemradio", "aria-checked": "true" }), item("user", "Member", { role: "menuitemradio", "aria-checked": "false" }),
-        item("user", "Guest", { role: "menuitemradio", "aria-checked": "false", disabled: true }))));
+        item("user", "Guest", { role: "menuitemradio", "aria-checked": "false", disabled: true })), several));
 }
 
 function tables() {

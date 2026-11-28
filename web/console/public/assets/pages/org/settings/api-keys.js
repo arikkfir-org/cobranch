@@ -4,8 +4,8 @@ import { h } from "../../../lib/dom.js";
 import { checkbox, copyField, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, plural, when } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
-import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
-import { rolesMenu } from "../../../lib/organization.js";
+import { drawAgain, followLists, readTagged } from "../../../lib/live.js";
+import { changeRoles, rolesMenu } from "../../../lib/organization.js";
 import { roles } from "../../../lib/state.js";
 
 export const tab = { label: "API keys", order: 30 };
@@ -29,14 +29,25 @@ const newest = (k, at) => k.secrets.map(at).filter(Boolean).sort().pop() || null
 
 // showApiKeys lists the organization's API keys, each with its roles, when it was made and last used, and, for a viewer
 // with org.principals.manage, Rotate and Revoke, or Delete once no secret of it works; with org.grants.manage too, a
-// working key's roles change from its row, as a member's do. made is a key just made or
-// rotated, whose secret this draw shows once, as the API never shows it again. It follows the keys while it shows, and
-// draws itself again once they change, here or elsewhere, still showing made.
-async function showApiKeys(org, main, can, actions, made = null) {
+// working key's roles change from its row, as a member's do, keeping at least one. made is a key just made or
+// rotated, whose secret this draw shows once, as the API never shows it again, and failed what went wrong when the
+// change of roles that drew it failed. It follows the keys while it shows, and draws itself again once they change,
+// here or elsewhere, still showing made.
+async function showApiKeys(org, main, can, actions, made = null, failed = null) {
   const manage = can("org.principals.manage");
   const grants = manage && can("org.grants.manage");
   const error = failure();
+  if (failed) error.fail(failed);
   const refresh = (created) => showApiKeys(org, main, can, actions, created || null);
+  // saveRoles changes a key's roles, then draws the page again with what was saved and what failed, if anything, and
+  // answers once it has; the page doesn't follow its keys meanwhile, as a draw then would replace the banner the
+  // failure shows on.
+  let saving = false;
+  const still = () => error.el.isConnected && !saving;
+  const saveRoles = (call) => {
+    saving = true;
+    return call.then(() => null, (err) => err).then((err) => showApiKeys(org, main, can, actions, null, err)).catch(error.fail);
+  };
   const path = "/orgs/" + org.slug + "/api-keys";
   const list = await readTagged(path);
   const keys = list.data.apiKeys;
@@ -51,8 +62,8 @@ async function showApiKeys(org, main, can, actions, made = null) {
     return h("tr", { class: gone ? "row-muted" : "", "data-filter": k.name.toLowerCase() },
       h("td", { class: "cell-two-lines" }, h("span", {}, k.name), hint ? h("code", {}, "cbk_…" + hint) : null),
       h("td", {}, gone ? h("span", { class: "tag" }, revoked ? "Revoked" : "Expired")
-        : grants ? rolesMenu(k.roles, "The roles " + k.name + " holds", (r, held) =>
-          (held ? api("DELETE", path + "/" + k.id + "/roles/" + r.id) : api("POST", path + "/" + k.id + "/roles", { roleId: r.id })).then(() => refresh()).catch(error.fail))
+        : grants ? rolesMenu(k.roles, "The roles " + k.name + " holds", (granted, revoked) =>
+          saveRoles(changeRoles(granted, revoked, (r) => api("POST", path + "/" + k.id + "/roles", { roleId: r.id }), (r) => api("DELETE", path + "/" + k.id + "/roles/" + r.id))), true)
           : k.roles.length ? k.roles.map((r) => h("span", { class: "tag tone-info" }, r.name)) : h("span", { class: "cell-muted" }, "No role")),
       h("td", { class: "cell-muted" }, when(k.createdAt)),
       h("td", { class: "cell-muted" }, gone ? (revoked ? "revoked " + ago(revoked) : "expired " + ago(newest(k, (s) => s.expiresAt))) : used ? ago(used) : "never"),
@@ -81,7 +92,7 @@ async function showApiKeys(org, main, can, actions, made = null) {
     ...(keys.length ? [h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), counted), table, none]
       : [h("div", { class: "card" }, h("div", { class: "empty" }, h("div", { class: "empty-icon" }, icon("key-round")), h("h2", { class: "empty-title" }, "No API keys yet"),
         h("p", { class: "empty-description" }, "Make a key for a script that calls " + org.name + "'s API as itself.")))]));
-  followLists([[path, list.tag]], () => error.el.isConnected, () => keepingFilter(() => showApiKeys(org, main, can, actions, made)).catch(error.fail));
+  followLists([[path, list.tag]], still, () => drawAgain(() => showApiKeys(org, main, can, actions, made), still));
 }
 
 // reveal announces a key just made or rotated in a Card (Tone=Success) with its secret in a Copy field, as the API
