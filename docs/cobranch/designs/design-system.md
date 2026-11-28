@@ -28,7 +28,7 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 
 ## Principles
 
-Six rules decide every screen; when a design breaks one, the design changes, not the rule.
+Seven rules decide every screen; when a design breaks one, the design changes, not the rule.
 
 1. **Ink for the interface, blue for its one action.** Chrome and text are near-black on white (inverted in dark mode);
    the primary action is blue. Other colour is reserved for meaning, so it stands out when it appears.
@@ -42,6 +42,9 @@ Six rules decide every screen; when a design breaks one, the design changes, not
    is secondary or ghost.
 6. **Code is mono, prose is sans.** Branch names, repository names, SHAs, ids, paths and environments use JetBrains
    Mono; everything people wrote uses Inter.
+7. **A name is its link.** Every entity a table or list names (a repository, branch, commit, run, annotation, agent,
+   task, issue, artifact or environment) links to its page from its name, and no row adds a Details link to the same
+   page. A name stays plain only where it has no page, or inside a form, where leaving would lose the edits.
 
 ![The Foundations page: principles, colour, type, spacing, radii and elevation](design-system/foundations.png)
 
@@ -272,7 +275,7 @@ plan.
 | App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | `.app-sidebar`, `.app-topbar` (`lib/shell.css`) |
 | App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
-| Annotation row | Status (as Badge/Annotation) | Name, description, duration, Details (off for a job's run, whose name links to its page); creator avatar nested | `.annotation-row` in a `.list`, a linked name `a.row-title` |
+| Annotation row | Status (as Badge/Annotation) | Name, linking to its page (a job's run, a target's environment, else the annotation's link), description, duration; creator avatar nested | `.annotation-row` in a `.list`, a linked name `a.row-title` |
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
 | Chat message | Author: Person, Agent | Name, time, body, code reference; on hover Copy, Edit and Delete; Cobranch's own status reply is a Machine avatar and a muted body | `.chat-message`, `.chat-message-status` (`lib/shell.css`) |
 | Pattern/Inline code | None | Text in backticks within written text, in Code/Medium on `bg/code`, never in a file's contents; a Markdown text box marks it as it is typed, its backticks kept | `.inline-code`, `code` in a `.chat-message-body` or rendered Markdown; `markCode` (`lib/codemarks.js`) around a textarea |

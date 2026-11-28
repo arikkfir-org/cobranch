@@ -56,14 +56,14 @@ async function showAgents(org, main, can, editing, saved = false) {
 }
 
 // repositoryAgents lists the agents the organization's repositories declare (Settings · Agents, Repository agents),
-// read-only: the repository of each, the model it runs on, its image, the permissions it declares and its tasks this
-// month, each with a menu.
+// read-only: the repository of each, linking to it, the model it runs on, its image, the permissions it declares and
+// its tasks this month, each with a menu.
 function repositoryAgents(org, declared, report, monthly) {
   const mono = (text, none) => h("td", { class: text ? "cell-mono" : "cell-muted" }, text || none);
   const row = (a) => h("tr", {},
     h("td", {}, h("a", { class: "agents-agent agents-agent-small", href: agentPage(org, a.id), "data-nav": "" }, avatar(a.name, true, 24),
       h("span", { class: "cell-two-lines" }, h("span", {}, a.name), a.description ? h("span", {}, a.description) : ""))),
-    h("td", {}, a.repositorySlug), mono(a.model, "Not set"), mono(a.image, "The installation's"), mono(a.permissions.join(", "), "None"),
+    h("td", {}, h("a", { href: base + org.slug + "/" + a.repositorySlug, "data-nav": "" }, a.repositorySlug)), mono(a.model, "Not set"), mono(a.image, "The installation's"), mono(a.permissions.join(", "), "None"),
     h("td", {}, report ? String(monthly.get(a.id) || 0) : "–"),
     h("td", { class: "cell-actions" }, rowMenu(org, a, () => false)));
   return [sectionHeader("Repository agents", "Declared in each repository's main /cobranch.yaml, and changed only by a push to its main. Each works in its repository alone."),

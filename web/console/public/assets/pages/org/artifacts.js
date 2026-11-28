@@ -5,6 +5,7 @@ import { icon } from "../../lib/icons.js";
 import { pageHeader } from "../../lib/layout.js";
 import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { go } from "../../lib/router.js";
+import { base } from "../../lib/state.js";
 
 // nav puts Artifacts in the sidebar after Agents, with the artifacts the viewer may open under it.
 export const nav = { label: "Artifacts", order: 60, icon: "file", items: artifactItems };
@@ -60,8 +61,9 @@ async function showArtifacts(org, main) {
   const filter = search("Filter artifacts", () => draw());
   const table = h("table", { class: "table" }, h("thead", {}, h("tr", {}, ["Name", "Repository", "Produced by", "Access", "Updated"].map((t) => h("th", {}, t)))), tbody);
   const row = (a) => h("tr", {}, nameCell(org, a, "file", [formats[a.mediaType], kinds[a.kind].word].filter(Boolean).join(" · ")),
-    h("td", {}, a.repository ? h("code", { class: "cell-mono" }, a.repository.slug) : h("span", { class: "cell-muted" }, listedOnly(a) ? "" : "None")),
-    h("td", {}, producer(a)), h("td", {}, audienceBadge(a)), h("td", { class: "cell-muted" }, a.updatedAt ? updated(a.updatedAt) : ""));
+    h("td", {}, a.repository ? h("a", { href: base + org.slug + "/" + a.repository.slug, "data-nav": "" }, h("code", { class: "cell-mono" }, a.repository.slug))
+      : h("span", { class: "cell-muted" }, listedOnly(a) ? "" : "None")),
+    h("td", {}, producer(org, a)), h("td", {}, audienceBadge(a)), h("td", { class: "cell-muted" }, a.updatedAt ? updated(a.updatedAt) : ""));
   const rows = new Map(list.map((a) => [a, row(a)]));
   const count = h("span", { class: "filters-count" });
   const draw = () => {

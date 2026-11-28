@@ -86,9 +86,23 @@ async function tabContent(ctx, b, tab, envs) {
     ctx.follow(envs.path, tag);
     return environmentsOf(ctx, b, data.environments);
   }
-  if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null];
-  return [b.status === "merged" ? null : await branchCommits(ctx, b), b.commit ? commitAnnotations(path, b.commit, can, fail) : null,
+  const annotations = b.commit ? commitAnnotations(path, b.commit, can, fail, await annotationPages(ctx, b, envs)) : null;
+  if (!b.status) return [await recentCommits(ctx, b), mergeCard(ctx, b), annotations];
+  return [b.status === "merged" ? null : await branchCommits(ctx, b), annotations,
     b.commit ? commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)) : null];
+}
+
+// annotationPages answers the Console's page of each annotation on b's head that has one: a job's latest run there, or
+// the environment of b whose target set it. What fails to arrive leaves those names to their links.
+async function annotationPages({ path, at }, b, envs) {
+  const [runs, environments] = await Promise.all([
+    api("GET", path + "/runs?" + new URLSearchParams({ sha: b.commit.sha, limit: "100" })).then((p) => p.runs, () => []),
+    envs.read.then((r) => r.data.environments, () => [])]);
+  const pages = new Map();
+  // Runs come newest first, so a job's first is its latest.
+  for (const r of runs) if (!pages.has(r.job.id)) pages.set(r.job.id, at.run(r.number));
+  for (const e of environments) if (e.target && !pages.has(e.target.id)) pages.set(e.target.id, at.environment(e.id));
+  return (a) => (a.principal && pages.get(a.principal.id)) || null;
 }
 
 // branchTabBar is b's tabs (Tab), each a link to its page, Files changed with the files its diff changes and Jobs with

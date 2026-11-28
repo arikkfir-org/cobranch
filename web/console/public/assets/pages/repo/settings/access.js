@@ -6,7 +6,7 @@ import { since } from "../../../lib/format.js";
 import { avatar, icon, machineAvatar } from "../../../lib/icons.js";
 import { readTagged } from "../../../lib/live.js";
 import { render } from "../../../lib/router.js";
-import { me } from "../../../lib/state.js";
+import { base, me } from "../../../lib/state.js";
 
 export const tab = { label: "Access", order: 10 };
 export default ({ org, repo, path, orgCan, fail, follow }) => showAccess(org, repo, path, orgCan("org.grants.manage"), fail, follow);
@@ -24,10 +24,10 @@ const whoAvatar = (a) => a.kind === "user" || a.kind === "agent" ? avatar(a.disp
 // rollout may still answer from, says only the roles held on the repository, and not since when.
 const grantsOf = (a) => a.grants || a.roles.map((role) => ({ role, through: "repository", since: null }));
 
-// showAccess lists every role that reaches the repository, a row each: who holds it, how (granted here, or a role at
-// the organization, which reaches every repository of it) and since when. A viewer who manages the organization's
-// grants grants roles here, and revokes those granted here, but their own; the organization's roles change on its
-// Members page. It follows them with follow(path, tag).
+// showAccess lists every role that reaches the repository, a row each: who holds it, an agent linking to its page, how
+// (granted here, or a role at the organization, which reaches every repository of it) and since when. A viewer who
+// manages the organization's grants grants roles here, and revokes those granted here, but their own; the
+// organization's roles change on its Members page. It follows them with follow(path, tag).
 async function showAccess(org, repo, path, manage, fail, follow) {
   const read = await readTagged(path + "/access");
   const access = read.data.access;
@@ -36,7 +36,8 @@ async function showAccess(org, repo, path, manage, fail, follow) {
   const revoke = (a, g) => h("button", { class: "btn btn-ghost btn-sm", type: "button",
     onclick: () => api("DELETE", path + "/access/" + a.principalId + "/roles/" + g.role.id).then(render).catch(fail) }, "Revoke");
   const row = (a, g) => h("tr", {},
-    h("td", {}, h("span", { class: "cell-person" }, whoAvatar(a), a.displayName)),
+    h("td", {}, a.kind === "agent" ? h("a", { class: "cell-person", href: base + org.slug + "/agents/" + a.principalId, "data-nav": "" }, whoAvatar(a), a.displayName)
+      : h("span", { class: "cell-person" }, whoAvatar(a), a.displayName)),
     h("td", {}, g.role.name),
     h("td", { class: g.through === "repository" ? null : "cell-muted" }, through(g)),
     h("td", { class: "cell-muted", title: g.since ? new Date(g.since).toLocaleString() : null }, g.since ? since(g.since) : ""),
