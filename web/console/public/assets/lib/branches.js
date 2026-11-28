@@ -1,4 +1,6 @@
 import { annotationStatuses } from "./annotations.js";
+import { api } from "./api.js";
+import { ask } from "./dialog.js";
 import { h } from "./dom.js";
 import { plural } from "./format.js";
 import { icon } from "./icons.js";
@@ -52,3 +54,21 @@ export function processingWhat(b) {
   if (running) return running.name + " " + annotationStatuses[running.status].word.toLowerCase();
   return reviewing ? "AI review " + aiCheckStates[reviewing.ai].word.toLowerCase() : "processing its last push";
 }
+
+// mayDelete reports whether the viewer may delete b: with repo.push, and repo.bypass too for a branch main's
+// /cobranch.yaml names. main is never deleted.
+export const mayDelete = (b, can) => b.name !== "main" && can("repo.push") && (!b.requirements || can("repo.bypass"));
+
+// deleteDialog asks before it deletes b of the repository at path, at the head the page shows: plainly for a Merged or
+// Empty branch, and naming the commits main lacks for any other. Once it is deleted, deleted shows where the page goes:
+// the branch's page shows its deletion, the repository's branches draw themselves without it.
+export function deleteDialog(path, b, deleted) {
+  const done = b.status === "merged" || b.status === "empty";
+  const lacks = b.ahead ? plural(b.ahead, "commit") + " main lacks" : "commits main may lack";
+  ask("Delete " + b.name + "?", done ? "Its commits stay in main's history, and its environments are torn down."
+    : "It has " + lacks + ", and no branch will hold them any more. Its environments are torn down.", "Delete branch",
+  () => deleteBranch(path, b).then(deleted));
+}
+
+// deleteBranch deletes b at the head the page showed, which refuses one that moved since.
+export const deleteBranch = (path, b) => api("DELETE", path + "/branches/" + encodeURIComponent(b.name), undefined, { "If-Match": '"' + b.head + '"' });

@@ -1,8 +1,8 @@
 import { annotationStatuses, commitAnnotations } from "../../lib/annotations.js";
 import { api, apiPage } from "../../lib/api.js";
-import { aiCheckStates, branchBadge, branchStatuses, checkShort, processingWhat } from "../../lib/branches.js";
+import { aiCheckStates, branchBadge, branchStatuses, checkShort, deleteBranch, deleteDialog, mayDelete, processingWhat } from "../../lib/branches.js";
 import { branchSubject } from "../../lib/chat.js";
-import { ask, dialog } from "../../lib/dialog.js";
+import { dialog } from "../../lib/dialog.js";
 import { diffView } from "../../lib/diff.js";
 import { h } from "../../lib/dom.js";
 import { banner, checkbox, field, input } from "../../lib/forms.js";
@@ -308,9 +308,6 @@ async function deletedBranchPage({ path, at, root }, name) {
     h("p", {}, "It was at ", head, d.commit ? [" · ", messageSubject(d.commit.message)] : null, "."), h("p", {}, merged)))];
 }
 
-// mayDelete reports whether the viewer may delete b: with repo.push, and repo.bypass too for a branch main's
-// /cobranch.yaml names. main is never deleted.
-const mayDelete = (b, can) => b.name !== "main" && can("repo.push") && (!b.requirements || can("repo.bypass"));
 // mayMerge reports whether the viewer may merge b, Ready, into its base: with repo.merge, while it has commits to merge.
 const mayMerge = ({ can }, b) => b.base && b.status !== "merged" && can("repo.merge");
 
@@ -330,7 +327,7 @@ function branchMenu(anchor, ctx, b) {
         then(() => api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/review").then(render).catch(fail))) : null,
       h("a", { class: "menu-item", href: at.history(b.name), "data-nav": "", role: "menuitem", onclick: close }, icon("history"), h("span", {}, "History")),
       anyway ? [h("hr", { class: "menu-divider" }), item("git-branch", "Merge anyway", then(() => mergeDialog(ctx, b, true)))] : null,
-      mayDelete(b, can) ? [h("hr", { class: "menu-divider" }), item("x", "Delete branch", then(() => deleteDialog(ctx, b)), true)] : null];
+      mayDelete(b, can) ? [h("hr", { class: "menu-divider" }), item("x", "Delete branch", then(() => deleteDialog(path, b, () => go(at.branchPage(b.name).slice(base.length - 1)))), true)] : null];
   })?.classList.add("branch-menu");
 }
 
@@ -362,19 +359,6 @@ function mergeDialog({ path, can }, b, anyway) {
   dialog("Merge " + b.name + " into " + b.base, [warning, how, remove ? checkbox(remove, "Delete the branch once merged") : null],
     anyway ? "Merge anyway" : "Merge", anyway ? "btn-danger" : "btn-primary", merge);
 }
-
-// deleteDialog asks before it deletes b at the head the page shows: plainly for a Merged or Empty branch, and naming
-// the commits main lacks for any other.
-function deleteDialog({ path, at }, b) {
-  const done = b.status === "merged" || b.status === "empty";
-  const lacks = b.ahead ? plural(b.ahead, "commit") + " main lacks" : "commits main may lack";
-  ask("Delete " + b.name + "?", done ? "Its commits stay in main's history, and its environments are torn down."
-    : "It has " + lacks + ", and no branch will hold them any more. Its environments are torn down.", "Delete branch",
-  () => deleteBranch(path, b).then(() => go(at.branchPage(b.name).slice(base.length - 1))));
-}
-
-// deleteBranch deletes b at the head the page showed, which refuses one that moved since.
-const deleteBranch = (path, b) => api("DELETE", path + "/branches/" + encodeURIComponent(b.name), undefined, { "If-Match": '"' + b.head + '"' });
 
 // linkDialog links b to an issue of the organization, by its identifier or number, in place of the one it works on,
 // or unlinks that one.

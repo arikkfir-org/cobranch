@@ -1,9 +1,10 @@
 import { api } from "../../lib/api.js";
-import { branchBadge, checkShort, processingWhat } from "../../lib/branches.js";
+import { branchBadge, checkShort, deleteDialog, mayDelete, processingWhat } from "../../lib/branches.js";
 import { h } from "../../lib/dom.js";
 import { fromNow, plural, shortSha } from "../../lib/format.js";
 import { authorAvatar, icon } from "../../lib/icons.js";
 import { readTagged } from "../../lib/live.js";
+import { render } from "../../lib/router.js";
 import { config, me } from "../../lib/state.js";
 
 export const nav = { label: "Branches", order: 0 };
@@ -23,11 +24,11 @@ function listBranches(path) {
 }
 
 // repositoryBranches is the repository's first tab, as the Repository screen draws it: its branches, filtered by
-// name and by what they are, main above the rest, and beside them what a merge into main needs and the environments
-// branches deliver to. A repository nothing was pushed to says how to push its first commit. It follows the branches,
+// name and by what they are, main above the rest, each but main with Delete for a viewer who may delete it, and beside
+// them what a merge into main needs and the environments branches deliver to. A repository nothing was pushed to says how to push its first commit. It follows the branches,
 // which it draws in the API's order, as they change.
 export async function repositoryBranches(ctx) {
-  const { path, at, root, follow } = ctx;
+  const { at, root, path, follow } = ctx;
   const [{ branches, tag }, environments] = await Promise.all([listBranches(path),
     api("GET", path + "/environments").then((d) => d.environments, () => [])]);
   follow(path + "/branches", tag);
@@ -36,13 +37,13 @@ export async function repositoryBranches(ctx) {
     h("p", { class: "empty-description" }, "Nothing has been pushed to this repository. Clone it and push main: every other branch is then a request to merge into it.")))];
   const main = branches.find((b) => !b.status);
   const others = branches.filter((b) => b.status);
-  const rows = others.map((b) => [b, branchRow(at, b)]);
+  const rows = others.map((b) => [b, branchRow(ctx, b)]);
   const none = h("li", { class: "branch-row", hidden: true }, h("span", { class: "row-meta" }, "No branches match."));
   const list = others.length ? h("ul", { class: "list" }, rows.map(([, el]) => el), none)
     : h("div", { class: "card-body" }, h("p", { class: "muted" }, "No branches besides main yet. Push one, and it shows here as a request to merge into main."));
   return [h("div", { class: "branches-page" },
     h("div", { class: "branches-main" }, branchFilters(rows, none),
-      main ? h("ul", { class: "list" }, branchRow(at, main)) : null,
+      main ? h("ul", { class: "list" }, branchRow(ctx, main)) : null,
       h("section", { class: "card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Branches"), h("span", { class: "card-meta" }, "Into main")), list)),
     h("div", { class: "branches-side" }, main ? mergeCard(ctx, main) : null, environmentsCard(at, root, environments)))];
 }
@@ -77,13 +78,17 @@ function branchFilters(rows, none) {
 }
 
 // branchRow is a branch as a Branch row: its name, over what it would merge, when it moved and by whose head, and
-// where it stands; its status, and the avatar of its head's author.
-function branchRow(at, b) {
+// where it stands; its status, the avatar of its head's author, and Delete for a viewer who may delete it, which asks
+// as the branch's page does and leaves the repository's branches drawn without it.
+function branchRow({ path, at, can }, b) {
   const author = b.commit && b.commit.author;
   const meta = branchMeta(b);
+  const label = "Delete " + b.name;
   return h("li", { class: "branch-row" }, icon("git-branch"),
     h("div", { class: "row-text" }, h("a", { class: "row-title", href: at.branchPage(b.name), "data-nav": "" }, b.name), h("span", { class: "row-meta", title: meta }, meta)),
-    b.status ? branchBadge(b.status) : null, author ? authorAvatar(author) : null);
+    b.status ? branchBadge(b.status) : null, author ? authorAvatar(author) : null,
+    mayDelete(b, can) ? h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label,
+      onclick: () => deleteDialog(path, b, render) }, icon("trash-2")) : null);
 }
 
 // branchMeta is the line under a branch's name in its row: main's head, or what a branch would merge, when it moved

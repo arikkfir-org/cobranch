@@ -316,6 +316,10 @@ A branch of that name pushed again later is a new branch, and its page shows it 
 - **A branch's page** offers Delete branch to a viewer who may delete it: a plain confirmation on a Merged or Empty
   branch, and on any other a danger button whose confirmation names how many commits `main` lacks. It deletes at the
   head the page shows.
+- **A repository's Branches tab** offers the same deletion on each branch's row, main's excepted, to a viewer who may
+  delete that branch: a trash icon at the row's end, so cleaning up merged branches needs no visit to each one
+  ([ENG-314](https://linear.app/arikkfir/issue/ENG-314)). It asks with the same confirmation, deletes at the head the
+  list shows, and draws the list again without the branch.
 - **Merging offers to delete in the same step:** Delete the branch once merged, checked by default, next to the Merge
   button. The Console merges, then deletes the branch at the head it merged; a branch that moved in between is kept, and
   the merge stands.

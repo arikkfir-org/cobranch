@@ -276,7 +276,7 @@ plan.
 | App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |
 | Annotation row | Status (as Badge/Annotation) | Name, linking to its page (a job's run, a target's environment, else the annotation's link), description, duration; creator avatar nested | `.annotation-row` in a `.list`, a linked name `a.row-title` |
-| Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
+| Branch row | None | Name, meta, message count; status badge and author avatar nested; Delete (a Small Ghost Icon button, trash-2) for a viewer who may delete the branch, never on main | `.branch-row` in a `.list`, Delete an `.icon-btn.icon-btn-ghost.icon-btn-sm` |
 | Chat message | Author: Person, Agent | Name, time, body, code reference; on hover Copy, Edit and Delete; Cobranch's own status reply is a Machine avatar and a muted body | `.chat-message`, `.chat-message-status` (`lib/shell.css`) |
 | Pattern/Inline code | None | Text in backticks within written text, in Code/Medium on `bg/code`, never in a file's contents; a Markdown text box marks it as it is typed, its backticks kept | `.inline-code`, `code` in a `.chat-message-body` or rendered Markdown; `markCode` (`lib/codemarks.js`) around a textarea |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
