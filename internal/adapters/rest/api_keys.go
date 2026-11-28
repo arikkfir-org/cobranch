@@ -136,3 +136,35 @@ func (a api) DeleteAPIKey(ctx context.Context, req DeleteAPIKeyRequestObject) (D
 	}
 	return DeleteAPIKey204Response{}, nil
 }
+
+// GrantAPIKeyRole gives an API key another role at the organization.
+func (a api) GrantAPIKeyRole(ctx context.Context, req GrantAPIKeyRoleRequestObject) (GrantAPIKeyRoleResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.orgs.GrantKeyRole(ctx, v, org.ID, req.KeyID, req.Body.RoleId); err != nil {
+		return nil, fail(err, "api_key")
+	}
+	return GrantAPIKeyRole204Response{}, nil
+}
+
+// RevokeAPIKeyRole takes a role from an API key at the organization.
+func (a api) RevokeAPIKeyRole(ctx context.Context, req RevokeAPIKeyRoleRequestObject) (RevokeAPIKeyRoleResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.orgs.RevokeKeyRole(ctx, v, org.ID, req.KeyID, req.RoleID); err != nil {
+		return nil, fail(err, "grant")
+	}
+	return RevokeAPIKeyRole204Response{}, nil
+}

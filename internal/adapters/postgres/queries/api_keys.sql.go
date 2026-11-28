@@ -78,6 +78,18 @@ func (q *Queries) CountLiveCredentials(ctx context.Context, principalID uuid.UUI
 	return count, err
 }
 
+const countOrganizationRoles = `-- name: CountOrganizationRoles :one
+SELECT count(*) FROM grants WHERE principal_id = $1 AND scope = 'organization' AND scope_id = $2::uuid
+`
+
+// CountOrganizationRoles counts the roles the principal holds at the organization.
+func (q *Queries) CountOrganizationRoles(ctx context.Context, principalID uuid.UUID, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countOrganizationRoles, principalID, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const credentialByToken = `-- name: CredentialByToken :one
 SELECT c.id, c.kind, c.token_hash, c.principal_id, c.hint, c.created_at, c.created_by, c.expires_at, c.last_used_at, c.revoked_at, c.name, c.permissions, c.issuer, c.subject, c.public_key, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE c.token_hash = $1
 `

@@ -6,7 +6,7 @@ import { ago, when } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
 import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
-import { roleSelect } from "../../../lib/organization.js";
+import { roleSelect, rolesMenu } from "../../../lib/organization.js";
 import { base, me, roles } from "../../../lib/state.js";
 import { recount } from "../../../lib/tabs.js";
 
@@ -39,18 +39,9 @@ async function showMembers(org, main, can, actions) {
   // rolesButton is a member's roles, a ghost button that opens them as a menu to grant and revoke for a viewer with
   // org.grants.manage, and their names otherwise.
   const rolesButton = (m) => {
-    const names = m.roles.map((r) => r.name).join(", ") || "No role";
-    if (!grants) return h("span", { class: "row-aside" }, names);
-    const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-haspopup": "menu", title: "The roles " + m.displayName + " holds" }, names, icon("chevron-down"));
-    button.addEventListener("click", () => popover(button, "end", (close) => roles.map((r) => {
-      const held = m.roles.some((x) => x.id === r.id);
-      return h("button", { class: "menu-item", type: "button", role: "menuitemcheckbox", "aria-checked": String(held), title: r.description || null, onclick: () => {
-        close();
-        act(held ? api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId + "/roles/" + r.id)
-          : api("POST", "/orgs/" + org.slug + "/members/" + m.userId + "/roles", { roleId: r.id }));
-      } }, h("span", {}, r.name));
-    })));
-    return button;
+    if (!grants) return h("span", { class: "row-aside" }, m.roles.map((r) => r.name).join(", ") || "No role");
+    const path = "/orgs/" + org.slug + "/members/" + m.userId + "/roles";
+    return rolesMenu(m.roles, "The roles " + m.displayName + " holds", (r, held) => act(held ? api("DELETE", path + "/" + r.id) : api("POST", path, { roleId: r.id })));
   };
   // more is a row's menu of what else the viewer may do with it, or nothing when there is none.
   const more = (label, items) => {

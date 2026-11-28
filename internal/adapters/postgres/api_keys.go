@@ -285,6 +285,55 @@ func (s *OrgStore) DeleteAPIKey(ctx context.Context, actor uuid.UUID, orgID, key
 	})
 }
 
+// GrantKeyRole gives the key the role at the organization, or ErrGranted when it holds it, under the organization's
+// lock, so a role being deleted meanwhile isn't granted.
+func (s *OrgStore) GrantKeyRole(ctx context.Context, actor uuid.UUID, orgID, keyID, roleID uuid.UUID) error {
+	return s.transact(ctx, s.db.In(orgID), "granting the key the role", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := lockedKey(ctx, q, orgID, keyID); err != nil {
+			return err
+		}
+		if _, err := q.Role(ctx, roleID); err != nil {
+			return wrapOrg("reading the role", err)
+		}
+		granted, err := q.InsertGrant(ctx, queries.InsertGrantParams{
+			PrincipalID: keyID, RoleID: roleID, Scope: string(auth.ScopeOrganization), ScopeID: &orgID, Source: string(auth.SourceGrant),
+		})
+		if err != nil {
+			return fmt.Errorf("inserting the grant: %w", err)
+		}
+		if granted == 0 {
+			return orgs.ErrGranted
+		}
+		return orgEvent(ctx, q, &orgID, actor, "api_key.role_granted", keyID, map[string]any{"role": roleID})
+	})
+}
+
+// RevokeKeyRole takes the role from the key at the organization: ErrNotFound when it doesn't hold it, and
+// ErrLastKeyRole when it is the key's last, decided under the organization's lock, so two revocations at once can't
+// leave the key with none.
+func (s *OrgStore) RevokeKeyRole(ctx context.Context, actor uuid.UUID, orgID, keyID, roleID uuid.UUID) error {
+	return s.transact(ctx, s.db.In(orgID), "revoking the key's role", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := lockedKey(ctx, q, orgID, keyID); err != nil {
+			return err
+		}
+		held, err := q.CountOrganizationRoles(ctx, keyID, orgID)
+		if err != nil {
+			return fmt.Errorf("counting the key's roles: %w", err)
+		}
+		revoked, err := q.DeleteOrganizationGrant(ctx, keyID, roleID, orgID)
+		if err != nil {
+			return fmt.Errorf("deleting the grant: %w", err)
+		}
+		if revoked == 0 {
+			return orgs.ErrNotFound
+		}
+		if held <= 1 {
+			return orgs.ErrLastKeyRole
+		}
+		return orgEvent(ctx, q, &orgID, actor, "api_key.role_revoked", keyID, map[string]any{"role": roleID})
+	})
+}
+
 // grantRole gives the principal the role at the organization, once.
 func grantRole(ctx context.Context, q *queries.Queries, principalID, roleID, orgID uuid.UUID) error {
 	if _, err := q.InsertGrant(ctx, queries.InsertGrantParams{

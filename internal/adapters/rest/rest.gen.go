@@ -4395,6 +4395,11 @@ type ListAPIKeysParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GrantAPIKeyRoleJSONBody defines parameters for GrantAPIKeyRole.
+type GrantAPIKeyRoleJSONBody struct {
+	RoleId openapi_types.UUID `json:"roleId"`
+}
+
 // ListOrganizationArtifactsParams defines parameters for ListOrganizationArtifacts.
 type ListOrganizationArtifactsParams struct {
 	// Kind Only the artifacts of this kind.
@@ -5415,6 +5420,9 @@ type SetAgentSecretsJSONRequestBody = AgentSecrets
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = ApiKeyInput
 
+// GrantAPIKeyRoleJSONRequestBody defines body for GrantAPIKeyRole for application/json ContentType.
+type GrantAPIKeyRoleJSONRequestBody GrantAPIKeyRoleJSONBody
+
 // RotateAPIKeyJSONRequestBody defines body for RotateAPIKey for application/json ContentType.
 type RotateAPIKeyJSONRequestBody = SecretInput
 
@@ -5708,6 +5716,12 @@ type ServerInterface interface {
 	// DeleteAPIKey Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds.
 	// (DELETE /orgs/{org}/api-keys/{key})
 	DeleteAPIKey(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID)
+	// GrantAPIKeyRole Gives an API key another role at the organization, under the rules of making a key with it; takes org.principals.manage, org.grants.manage and every permission of the role. A person changes a key's roles, never a key.
+	// (POST /orgs/{org}/api-keys/{key}/roles)
+	GrantAPIKeyRole(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID)
+	// RevokeAPIKeyRole Takes a role from an API key at the organization, under the same rules as granting it. A key's last role stays (409 api_key.last_role); delete the key instead.
+	// (DELETE /orgs/{org}/api-keys/{key}/roles/{role})
+	RevokeAPIKeyRole(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, roleID RoleID)
 	// RotateAPIKey Gives the key a new secret, shown once, beside the old one, which works until revoked or expired; a key with two live secrets takes no third. Takes org.principals.manage.
 	// (POST /orgs/{org}/api-keys/{key}/secrets)
 	RotateAPIKey(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID)
@@ -8120,6 +8134,85 @@ func (siw *ServerInterfaceWrapper) DeleteAPIKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAPIKey(w, r, org, keyID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantAPIKeyRole operation middleware
+func (siw *ServerInterfaceWrapper) GrantAPIKeyRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var keyID KeyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantAPIKeyRole(w, r, org, keyID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeAPIKeyRole operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAPIKeyRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var keyID KeyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var roleID RoleID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &roleID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeAPIKeyRole(w, r, org, keyID, roleID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18508,6 +18601,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}", wrapper.DeleteAPIKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/secrets", wrapper.RotateAPIKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/secrets/{secret}", wrapper.RevokeAPIKeySecret)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/roles", wrapper.GrantAPIKeyRole)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/roles/{role}", wrapper.RevokeAPIKeyRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets", wrapper.ListSecrets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets", wrapper.CreateSecret)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}", wrapper.DeleteSecret)
@@ -23212,6 +23307,206 @@ type DeleteAPIKeydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DeleteAPIKeydefaultApplicationProblemPlusJSONResponse) VisitDeleteAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRoleRequestObject struct {
+	Org   Org   `json:"org"`
+	KeyID KeyID `json:"key"`
+	Body  *GrantAPIKeyRoleJSONRequestBody
+}
+
+type GrantAPIKeyRoleResponseObject interface {
+	VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error
+}
+
+type GrantAPIKeyRole204Response struct {
+}
+
+func (response GrantAPIKeyRole204Response) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantAPIKeyRole400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GrantAPIKeyRole400ApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRole401ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantAPIKeyRole401ApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRole403ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantAPIKeyRole403ApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRole404ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantAPIKeyRole404ApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRole409ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantAPIKeyRole409ApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantAPIKeyRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GrantAPIKeyRoledefaultApplicationProblemPlusJSONResponse) VisitGrantAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAPIKeyRoleRequestObject struct {
+	Org    Org    `json:"org"`
+	KeyID  KeyID  `json:"key"`
+	RoleID RoleID `json:"role"`
+}
+
+type RevokeAPIKeyRoleResponseObject interface {
+	VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error
+}
+
+type RevokeAPIKeyRole204Response struct {
+}
+
+func (response RevokeAPIKeyRole204Response) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeAPIKeyRole401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeAPIKeyRole401ApplicationProblemPlusJSONResponse) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAPIKeyRole403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeAPIKeyRole403ApplicationProblemPlusJSONResponse) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAPIKeyRole404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeAPIKeyRole404ApplicationProblemPlusJSONResponse) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAPIKeyRole409ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeAPIKeyRole409ApplicationProblemPlusJSONResponse) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeAPIKeyRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeAPIKeyRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeAPIKeyRoleResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -42197,6 +42492,12 @@ type StrictServerInterface interface {
 	// DeleteAPIKey Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds.
 	// (DELETE /orgs/{org}/api-keys/{key})
 	DeleteAPIKey(ctx context.Context, request DeleteAPIKeyRequestObject) (DeleteAPIKeyResponseObject, error)
+	// GrantAPIKeyRole Gives an API key another role at the organization, under the rules of making a key with it; takes org.principals.manage, org.grants.manage and every permission of the role. A person changes a key's roles, never a key.
+	// (POST /orgs/{org}/api-keys/{key}/roles)
+	GrantAPIKeyRole(ctx context.Context, request GrantAPIKeyRoleRequestObject) (GrantAPIKeyRoleResponseObject, error)
+	// RevokeAPIKeyRole Takes a role from an API key at the organization, under the same rules as granting it. A key's last role stays (409 api_key.last_role); delete the key instead.
+	// (DELETE /orgs/{org}/api-keys/{key}/roles/{role})
+	RevokeAPIKeyRole(ctx context.Context, request RevokeAPIKeyRoleRequestObject) (RevokeAPIKeyRoleResponseObject, error)
 	// RotateAPIKey Gives the key a new secret, shown once, beside the old one, which works until revoked or expired; a key with two live secrets takes no third. Takes org.principals.manage.
 	// (POST /orgs/{org}/api-keys/{key}/secrets)
 	RotateAPIKey(ctx context.Context, request RotateAPIKeyRequestObject) (RotateAPIKeyResponseObject, error)
@@ -44105,6 +44406,68 @@ func (sh *strictHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteAPIKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteAPIKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantAPIKeyRole operation middleware
+func (sh *strictHandler) GrantAPIKeyRole(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID) {
+	var request GrantAPIKeyRoleRequestObject
+
+	request.Org = org
+	request.KeyID = keyID
+
+	var body GrantAPIKeyRoleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantAPIKeyRole(ctx, request.(GrantAPIKeyRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantAPIKeyRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantAPIKeyRoleResponseObject); ok {
+		if err := validResponse.VisitGrantAPIKeyRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeAPIKeyRole operation middleware
+func (sh *strictHandler) RevokeAPIKeyRole(w http.ResponseWriter, r *http.Request, org Org, keyID KeyID, roleID RoleID) {
+	var request RevokeAPIKeyRoleRequestObject
+
+	request.Org = org
+	request.KeyID = keyID
+	request.RoleID = roleID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeAPIKeyRole(ctx, request.(RevokeAPIKeyRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeAPIKeyRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeAPIKeyRoleResponseObject); ok {
+		if err := validResponse.VisitRevokeAPIKeyRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -55,6 +55,8 @@ type Organizations interface {
 	RotateAPIKey(ctx context.Context, v orgs.Viewer, orgID, keyID uuid.UUID, expiry orgs.Expiry) (orgs.APIKey, string, error)
 	RevokeSecret(ctx context.Context, v orgs.Viewer, orgID, keyID, secretID uuid.UUID) error
 	DeleteAPIKey(ctx context.Context, v orgs.Viewer, orgID, keyID uuid.UUID) error
+	GrantKeyRole(ctx context.Context, v orgs.Viewer, orgID, keyID, roleID uuid.UUID) error
+	RevokeKeyRole(ctx context.Context, v orgs.Viewer, orgID, keyID, roleID uuid.UUID) error
 }
 
 // The error codes a field's error carries in its extensions, beside unauthenticated.
@@ -79,6 +81,7 @@ var conflicts = map[error]string{
 	orgs.ErrBuiltInRole:       "role.built_in",
 	orgs.ErrGranted:           "grant.exists",
 	orgs.ErrTwoSecrets:        "api_key.two_secrets",
+	orgs.ErrLastKeyRole:       "api_key.last_role",
 	repos.ErrSlugTaken:        "slug.taken",
 	repos.ErrGranted:          "grant.exists",
 	chats.ErrIDTaken:          "chat.id_taken",
@@ -198,8 +201,8 @@ func roleInput(input RoleInput) orgs.RoleInput {
 }
 
 // changeGrant grants or revokes a role of a member, through change, and answers true when it did.
-func (r *mutationResolver) changeGrant(ctx context.Context, organizationID, userID, roleID string,
-	change func(ctx context.Context, v orgs.Viewer, orgID, userID, roleID uuid.UUID) error, what string) (bool, error) {
+func (r *mutationResolver) changeGrant(ctx context.Context, organizationID, principalID, kind, roleID string,
+	change func(ctx context.Context, v orgs.Viewer, orgID, principalID, roleID uuid.UUID) error, what string) (bool, error) {
 	v, err := viewer(ctx)
 	if err != nil {
 		return false, err
@@ -208,7 +211,7 @@ func (r *mutationResolver) changeGrant(ctx context.Context, organizationID, user
 	if err != nil {
 		return false, err
 	}
-	return act(ctx, organizationID, userID, "member", func(orgID, id uuid.UUID) error {
+	return act(ctx, organizationID, principalID, kind, func(orgID, id uuid.UUID) error {
 		return change(ctx, v.User, orgID, id, role)
 	}, what)
 }

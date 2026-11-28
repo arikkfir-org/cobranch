@@ -2,12 +2,29 @@ import { api } from "./api.js";
 import { consolePages, orgPages } from "./assets.js";
 import { privateSubject } from "./chat.js";
 import { h } from "./dom.js";
+import { icon } from "./icons.js";
 import { frame, notFound, pageHeading } from "./layout.js";
+import { popover } from "./menu.js";
 import { showRepository } from "./repository.js";
 import { go } from "./router.js";
 import { base, orgs, roles, setRoles } from "./state.js";
 
 export const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
+
+// rolesMenu is the roles a principal holds at the organization (a member, an API key), a ghost button that opens the
+// organization's roles as a menu, each checked when held, which change(role, held) grants or revokes; title names
+// whose roles they are.
+export function rolesMenu(held, title, change) {
+  const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-haspopup": "menu", title }, held.map((r) => r.name).join(", ") || "No role", icon("chevron-down"));
+  button.addEventListener("click", () => popover(button, "end", (close) => roles.map((r) => {
+    const holds = held.some((x) => x.id === r.id);
+    return h("button", { class: "menu-item", type: "button", role: "menuitemcheckbox", "aria-checked": String(holds), title: r.description || null, onclick: () => {
+      close();
+      change(r, holds);
+    } }, h("span", {}, r.name));
+  })));
+  return button;
+}
 
 // What a repository's visibility means, as the API names it.
 export const visibilities = {

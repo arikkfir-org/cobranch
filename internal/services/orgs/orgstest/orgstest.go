@@ -815,6 +815,52 @@ func (s *Store) RevokeSecret(ctx context.Context, _ uuid.UUID, org, keyID, secre
 	return nil
 }
 
+// GrantKeyRole gives the key the role at its organization.
+func (s *Store) GrantKeyRole(ctx context.Context, _ uuid.UUID, org, keyID, roleID uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	k, err := s.APIKey(ctx, org, keyID)
+	if err != nil {
+		return err
+	}
+	if s.holds(keyID, roleID, org) {
+		return orgs.ErrGranted
+	}
+	r, ok := s.role(roleID)
+	if !ok {
+		return orgs.ErrNotFound
+	}
+	k.Roles = append(slices.Clone(k.Roles), r)
+	s.Keys[keyID] = k
+	s.Grant(keyID, roleID, auth.ScopeOrganization, org)
+	s.Events = append(s.Events, "api_key.role_granted")
+	return nil
+}
+
+// RevokeKeyRole takes the role from the key at its organization; its last role stays.
+func (s *Store) RevokeKeyRole(ctx context.Context, _ uuid.UUID, org, keyID, roleID uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	k, err := s.APIKey(ctx, org, keyID)
+	if err != nil {
+		return err
+	}
+	if !s.holds(keyID, roleID, org) {
+		return orgs.ErrNotFound
+	}
+	if len(k.Roles) <= 1 {
+		return orgs.ErrLastKeyRole
+	}
+	k.Roles = slices.DeleteFunc(slices.Clone(k.Roles), func(r orgs.Role) bool { return r.ID == roleID })
+	s.Keys[keyID] = k
+	g := Grant{Principal: keyID, Role: roleID, Scope: auth.ScopeOrganization, ScopeID: org}
+	s.Grants = slices.DeleteFunc(s.Grants, func(other Grant) bool { return other == g })
+	s.Events = append(s.Events, "api_key.role_revoked")
+	return nil
+}
+
 // DeleteAPIKey deletes the key with its grants and secrets.
 func (s *Store) DeleteAPIKey(ctx context.Context, _ uuid.UUID, org, keyID uuid.UUID) error {
 	if s.Fail != nil {

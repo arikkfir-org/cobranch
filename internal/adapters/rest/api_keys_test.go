@@ -77,6 +77,33 @@ func TestAPIKeysAPI(t *testing.T) {
 	})
 }
 
+// TestAPIKeyRolesAPI grants and revokes a key's roles at its organization.
+func TestAPIKeyRolesAPI(t *testing.T) {
+	member, owner := auth.RoleMember.String(), auth.RoleOwner.String()
+	keyPath := func(f *orgFixture) string { return "/v1/orgs/acme/api-keys/" + f.withKey().ID.String() }
+	runOrgCases(t, []orgCase{
+		{name: "grant a key a role", viewer: olivia, method: "POST", path: func(f *orgFixture) string { return keyPath(f) + "/roles" }, body: `{"roleId":"` + owner + `"}`, wantStatus: 204,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				for _, k := range f.store.Keys {
+					if len(k.Roles) != 2 || k.Roles[1].ID != auth.RoleOwner {
+						t.Errorf("the key holds %+v, want Member and Owner", k.Roles)
+					}
+				}
+			}},
+		{name: "grant a key a role it holds", viewer: olivia, method: "POST", path: func(f *orgFixture) string { return keyPath(f) + "/roles" }, body: `{"roleId":"` + member + `"}`, wantStatus: 409, wantCode: "grant.exists"},
+		{name: "grant a key a role as a Member", viewer: maxim, method: "POST", path: func(f *orgFixture) string { return keyPath(f) + "/roles" }, body: `{"roleId":"` + owner + `"}`, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "grant a key a role that isn't", viewer: olivia, method: "POST", path: func(f *orgFixture) string { return keyPath(f) + "/roles" }, body: `{"roleId":"00000000-0000-7000-8000-00000000ffff"}`, wantStatus: 400, wantCode: "role.invalid"},
+		{name: "grant a role to a key that isn't", viewer: olivia, method: "POST", path: fixed("/v1/orgs/acme/api-keys/00000000-0000-7000-8000-00000000ffff/roles"), body: `{"roleId":"` + owner + `"}`, wantStatus: 404, wantCode: "api_key.not_found"},
+		{name: "revoke one of a key's roles", viewer: olivia, method: "DELETE", path: func(f *orgFixture) string {
+			key := f.withKey()
+			f.store.AddKey(key, auth.RoleGuest)
+			return "/v1/orgs/acme/api-keys/" + key.ID.String() + "/roles/" + member
+		}, wantStatus: 204},
+		{name: "revoke a key's last role", viewer: olivia, method: "DELETE", path: func(f *orgFixture) string { return keyPath(f) + "/roles/" + member }, wantStatus: 409, wantCode: "api_key.last_role"},
+		{name: "revoke a role the key doesn't hold", viewer: olivia, method: "DELETE", path: func(f *orgFixture) string { return keyPath(f) + "/roles/" + owner }, wantStatus: 404, wantCode: "grant.not_found"},
+	})
+}
+
 // TestAPIKeyViewer checks what a request with a key's secret may do.
 func TestAPIKeyViewer(t *testing.T) {
 	member := auth.RoleMember.String()
@@ -87,6 +114,9 @@ func TestAPIKeyViewer(t *testing.T) {
 					t.Errorf("organization = %s", body)
 				}
 			}},
+		{name: "a key may not change keys' roles", viewer: asKey, method: "POST", path: func(f *orgFixture) string {
+			return "/v1/orgs/acme/api-keys/" + f.withKey().ID.String() + "/roles"
+		}, body: `{"roleId":"` + auth.RoleGuest.String() + `"}`, wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a key may not make keys", viewer: asKey, method: "POST", path: fixed("/v1/orgs/acme/api-keys"), body: `{"name":"Other","roleIds":["` + member + `"]}`, wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a key has no sessions", viewer: asKey, method: "GET", path: fixed("/v1/me"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
