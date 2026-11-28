@@ -330,14 +330,6 @@ func TestDispatch(t *testing.T) {
 		})}, wantOK: true, wantEvents: []string{"claimed #7 until 09:02:00", "failed: its pod: a job's pod may not set hostNetwork"}},
 		{name: "a checkout without Git over HTTPS", queued: []runner.Run{scriptRun(nil)}, settings: func(s *runner.Settings) { s.GitURL = "" },
 			wantOK: true, wantEvents: []string{"claimed #7 until 09:02:00", "failed: this installation serves no Git over HTTPS to check its commit out from"}},
-		{name: "a repository's secret its job may not read", queued: []runner.Run{scriptRun(nil)}, vault: vault{refused: id("5ec1"), label: secrets.Label{Name: "npm", Repo: "api"}},
-			wantOK: true, wantEvents: []string{"claimed #7 until 09:02:00",
-				`failed: job ci/build may not read repository api's secret "npm", which it takes as API_TOKEN: grant it Secret reader on the secret or on repository api`}},
-		{name: "an organization's secret its job may not read", queued: []runner.Run{scriptRun(nil)}, vault: vault{refused: id("5ec1"), label: secrets.Label{Name: "npm"}},
-			wantOK: true, wantEvents: []string{"claimed #7 until 09:02:00",
-				`failed: job ci/build may not read the organization's secret "npm", which it takes as API_TOKEN: grant it Secret reader on the secret`}},
-		{name: "a secret that is gone", queued: []runner.Run{scriptRun(nil)}, vault: vault{refused: id("5ec1"), missing: true}, wantOK: true,
-			wantEvents: []string{"claimed #7 until 09:02:00", "failed: secret 5ec10000-0000-7000-8000-000000000000, which job ci/build takes as API_TOKEN, isn't there"}},
 		{name: "no secrets key", queued: []runner.Run{scriptRun(nil)}, vault: vault{err: secrets.ErrNoSecretsKey}, wantOK: true,
 			wantEvents: []string{"claimed #7 until 09:02:00", "failed: this installation has no secrets key to open its secrets with"}},
 		{name: "no room", queued: []runner.Run{scriptRun(nil)}, startErr: fmt.Errorf("pod: %w", runner.ErrNoRoom), wantOK: true,
@@ -367,6 +359,36 @@ func TestDispatch(t *testing.T) {
 				t.Fatalf("Dispatch() = %t, %v, want %t, %q", ok, err, tt.wantOK, tt.wantErr)
 			}
 			checkDispatched(t, s, c, tt.wantEvents, tt.wantImage, tt.wantRemove)
+		})
+	}
+}
+
+// TestDispatchSecrets fails a run whose job may not read a secret it names, naming the secret, what the job takes it
+// as and where a grant reaches it, or the ID of one that is gone.
+func TestDispatchSecrets(t *testing.T) {
+	claimed := "claimed #7 until 09:02:00"
+	tests := []struct {
+		name  string
+		vault vault
+		want  string
+	}{
+		{name: "a repository's secret", vault: vault{refused: id("5ec1"), label: secrets.Label{Name: "npm", Repo: "api"}},
+			want: `failed: job ci/build may not read repository api's secret "npm", which it takes as API_TOKEN: grant it Secret reader on the secret or on repository api`},
+		{name: "an organization's secret", vault: vault{refused: id("5ec1"), label: secrets.Label{Name: "npm"}},
+			want: `failed: job ci/build may not read the organization's secret "npm", which it takes as API_TOKEN: grant it Secret reader on the secret`},
+		{name: "a secret that is gone", vault: vault{refused: id("5ec1"), missing: true},
+			want: "failed: secret 5ec10000-0000-7000-8000-000000000000, which job ci/build takes as API_TOKEN, isn't there"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &store{queued: []runner.Run{scriptRun(nil)}, tokens: map[uuid.UUID]time.Time{}}
+			c := &cluster{}
+			svc := runner.NewService(s, c, tt.vault, archive{}, &poster{}, authz{}, settings)
+			svc.SetClock(func() time.Time { return now })
+			if ok, err := svc.Dispatch(context.Background()); !ok || err != nil {
+				t.Fatalf("Dispatch() = %t, %v, want true, nil", ok, err)
+			}
+			checkDispatched(t, s, c, []string{claimed, tt.want}, "", false)
 		})
 	}
 }

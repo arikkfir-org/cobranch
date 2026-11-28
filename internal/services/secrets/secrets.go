@@ -113,9 +113,9 @@ type RefusedError struct {
 
 func (e *RefusedError) Error() string {
 	if e.Missing {
-		return e.Label.String() + " isn't there"
+		return e.String() + " isn't there"
 	}
-	return "may not read " + e.Label.String()
+	return "may not read " + e.String()
 }
 
 // About is what a secret's value is sealed for: its row alone, so a sealed value copied to another row doesn't open.
