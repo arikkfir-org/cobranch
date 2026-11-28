@@ -416,7 +416,7 @@ Researcher waits for a task.
 | [Settings · General · Delete organization · Typed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=251-39767) | The same dialog once the name is typed, its button enabled |
 | [Settings · Members](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=13-554) | A request to join, members with roles, invited people |
 | [Settings · Roles](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=107-8281) | Built-in and custom roles, each a set of permissions |
-| [Settings · API keys](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-8694) | The organization's keys with their roles and secrets, made, rotated and revoked |
+| [Settings · API keys](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-8694) | The organization's keys with their roles and secrets, made, rotated and revoked, their roles changed from the Role column as a member's are |
 | [Settings · API keys · New key](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9086) | Making a key, in a dialog, and its secret shown once |
 | [Settings · Secrets](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=109-9367) | The organization's own secrets, which its repositories' jobs share |
 | [Settings · Secrets · Add secret · Long value](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=254-39928) | Adding a secret whose value is long (a kubeconfig): the value scrolls inside its field, which stops at 320px, and the dialog keeps its actions in reach |

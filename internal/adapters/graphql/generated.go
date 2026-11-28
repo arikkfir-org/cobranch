@@ -787,6 +787,7 @@ type ComplexityRoot struct {
 		EditChatMessage           func(childComplexity int, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) int
 		EditConversationMessage   func(childComplexity int, subject ConversationSubject, thread string, message string, body string, expectedVersion *int) int
 		EditIssueChatMessage      func(childComplexity int, organizationID string, number int, thread string, message string, body string, expectedVersion *int) int
+		GrantAPIKeyRole           func(childComplexity int, organizationID string, id string, roleID string) int
 		GrantRepositoryRole       func(childComplexity int, repositoryID string, principalID string, roleID string) int
 		GrantRole                 func(childComplexity int, organizationID string, userID string, roleID string) int
 		GrantSecret               func(childComplexity int, organizationID string, id string, principalID string) int
@@ -811,6 +812,7 @@ type ComplexityRoot struct {
 		ResolveConversationThread func(childComplexity int, subject ConversationSubject, thread string, resolved bool, expectedVersion *int) int
 		ResolveIssueChatThread    func(childComplexity int, organizationID string, number int, thread string, resolved bool, expectedVersion *int) int
 		ResumeEnvironment         func(childComplexity int, repositoryID string, environmentID string) int
+		RevokeAPIKeyRole          func(childComplexity int, organizationID string, id string, roleID string) int
 		RevokeAPIKeySecret        func(childComplexity int, organizationID string, id string, secretID string) int
 		RevokePersonalToken       func(childComplexity int, id string) int
 		RevokeRepositoryRole      func(childComplexity int, repositoryID string, principalID string, roleID string) int
@@ -1461,6 +1463,8 @@ type MutationResolver interface {
 	RotateAPIKey(ctx context.Context, organizationID string, id string, input *SecretInput) (*APIKeyCreated, error)
 	RevokeAPIKeySecret(ctx context.Context, organizationID string, id string, secretID string) (bool, error)
 	DeleteAPIKey(ctx context.Context, organizationID string, id string) (bool, error)
+	GrantAPIKeyRole(ctx context.Context, organizationID string, id string, roleID string) (bool, error)
+	RevokeAPIKeyRole(ctx context.Context, organizationID string, id string, roleID string) (bool, error)
 	CreateSecret(ctx context.Context, organizationID string, repositoryID *string, input NewSecret) (*Secret, error)
 	UpdateSecret(ctx context.Context, organizationID string, id string, input SecretChange, expectedVersion *int) (*Secret, error)
 	DeleteSecret(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
@@ -4965,6 +4969,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.EditIssueChatMessage(childComplexity, args["organizationId"].(string), args["number"].(int), args["thread"].(string), args["message"].(string), args["body"].(string), args["expectedVersion"].(*int)), true
+	case "Mutation.grantApiKeyRole":
+		if e.ComplexityRoot.Mutation.GrantAPIKeyRole == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_grantApiKeyRole_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.GrantAPIKeyRole(childComplexity, args["organizationId"].(string), args["id"].(string), args["roleId"].(string)), true
 	case "Mutation.grantRepositoryRole":
 		if e.ComplexityRoot.Mutation.GrantRepositoryRole == nil {
 			break
@@ -5229,6 +5244,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResumeEnvironment(childComplexity, args["repositoryId"].(string), args["environmentId"].(string)), true
+	case "Mutation.revokeApiKeyRole":
+		if e.ComplexityRoot.Mutation.RevokeAPIKeyRole == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeApiKeyRole_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeAPIKeyRole(childComplexity, args["organizationId"].(string), args["id"].(string), args["roleId"].(string)), true
 	case "Mutation.revokeApiKeySecret":
 		if e.ComplexityRoot.Mutation.RevokeAPIKeySecret == nil {
 			break
@@ -10700,6 +10726,10 @@ extend type Mutation {
   revokeApiKeySecret(organizationId: ID!, id: ID!, secretId: ID!): Boolean!
   "Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds."
   deleteApiKey(organizationId: ID!, id: ID!): Boolean!
+  "Gives an API key another role at the organization, under the rules of making a key with it; takes org.principals.manage, org.grants.manage and every permission of the role. A person changes a key's roles, never a key."
+  grantApiKeyRole(organizationId: ID!, id: ID!, roleId: ID!): Boolean!
+  "Takes a role from an API key at the organization, under the same rules as granting it. A key's last role stays (api_key.last_role); delete the key instead."
+  revokeApiKeyRole(organizationId: ID!, id: ID!, roleId: ID!): Boolean!
 }
 
 "An organization: a slug for its URLs, a name, and its settings."
@@ -14668,6 +14698,36 @@ func (ec *executionContext) field_Mutation_editIssueChatMessage_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_grantApiKeyRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "roleId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roleId"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_grantRepositoryRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -15377,6 +15437,36 @@ func (ec *executionContext) field_Mutation_resumeEnvironment_args(ctx context.Co
 		return nil, err
 	}
 	args["environmentId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_revokeApiKeyRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "roleId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roleId"] = arg2
 	return args, nil
 }
 
@@ -33305,6 +33395,94 @@ func (ec *executionContext) fieldContext_Mutation_deleteApiKey(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteApiKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_grantApiKeyRole(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_grantApiKeyRole(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().GrantAPIKeyRole(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["roleId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_grantApiKeyRole(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_grantApiKeyRole_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeApiKeyRole(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeApiKeyRole(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeAPIKeyRole(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["roleId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeApiKeyRole(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeApiKeyRole_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -51359,6 +51537,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteApiKey":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteApiKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grantApiKeyRole":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_grantApiKeyRole(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeApiKeyRole":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeApiKeyRole(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

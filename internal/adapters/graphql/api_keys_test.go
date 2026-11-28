@@ -59,5 +59,19 @@ func TestAPIKeyMutations(t *testing.T) {
 		{name: "delete a key as a Member", viewer: maxim, document: func(f *orgFixture) string {
 			return `mutation { deleteApiKey(organizationId: "` + f.acme.ID.String() + `", id: "` + f.withKey().ID.String() + `") }`
 		}, wantCode: forbidden},
+		{name: "grant a key a role", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { grantApiKeyRole(organizationId: "` + f.acme.ID.String() + `", id: "` + f.withKey().ID.String() + `", roleId: "` + auth.RoleOwner.String() + `") }`
+		}, want: []string{`{"data":{"grantApiKeyRole":true}}`}},
+		{name: "grant a key a role as a Member", viewer: maxim, document: func(f *orgFixture) string {
+			return `mutation { grantApiKeyRole(organizationId: "` + f.acme.ID.String() + `", id: "` + f.withKey().ID.String() + `", roleId: "` + auth.RoleGuest.String() + `") }`
+		}, wantCode: forbidden},
+		{name: "revoke one of a key's roles", viewer: olivia, document: func(f *orgFixture) string {
+			key := f.withKey()
+			f.store.AddKey(key, auth.RoleGuest)
+			return `mutation { revokeApiKeyRole(organizationId: "` + f.acme.ID.String() + `", id: "` + key.ID.String() + `", roleId: "` + member + `") }`
+		}, want: []string{`{"data":{"revokeApiKeyRole":true}}`}},
+		{name: "revoke a key's last role", viewer: olivia, document: func(f *orgFixture) string {
+			return `mutation { revokeApiKeyRole(organizationId: "` + f.acme.ID.String() + `", id: "` + f.withKey().ID.String() + `", roleId: "` + member + `") }`
+		}, wantCode: conflict, wantReason: "api_key.last_role"},
 	})
 }

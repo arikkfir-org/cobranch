@@ -1318,6 +1318,60 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys/{key}/roles:
+    post:
+      operationId: grantAPIKeyRole
+      summary: Gives an API key another role at the organization, under the rules of making a key with it; takes org.principals.manage, org.grants.manage and every permission of the role. A person changes a key's roles, never a key.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/key"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleId]
+              properties:
+                roleId:
+                  type: string
+                  format: uuid
+      responses:
+        "204":
+          description: Granted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys/{key}/roles/{role}:
+    delete:
+      operationId: revokeAPIKeyRole
+      summary: Takes a role from an API key at the organization, under the same rules as granting it. A key's last role stays (409 api_key.last_role); delete the key instead.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/key"
+        - $ref: "#/components/parameters/role"
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/secrets:
     get:
       operationId: listSecrets

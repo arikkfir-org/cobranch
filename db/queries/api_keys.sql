@@ -10,6 +10,10 @@ SELECT * FROM principals WHERE kind = 'api_key' AND org_id = @org_id::uuid ORDER
 -- name: APIKey :one
 SELECT * FROM principals WHERE id = @id AND kind = 'api_key' AND org_id = @org_id::uuid;
 
+-- CountOrganizationRoles counts the roles the principal holds at the organization.
+-- name: CountOrganizationRoles :one
+SELECT count(*) FROM grants WHERE principal_id = @principal_id AND scope = 'organization' AND scope_id = @org_id::uuid;
+
 -- name: DeleteAPIKey :execrows
 DELETE FROM principals WHERE id = @id AND kind = 'api_key' AND org_id = @org_id::uuid;
 

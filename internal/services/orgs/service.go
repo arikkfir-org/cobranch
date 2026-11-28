@@ -97,6 +97,12 @@ type Store interface {
 	AddSecret(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID, secret Secret, hash []byte, at time.Time) error
 	// RevokeSecret revokes one of the key's secrets at `at`, or ErrNotFound when it isn't the key's or is revoked.
 	RevokeSecret(ctx context.Context, actor uuid.UUID, orgID, keyID, secretID uuid.UUID, at time.Time) error
+	// GrantKeyRole gives the key the role at the organization under the organization's lock: ErrGranted when it holds
+	// it, ErrNotFound for a key that isn't the organization's.
+	GrantKeyRole(ctx context.Context, actor uuid.UUID, orgID, keyID, roleID uuid.UUID) error
+	// RevokeKeyRole takes the role from the key at the organization under the organization's lock: ErrNotFound when
+	// it doesn't hold it or isn't the organization's, ErrLastKeyRole when it is the key's last role.
+	RevokeKeyRole(ctx context.Context, actor uuid.UUID, orgID, keyID, roleID uuid.UUID) error
 	// DeleteAPIKey deletes the key with its principal, secrets and grants, or ErrNotFound.
 	DeleteAPIKey(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID) error
 	// DeleteExpired deletes the invitations and join requests that expired before now, and returns how many of each.
@@ -943,6 +949,50 @@ func (s *Service) RevokeSecret(ctx context.Context, v Viewer, orgID, keyID, secr
 		return err
 	}
 	return wrap("revoking the secret", s.store.RevokeSecret(ctx, v.ID, orgID, keyID, secretID, s.now()))
+}
+
+// GrantKeyRole gives an API key another role at the organization, under the rules of making a key with it: it takes
+// org.principals.manage, org.grants.manage and every permission of the role. A key changes no key's roles; a person
+// does, as a person makes keys. It answers ErrGranted when the key holds the role.
+func (s *Service) GrantKeyRole(ctx context.Context, v Viewer, orgID, keyID, roleID uuid.UUID) error {
+	key, role, err := s.keyRole(ctx, v, orgID, keyID, roleID, "changing a key's roles")
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(key.Roles, func(r Role) bool { return r.ID == role.ID }) {
+		return ErrGranted
+	}
+	return wrap("granting the key the role", s.store.GrantKeyRole(ctx, v.ID, orgID, keyID, role.ID))
+}
+
+// RevokeKeyRole takes a role from an API key at the organization, under the same rules as GrantKeyRole. The key's last
+// role stays (ErrLastKeyRole): a key holds at least one, as it does when it is made.
+func (s *Service) RevokeKeyRole(ctx context.Context, v Viewer, orgID, keyID, roleID uuid.UUID) error {
+	key, role, err := s.keyRole(ctx, v, orgID, keyID, roleID, "changing a key's roles")
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(key.Roles, func(r Role) bool { return r.ID == role.ID }) {
+		return ErrNotFound
+	}
+	return wrap("revoking the key's role", s.store.RevokeKeyRole(ctx, v.ID, orgID, keyID, role.ID))
+}
+
+// keyRole finds the organization's key and one of its roles for a person who may give a key that role: the checks of
+// GrantKeyRole and RevokeKeyRole, what naming the change.
+func (s *Service) keyRole(ctx context.Context, v Viewer, orgID, keyID, roleID uuid.UUID, what string) (APIKey, Role, error) {
+	if v.Kind == auth.KindAPIKey {
+		return APIKey{}, Role{}, fmt.Errorf("%w: %s: a key changes no key's roles; a person does", auth.ErrForbidden, what)
+	}
+	key, held, err := s.apiKey(ctx, v, orgID, keyID)
+	if err != nil {
+		return APIKey{}, Role{}, err
+	}
+	roles, err := s.apiKeyRoles(ctx, orgID, held, []uuid.UUID{roleID})
+	if err != nil {
+		return APIKey{}, Role{}, err
+	}
+	return key, roles[0], nil
 }
 
 // DeleteAPIKey deletes the key with its secrets and grants; it takes org.principals.manage and every permission of

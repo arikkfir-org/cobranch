@@ -203,6 +203,10 @@ extend type Mutation {
   revokeApiKeySecret(organizationId: ID!, id: ID!, secretId: ID!): Boolean!
   "Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds."
   deleteApiKey(organizationId: ID!, id: ID!): Boolean!
+  "Gives an API key another role at the organization, under the rules of making a key with it; takes org.principals.manage, org.grants.manage and every permission of the role. A person changes a key's roles, never a key."
+  grantApiKeyRole(organizationId: ID!, id: ID!, roleId: ID!): Boolean!
+  "Takes a role from an API key at the organization, under the same rules as granting it. A key's last role stays (api_key.last_role); delete the key instead."
+  revokeApiKeyRole(organizationId: ID!, id: ID!, roleId: ID!): Boolean!
 }
 
 "An organization: a slug for its URLs, a name, and its settings."

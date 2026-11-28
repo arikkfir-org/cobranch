@@ -256,12 +256,12 @@ func (r *mutationResolver) RemoveMember(ctx context.Context, organizationID stri
 
 // GrantRole is the resolver for the grantRole field.
 func (r *mutationResolver) GrantRole(ctx context.Context, organizationID string, userID string, roleID string) (bool, error) {
-	return r.changeGrant(ctx, organizationID, userID, roleID, r.Orgs.GrantRole, "granting the role")
+	return r.changeGrant(ctx, organizationID, userID, "member", roleID, r.Orgs.GrantRole, "granting the role")
 }
 
 // RevokeRole is the resolver for the revokeRole field.
 func (r *mutationResolver) RevokeRole(ctx context.Context, organizationID string, userID string, roleID string) (bool, error) {
-	return r.changeGrant(ctx, organizationID, userID, roleID, r.Orgs.RevokeRole, "revoking the role")
+	return r.changeGrant(ctx, organizationID, userID, "member", roleID, r.Orgs.RevokeRole, "revoking the role")
 }
 
 // CreateRole is the resolver for the createRole field.
@@ -383,6 +383,16 @@ func (r *mutationResolver) DeleteAPIKey(ctx context.Context, organizationID stri
 	return act(ctx, organizationID, id, "api_key", func(orgID, keyID uuid.UUID) error {
 		return r.Orgs.DeleteAPIKey(ctx, v.User, orgID, keyID)
 	}, "deleting the API key")
+}
+
+// GrantAPIKeyRole is the resolver for the grantApiKeyRole field.
+func (r *mutationResolver) GrantAPIKeyRole(ctx context.Context, organizationID string, id string, roleID string) (bool, error) {
+	return r.changeGrant(ctx, organizationID, id, "api_key", roleID, r.Orgs.GrantKeyRole, "granting the key the role")
+}
+
+// RevokeAPIKeyRole is the resolver for the revokeApiKeyRole field.
+func (r *mutationResolver) RevokeAPIKeyRole(ctx context.Context, organizationID string, id string, roleID string) (bool, error) {
+	return r.changeGrant(ctx, organizationID, id, "api_key", roleID, r.Orgs.RevokeKeyRole, "revoking the key's role")
 }
 
 // ViewerPermissions is the resolver for the viewerPermissions field.

@@ -363,6 +363,7 @@ pages call the REST API, as its sign-in page already did; they switch to GraphQL
 | Grant or revoke a role | `org.grants.manage` and every permission of the role |
 | Define, edit or delete a custom role | `org.grants.manage` and every permission it lists |
 | Create, rotate or delete an API key | `org.principals.manage`; its roles add the grant rules |
+| Grant or revoke an API key's role | `org.principals.manage` and the grant rules of the role, as a person only: a key changes no key's roles, and keeps at least one |
 
 Every change is an event in the [architecture](architecture.md#events-and-background-work)'s `events` table from this
 slice on; reading them as the audit trail comes later. Beneath the events, every row an audited table gains, loses or

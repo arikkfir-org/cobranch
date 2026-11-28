@@ -323,6 +323,8 @@ var (
 	ErrGranted = errors.New("the member already holds this role")
 	// ErrTwoSecrets is an API key that already holds two live secrets, the most a rotation overlaps.
 	ErrTwoSecrets = errors.New("the key already holds two live secrets; revoke one first")
+	// ErrLastKeyRole is the one role an API key holds at its organization, which stays: a key holds at least one.
+	ErrLastKeyRole = errors.New("a key holds at least one role; grant another first, or delete the key")
 )
 
 // ValidationError is input the domain refuses, as sign-in's domain names it: the organizations', the repositories'

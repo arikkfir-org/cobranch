@@ -148,3 +148,62 @@ func TestOrgStoreRotateAtOnce(t *testing.T) {
 		t.Errorf("added %d and refused %d, want one of each", added, refused)
 	}
 }
+
+// TestOrgStoreKeyRoles grants a key a role and takes it away; its last role stays, and so does another
+// organization's key.
+func TestOrgStoreKeyRoles(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	key, _ := deployKey(t, f)
+	roles := func() []string {
+		t.Helper()
+		got, err := f.s.APIKey(ctx, f.acme.ID, key.ID)
+		if err != nil {
+			t.Fatalf("APIKey() error = %v", err)
+		}
+		names := make([]string, 0, len(got.Roles))
+		for _, r := range got.Roles {
+			names = append(names, r.Name)
+		}
+		slices.Sort(names)
+		return names
+	}
+	cases := []struct {
+		name    string
+		run     func() error
+		wantErr error
+		want    []string
+	}{
+		{name: "grant Guest", run: func() error { return f.s.GrantKeyRole(ctx, f.olivia, f.acme.ID, key.ID, auth.RoleGuest) }, want: []string{"Guest", "Member"}},
+		{name: "grant Guest again", run: func() error { return f.s.GrantKeyRole(ctx, f.olivia, f.acme.ID, key.ID, auth.RoleGuest) },
+			wantErr: orgs.ErrGranted, want: []string{"Guest", "Member"}},
+		{name: "grant at another organization", run: func() error { return f.s.GrantKeyRole(ctx, f.olivia, uuid.New(), key.ID, auth.RoleOwner) },
+			wantErr: orgs.ErrNotFound, want: []string{"Guest", "Member"}},
+		{name: "grant a role that isn't", run: func() error { return f.s.GrantKeyRole(ctx, f.olivia, f.acme.ID, key.ID, uuid.New()) },
+			wantErr: orgs.ErrNotFound, want: []string{"Guest", "Member"}},
+		{name: "revoke Member", run: func() error { return f.s.RevokeKeyRole(ctx, f.olivia, f.acme.ID, key.ID, auth.RoleMember) }, want: []string{"Guest"}},
+		{name: "revoke Member again", run: func() error { return f.s.RevokeKeyRole(ctx, f.olivia, f.acme.ID, key.ID, auth.RoleMember) },
+			wantErr: orgs.ErrNotFound, want: []string{"Guest"}},
+		{name: "revoke the last role", run: func() error { return f.s.RevokeKeyRole(ctx, f.olivia, f.acme.ID, key.ID, auth.RoleGuest) },
+			wantErr: orgs.ErrLastKeyRole, want: []string{"Guest"}},
+		{name: "revoke a member's role through a key's call", run: func() error { return f.s.RevokeKeyRole(ctx, f.olivia, f.acme.ID, f.olivia, auth.RoleOwner) },
+			wantErr: orgs.ErrNotFound, want: []string{"Guest"}},
+	}
+	for _, tc := range cases {
+		err := tc.run()
+		if !errors.Is(err, tc.wantErr) {
+			t.Errorf("%s: error = %v, want %v", tc.name, err, tc.wantErr)
+		}
+		if got := roles(); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: the key holds %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	want := []string{"api_key.created", "api_key.role_granted", "api_key.role_revoked"}
+	if got := eventKinds(t, f.pool); len(got) < len(want) || !slices.Equal(got[len(got)-len(want):], want) {
+		t.Errorf("events = %v, want them to end with %v", got, want)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'grants' AND principal_id = $1", f.olivia); n < 3 {
+		t.Errorf("%d audit rows on grants name Olivia, want the key's creation, grant and revocation", n)
+	}
+}

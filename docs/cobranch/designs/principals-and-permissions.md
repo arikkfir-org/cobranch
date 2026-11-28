@@ -156,7 +156,9 @@ The run token lasts as long as the run, at most 24 hours. Neither Cobranch nor t
 
 ### API keys and personal tokens
 
-An API key's secret is shown once, stored hashed, may expire, and rotates with two secrets valid during the overlap. A
+An API key's secret is shown once, stored hashed, may expire, and rotates with two secrets valid during the overlap. Its
+roles at the organization change after it is made, by a person who could make a key holding them, so a script that
+needs more is granted it without a new secret. A
 personal token is a user's credential for Git over HTTPS and the command line: it lists the permissions and scopes it
 may use, a subset of the user's, and must expire. Every Cobranch secret carries a fixed prefix so scanners spot a leaked
 one.
