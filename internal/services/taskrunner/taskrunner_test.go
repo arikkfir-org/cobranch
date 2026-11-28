@@ -170,11 +170,12 @@ func (c *cluster) Namespaces(context.Context) ([]uuid.UUID, error) {
 // vault is a taskrunner.Secrets that hands over values by ID, refusing refused, or answering it missing.
 type vault struct {
 	refused uuid.UUID
+	label   secrets.Label
 	missing bool
 	err     error
 }
 
-func (v vault) Receive(_ context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
+func (v vault) Receive(_ context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error) {
 	if v.err != nil {
 		return nil, v.err
 	}
@@ -182,12 +183,13 @@ func (v vault) Receive(_ context.Context, principalID uuid.UUID, ids []uuid.UUID
 		return nil, errors.New("not the task's agent")
 	}
 	values := map[uuid.UUID][]byte{id("6e70"): []byte("provider-key"), id("5ec1"): []byte("s3cret")}
-	out := map[uuid.UUID][]byte{}
+	out := map[uuid.UUID]secrets.Received{}
 	for _, id := range ids {
 		if id == v.refused {
-			return nil, &secrets.RefusedError{ID: id, Missing: v.missing}
+			v.label.ID = id
+			return nil, &secrets.RefusedError{Label: v.label, Missing: v.missing}
 		}
-		out[id] = values[id]
+		out[id] = secrets.Received{Label: secrets.Label{ID: id, Name: "s"}, Value: values[id]}
 	}
 	return out, nil
 }
@@ -228,10 +230,10 @@ func TestDispatch(t *testing.T) {
 			wantEvents: []string{claimed, "failed: its agent has no model: an admin picks one"}},
 		{name: "a provider without its key", queued: []taskrunner.Task{task(func(t *taskrunner.Task) { t.KeyID = uuid.Nil })}, wantOK: true,
 			wantEvents: []string{claimed, "failed: the organization's anthropic provider has no secret with its key"}},
-		{name: "a secret its agent may not read", queued: []taskrunner.Task{task(nil)}, vault: vault{refused: id("5ec1")}, wantOK: true,
-			wantEvents: []string{claimed, "failed: its agent may not read secret 5ec10000-0000-7000-8000-000000000000: grant it Secret reader on it"}},
-		{name: "a secret that is gone", queued: []taskrunner.Task{task(nil)}, vault: vault{refused: id("6e70"), missing: true}, wantOK: true,
-			wantEvents: []string{claimed, "failed: secret 6e700000-0000-7000-8000-000000000000 isn't there"}},
+		{name: "a secret its agent may not read", queued: []taskrunner.Task{task(nil)}, vault: vault{refused: id("5ec1"), label: secrets.Label{Name: "github-token"}}, wantOK: true,
+			wantEvents: []string{claimed, `failed: its agent may not read the organization's secret "github-token", which it takes as API_TOKEN: grant it Secret reader on the secret`}},
+		{name: "a provider's key that is gone", queued: []taskrunner.Task{task(nil)}, vault: vault{refused: id("6e70"), missing: true}, wantOK: true,
+			wantEvents: []string{claimed, "failed: secret 6e700000-0000-7000-8000-000000000000, which its agent calls anthropic with, isn't there"}},
 		{name: "no secrets key", queued: []taskrunner.Task{task(nil)}, vault: vault{err: secrets.ErrNoSecretsKey}, wantOK: true,
 			wantEvents: []string{claimed, "failed: this installation has no secrets key to open its secrets with"}},
 		{name: "secrets that can't be read", queued: []taskrunner.Task{task(nil)}, vault: vault{err: errors.New("database down")}, wantOK: true,

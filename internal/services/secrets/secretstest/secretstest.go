@@ -29,6 +29,8 @@ type Store struct {
 	// Values holds each secret's sealed value.
 	Values map[uuid.UUID][]byte
 	Others map[uuid.UUID]Other
+	// Slugs names repositories, for the labels Sealed answers; a repository it lacks goes by its ID.
+	Slugs  map[uuid.UUID]string
 	Events []string
 	Fail   error
 	// Now is the time the store writes.
@@ -40,7 +42,7 @@ var _ secrets.Store = (*Store)(nil)
 // NewStore returns an empty Store over orgs.
 func NewStore(o *orgstest.Store) *Store {
 	return &Store{Orgs: o, Secrets: map[uuid.UUID]secrets.Secret{}, Values: map[uuid.UUID][]byte{}, Others: map[uuid.UUID]Other{},
-		Now: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)}
+		Slugs: map[uuid.UUID]string{}, Now: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)}
 }
 
 // Add records a secret as it stands, with its sealed value.
@@ -149,15 +151,27 @@ func (s *Store) Delete(_ context.Context, _ uuid.UUID, id uuid.UUID, version int
 	return nil
 }
 
-// Sealed reads the sealed values of those of ids that are there.
-func (s *Store) Sealed(_ context.Context, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
-	out := map[uuid.UUID][]byte{}
+// Sealed reads those of ids that are there, labelled, with their sealed values.
+func (s *Store) Sealed(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error) {
+	out := map[uuid.UUID]secrets.Received{}
 	for _, id := range ids {
 		if v, ok := s.Values[id]; ok {
-			out[id] = v
+			out[id] = secrets.Received{Label: s.label(s.Secrets[id]), Value: v}
 		}
 	}
 	return out, nil
+}
+
+// label is secret's label, its repository named by Slugs.
+func (s *Store) label(secret secrets.Secret) secrets.Label {
+	l := secrets.Label{ID: secret.ID, Name: secret.Name}
+	if secret.RepoID != uuid.Nil {
+		l.Repo = s.Slugs[secret.RepoID]
+		if l.Repo == "" {
+			l.Repo = secret.RepoID.String()
+		}
+	}
+	return l
 }
 
 // Access lists the principals holding a grant on the secret, by display name.

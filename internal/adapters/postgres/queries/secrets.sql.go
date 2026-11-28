@@ -182,14 +182,18 @@ func (q *Queries) RepositoryJobs(ctx context.Context, orgID uuid.UUID, repoID uu
 }
 
 const sealedSecrets = `-- name: SealedSecrets :many
-SELECT id, value FROM secrets WHERE id = ANY ($1::uuid[])
+SELECT s.id, s.name, s.value, r.slug AS repo_slug FROM secrets s LEFT JOIN repositories r ON r.id = s.repo_id
+WHERE s.id = ANY ($1::uuid[])
 `
 
 type SealedSecretsRow struct {
-	ID    uuid.UUID
-	Value []byte
+	ID       uuid.UUID
+	Name     string
+	Value    []byte
+	RepoSlug *string
 }
 
+// SealedSecrets reads secrets' sealed values, with their names and their repositories' slugs, which failures name them by.
 func (q *Queries) SealedSecrets(ctx context.Context, ids []uuid.UUID) ([]SealedSecretsRow, error) {
 	rows, err := q.db.Query(ctx, sealedSecrets, ids)
 	if err != nil {
@@ -199,7 +203,12 @@ func (q *Queries) SealedSecrets(ctx context.Context, ids []uuid.UUID) ([]SealedS
 	var items []SealedSecretsRow
 	for rows.Next() {
 		var i SealedSecretsRow
-		if err := rows.Scan(&i.ID, &i.Value); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Value,
+			&i.RepoSlug,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

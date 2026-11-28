@@ -32,18 +32,19 @@ func (s *Service) open(ctx context.Context, env Environment) (Target, string, er
 	var refused *secrets.RefusedError
 	switch {
 	case errors.As(err, &refused) && refused.Missing:
-		return nil, fmt.Sprintf("secret %s, target %s's cluster, isn't there", id, env.Target), nil
+		return nil, fmt.Sprintf("%s, which holds target %s's kubeconfig, isn't there", refused.Label, env.Target), nil
 	case errors.As(err, &refused):
-		return nil, fmt.Sprintf("target %s may not read secret %s, its cluster: grant it Secret reader on the secret", env.Target, id), nil
+		return nil, fmt.Sprintf("target %s may not read %s, which holds its cluster's kubeconfig: grant it Secret reader on the secret",
+			env.Target, refused.Label), nil
 	case errors.Is(err, secrets.ErrNoSecretsKey):
 		return nil, noKey, nil
 	case err != nil:
 		return nil, "", fmt.Errorf("reading target %s's kubeconfig: %w", env.Target, err)
 	}
-	target, err := s.clusters.Open(ctx, values[id])
+	target, err := s.clusters.Open(ctx, values[id].Value)
 	switch {
 	case errors.Is(err, ErrRefused):
-		return nil, fmt.Sprintf("the kubeconfig in secret %s: %s", id, unrefused(err)), nil
+		return nil, fmt.Sprintf("the kubeconfig in %s: %s", values[id].Label, unrefused(err)), nil
 	case err != nil:
 		return nil, "", fmt.Errorf("opening target %s's cluster: %w", env.Target, err)
 	}

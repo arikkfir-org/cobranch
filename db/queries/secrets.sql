@@ -43,8 +43,10 @@ RETURNING id, org_id, repo_id, name, version, created_by, created_at, updated_by
 -- name: DeleteSecret :exec
 DELETE FROM secrets WHERE id = $1;
 
+-- SealedSecrets reads secrets' sealed values, with their names and their repositories' slugs, which failures name them by.
 -- name: SealedSecrets :many
-SELECT id, value FROM secrets WHERE id = ANY (@ids::uuid[]);
+SELECT s.id, s.name, s.value, r.slug AS repo_slug FROM secrets s LEFT JOIN repositories r ON r.id = s.repo_id
+WHERE s.id = ANY (@ids::uuid[]);
 
 -- SecretGrantees lists the principals holding a grant on a secret, by display name.
 -- name: SecretGrantees :many

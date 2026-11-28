@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 
@@ -91,8 +92,12 @@ func TestSecretStoreWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	sealed, err := f.store.Sealed(ctx, []uuid.UUID{npm.ID, deploy.ID, uuid.New()})
-	if err != nil || len(sealed) != 2 || string(sealed[npm.ID]) != "sealed-new" || string(sealed[deploy.ID]) != "sealed-deploy" {
-		t.Errorf("Sealed() = %q, %v", sealed, err)
+	want := map[uuid.UUID]secrets.Received{
+		npm.ID:    {Label: secrets.Label{ID: npm.ID, Name: "npm"}, Value: []byte("sealed-new")},
+		deploy.ID: {Label: secrets.Label{ID: deploy.ID, Name: "npm", Repo: f.website.Slug}, Value: []byte("sealed-deploy")},
+	}
+	if err != nil || !maps.EqualFunc(sealed, want, func(a, b secrets.Received) bool { return a.Label == b.Label && string(a.Value) == string(b.Value) }) {
+		t.Errorf("Sealed() = %+v, %v; want %+v", sealed, err, want)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'secrets' AND (before ? 'value' OR after ? 'value')"); n != 0 {
 		t.Errorf("%d audit rows hold a value", n)

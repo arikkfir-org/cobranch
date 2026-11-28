@@ -18,6 +18,7 @@ import (
 
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/runner"
+	"cobranch.dev/internal/services/secrets"
 )
 
 var tracer = otel.Tracer("cobranch.dev/internal/services/deliverer")
@@ -256,9 +257,9 @@ type Clusters interface {
 	Open(ctx context.Context, kubeconfig []byte) (Target, error)
 }
 
-// Secrets hands a principal the values of the secrets it may read: secrets.Service's Receive.
+// Secrets hands a principal the values of the secrets it may read, labelled: secrets.Service's Receive.
 type Secrets interface {
-	Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID][]byte, error)
+	Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error)
 }
 
 // Archive keeps ended renders' logs: the object store.

@@ -63,6 +63,7 @@ func newFixture(t *testing.T) *fixture {
 	s.Others[f.docs] = secretstest.Other{OrgID: uuid.New(), Principal: secrets.Principal{ID: f.docs, Kind: auth.KindJob, DisplayName: "docs"}}
 	f.npm = secrets.Secret{ID: uuid.New(), OrgID: f.acme, Name: "npm", Version: 1}
 	f.deploy = secrets.Secret{ID: uuid.New(), OrgID: f.acme, RepoID: f.website, Name: "deploy", Version: 3}
+	s.Slugs[f.website] = "website"
 	s.Add(f.npm, sealed(f.npm.ID, "npm-token"))
 	s.Add(f.deploy, sealed(f.deploy.ID, "deploy-key"))
 	o.Grant(f.build, auth.RoleSecretReader, auth.ScopeRepository, f.website)
@@ -293,19 +294,25 @@ func TestReceive(t *testing.T) {
 			want: map[string]string{"deploy": "deploy-key"}},
 		{name: "but not the organization's",
 			principal: func(f *fixture) uuid.UUID { return f.build }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.deploy.ID, f.npm.ID} },
-			refused: func(f *fixture) *secrets.RefusedError { return &secrets.RefusedError{ID: f.npm.ID} }},
+			refused: func(f *fixture) *secrets.RefusedError {
+				return &secrets.RefusedError{Label: secrets.Label{ID: f.npm.ID, Name: "npm"}}
+			}},
 		{name: "a job with Secret reader on one secret receives it",
 			principal: func(f *fixture) uuid.UUID { return f.lint }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.npm.ID} },
 			want: map[string]string{"npm": "npm-token"}},
 		{name: "and nothing else",
 			principal: func(f *fixture) uuid.UUID { return f.lint }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.deploy.ID} },
-			refused: func(f *fixture) *secrets.RefusedError { return &secrets.RefusedError{ID: f.deploy.ID} }},
+			refused: func(f *fixture) *secrets.RefusedError {
+				return &secrets.RefusedError{Label: secrets.Label{ID: f.deploy.ID, Name: "deploy", Repo: "website"}}
+			}},
 		{name: "an Owner's roles reach every secret of the organization",
 			principal: func(f *fixture) uuid.UUID { return f.olivia.ID }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.npm.ID, f.deploy.ID} },
 			want: map[string]string{"npm": "npm-token", "deploy": "deploy-key"}},
 		{name: "one that isn't there",
 			principal: func(f *fixture) uuid.UUID { return f.olivia.ID }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.build} },
-			refused: func(f *fixture) *secrets.RefusedError { return &secrets.RefusedError{ID: f.build, Missing: true} }},
+			refused: func(f *fixture) *secrets.RefusedError {
+				return &secrets.RefusedError{Label: secrets.Label{ID: f.build}, Missing: true}
+			}},
 		{name: "none", principal: func(f *fixture) uuid.UUID { return f.docs }, ids: func(*fixture) []uuid.UUID { return nil }, want: map[string]string{}},
 		{name: "without a secrets key", sealer: nil, wantErr: secrets.ErrNoSecretsKey,
 			principal: func(f *fixture) uuid.UUID { return f.lint }, ids: func(f *fixture) []uuid.UUID { return []uuid.UUID{f.npm.ID} }},
@@ -334,12 +341,15 @@ func TestReceive(t *testing.T) {
 }
 
 // assertValues fails t unless got holds want's values, by the fixture's secrets' names.
-func assertValues(t *testing.T, f *fixture, got map[uuid.UUID][]byte, want map[string]string) {
+func assertValues(t *testing.T, f *fixture, got map[uuid.UUID]secrets.Received, want map[string]string) {
 	t.Helper()
-	byName := map[uuid.UUID]string{f.npm.ID: "npm", f.deploy.ID: "deploy"}
+	labels := map[uuid.UUID]secrets.Label{f.npm.ID: {ID: f.npm.ID, Name: "npm"}, f.deploy.ID: {ID: f.deploy.ID, Name: "deploy", Repo: "website"}}
 	named := map[string]string{}
-	for id, v := range got {
-		named[byName[id]] = string(v)
+	for id, r := range got {
+		if r.Label != labels[id] {
+			t.Errorf("label of %s = %+v, want %+v", id, r.Label, labels[id])
+		}
+		named[r.Name] = string(r.Value)
 	}
 	if !maps.Equal(named, want) {
 		t.Errorf("values = %v, want %v", named, want)

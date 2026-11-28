@@ -79,18 +79,43 @@ var (
 	ErrNoSecretsKey = errors.New("the installation has no secrets key")
 )
 
+// Label names a secret as a failure shows it: by its name and where it lives, so whoever reads the failure finds it
+// on that Secrets page, or by its ID, as /cobranch.yaml names it, when it isn't there.
+type Label struct {
+	ID   uuid.UUID
+	Name string
+	// Repo is the slug of the repository whose settings hold the secret; empty for the organization's own.
+	Repo string
+}
+
+func (l Label) String() string {
+	switch {
+	case l.Name == "":
+		return "secret " + l.ID.String()
+	case l.Repo == "":
+		return fmt.Sprintf("the organization's secret %q", l.Name)
+	}
+	return fmt.Sprintf("repository %s's secret %q", l.Repo, l.Name)
+}
+
+// Received is a secret as Receive hands it over: its label and its value. The store's Sealed answers the value sealed.
+type Received struct {
+	Label
+	Value []byte
+}
+
 // RefusedError is a secret Receive won't hand over: one the principal holds no secrets.read on, or one that isn't
-// there.
+// there, which its label names by ID alone.
 type RefusedError struct {
-	ID      uuid.UUID
+	Label
 	Missing bool
 }
 
 func (e *RefusedError) Error() string {
 	if e.Missing {
-		return fmt.Sprintf("secret %s isn't there", e.ID)
+		return e.String() + " isn't there"
 	}
-	return fmt.Sprintf("may not read secret %s", e.ID)
+	return "may not read " + e.String()
 }
 
 // About is what a secret's value is sealed for: its row alone, so a sealed value copied to another row doesn't open.
@@ -129,8 +154,8 @@ type Store interface {
 	// Delete deletes the secret and the grants on it if it is still at version (any with AnyVersion), and records
 	// the event: ErrChanged otherwise, ErrNotFound when it's gone.
 	Delete(ctx context.Context, actor uuid.UUID, id uuid.UUID, version int64) error
-	// Sealed reads the sealed values of those of ids that are there.
-	Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]byte, error)
+	// Sealed reads those of ids that are there, labelled, with their sealed values.
+	Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Received, error)
 	// Access lists the principals holding a grant on the secret, by display name.
 	Access(ctx context.Context, id uuid.UUID) ([]Principal, error)
 	// Jobs lists the jobs of the organization's repository, by name.
