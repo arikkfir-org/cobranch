@@ -1,5 +1,6 @@
 // Menus the shell opens from a button: the avatar menu, the organization switcher, the conversation's mode. One is
-// open at a time; it closes on a choice, a click outside, Escape, or a move to another page.
+// open at a time; it closes on a choice, a click outside, Escape, or a move to another page. A check menu (checkMenu)
+// stays open through its choices and saves them as it closes.
 
 import { h } from "./dom.js";
 
@@ -13,8 +14,9 @@ export function closeMenu() {
 // popover opens a menu (B's .menu) under anchor, its start or end edge aligned with the anchor's (align "start" or
 // "end"), or above it, aligned with its start (align "above"), holding what build(close) returns, with the shell's
 // class for it, if any, and answers it; the anchor's button opens it again once closed, and a second click on it
-// closes it (answering null). It reports itself to assistive technology through the anchor's aria-expanded.
-export function popover(anchor, align, build, kind = "") {
+// closes it (answering null). It reports itself to assistive technology through the anchor's aria-expanded. closed,
+// when given, runs once the menu closes, however it does.
+export function popover(anchor, align, build, kind = "", closed = null) {
   const again = open && open.anchor === anchor;
   closeMenu();
   if (again) return null;
@@ -26,6 +28,7 @@ export function popover(anchor, align, build, kind = "") {
     anchor.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", outside, true);
     document.removeEventListener("keydown", keys, true);
+    if (closed) closed();
   };
   const outside = (e) => { if (!el.contains(e.target) && !anchor.contains(e.target)) close(); };
   const items = () => [...el.querySelectorAll(".menu-item:not([disabled]), .segmented button")];
@@ -53,5 +56,35 @@ export function popover(anchor, align, build, kind = "") {
   document.addEventListener("pointerdown", outside, true);
   document.addEventListener("keydown", keys, true);
   items()[0]?.focus();
+  return el;
+}
+
+// checkMenu opens a menu of choices (each { id, name, title, checked }) under anchor, as popover does, that stays open
+// while they are checked and unchecked, and on closing (a click outside, Escape, the anchor again, or focus moving out
+// of it) calls save(added, removed) with the choices whose check changed, if any. With keepOne, the last choice still
+// checked can't be unchecked, and says why in why.
+export function checkMenu(anchor, align, choices, save, { keepOne = false, why = "" } = {}) {
+  const checked = new Set(choices.filter((c) => c.checked).map((c) => c.id));
+  const items = choices.map((c) => h("button", { class: "menu-item", type: "button", role: "menuitemcheckbox", title: c.title || null,
+    onclick: () => { checked.has(c.id) ? checked.delete(c.id) : checked.add(c.id); mark(); } }, h("span", {}, c.name)));
+  // mark shows each choice as it stands, and locks the last one checked when one must stay.
+  const mark = () => items.forEach((item, i) => {
+    const on = checked.has(choices[i].id);
+    const locked = keepOne && on && checked.size === 1;
+    item.setAttribute("aria-checked", String(on));
+    item.disabled = locked;
+    item.title = locked ? why : choices[i].title || "";
+  });
+  mark();
+  const el = popover(anchor, align, () => items, "", () => {
+    const added = choices.filter((c) => !c.checked && checked.has(c.id));
+    const removed = choices.filter((c) => c.checked && !checked.has(c.id));
+    if (added.length || removed.length) save(added, removed);
+  });
+  // Focus leaving it closes it too. Tab hands focus back to the anchor first, so the browser moves on from there, as
+  // from the button that opened it; focus that moves elsewhere on the page closes it as it goes, while a click inside
+  // that takes no focus moves it nowhere.
+  el?.addEventListener("keydown", (e) => { if (e.key === "Tab") { closeMenu(); anchor.focus(); } });
+  el?.addEventListener("focusout", (e) => { if (e.relatedTarget && !el.contains(e.relatedTarget) && e.relatedTarget !== anchor) closeMenu(); });
   return el;
 }

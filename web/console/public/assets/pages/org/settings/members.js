@@ -6,7 +6,7 @@ import { ago, when } from "../../../lib/format.js";
 import { avatar, icon } from "../../../lib/icons.js";
 import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
 import { popover } from "../../../lib/menu.js";
-import { roleSelect, rolesMenu } from "../../../lib/organization.js";
+import { changeRoles, roleSelect, rolesMenu } from "../../../lib/organization.js";
 import { base, me, roles } from "../../../lib/state.js";
 import { recount } from "../../../lib/tabs.js";
 
@@ -41,7 +41,8 @@ async function showMembers(org, main, can, actions) {
   const rolesButton = (m) => {
     if (!grants) return h("span", { class: "row-aside" }, m.roles.map((r) => r.name).join(", ") || "No role");
     const path = "/orgs/" + org.slug + "/members/" + m.userId + "/roles";
-    return rolesMenu(m.roles, "The roles " + m.displayName + " holds", (r, held) => act(held ? api("DELETE", path + "/" + r.id) : api("POST", path, { roleId: r.id })));
+    return rolesMenu(m.roles, "The roles " + m.displayName + " holds", (granted, revoked) =>
+      act(changeRoles(granted, revoked, (r) => api("POST", path, { roleId: r.id }), (r) => api("DELETE", path + "/" + r.id))));
   };
   // more is a row's menu of what else the viewer may do with it, or nothing when there is none.
   const more = (label, items) => {

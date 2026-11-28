@@ -5,7 +5,7 @@ import { checkbox, copyField, failure, field, input, selectBox } from "../../../
 import { ago, plural, when } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
 import { followLists, keepingFilter, readTagged } from "../../../lib/live.js";
-import { rolesMenu } from "../../../lib/organization.js";
+import { changeRoles, rolesMenu } from "../../../lib/organization.js";
 import { roles } from "../../../lib/state.js";
 
 export const tab = { label: "API keys", order: 30 };
@@ -29,7 +29,7 @@ const newest = (k, at) => k.secrets.map(at).filter(Boolean).sort().pop() || null
 
 // showApiKeys lists the organization's API keys, each with its roles, when it was made and last used, and, for a viewer
 // with org.principals.manage, Rotate and Revoke, or Delete once no secret of it works; with org.grants.manage too, a
-// working key's roles change from its row, as a member's do. made is a key just made or
+// working key's roles change from its row, as a member's do, keeping at least one. made is a key just made or
 // rotated, whose secret this draw shows once, as the API never shows it again. It follows the keys while it shows, and
 // draws itself again once they change, here or elsewhere, still showing made.
 async function showApiKeys(org, main, can, actions, made = null) {
@@ -51,8 +51,9 @@ async function showApiKeys(org, main, can, actions, made = null) {
     return h("tr", { class: gone ? "row-muted" : "", "data-filter": k.name.toLowerCase() },
       h("td", { class: "cell-two-lines" }, h("span", {}, k.name), hint ? h("code", {}, "cbk_…" + hint) : null),
       h("td", {}, gone ? h("span", { class: "tag" }, revoked ? "Revoked" : "Expired")
-        : grants ? rolesMenu(k.roles, "The roles " + k.name + " holds", (r, held) =>
-          (held ? api("DELETE", path + "/" + k.id + "/roles/" + r.id) : api("POST", path + "/" + k.id + "/roles", { roleId: r.id })).then(() => refresh()).catch(error.fail))
+        : grants ? rolesMenu(k.roles, "The roles " + k.name + " holds", (granted, revoked) =>
+          changeRoles(granted, revoked, (r) => api("POST", path + "/" + k.id + "/roles", { roleId: r.id }), (r) => api("DELETE", path + "/" + k.id + "/roles/" + r.id))
+            .then(() => refresh()).catch(error.fail), true)
           : k.roles.length ? k.roles.map((r) => h("span", { class: "tag tone-info" }, r.name)) : h("span", { class: "cell-muted" }, "No role")),
       h("td", { class: "cell-muted" }, when(k.createdAt)),
       h("td", { class: "cell-muted" }, gone ? (revoked ? "revoked " + ago(revoked) : "expired " + ago(newest(k, (s) => s.expiresAt))) : used ? ago(used) : "never"),
