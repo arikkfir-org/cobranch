@@ -14,6 +14,7 @@ import (
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
+	"cobranch.dev/internal/services/secrets"
 )
 
 var now = time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
@@ -290,13 +291,13 @@ func (c clusters) Open(_ context.Context, kubeconfig []byte) (deliverer.Target, 
 // vault is the world's deliverer.Secrets.
 type vault struct{ *world }
 
-func (v vault) Receive(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
+func (v vault) Receive(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error) {
 	if v.secretErr != nil {
 		return nil, v.secretErr
 	}
-	out := map[uuid.UUID][]byte{}
+	out := map[uuid.UUID]secrets.Received{}
 	for _, id := range ids {
-		out[id] = v.kubeconfigs[id]
+		out[id] = secrets.Received{Label: secrets.Label{ID: id, Name: "preview-kubeconfig", Repo: "api"}, Value: v.kubeconfigs[id]}
 	}
 	return out, nil
 }

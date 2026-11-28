@@ -145,15 +145,15 @@ func (s *SecretStore) Delete(ctx context.Context, actor uuid.UUID, id uuid.UUID,
 	})
 }
 
-// Sealed reads the sealed values of those of ids that are there.
-func (s *SecretStore) Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
+// Sealed reads those of ids that are there, labelled, with their sealed values.
+func (s *SecretStore) Sealed(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error) {
 	rows, err := s.db.OfAny(Secrets, ids).SealedSecrets(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading the sealed values: %w", err)
 	}
-	out := make(map[uuid.UUID][]byte, len(rows))
+	out := make(map[uuid.UUID]secrets.Received, len(rows))
 	for _, r := range rows {
-		out[r.ID] = r.Value
+		out[r.ID] = secrets.Received{Label: secrets.Label{ID: r.ID, Name: r.Name, Repo: derefString(r.RepoSlug)}, Value: r.Value}
 	}
 	return out, nil
 }

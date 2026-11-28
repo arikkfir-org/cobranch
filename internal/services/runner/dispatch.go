@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -98,11 +99,11 @@ func (s *Service) launch(ctx context.Context, run Run) (Launch, string, error) {
 	if job.Checkout && s.settings.GitURL == "" {
 		return Launch{}, "this installation serves no Git over HTTPS to check its commit out from", nil
 	}
-	ids := make([]uuid.UUID, 0, len(job.Secrets))
-	for _, id := range job.Secrets {
-		ids = append(ids, id)
+	uses := make(map[uuid.UUID]string, len(job.Secrets))
+	for name, id := range job.Secrets {
+		uses[id] = "takes as " + name
 	}
-	values, refusal, err := s.receive(ctx, run, ids)
+	values, refusal, err := s.receive(ctx, run, uses)
 	if err != nil || refusal != "" {
 		return Launch{}, refusal, err
 	}
@@ -117,9 +118,9 @@ func (s *Service) launch(ctx context.Context, run Run) (Launch, string, error) {
 		l.Image = s.settings.ScriptImage
 	}
 	for name, id := range job.Secrets {
-		l.Env[name] = string(values[id])
-		if len(values[id]) > 0 {
-			l.Masked = append(l.Masked, string(values[id]))
+		l.Env[name] = string(values[id].Value)
+		if len(values[id].Value) > 0 {
+			l.Masked = append(l.Masked, string(values[id].Value))
 		}
 	}
 	for name, value := range s.cobranchEnv(run, token) {
@@ -143,21 +144,33 @@ func checkPod(pod json.RawMessage) string {
 	return ""
 }
 
-// receive reads the values of the secrets ids, which the run's job names, or answers why it may not have them.
-func (s *Service) receive(ctx context.Context, run Run, ids []uuid.UUID) (map[uuid.UUID][]byte, string, error) {
+// receive reads the values of the secrets the run's job names, each in uses by what the job does with it ("takes as
+// TOKEN"), or answers why it may not have them, naming the secret and what the job does with it.
+func (s *Service) receive(ctx context.Context, run Run, uses map[uuid.UUID]string) (map[uuid.UUID]secrets.Received, string, error) {
+	ids := slices.Collect(maps.Keys(uses))
 	values, err := s.secrets.Receive(ctx, run.JobID, ids)
 	var refused *secrets.RefusedError
 	switch {
 	case errors.As(err, &refused) && refused.Missing:
-		return nil, fmt.Sprintf("secret %s isn't there", refused.ID), nil
+		return nil, fmt.Sprintf("%s, which job %s %s, isn't there", refused.Label, run.Job, uses[refused.ID]), nil
 	case errors.As(err, &refused):
-		return nil, fmt.Sprintf("job %s may not read secret %s: grant it Secret reader on it or on the repository", run.Job, refused.ID), nil
+		return nil, fmt.Sprintf("job %s may not read %s, which it %s: grant it Secret reader on %s", run.Job, refused.Label, uses[refused.ID],
+			grantable(refused.Label)), nil
 	case errors.Is(err, secrets.ErrNoSecretsKey):
 		return nil, "this installation has no secrets key to open its secrets with", nil
 	case err != nil:
 		return nil, "", fmt.Errorf("receiving run %s's secrets: %w", run.ID, err)
 	}
 	return values, "", nil
+}
+
+// grantable says where a grant of Secret reader reaches the secret l labels: a repository's secret through a grant on
+// it or on its repository, an organization's only through one on it.
+func grantable(l secrets.Label) string {
+	if l.Repo == "" {
+		return "the secret"
+	}
+	return "the secret or on repository " + l.Repo
 }
 
 // cobranchEnv is what every container of a run gets from Cobranch: where Cobranch is, the run's token, and what the

@@ -102,7 +102,7 @@ type Store interface {
 	States(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]agents.TaskState, error)
 }
 
-// Secrets hands a principal the values of the secrets it may read: secrets.Service's Receive.
+// Secrets hands a principal the values of the secrets it may read, labelled: secrets.Service's Receive.
 type Secrets = runner.Secrets
 
 // Launch is a task's pod as the cluster starts it.

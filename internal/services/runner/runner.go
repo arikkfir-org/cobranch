@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"cobranch.dev/internal/services/jobs"
+	"cobranch.dev/internal/services/secrets"
 )
 
 var tracer = otel.Tracer("cobranch.dev/internal/services/runner")
@@ -110,9 +111,9 @@ type Standing struct {
 	EndedAt *time.Time
 }
 
-// Secrets hands a principal the values of the secrets it may read: secrets.Service's Receive.
+// Secrets hands a principal the values of the secrets it may read, labelled: secrets.Service's Receive.
 type Secrets interface {
-	Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID][]byte, error)
+	Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]secrets.Received, error)
 }
 
 // Launch is a run as the cluster starts it: its pod, its Secret's data, and how long it may take.

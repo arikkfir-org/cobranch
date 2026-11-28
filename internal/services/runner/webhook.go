@@ -65,7 +65,7 @@ func (s *Service) deliver(ctx context.Context, run Run) error {
 	if !s.now().Before(run.QueuedAt.Add(timeout)) {
 		return s.fail(ctx, run.ID, "its webhook's receiver answered no post with a 2xx within its timeout")
 	}
-	values, refusal, err := s.receive(ctx, run, []uuid.UUID{hook.SigningSecret})
+	values, refusal, err := s.receive(ctx, run, map[uuid.UUID]string{hook.SigningSecret: "signs its webhook's posts with"})
 	if err != nil || refusal != "" {
 		return errors.Join(err, s.failIf(ctx, run.ID, refusal))
 	}
@@ -80,7 +80,7 @@ func (s *Service) deliver(ctx context.Context, run Run) error {
 	if err != nil {
 		return fmt.Errorf("encoding run %s's webhook: %w", run.ID, err)
 	}
-	headers := map[string]string{"Content-Type": "application/json", SignatureHeader: Sign(values[hook.SigningSecret], body)}
+	headers := map[string]string{"Content-Type": "application/json", SignatureHeader: Sign(values[hook.SigningSecret].Value, body)}
 	switch err := s.poster.Post(ctx, hook.URL, body, headers); {
 	case errors.Is(err, ErrUnreachable):
 		return s.fail(ctx, run.ID, "its webhook: "+err.Error())

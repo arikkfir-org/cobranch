@@ -14,6 +14,7 @@ import (
 
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/runner"
+	"cobranch.dev/internal/services/secrets"
 )
 
 // webhookRun is a run of webhook job deploy, queued ago before now.
@@ -52,8 +53,8 @@ func TestDeliver(t *testing.T) {
 		{name: "an address webhooks may not reach", run: webhookRun(0), postErr: fmt.Errorf("posting to hooks.example.com: %w: 10.0.0.7, in 10.0.0.0/8", runner.ErrUnreachable),
 			wantEvents: []string{claimed, "failed: its webhook: posting to hooks.example.com: webhooks may not reach the address: 10.0.0.7, in 10.0.0.0/8"},
 			wantPosts:  1},
-		{name: "a signing secret its job may not read", run: webhookRun(0), vault: vault{refused: id("5160")},
-			wantEvents: []string{claimed, "failed: job deploy may not read secret 51600000-0000-7000-8000-000000000000: grant it Secret reader on it or on the repository"}},
+		{name: "a signing secret its job may not read", run: webhookRun(0), vault: vault{refused: id("5160"), label: secrets.Label{Name: "hook-signing", Repo: "api"}},
+			wantEvents: []string{claimed, `failed: job deploy may not read repository api's secret "hook-signing", which it signs its webhook's posts with: grant it Secret reader on the secret or on repository api`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

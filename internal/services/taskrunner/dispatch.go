@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -99,26 +101,28 @@ func (s *Service) launch(ctx context.Context, t Task, pod int) (Launch, string, 
 	if err != nil {
 		return Launch{}, "", err
 	}
-	l := Launch{Task: t, Pod: pod, Token: token, Key: values[t.KeyID], Env: s.harnessEnv(t), Timeout: s.settings.Timeout}
+	l := Launch{Task: t, Pod: pod, Token: token, Key: values[t.KeyID].Value, Env: s.harnessEnv(t), Timeout: s.settings.Timeout}
 	for name, id := range t.Secrets {
-		l.Env[name] = string(values[id])
+		l.Env[name] = string(values[id].Value)
 	}
 	return l, "", nil
 }
 
-// receive reads the provider's key and the agent's secrets, or answers why the agent may not have them.
-func (s *Service) receive(ctx context.Context, t Task) (map[uuid.UUID][]byte, string, error) {
-	ids := []uuid.UUID{t.KeyID}
-	for _, id := range t.Secrets {
-		ids = append(ids, id)
+// receive reads the provider's key and the agent's secrets, or answers why the agent may not have them, naming the
+// secret and what the agent does with it.
+func (s *Service) receive(ctx context.Context, t Task) (map[uuid.UUID]secrets.Received, string, error) {
+	uses := map[uuid.UUID]string{}
+	for name, id := range t.Secrets {
+		uses[id] = "takes as " + name
 	}
-	values, err := s.secrets.Receive(ctx, t.AgentID, ids)
+	uses[t.KeyID] = "calls " + t.Provider + " with"
+	values, err := s.secrets.Receive(ctx, t.AgentID, slices.Collect(maps.Keys(uses)))
 	var refused *secrets.RefusedError
 	switch {
 	case errors.As(err, &refused) && refused.Missing:
-		return nil, fmt.Sprintf("secret %s isn't there", refused.ID), nil
+		return nil, fmt.Sprintf("%s, which its agent %s, isn't there", refused.Label, uses[refused.ID]), nil
 	case errors.As(err, &refused):
-		return nil, fmt.Sprintf("its agent may not read secret %s: grant it Secret reader on it", refused.ID), nil
+		return nil, fmt.Sprintf("its agent may not read %s, which it %s: grant it Secret reader on the secret", refused.Label, uses[refused.ID]), nil
 	case errors.Is(err, secrets.ErrNoSecretsKey):
 		return nil, "this installation has no secrets key to open its secrets with", nil
 	case err != nil:

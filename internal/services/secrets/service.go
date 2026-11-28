@@ -325,15 +325,15 @@ func (s *Service) Revoke(ctx context.Context, v Viewer, orgID, id, principalID u
 }
 
 // Receive opens the values of the secrets ids names for principalID, a job's or an agent's, if it holds
-// secrets.read on every one: all of them, or a RefusedError naming the first it may not have. Its callers put the
+// secrets.read on every one: all of them, labelled, or a RefusedError naming the first it may not have. Its callers put the
 // values where only the run or the task reads them, and never log them.
-func (s *Service) Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (_ map[uuid.UUID][]byte, err error) {
+func (s *Service) Receive(ctx context.Context, principalID uuid.UUID, ids []uuid.UUID) (_ map[uuid.UUID]Received, err error) {
 	ctx, span := tracer.Start(ctx, "secrets.Service.Receive", trace.WithAttributes(principalAttr(principalID), attribute.Int("cobranch.secrets.count", len(ids))))
 	defer span.End()
 	defer func() { record(span, err) }()
 	ids = slices.Compact(slices.SortedFunc(slices.Values(ids), func(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) }))
 	if len(ids) == 0 {
-		return map[uuid.UUID][]byte{}, nil
+		return map[uuid.UUID]Received{}, nil
 	}
 	sealed, err := s.store.Sealed(ctx, ids)
 	if err != nil {
@@ -341,11 +341,11 @@ func (s *Service) Receive(ctx context.Context, principalID uuid.UUID, ids []uuid
 	}
 	for _, id := range ids {
 		if _, ok := sealed[id]; !ok {
-			return nil, &RefusedError{ID: id, Missing: true}
+			return nil, &RefusedError{Label: Label{ID: id}, Missing: true}
 		}
 		if err := s.authz.Can(ctx, principalID, PermRead, auth.ScopeSecret, id); err != nil {
 			if errors.Is(err, auth.ErrForbidden) {
-				return nil, &RefusedError{ID: id}
+				return nil, &RefusedError{Label: sealed[id].Label}
 			}
 			return nil, fmt.Errorf("checking the principal's permissions: %w", err)
 		}
@@ -353,13 +353,13 @@ func (s *Service) Receive(ctx context.Context, principalID uuid.UUID, ids []uuid
 	if s.sealer == nil {
 		return nil, ErrNoSecretsKey
 	}
-	values := make(map[uuid.UUID][]byte, len(ids))
+	values := make(map[uuid.UUID]Received, len(ids))
 	for _, id := range ids {
-		value, err := s.sealer.Open(sealed[id], About(id))
+		value, err := s.sealer.Open(sealed[id].Value, About(id))
 		if err != nil {
 			return nil, fmt.Errorf("opening secret %s: %w", id, err)
 		}
-		values[id] = value
+		values[id] = Received{Label: sealed[id].Label, Value: value}
 	}
 	return values, nil
 }

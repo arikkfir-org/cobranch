@@ -26,15 +26,19 @@ func TestDispatchOtherCluster(t *testing.T) {
 		want  []string
 	}{
 		{name: "a kubeconfig the target reads", want: []string{claimed, `opened "apiVersion: v1"`, "prepared job namespace", "started render pod", "rendering"}},
-		{name: "a secret the target may not read", world: func(w *world) { w.secretErr = &secrets.RefusedError{ID: secret} },
-			want: []string{claimed, "failed: target preview may not read secret " + secret.String() + ", its cluster: grant it Secret reader on the secret"}},
-		{name: "a secret that is gone", world: func(w *world) { w.secretErr = &secrets.RefusedError{ID: secret, Missing: true} },
-			want: []string{claimed, "failed: secret " + secret.String() + ", target preview's cluster, isn't there"}},
+		{name: "an organization's secret the target may not read", world: func(w *world) {
+			w.secretErr = &secrets.RefusedError{Label: secrets.Label{ID: secret, Name: "prod-kubeconfig"}}
+		}, want: []string{claimed, `failed: target preview may not read the organization's secret "prod-kubeconfig", which holds its cluster's kubeconfig: grant it Secret reader on the secret`}},
+		{name: "a repository's secret the target may not read", world: func(w *world) {
+			w.secretErr = &secrets.RefusedError{Label: secrets.Label{ID: secret, Name: "preview-kubeconfig", Repo: "api"}}
+		}, want: []string{claimed, `failed: target preview may not read repository api's secret "preview-kubeconfig", which holds its cluster's kubeconfig: grant it Secret reader on the secret`}},
+		{name: "a secret that is gone", world: func(w *world) { w.secretErr = &secrets.RefusedError{Label: secrets.Label{ID: secret}, Missing: true} },
+			want: []string{claimed, "failed: secret " + secret.String() + ", which holds target preview's kubeconfig, isn't there"}},
 		{name: "no secrets key", world: func(w *world) { w.secretErr = secrets.ErrNoSecretsKey },
 			want: []string{claimed, "failed: this installation has no secrets key to open its secrets with"}},
 		{name: "a kubeconfig the controller refuses", world: func(w *world) {
 			w.openErr = fmt.Errorf("%w: user ci: exec plugins are refused", deliverer.ErrRefused)
-		}, want: []string{claimed, "failed: the kubeconfig in secret " + secret.String() + ": user ci: exec plugins are refused"}},
+		}, want: []string{claimed, `failed: the kubeconfig in repository api's secret "preview-kubeconfig": user ci: exec plugins are refused`}},
 		{name: "a cluster that doesn't answer", world: func(w *world) { w.capErr = errors.New("dial tcp 10.0.0.1:443: i/o timeout") },
 			want: []string{claimed, `opened "apiVersion: v1"`, "failed: reaching the cluster failed: dial tcp 10.0.0.1:443: i/o timeout"}},
 	}
