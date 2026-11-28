@@ -28,13 +28,13 @@ async function showMembers(org, main, can, actions, failed = null) {
   const error = failure();
   if (failed) error.fail(failed);
   const refresh = () => showMembers(org, main, can, actions);
-  // act makes a change, then draws the page again with what was saved and what failed, if anything; the page doesn't
-  // follow its lists meanwhile, as a draw then would replace the banner the failure shows on.
+  // act makes a change, then draws the page again with what was saved and what failed, if anything, and answers once
+  // it has; the page doesn't follow its lists meanwhile, as a draw then would replace the banner the failure shows on.
   let saving = false;
   const still = () => error.el.isConnected && !saving;
   const act = (call) => {
     saving = true;
-    call.then(() => null, (err) => err).then((err) => showMembers(org, main, can, actions, err)).catch(error.fail);
+    return call.then(() => null, (err) => err).then((err) => showMembers(org, main, can, actions, err)).catch(error.fail);
   };
   const lists = ["/orgs/" + org.slug + "/members", ...(manage ? ["/orgs/" + org.slug + "/invitations", "/orgs/" + org.slug + "/join-requests"] : [])];
   const read = await Promise.all(lists.map((path) => readTagged(path)));

@@ -2,25 +2,22 @@ import { api } from "./api.js";
 import { consolePages, orgPages } from "./assets.js";
 import { privateSubject } from "./chat.js";
 import { h } from "./dom.js";
-import { icon } from "./icons.js";
 import { frame, notFound, pageHeading } from "./layout.js";
-import { checkMenu } from "./menu.js";
+import { checkButton } from "./menu.js";
 import { showRepository } from "./repository.js";
 import { go } from "./router.js";
 import { base, orgs, roles, setRoles } from "./state.js";
 
 export const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
 
-// rolesMenu is the roles a principal holds at the organization (a member, an API key), a ghost button that opens the
-// organization's roles as a check menu, each checked when held, which stays open for several picks and, once it
-// closes, hands save(granted, revoked) the roles to grant and those to revoke; title names whose roles they are. With
-// keepOne, the principal's last role can't be unchecked, as an API key's can't.
+// rolesMenu is the roles a principal holds at the organization (a member, an API key), a check button (checkButton)
+// over the organization's roles, each checked when held, whose menu stays open for several picks and, once it closes,
+// hands save(granted, revoked) the roles to grant and those to revoke, showing them saving until the promise it
+// answers settles; title names whose roles they are. With keepOne, the principal's last role can't be unchecked, as an
+// API key's can't.
 export function rolesMenu(held, title, save, keepOne = false) {
-  const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-haspopup": "menu", title }, held.map((r) => r.name).join(", ") || "No role", icon("chevron-down"));
-  button.addEventListener("click", () => checkMenu(button, "end",
-    roles.map((r) => ({ id: r.id, name: r.name, title: r.description, checked: held.some((x) => x.id === r.id) })), save,
-    { keepOne, why: "A key holds at least one role; grant another first." }));
-  return button;
+  return checkButton({ choices: roles.map((r) => ({ id: r.id, name: r.name, title: r.description, checked: held.some((x) => x.id === r.id) })),
+    save, empty: "No role", align: "end", keepOne, why: "A key holds at least one role; grant another first.", title });
 }
 
 // changeRoles grants the roles granted, then revokes those revoked, one call each through grant(role) and

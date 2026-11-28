@@ -39,13 +39,14 @@ async function showApiKeys(org, main, can, actions, made = null, failed = null) 
   const error = failure();
   if (failed) error.fail(failed);
   const refresh = (created) => showApiKeys(org, main, can, actions, created || null);
-  // saveRoles changes a key's roles, then draws the page again with what was saved and what failed, if anything; the
-  // page doesn't follow its keys meanwhile, as a draw then would replace the banner the failure shows on.
+  // saveRoles changes a key's roles, then draws the page again with what was saved and what failed, if anything, and
+  // answers once it has; the page doesn't follow its keys meanwhile, as a draw then would replace the banner the
+  // failure shows on.
   let saving = false;
   const still = () => error.el.isConnected && !saving;
   const saveRoles = (call) => {
     saving = true;
-    call.then(() => null, (err) => err).then((err) => showApiKeys(org, main, can, actions, null, err)).catch(error.fail);
+    return call.then(() => null, (err) => err).then((err) => showApiKeys(org, main, can, actions, null, err)).catch(error.fail);
   };
   const path = "/orgs/" + org.slug + "/api-keys";
   const list = await readTagged(path);

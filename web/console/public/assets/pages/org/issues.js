@@ -12,7 +12,7 @@ import { branchHref, issueChoices, issueList, issuePath, issueStates, item, labe
 import { pageHeading } from "../../lib/layout.js";
 import { drawAgain, followLists, readTagged } from "../../lib/live.js";
 import { rendered } from "../../lib/markdown.js";
-import { closeMenu, popover } from "../../lib/menu.js";
+import { checkButton, closeMenu, popover } from "../../lib/menu.js";
 import { go } from "../../lib/router.js";
 import { remember } from "../../lib/sidebar.js";
 import { base, me } from "../../lib/state.js";
@@ -271,7 +271,7 @@ const taskAtWork = { queued: { word: "Queued", tone: "neutral" }, running: { wor
 // issueFacts are an issue's properties as Fact rows: its state, priority, assignee, the task its agent works on it
 // in, labels, repository, and when and by whom it was created and closed. For a viewer with issues.write each of the
 // first is a Small Ghost button that opens a Menu of its choices, checked as the issue stands, and saves a pick at
-// once.
+// once; its labels open a check menu (checkButton), which saves them all once it closes.
 function issueFacts({ org, issue, can, choices, save }) {
   const write = can("issues.write");
   const fact = (label, ...value) => h("div", { class: "fact-row" }, h("span", { class: "fact-label" }, label), h("div", { class: "fact-value" }, value));
@@ -295,12 +295,11 @@ function issueFacts({ org, issue, can, choices, save }) {
       offered.map((a) => item(a.name, a.id === issue.assignee?.id, () => { close(); save({ assigneeId: a.id }); }, avatar(a.name, true)))]),
     issue.task && taskAtWork[issue.task.state] ? fact("Task", h("a", { class: "issue-task", href: taskPage(org, issue.task, issue.assignee.id), "data-nav": "" }, "#" + issue.task.number),
       h("span", { class: "badge-quiet tone-" + taskAtWork[issue.task.state].tone }, taskAtWork[issue.task.state].word)) : null,
-    menu("Labels", issue.labels.length ? issue.labels.map((l) => l.name).join(", ") : "None", (close) => labels.length
-      ? labels.map((l) => item(l.name, held.includes(l.id), () => {
-        close();
-        save({ labelIds: held.includes(l.id) ? held.filter((id) => id !== l.id) : [...held, l.id] });
-      }, labelTag(l), "menuitemcheckbox"))
-      : [h("a", { class: "menu-item", href: base + org.slug + "/issues/labels", "data-nav": "", role: "menuitem" }, h("span", {}, "No labels yet: make one"))]),
+    write && labels.length ? fact("Labels", checkButton({ choices: labels.map((l) => ({ id: l.id, name: l.name, title: l.description, lead: labelTag(l), checked: held.includes(l.id) })),
+      save: (added, removed) => save({ labelIds: [...held.filter((id) => !removed.some((l) => l.id === id)), ...added.map((l) => l.id)] }),
+      empty: "None", "aria-label": "Labels: change them" }))
+      : menu("Labels", issue.labels.length ? issue.labels.map((l) => l.name).join(", ") : "None", () =>
+        [h("a", { class: "menu-item", href: base + org.slug + "/issues/labels", "data-nav": "", role: "menuitem" }, h("span", {}, "No labels yet: make one"))]),
     menu("Repository", issue.repository ? issue.repository.slug : "No repository", (close) => [
       item("No repository", !issue.repository, () => { close(); save({ repositoryId: null }); }),
       repositories.map((r) => item(r.slug, r.id === issue.repository?.id, () => { close(); save({ repositoryId: r.id }); }, icon("folder-git-2")))]),
